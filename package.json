@@ -14,7 +14,8 @@
     "format:check": "prettier --check .",
     "test:db": "supabase test db",
     "gen:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
-    "test:integration": "vitest run --config vitest.integration.config.mts"
+    "test:integration": "vitest run --config vitest.integration.config.mts",
+    "triage:report": "tsx --tsconfig tsconfig.json scripts/triage-report.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -46,6 +47,7 @@
     "prettier": "^3.9.10",
     "prettier-plugin-tailwindcss": "^0.8.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5",
     "vitest": "^5.0.5"
   },

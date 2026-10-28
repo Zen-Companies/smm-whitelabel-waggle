@@ -392,6 +392,14 @@ The tenant threshold (default 0.85) is still applied by `policy()` step 4 (§11)
 
 **VERIFY** before production: which hosted endpoint we use (TypeSafe cloud vs `jevtypesafeai.com`), its pricing, rate limits and DPA; real latency against the 3 s timeout.
 
+As built (T7):
+
+- **Job step** (`features/triage/classify-step.ts`, the `new` step): classifies with the tenant name as `businessContext`; stores `category`, `confidence` (4 dp), `classifier_used` and `classifier_scores` (Jev's raw scores, null for the LLM); writes a `classifier_fallback` audit row (`reason`, `used`, `model`) when the LLM answered; the status_changed row carries category, confidence, classifier, model, unclear reason and fallback reason. The LLM call is capped by the job's 20 s `callSignal`; Jev keeps its 3 s inside `FallbackClassifier`. If both fail, the step errors and the item retries (§14).
+- **Production classifier** (`getClassifier()`): `FallbackClassifier(jev, llm)` when both are configured, otherwise whichever is (Jev alone then has only the 20 s cap, not 3 s), otherwise none, and the job leaves `new` items alone instead of failing them.
+- **Jev via OpenRouter** (`OpenRouterJevClassifier`, `typesafe/jev-1.13`, Decisions API alpha): the same four questions and `pickCategory()`, for comparison in the report only. It calls the provider model's `doEvaluate` directly: `ai` 7.0.155's `experimental_decide` passes `state` as typed parts, which `@openrouter/ai-sdk-provider` 3.1.0 forwards unchanged, so OpenRouter would receive `[{ type: "json", value }]`. Recheck when either package is upgraded.
+- **Labeled set** (`tests/fixtures/triage/`): 30 messages per category plus 25 ambiguous cases (each with a note), English and Taglish, for the demo café. A starter set to review: about 35 per category, not the ~50 planned above.
+- **Report** (`pnpm triage:report`, `scripts/triage-report.ts`): runs every configured classifier directly (no fallback, 30 s timeout, concurrency 4): `jev` (`JEV_API_URL`), extra Jev endpoints from `TRIAGE_JEV_ENDPOINTS=name=url,...` (key `JEV_API_KEY_<NAME>`), `jev-openrouter` and `llm` (`OPENROUTER_API_KEY` + LLM config). Prints accuracy, recall and precision per category, the confusion matrix, accuracy by language and on the ambiguous set, p50/p95/max latency, total AI cost and the misclassified messages; `--json` writes everything. No DB writes.
+
 ## 10. LLM drafting
 
 - Provider: **OpenRouter** through the Vercel AI SDK (`@openrouter/ai-sdk-provider` 3.x, AI SDK 7), so one balance covers every model. Models are OpenRouter `provider/model` ids set by env (`LLM_CLASSIFY_MODEL`, `LLM_DRAFT_MODEL`, `EMBEDDING_MODEL`).

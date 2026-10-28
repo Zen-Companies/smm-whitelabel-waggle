@@ -1,0 +1,182 @@
+[
+  {
+    "id": "faq-01",
+    "text": "What time do you open on Sundays?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-02",
+    "text": "Are you open on public holidays?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-03",
+    "text": "Hi! Where exactly is your shop? Is it near Cubao station?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-04",
+    "text": "Do you have parking?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-05",
+    "text": "How much is a cappuccino?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-06",
+    "text": "Do you have oat milk?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-07",
+    "text": "Is your ube cheese pandesal available every day?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-08",
+    "text": "Do you accept GCash?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-09",
+    "text": "Are dogs allowed inside?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-10",
+    "text": "Do you have wifi for customers?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-11",
+    "text": "Do you have gluten-free options?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-12",
+    "text": "Is this the branch on Aurora Blvd?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-13",
+    "text": "What's your phone number?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-14",
+    "text": "Do you deliver via Grab or Foodpanda?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-15",
+    "text": "Is there a corkage fee if I bring my own cake?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-16",
+    "text": "How late is the kitchen open on Fridays?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-17",
+    "text": "Do you have vegan pastries?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "faq-18",
+    "text": "What's the price of the matcha latte?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "faq-19",
+    "text": "Anong oras kayo bukas bukas?",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-20",
+    "text": "Open po ba kayo ngayong Sunday?",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-21",
+    "text": "Hello po, saan po exact location niyo? Malapit po ba sa Gateway?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-22",
+    "text": "May parking po ba kayo?",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-23",
+    "text": "Magkano po yung iced Spanish latte niyo?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-24",
+    "text": "Tumatanggap po ba kayo ng GCash or Maya?",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-25",
+    "text": "Pwede po ba magdala ng aso sa loob?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-26",
+    "text": "May wifi po ba dyan? Mag-wo-work lang sana ako.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-27",
+    "text": "Hanggang anong oras po kayo open pag Saturday?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-28",
+    "text": "May sugar-free option po ba kayo sa drinks?",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-29",
+    "text": "Nagde-deliver po ba kayo sa Marikina?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "faq-30",
+    "text": "Available pa po ba yung ensaymada ngayon?",
+    "kind": "comment",
+    "lang": "taglish"
+  }
+]

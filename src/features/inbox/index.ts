@@ -23,4 +23,4 @@ export {
   transitionItem,
 } from "./status";
 export type { AccountTransition, ItemStatus, ProcessingStatus, StatusEvent } from "./status";
-export { PRODUCTION_STEPS } from "./steps";
+export { getProductionSteps } from "./steps";

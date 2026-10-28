@@ -1,5 +1,5 @@
 import "server-only";
-import { getLlmClient } from "@/lib/llm";
+import { getLlmClientOrNull } from "@/lib/llm";
 import { createDbUsageRecorder } from "@/lib/llm/usage";
 import { getServiceClient } from "@/lib/supabase/service";
 import { FallbackClassifier } from "./fallback";
@@ -9,6 +9,7 @@ import type { Classifier } from "./types";
 
 export { FallbackClassifier } from "./fallback";
 export { JevClassifier, loadJevConfig } from "./jev";
+export { OPENROUTER_JEV_MODEL, OpenRouterJevClassifier } from "./jev-openrouter";
 export type { JevConfig } from "./jev";
 export { JEV_QUESTIONS, JEV_QUESTIONS_VERSION } from "./jev-questions";
 export { LlmClassifier, LLM_CLASSIFY_PROMPT_VERSION } from "./llm";
@@ -33,18 +34,29 @@ export type {
   UnclearReason,
 } from "./types";
 
-let classifier: Classifier | undefined;
+let classifier: Classifier | null | undefined;
 
-/** The production classifier: FallbackClassifier(jev, llm). */
-export function getClassifier(): Classifier {
-  if (!classifier) {
-    const config = loadJevConfig();
-    const jev = new JevClassifier(config, {
-      usage: createDbUsageRecorder(getServiceClient()),
-    });
-    classifier = new FallbackClassifier(jev, new LlmClassifier(getLlmClient()), {
-      timeoutMs: config.timeoutMs,
-    });
+/**
+ * The production classifier (docs/tdd.md §8): FallbackClassifier(jev, llm) when both are
+ * configured, the one that is when only one is, or null when neither is (then the job leaves
+ * `new` items alone instead of failing them).
+ */
+export function getClassifier(): Classifier | null {
+  if (classifier !== undefined) return classifier;
+  let jevConfig: ReturnType<typeof loadJevConfig> | null = null;
+  try {
+    jevConfig = loadJevConfig();
+  } catch {
+    jevConfig = null;
   }
+  const llm = getLlmClientOrNull();
+  const jev = jevConfig
+    ? new JevClassifier(jevConfig, { usage: createDbUsageRecorder(getServiceClient()) })
+    : null;
+  const fallback = llm ? new LlmClassifier(llm) : null;
+  classifier =
+    jev && fallback && jevConfig
+      ? new FallbackClassifier(jev, fallback, { timeoutMs: jevConfig.timeoutMs })
+      : (jev ?? fallback);
   return classifier;
 }

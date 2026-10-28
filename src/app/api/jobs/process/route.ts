@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
-import { processDueItems, PRODUCTION_STEPS } from "@/features/inbox";
+import { getProductionSteps, processDueItems } from "@/features/inbox";
 import { embedPendingEntries } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
@@ -24,7 +24,7 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const db = getServiceClient();
     const deadline = createDeadline();
-    const items = await processDueItems({ db, steps: PRODUCTION_STEPS, deadline });
+    const items = await processDueItems({ db, steps: getProductionSteps(), deadline });
 
     // Knowledge base entries without an embedding (new, edited, or a failed embed: T8).
     const llm = getLlmClientOrNull();

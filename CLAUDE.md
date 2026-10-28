@@ -26,6 +26,7 @@ pnpm typecheck        # next typegen && tsc --noEmit
 pnpm test:db          # pgTAP tests in supabase/tests (RLS); needs supabase start
 pnpm test:integration # Vitest against local Supabase (tests/integration); needs supabase start
 pnpm gen:types        # regenerate src/lib/supabase/database.types.ts after a migration
+pnpm triage:report    # labeled set → every configured classifier (accuracy, confusion, latency)
 supabase start        # local Supabase (ports 553xx, see supabase/config.toml)
 supabase db reset     # re-apply migrations + seed
 supabase migration new <name>

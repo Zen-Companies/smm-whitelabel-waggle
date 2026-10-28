@@ -38,7 +38,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       _Done when:_ seeded `new` items move through mocked steps; a failing step retries 3 times then fails and escalates.
       _Note:_ the job route tracks its own deadline and stops claiming items before Vercel's max function duration.
 
-- [ ] **T7. Triage**
+- [x] **T7. Triage**
       Classification step using `FallbackClassifier`; stores category, confidence, classifier_used. Local Jev test script against message fixtures with an accuracy report.
       _Done when:_ every item gets a category; forced Jev failure uses LLM; local Jev report runs.
       _Note:_ also evaluate Jev through OpenRouter's Decisions API (`typesafe/jev-1.13`, alpha) alongside the current endpoint.

@@ -1,0 +1,227 @@
+[
+  {
+    "id": "ambiguous-01",
+    "text": "How much is a whole chocolate cake? I want to order one for Saturday.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Price question with purchase intent: lead beats faq."
+  },
+  {
+    "id": "ambiguous-02",
+    "text": "Why is your cappuccino ₱180 now? It was ₱150 last month. Ridiculous.",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Price question in a complaint: complaint beats faq."
+  },
+  {
+    "id": "ambiguous-03",
+    "text": "My cake was late last time, can I get a discount on my next order?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Complaint wrapped in a lead: complaint beats lead."
+  },
+  {
+    "id": "ambiguous-04",
+    "text": "I run a small bakery and want to order 200 of your cookies wholesale every month.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Another business, but a genuine order: lead, not spam."
+  },
+  {
+    "id": "ambiguous-05",
+    "text": "Lol do you guys still have the ube latte or not 😂",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq",
+    "ambiguous": true,
+    "note": "Casual tone, real question: faq."
+  },
+  {
+    "id": "ambiguous-06",
+    "text": "Love your coffee but the wifi has been down every time I come in.",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Mixed praise; the reported problem makes it a complaint."
+  },
+  {
+    "id": "ambiguous-07",
+    "text": "DM me the catering menu pls",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Asking for packages to buy: lead."
+  },
+  {
+    "id": "ambiguous-08",
+    "text": "Do you have a function room? How many people can it fit?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "faq",
+    "ambiguous": true,
+    "note": "Information only, no booking yet: faq (borderline lead)."
+  },
+  {
+    "id": "ambiguous-09",
+    "text": "Ok",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "unclear",
+    "ambiguous": true,
+    "note": "Under 4 words: never spam, nothing to act on."
+  },
+  {
+    "id": "ambiguous-10",
+    "text": "This is the third time my order is wrong. Do you even read the notes?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Question form, but a complaint."
+  },
+  {
+    "id": "ambiguous-11",
+    "text": "Promote your café to 50k foodies! Our page features local shops for just ₱2,000.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "spam",
+    "ambiguous": true,
+    "note": "Unsolicited promotion offer: spam, even though it mentions the café."
+  },
+  {
+    "id": "ambiguous-12",
+    "text": "Do you have availability for a table of 12 on Christmas Eve?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Availability question with booking intent: lead."
+  },
+  {
+    "id": "ambiguous-13",
+    "text": "Magkano po yung cake na nasa post? Order po sana ako for Linggo.",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Price + order intent: lead."
+  },
+  {
+    "id": "ambiguous-14",
+    "text": "Bakit ang mahal na ng kape niyo ngayon? Dati ₱150 lang ah.",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Price question as complaint: complaint."
+  },
+  {
+    "id": "ambiguous-15",
+    "text": "Late na naman yung order ko last time, may discount po ba sa next order?",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Complaint first, then a request: complaint."
+  },
+  {
+    "id": "ambiguous-16",
+    "text": "Hala meron pa ba kayong ube latte? Huhu",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "faq",
+    "ambiguous": true,
+    "note": "Real question: faq."
+  },
+  {
+    "id": "ambiguous-17",
+    "text": "Pm po ng catering packages",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Package request: lead."
+  },
+  {
+    "id": "ambiguous-18",
+    "text": "May function room po ba kayo? Ilan po kasya?",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "faq",
+    "ambiguous": true,
+    "note": "Information only: faq (borderline lead)."
+  },
+  {
+    "id": "ambiguous-19",
+    "text": "Masarap naman kape niyo pero laging sira wifi niyo pag andito ako.",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Praise + problem: complaint."
+  },
+  {
+    "id": "ambiguous-20",
+    "text": "Sige",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "unclear",
+    "ambiguous": true,
+    "note": "Under 4 words: unclear."
+  },
+  {
+    "id": "ambiguous-21",
+    "text": "I-promote namin shop niyo sa 50k followers namin, ₱2k lang! Pm.",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "spam",
+    "ambiguous": true,
+    "note": "Unsolicited promotion: spam."
+  },
+  {
+    "id": "ambiguous-22",
+    "text": "May slot pa po ba sa Dec 24 for 12 people? Reserve sana namin.",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Availability + reservation: lead."
+  },
+  {
+    "id": "ambiguous-23",
+    "text": "Can I talk to the manager? I'm not happy with how I was treated today.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint",
+    "ambiguous": true,
+    "note": "Asking for the manager about bad treatment: complaint."
+  },
+  {
+    "id": "ambiguous-24",
+    "text": "Is the Aurora branch closed? Passed by and the lights were off.",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq",
+    "ambiguous": true,
+    "note": "Question about opening, not a complaint: faq."
+  },
+  {
+    "id": "ambiguous-25",
+    "text": "Interested in the barista workshop. Is there a slot this Saturday?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead",
+    "ambiguous": true,
+    "note": "Availability with intent to join: lead."
+  }
+]

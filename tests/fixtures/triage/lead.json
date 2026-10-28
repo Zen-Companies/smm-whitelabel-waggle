@@ -1,0 +1,182 @@
+[
+  {
+    "id": "lead-01",
+    "text": "Hi, can I book a table for 6 this Saturday at 7pm?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-02",
+    "text": "I'd like to order a 2-tier chocolate cake for my daughter's birthday on Nov 15.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-03",
+    "text": "Can I get a quote for coffee and pastries for 40 people, company event next month?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-04",
+    "text": "How do I order a box of 12 croissants for pickup tomorrow?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "lead-05",
+    "text": "Do you have slots for a private event on Dec 20? Around 30 guests.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-06",
+    "text": "Interested in your catering, please DM me the packages",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "lead-07",
+    "text": "I want to reserve the function room for a baby shower, 25 pax.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-08",
+    "text": "Can I pre-order 50 ube pandesal for Sunday morning?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-09",
+    "text": "Price for the wedding cake package? Planning for March.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "lead-10",
+    "text": "We're a school looking for a supplier of pastries every Friday. Can we talk?",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-11",
+    "text": "Can you do a coffee cart for our office anniversary? Nov 28, 80 people.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-12",
+    "text": "How can I book the barista workshop?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "lead-13",
+    "text": "I'd like to buy gift cards for my team, around 15 pieces.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-14",
+    "text": "Is the long table available for a birthday lunch next Sunday? 10 of us.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "lead-15",
+    "text": "Can I order a custom cake with a photo print? Need it Friday.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-16",
+    "text": "Do you do bulk orders of cold brew bottles? Like 100 for an event.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-17",
+    "text": "Want to order the holiday gift box, how?",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "lead-18",
+    "text": "Hi, please reserve a table for two tonight at 8, name is Mia.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "lead-19",
+    "text": "Hi po, pwede po magpa-reserve ng table for 8 sa Sabado, 6pm?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-20",
+    "text": "Magpapagawa po sana ako ng cake for debut, 18th birthday, sa Dec 2.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-21",
+    "text": "Pa-quote naman po for catering, 50 pax, kasal po sa Feb.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-22",
+    "text": "Pwede po ba mag-order ng 3 dozen na ensaymada for pickup bukas ng umaga?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-23",
+    "text": "Paano po mag-order ng birthday cake? Gusto ko sana for this weekend.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-24",
+    "text": "May available pa po ba na slot sa function room sa 25? Christening po, mga 30 tao.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-25",
+    "text": "Interested po ako sa coffee cart niyo para sa company Christmas party namin.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-26",
+    "text": "Pre-order po ako ng ube cheese pandesal, 2 boxes, for Sunday.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-27",
+    "text": "Hello, pa-book po ng barista class for 2 people, kahit anong date this month.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-28",
+    "text": "Magkano po yung package for kiddie party tapos pano mag-reserve?",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-29",
+    "text": "Kukuha po sana kami ng pastries for our weekly meeting, every Monday, 20 pcs. Pwede?",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "lead-30",
+    "text": "Pa-reserve po ng table for 4 mamaya, 7pm. Thank you!",
+    "kind": "comment",
+    "lang": "taglish"
+  }
+]

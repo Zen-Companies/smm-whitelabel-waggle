@@ -1,0 +1,182 @@
+[
+  {
+    "id": "complaint-01",
+    "text": "Waited 45 minutes for two coffees. Terrible service today.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-02",
+    "text": "My cake order was supposed to be ready at 3pm and it wasn't. I had to leave without it. I want a refund.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-03",
+    "text": "Found a hair in my sandwich. Not coming back.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-04",
+    "text": "The croissants I bought this morning were stale and hard. Very disappointed.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-05",
+    "text": "Your staff was really rude to my mom at the counter.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-06",
+    "text": "I was charged twice on my card for one order. Please fix this.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-07",
+    "text": "The latte was cold and tasted burnt.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-08",
+    "text": "Delivery arrived an hour late and the drinks were spilled all over the bag.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-09",
+    "text": "Overpriced and tiny portions. Not worth it.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-10",
+    "text": "The birthday cake had the wrong name on it. The party is ruined.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-11",
+    "text": "Tables were dirty and the restroom had no soap.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-12",
+    "text": "I got food poisoning after eating your chicken pesto sandwich yesterday.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-13",
+    "text": "Ordered oat milk, got regular milk. I'm lactose intolerant.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-14",
+    "text": "Nobody answered my messages about my catering deposit for a week. I want my money back.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-15",
+    "text": "The music was so loud we couldn't talk. Ruined our meeting.",
+    "kind": "comment",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-16",
+    "text": "Your barista gave me the wrong change and denied it.",
+    "kind": "dm",
+    "lang": "en"
+  },
+  {
+    "id": "complaint-17",
+    "text": "Ang tagal ng order namin, halos isang oras. Grabe.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-18",
+    "text": "Yung cake na inorder ko, iba yung design sa pinag-usapan natin. Sobrang disappointed ako.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-19",
+    "text": "Ang sungit ng cashier niyo kanina. Hindi na ako babalik.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-20",
+    "text": "Na-double charge po ako sa GCash. Pakibalik naman po yung sobra.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-21",
+    "text": "Matabang yung kape at malamig na nung dumating.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-22",
+    "text": "May ipis po sa may table namin kanina. Kadiri.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-23",
+    "text": "Ang mahal tapos ang liit ng serving. Sayang pera.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-24",
+    "text": "Hindi dumating yung delivery ko, bayad na ako. Refund po please.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-25",
+    "text": "Ang dumi ng CR niyo, walang tissue at sabon.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-26",
+    "text": "Sumakit tiyan ko after kumain ng pasta niyo kahapon.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-27",
+    "text": "Mali yung order na binigay sa akin, tapos ayaw pa palitan.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-28",
+    "text": "Ilang beses na ako nag-message tungkol sa deposit ko sa catering, wala pa rin sagot.",
+    "kind": "dm",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-29",
+    "text": "Ang ingay sa loob, hindi kami makapag-usap. Sana ayusin niyo.",
+    "kind": "comment",
+    "lang": "taglish"
+  },
+  {
+    "id": "complaint-30",
+    "text": "Expired na pala yung binili kong cold brew. Ano po gagawin niyo dito?",
+    "kind": "dm",
+    "lang": "taglish"
+  }
+]
