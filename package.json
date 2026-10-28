@@ -13,12 +13,14 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test:db": "supabase test db",
-    "gen:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts"
+    "gen:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
+    "test:integration": "vitest run --config vitest.integration.config.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@openrouter/ai-sdk-provider": "3.1.0",
     "@sentry/nextjs": "^11.9.0",
+    "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.118.0",
     "@zernio/node": "0.2.1369",
     "ai": "7.0.155",

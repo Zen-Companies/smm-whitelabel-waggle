@@ -141,6 +141,7 @@ One owner per tenant in Pass 1 (team members later).
 - **Security:** tenant isolation via RLS; all webhooks signature-verified; secrets only in server env.
 - **Privacy:** customer messages kept only as long as needed; Zernio DPA in place.
 - **Cost:** AI cost tracked per message and per tenant.
+- **AI provider:** all LLM calls (classification fallback, drafting, embeddings) go through OpenRouter on a single balance, with models set via env.
 
 ## 8. Success metrics (pilot)
 
@@ -152,7 +153,7 @@ One owner per tenant in Pass 1 (team members later).
 
 ## 9. Out of scope for Pass 1
 
-AI content generation (UGC), generative dashboard, ads, analytics dashboards, TikTok/LinkedIn, WhatsApp/SMS/voice, team members and roles, weekly summary email, Temporal (background jobs run on Supabase), model routing/OpenRouter.
+AI content generation (UGC), generative dashboard, ads, analytics dashboards, TikTok/LinkedIn, WhatsApp/SMS/voice, team members and roles, weekly summary email, Temporal (background jobs run on Supabase), model routing.
 
 ## 10. Open questions
 

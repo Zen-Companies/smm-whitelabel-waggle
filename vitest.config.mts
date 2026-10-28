@@ -15,5 +15,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts", "tests/**/*.test.ts"],
+    // Needs local Supabase: `pnpm test:integration`.
+    exclude: ["tests/integration/**", "node_modules/**"],
   },
 });

@@ -201,6 +201,12 @@ Confirmed (T2, docs.zernio.com/webhooks and the `@zernio/node` 0.2.1369 types `W
 ### 7.6 Signup and connect
 
 - Signup → create tenant + member → `POST /v1/profiles { name, externalId: tenant.id }` → store `zernio_profile_id`.
+- As built (T3), `features/tenants`:
+  - Supabase Auth email + password (`/signup`, `/login`, `/auth/confirm` for the confirmation link; `src/proxy.ts` refreshes the session cookie). Works with email confirmation on or off.
+  - `public.create_owner_tenant(user_id, name)` (service role only) creates tenant + owner member + `tenant_created` audit row in one transaction, or returns the existing tenant. An advisory lock per user serializes concurrent calls; a partial unique index (`tenant_members (user_id) where role = 'owner'`) is the backstop: one tenant per owner in Pass 1.
+  - `ensureZernioProfile` creates the profile named `<business name> (<first 8 hex of tenant id>)` with `externalId = tenant.id`, then links it with `update … where zernio_profile_id is null` and writes `zernio_profile_linked`. No `Idempotency-Key`: Zernio's externalId uniqueness already makes a retry return the same profile (409 → adopt), and a key would 422 if the name changed between attempts.
+  - Signup, login and email confirmation all run the same idempotent setup, so a request that died half-way is completed on the next attempt. A Zernio failure doesn't block signup (tenant is created, error goes to Sentry); the profile is retried on the next login or connect.
+  - Tests: pgTAP `owner_tenant.test.sql`; `pnpm test:integration` (local Supabase, fake Zernio) proves one tenant + one profile across repeated, concurrent and lost-response retries. The concurrent test can't force the race over HTTP (removing the lock and index still passed); the unique index is what the pgTAP test proves.
 - Connect → `GET /v1/connect/{platform}?profileId=…&redirect_url=…` → redirect the browser to `authUrl`; the account arrives via `account.connected`.
 
 ## 8. Interfaces

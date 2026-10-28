@@ -641,7 +641,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      create_owner_tenant: {
+        Args: { p_name: string; p_user_id: string }
+        Returns: {
+          created: boolean
+          tenant_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

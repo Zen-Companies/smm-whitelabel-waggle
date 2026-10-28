@@ -18,7 +18,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 
 ## Phase 1: Tenants and accounts
 
-- [ ] **T3. Signup and tenant creation**
+- [x] **T3. Signup and tenant creation**
       Supabase Auth signup → tenant + member → Zernio profile (handle 409 conflict).
       _Done when:_ signup creates exactly one tenant and one linked Zernio profile, even on retry.
 
@@ -35,10 +35,12 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 - [ ] **T6. Status machine and job runner**
       `features/inbox/status.ts` (`nextStatus`), `/api/jobs/process` with claim query (§7.2), retries (§14), pg_cron + pg_net migration calling it with `CRON_SECRET`.
       _Done when:_ seeded `new` items move through mocked steps; a failing step retries 3 times then fails and escalates.
+      _Note:_ the job route tracks its own deadline and stops claiming items before Vercel's max function duration.
 
 - [ ] **T7. Triage**
       Classification step using `FallbackClassifier`; stores category, confidence, classifier_used. Local Jev test script against message fixtures with an accuracy report.
       _Done when:_ every item gets a category; forced Jev failure uses LLM; local Jev report runs.
+      _Note:_ also evaluate Jev through OpenRouter's Decisions API (`typesafe/jev-1.13`, alpha) alongside the current endpoint.
 
 - [ ] **T8. Knowledge base**
       CRUD UI, embeddings on save, retrieval function (top 5 by similarity, tenant-scoped). Choose the embedding model, then a migration sets `kb_entries.embedding` to `vector(N)` and adds the HNSW index (deferred from T1). Re-embedding picks up entries where `embedding is null` (a T1 trigger clears it whenever title or content changes).
@@ -69,6 +71,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 - [ ] **T14. Publishing**
       Compose page (text + image, target accounts, now or scheduled), `createPost` with idempotency key, status from `post.*` webhooks, retry on failure. VERIFY Zernio scheduling and media fields first.
       _Done when:_ a post publishes now and on schedule, and status shows correctly.
+      _Note:_ show a friendly message for Zernio's 409 duplicate-content error (same content to the same account within 24 h).
 
 - [ ] **T15. Billing**
       Stripe Checkout, `/api/webhooks/stripe`, subscription status sync, processing gate + billing banner.
