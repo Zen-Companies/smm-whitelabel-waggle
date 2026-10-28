@@ -8,7 +8,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Next.js (App Router, TS strict), Tailwind, shadcn/ui, Vitest, ESLint/Prettier, Sentry, folder structure from `docs/tdd.md` §3, `.env.example` from §17, Supabase local.
       _Done when:_ `pnpm dev`, `pnpm test`, `pnpm lint` all pass on an empty app.
 
-- [ ] **T1. Schema, RLS and seed**
+- [x] **T1. Schema, RLS and seed**
       Migrations for every table in TDD §5, indexes, RLS policies (§13), pgvector, default autonomy settings function.
       _Done when:_ migrations apply cleanly; an RLS test proves user A can't read tenant B's rows.
 
@@ -41,7 +41,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       _Done when:_ every item gets a category; forced Jev failure uses LLM; local Jev report runs.
 
 - [ ] **T8. Knowledge base**
-      CRUD UI, embeddings on save, retrieval function (top 5 by similarity, tenant-scoped).
+      CRUD UI, embeddings on save, retrieval function (top 5 by similarity, tenant-scoped). Choose the embedding model, then a migration sets `kb_entries.embedding` to `vector(N)` and adds the HNSW index (deferred from T1). Re-embedding picks up entries where `embedding is null` (a T1 trigger clears it whenever title or content changes).
       _Done when:_ retrieval returns the right entry for sample questions.
 
 - [ ] **T9. Drafting**

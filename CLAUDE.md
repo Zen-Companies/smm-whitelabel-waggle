@@ -14,14 +14,17 @@ Read before working:
 
 Next.js (App Router) + TypeScript strict · Tailwind + shadcn/ui · Supabase (Postgres, Auth, Realtime, pgvector, pg_cron, pg_net) · Vercel · Zernio (`@zernio/node`) · Jev · Vercel AI SDK (direct provider) · Resend · Sentry · Stripe · zod · Vitest.
 
+Next.js 16 has breaking changes from older versions: check `node_modules/next/dist/docs/` before using a Next.js API.
+
 ## Commands
 
 ```bash
 pnpm dev              # run the app
 pnpm test             # Vitest
 pnpm lint             # ESLint
-pnpm typecheck        # tsc --noEmit
-supabase start        # local Supabase
+pnpm typecheck        # next typegen && tsc --noEmit
+pnpm test:db          # pgTAP tests in supabase/tests (RLS); needs supabase start
+supabase start        # local Supabase (ports 553xx, see supabase/config.toml)
 supabase db reset     # re-apply migrations + seed
 supabase migration new <name>
 ```
@@ -53,6 +56,7 @@ tests/fixtures    recorded webhook payloads
 9. **Every tenant table has `tenant_id` and RLS.** The service-role client is server-only.
 10. **Never log customer message text** to Sentry or console in production; log ids.
 11. **Every state change and owner action writes to `audit_log`.**
+12. **Never add a `Co-Authored-By: Claude` (or any Claude attribution) line to commits.**
 
 ## Conventions
 

@@ -112,6 +112,15 @@ All tables: `id uuid pk default gen_random_uuid()`, `created_at timestamptz defa
 
 Indexes: `inbound_items (status, next_run_at)`, `inbound_items (tenant_id, created_at desc)`, ivfflat or hnsw on `kb_entries.embedding`.
 
+As built (T1, `supabase/migrations`):
+- Enumerated values are `text` + `check` constraints (easy to extend in a migration).
+- Child tables reference parents by `(id, tenant_id)` composite foreign keys, so no row can point at another tenant's row, even when written with the service role. `posts.target_account_ids` (a `uuid[]`) is checked by a trigger: every id must be a `social_accounts` row of the same tenant (§4).
+- `inbound_items`: a check requires `zernio_comment_id` for comments and `zernio_message_id` + `conversation_id` for DMs; both ids are unique. Extra column `classifier_scores jsonb` (per-category scores, §9.3; never message text).
+- `kb_entries.embedding` is an untyped `vector` for now; T8 picks the embedding model, sets `vector(N)` and adds the HNSW index.
+- A `before update` trigger on `kb_entries` sets `embedding = null` whenever `title` or `content` changes, so an edited entry never keeps the embedding of its old text. Re-embedding (T8) picks up entries where `embedding is null`. Tested in `supabase/tests/database/kb_entries_embedding.test.sql`.
+- `autonomy_settings` rows are created by an `after insert` trigger on `tenants` with the PRD F9 defaults.
+- Helpers live in a `private` schema (not exposed by PostgREST).
+
 ## 6. Inbound item status machine
 
 ```
@@ -365,7 +374,14 @@ Fully unit-tested; no I/O.
 
 ## 13. Security
 
-- RLS on every tenant table: `tenant_id in (select tenant_id from tenant_members where user_id = auth.uid())`.
+- RLS on every tenant table: `tenant_id in (select tenant_id from tenant_members where user_id = auth.uid())`. The membership lookup is `private.user_tenant_ids()` (security definer, so `tenant_members` policies don't recurse).
+- Client (`authenticated`) access, enforced with RLS plus table/column grants:
+  - **Read:** every tenant table, own tenants only (Realtime needs this for `drafts`).
+  - **Write, owner-authored content only:** `tenants` (name, confidence_threshold), `kb_entries` (insert/update title and content, delete), `posts` (insert/update content, media, target accounts, schedule), `autonomy_settings` (mode).
+  - **No client writes:** `inbound_items`, `drafts`, `conversations`, `social_accounts`, `leads`, `audit_log`, `ai_usage`, `tenant_members`. Server Actions and jobs write these with the service-role client after checking membership, so status changes (rule 5), sends and audit rows stay in server code.
+  - `webhook_events`: no client access at all. `anon`: no access to any table.
+- New tables get no client grants by default (default privileges revoked); each migration grants what it needs.
+- `supabase/tests/database/rls.test.sql` (pgTAP, `pnpm test:db`) proves tenant A can't read or write tenant B's rows.
 - Service-role key only in server code (`lib/supabase/service.ts`), never shipped to the client.
 - Verify signatures on Zernio and Stripe webhooks; `CRON_SECRET` on the job route.
 - Never log full webhook payloads to Sentry (customer messages); log ids.

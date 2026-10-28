@@ -2,6 +2,8 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs/config";
 
 const nextConfig: NextConfig = {
+  // AGENTS.md only points to CLAUDE.md; stop `next dev` from writing its own block into it.
+  agentRules: false,
   cacheComponents: true,
   partialPrefetching: true,
   env: {
