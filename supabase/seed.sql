@@ -1,0 +1,1 @@
+-- Seed data for local development (supabase db reset). Filled in T1.
