@@ -12,7 +12,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Migrations for every table in TDD §5, indexes, RLS policies (§13), pgvector, default autonomy settings function.
       _Done when:_ migrations apply cleanly; an RLS test proves user A can't read tenant B's rows.
 
-- [ ] **T2. Interfaces and adapters skeleton**
+- [x] **T2. Interfaces and adapters skeleton**
       `SocialProvider` + Zernio adapter, `Classifier` + Jev adapter + LLM adapter + `FallbackClassifier`, LLM client with `ai_usage` recording, audit helper.
       _Done when:_ adapters compile, unit tests with mocked HTTP pass, `FallbackClassifier` falls back on timeout.
 

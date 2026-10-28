@@ -37,7 +37,7 @@ Principle: **webhooks write, jobs process, the UI decides.** The webhook route o
 | DB, auth, realtime, vectors, cron | Supabase (Pro): Postgres, Auth, Realtime, pgvector, pg_cron, pg_net |
 | Social                            | Zernio Node SDK (`@zernio/node`) behind `SocialProvider`            |
 | Triage                            | Jev (TypeSafe AI) behind `Classifier`, LLM fallback                 |
-| Drafting + embeddings             | Direct provider API via Vercel AI SDK                               |
+| Drafting + embeddings             | OpenRouter via Vercel AI SDK (`@openrouter/ai-sdk-provider`)        |
 | Email                             | Resend                                                              |
 | Errors                            | Sentry                                                              |
 | Billing                           | Stripe                                                              |
@@ -86,7 +86,8 @@ Rules: features expose a public API via `index.ts` and never import another feat
 
 - One `tenant` per business; one Zernio **profile** per tenant with `externalId = tenant.id`.
 - Zernio webhooks carry `profiles[0].externalId`, so routing an event to a tenant needs no lookup.
-- On profile creation, a `409 profile_external_id_conflict` means it already exists: use `details.existingProfileId`.
+- On profile creation, a `409 profile_external_id_conflict` means it already exists: use `details.existingProfileId`. Send an `Idempotency-Key` too (same key + body replays the original 201).
+- Profile **names** are also unique per team and a duplicate name returns a 409 with `existingProfileId` too, but that profile may belong to another tenant: the adapter only adopts the existing profile for `profile_external_id_conflict`. T3 must make names unique (e.g. business name + short tenant id).
 - Never pass a tenant an account ID that isn't in their profile (`POST /v1/posts` accepts any account in our team).
 - Every tenant table has `tenant_id` and RLS.
 
@@ -147,7 +148,14 @@ Transitions live in one module (`features/inbox/status.ts`) with a pure `nextSta
    - `account.connected` / `account.disconnected` → upsert `social_accounts`; on disconnect set its open items to `paused` and enqueue an alert.
 4. Return 200. Target well under 5 seconds; Zernio retries up to 7 times on failure.
 
-Subscribe only to: `comment.received`, `message.received`, `message.failed`, `post.published`, `post.partial`, `post.failed`, `account.connected`, `account.disconnected`. **VERIFY** the exact `comment.received` payload fields (comment id, post id, author).
+Subscribe only to: `comment.received`, `message.received`, `message.failed`, `post.published`, `post.partial`, `post.failed`, `account.connected`, `account.disconnected`.
+
+Confirmed (T2, docs.zernio.com/webhooks and the `@zernio/node` 0.2.1369 types `WebhookPayloadComment` / `WebhookPayloadMessage`):
+
+- Signature: `X-Zernio-Signature` = lowercase hex HMAC-SHA256 of the raw body, no timestamp or prefix. Other headers: `X-Zernio-Event` (event name), `X-Zernio-Event-Id` (= payload `id`, stable across retries: the dedupe key).
+- Delivery: at least once; 2xx within 5 s; up to 7 attempts (immediate, 10 s, 1 m 40 s, 16 m 40 s, 2 h 46 m 40 s, 24 h, 24 h), then dead-letter. The account lives at `account.accountId` (`account.id` is the same value).
+- `comment.received`: `id`, `profiles`, `comment { id, postId (Zernio id, null for posts not published through Zernio), platformPostId, platform, text, author { id, username?, name?, isOwnAccount? }, createdAt, isReply, parentCommentId }`, `post { id, platformPostId, content, imageUrl, permalink }`, `account { id, accountId, platform, username }`, `timestamp`. Meta re-delivers our own replies as comments: **skip `author.isOwnAccount = true`** (T5).
+- `message.received`: `message { id, conversationId, platform, platformMessageId, direction, text (nullable), attachments[], sender { id, name?, username? } }`, plus `account`. Only `direction = 'incoming'` creates items.
 
 ### 7.2 Job processing (`/api/jobs/process`)
 
@@ -177,15 +185,17 @@ Subscribe only to: `comment.received`, `message.received`, `message.failed`, `po
 
 ### 7.4 Sending
 
-- Comment: `SocialProvider.replyToComment` (Zernio `POST /v1/inbox/comments/{postId}` with `accountId`, `commentId`, `message`).
+- Comment: `SocialProvider.replyToComment` (Zernio `POST /v1/inbox/comments/{postId}` with `accountId`, `commentId`, `message`, header `Idempotency-Key = drafts.idempotency_key`). `postId` may be the Zernio post id or the platform post id; use the webhook's `comment.platformPostId`, which is set even for posts not published through Zernio. Response `data.commentId`.
 - DM: `SocialProvider.sendDm` (Zernio `POST /v1/inbox/conversations/{conversationId}/messages` with `accountId`, `message`, header `Idempotency-Key = drafts.idempotency_key`).
 - Before sending a DM, check `conversations.last_customer_message_at > now() - 24h`; otherwise escalate.
-- A Zernio `500` on send is ambiguous (may have been delivered): list the conversation's messages to reconcile before retrying. `429` → respect `Retry-After`.
+- Idempotency (confirmed for both sends): same key + same body within 24 h replays the original response; same key + different body → 422; key in flight → 409. Only 2xx responses are stored, so a failure releases the key.
+- A Zernio `5xx`, timeout or network error on send is ambiguous (may have been delivered): list the conversation's messages (or the post's comments) to reconcile before retrying; Zernio warns an empty list is inconclusive. The adapter marks these errors `ambiguous: true`.
+- `429`: the SDK exposes `X-RateLimit-Reset` (not `Retry-After`); the adapter turns it into `retryAfterSeconds`.
 
 ### 7.5 Publishing
 
-- `SocialProvider.createPost({ content, mediaUrls, accountIds, publishAt | publishNow, idempotencyKey })` → Zernio `POST /v1/posts`. **VERIFY** the scheduling field name and idempotency header for posts.
-- Media: upload per Zernio's media flow (**VERIFY**), store returned URLs in `posts.media`.
+- `SocialProvider.createPost({ content, mediaUrls, targets, publishAt, idempotencyKey })` → Zernio `POST /v1/posts`. Confirmed: `scheduledFor` (ISO 8601 with `Z`/offset) or `publishNow: true` (`publishAt = null`); `platforms: [{ platform, accountId }]`; media as `mediaItems: [{ url }]` (the SDK README's `mediaUrls` is outdated). Header `Idempotency-Key` (24 h; a retry returns the original post with 200, `409 idempotency_conflict` + `Retry-After` while the first is in flight). Separately, identical content to the same account within 24 h is rejected with 409 and `existingPostId`.
+- Media: `POST /v1/media/presign { filename, contentType, size? }` → `{ uploadUrl, publicUrl }`; `PUT` the file to `uploadUrl`; pass `publicUrl` in `mediaItems`. Store the URLs in `posts.media`.
 - Status comes from `post.*` webhooks, not from polling.
 
 ### 7.6 Signup and connect
@@ -195,34 +205,29 @@ Subscribe only to: `comment.received`, `message.received`, `message.failed`, `po
 
 ## 8. Interfaces
 
+As built in T2 (`src/lib/*/types.ts`, `src/lib/llm/client.ts`); each lib's `index.ts` exports the interfaces and a server-only default instance (`getSocialProvider()`, `getClassifier()`, `getLlmClient()`).
+
 ```ts
 // lib/social/types.ts
 export interface SocialProvider {
-  createProfile(input: { name: string; externalId: string }): Promise<{ profileId: string }>;
-  getConnectUrl(input: {
-    platform: "instagram" | "facebook";
-    profileId: string;
-    redirectUrl: string;
-  }): Promise<{ authUrl: string }>;
-  createPost(input: CreatePostInput): Promise<{ providerPostId: string; status: string }>;
-  replyToComment(input: {
-    accountId: string;
-    postId: string;
-    commentId: string;
-    message: string;
-  }): Promise<{ providerReplyId: string }>;
-  sendDm(input: {
-    accountId: string;
-    conversationId: string;
-    message: string;
-    idempotencyKey: string;
-  }): Promise<{ providerMessageId: string }>;
-  listConversationMessages(input: {
-    conversationId: string;
-    accountId: string;
-  }): Promise<ProviderMessage[]>;
+  // 409 profile_external_id_conflict → the existing profile, alreadyExisted: true
+  createProfile(input: { name: string; externalId: string; idempotencyKey?: string }): Promise<{ profileId: string; alreadyExisted: boolean }>;
+  getConnectUrl(input: { platform: "instagram" | "facebook"; profileId: string; redirectUrl: string }): Promise<{ authUrl: string }>;
+  createPost(input: CreatePostInput): Promise<{ providerPostId: string; status: ProviderPostStatus }>;
+  replyToComment(input: { accountId: string; postId: string; commentId: string; message: string; idempotencyKey: string }): Promise<{ providerReplyId: string }>;
+  sendDm(input: { accountId: string; conversationId: string; message: string; idempotencyKey: string }): Promise<{ providerMessageId: string }>;
+  listConversationMessages(input: { conversationId: string; accountId: string; limit?: number }): Promise<ProviderMessage[]>; // newest first
   getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
 }
+export interface CreatePostInput {
+  content: string;
+  mediaUrls?: string[];
+  targets: { platform: "instagram" | "facebook"; accountId: string }[];
+  publishAt: Date | null; // null = publish now
+  idempotencyKey: string;
+}
+// Every adapter error is a SocialProviderError { status?, code?, ambiguous, retryAfterSeconds? }.
+// ambiguous = 5xx / timeout / network: the request may have taken effect, reconcile before retrying.
 
 // lib/classifier/types.ts
 export type Category = "faq" | "lead" | "complaint" | "spam" | "unclear";
@@ -230,15 +235,26 @@ export interface Classification {
   category: Category;
   confidence: number;
   provider: "jev" | "llm";
-  scores?: Partial<Record<Category, number>>;
+  model: string;
+  scores?: Partial<Record<Category, number>>; // raw Jev scores, never message text
+  reason?: "no_match" | "low_confidence"; // set when unclear
+  fallbackReason?: "timeout" | "network" | "http" | "invalid_output" | "error"; // set when the LLM fallback answered
 }
 export interface Classifier {
-  classify(input: {
-    text: string;
-    kind: "comment" | "dm";
-    businessContext?: string;
-  }): Promise<Classification>;
+  classify(
+    input: { tenantId: string; itemId?: string | null; text: string; kind: "comment" | "dm"; businessContext?: string },
+    options?: { signal?: AbortSignal },
+  ): Promise<Classification>;
 }
+
+// lib/llm/client.ts: every call writes one ai_usage row
+export interface LlmClient {
+  generateObject<T>(input: { purpose: "classify" | "draft"; schema: z.ZodType<T>; system: string; prompt: string; tenantId: string; itemId?: string | null; signal?: AbortSignal }): Promise<{ object: T; model: string }>;
+  embed(input: { value: string; tenantId: string; itemId?: string | null; signal?: AbortSignal }): Promise<{ embedding: number[]; model: string }>;
+}
+
+// lib/audit
+export function writeAudit(db: ServiceClient, entry: { tenantId: string; itemId?: string | null; action: string; actor: "system" | string; details?: Json }): Promise<void>; // throws on failure
 
 // features/drafting
 export interface DraftResult {
@@ -253,6 +269,8 @@ export function enqueue(itemId: string, opts?: { runAt?: Date }): Promise<void>;
 ```
 
 The classifier used in production is `FallbackClassifier(jev, llm)`: try Jev with a 3-second timeout (`JEV_TIMEOUT_MS`, §9.4); on error, timeout or invalid output, use the LLM classifier and record `classifier_used = 'llm'`.
+
+Changes from the draft interfaces (T2): `replyToComment` takes an `idempotencyKey` (Zernio supports it, rule 7); `createProfile` reports `alreadyExisted`; `createPost` takes `targets` (Zernio needs the platform per account) and `publishAt: Date | null`; `classify` takes `tenantId`/`itemId` (for `ai_usage`) and an abort signal; `Classification` gained `model`, `reason` and `fallbackReason`.
 
 ## 9. Jev integration
 
@@ -324,6 +342,7 @@ The tenant threshold (default 0.85) is still applied by `policy()` step 4 (§11)
 - Every Jev call writes `ai_usage` (`purpose = 'classify'`, `provider = 'jev'`, `model` from the response, tokens from `usage`). Cost = input tokens × `JEV_COST_PER_MTOK_INPUT` / 1e6 (cloud: $0.042; output tokens are free; local jevos: 0).
 - Env: `JEV_API_URL` (required), `JEV_API_KEY` (optional), `JEV_MODEL` (default `jev-latest`), `JEV_TIMEOUT_MS`, `JEV_COST_PER_MTOK_INPUT`.
 - Privacy: with a hosted backend, customer text leaves our infra; it needs a DPA like Zernio's. Never log `state`.
+- As built (T2): `FallbackClassifier` aborts the Jev request at the deadline and also races it, so a hung adapter can't hold the step. A caller abort is not a fallback (it propagates). If the LLM fails too, the error propagates and the job retries (§14). The LLM fallback (`lib/classifier/llm.ts`, prompt versioned) applies the same rules as `pickCategory`: confidence < `MIN_CONFIDENCE` → `unclear` (`low_confidence`, confidence `1 − c`), and messages under `SPAM_MIN_WORDS` are never spam. `pickCategory` treats a short message's spam score as 0, so it doesn't count towards `max(p)` either. Jev usage is recorded even when the answers fail validation (the tokens were spent).
 
 ### 9.5 Switching to TypeSafe cloud
 
@@ -341,7 +360,12 @@ The tenant threshold (default 0.85) is still applied by `policy()` step 4 (§11)
 
 ## 10. LLM drafting
 
-- Provider called directly through the Vercel AI SDK (`generateObject` with a zod schema matching `DraftResult`).
+- Provider: **OpenRouter** through the Vercel AI SDK (`@openrouter/ai-sdk-provider` 3.x, AI SDK 7), so one balance covers every model. Models are OpenRouter `provider/model` ids set by env (`LLM_CLASSIFY_MODEL`, `LLM_DRAFT_MODEL`, `EMBEDDING_MODEL`).
+- Provider resolution lives only in `lib/llm/provider.ts` (`LLM_PROVIDER`, `EMBEDDING_PROVIDER`; only `openrouter` today), so going direct to a provider later is config plus one case there.
+- Structured output: AI SDK 7 `generateText` with `Output.object({ schema })` (zod schema matching `DraftResult`), wrapped by `LlmClient.generateObject`.
+- Embeddings: OpenRouter's `/embeddings` endpoint natively (`openrouter.textEmbeddingModel`, e.g. `openai/text-embedding-3-small`); no `@ai-sdk/openai` needed.
+- Cost: models are created with `usage: { include: true }`; `ai_usage.cost_usd` = `providerMetadata.openrouter.usage.cost` (USD, chat and embeddings), 0 when absent. `ai_usage.model` is the served model id from the response (fallback: the configured id); `provider = 'openrouter'`.
+- A failed `ai_usage` insert is reported to Sentry by ids and does not fail the step (retrying would pay for the call again).
 - Retrieval: embed the incoming text, fetch the top 5 `kb_entries` by cosine similarity for the tenant, pass them as the only source of facts.
 - Prompt rules (system prompt, versioned in `features/drafting/prompts.ts`):
   - Answer only from the provided business info; if not covered, set `needsHuman = true` and write a short holding reply.
@@ -410,7 +434,8 @@ Fully unit-tested; no I/O.
 NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET
 JEV_API_URL, JEV_API_KEY, JEV_MODEL, JEV_TIMEOUT_MS, JEV_COST_PER_MTOK_INPUT
-LLM_PROVIDER_API_KEY, LLM_DRAFT_MODEL, LLM_CLASSIFY_MODEL, EMBEDDING_MODEL
+LLM_PROVIDER (openrouter), OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL
+EMBEDDING_PROVIDER (openrouter), EMBEDDING_MODEL
 RESEND_API_KEY, ALERT_FROM_EMAIL
 STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
 CRON_SECRET
@@ -422,10 +447,11 @@ APP_URL
 
 Setup notes (T0): Next.js 16 (Turbopack, `cacheComponents`), Tailwind 4, shadcn/ui `base-nova`, ESLint 9 flat config + Prettier, Vitest 5, `@sentry/nextjs` 11 (`withSentryConfig` is imported from `@sentry/nextjs/config`). `pnpm typecheck` runs `next typegen` first because route types such as `LayoutProps` are generated.
 
+Setup notes (T2): `@zernio/node` 0.2.1369 (pinned: it publishes daily), `ai` 7.0.155, `@openrouter/ai-sdk-provider` 3.1.0, `@supabase/supabase-js` 2. DB types are generated into `src/lib/supabase/database.types.ts` by `pnpm gen:types` (rerun after each migration). `lib/*/index.ts` and `lib/supabase/service.ts` import `server-only`; Vitest aliases it to its empty module. Tests mock HTTP only: `fetch` is stubbed under the real Zernio SDK and passed to the OpenRouter provider and the Jev adapter.
+
 ## 18. Open technical questions
 
 - Jev: production endpoint (TypeSafe cloud vs `jevtypesafeai.com`), pricing, rate limits, DPA and measured latency (shape confirmed, §9.1).
-- Exact `comment.received` payload and comment-reply fields (VERIFY).
-- Post scheduling field and media upload flow (VERIFY).
-- Embedding model and dimension.
+- Embedding model and dimension (T8; `openai/text-embedding-3-small` via OpenRouter is the default in `.env.example`, 1536 dims).
+- Option to evaluate in T7: OpenRouter also serves Jev (`typesafe/jev-1.13`) through its Decisions API (`openrouter.evaluationModel()`, alpha). It would put Jev on the same balance; it is not used now because the shape is alpha and our adapter speaks the §9.1 wire format.
 - Whether to add the webhook fast path in Pass 1 or rely on the 1-minute cron.

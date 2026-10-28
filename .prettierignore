@@ -4,3 +4,4 @@ supabase/.temp
 CLAUDE.md
 AGENTS.md
 docs/
+src/lib/supabase/database.types.ts
