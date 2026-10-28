@@ -51,7 +51,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       `generateObject` with `DraftResult` schema, prompt rules (TDD §10), lead extraction, `ai_usage` rows.
       _Done when:_ covered questions get correct drafts; uncovered ones set `needsHuman`.
 
-- [ ] **T10. Policy check and autonomy settings**
+- [x] **T10. Policy check and autonomy settings**
       Pure `policy()` (TDD §11) with full unit tests; settings UI per category.
       _Done when:_ all policy branches are tested; changing a mode changes the next item's outcome.
 

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { AccountsCard } from "@/features/accounts";
+import { AutonomyCard } from "@/features/approvals";
 import { BusinessSettings } from "@/features/tenants";
 
 export default function SettingsPage({ searchParams }: PageProps<"/settings">) {
@@ -9,6 +10,7 @@ export default function SettingsPage({ searchParams }: PageProps<"/settings">) {
       <Suspense fallback={<p className="text-muted-foreground text-sm">Loading…</p>}>
         <BusinessSettings />
         <AccountsCard searchParams={searchParams} />
+        <AutonomyCard />
       </Suspense>
     </main>
   );

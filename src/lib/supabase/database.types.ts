@@ -225,6 +225,8 @@ export type Database = {
           item_id: string
           kb_entry_ids: string[]
           model: string | null
+          needs_human: boolean
+          needs_human_reason: string | null
           sent_at: string | null
           status: string
           tenant_id: string
@@ -241,6 +243,8 @@ export type Database = {
           item_id: string
           kb_entry_ids?: string[]
           model?: string | null
+          needs_human?: boolean
+          needs_human_reason?: string | null
           sent_at?: string | null
           status?: string
           tenant_id: string
@@ -257,6 +261,8 @@ export type Database = {
           item_id?: string
           kb_entry_ids?: string[]
           model?: string | null
+          needs_human?: boolean
+          needs_human_reason?: string | null
           sent_at?: string | null
           status?: string
           tenant_id?: string

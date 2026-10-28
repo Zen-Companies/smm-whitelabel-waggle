@@ -424,6 +424,14 @@ Order:
 
 Fully unit-tested; no I/O.
 
+As built (T10, `features/approvals`):
+
+- `policy(input)` returns `{ decision: 'pause' | 'ignore' | 'escalate' | 'approve' | 'send', reason }` in the order above. Details: `trialing` counts as paying; confidence **equal** to the threshold passes; a DM with no known customer message, or exactly 24 h old, is outside the window; a missing draft counts as `needsHuman`; a missing autonomy row counts as `off`.
+- `triage(input)` is steps 1-4 without the draft, returning `draft` when the item is worth drafting. The T9 draft step uses it, so the pre-draft rules live in one place.
+- The `drafted` job step (`createPolicyStep`) loads the item, tenant, account, mode, latest pending draft and conversation window, runs `policy()`, and maps the decision to an event: send → `sending`, approve → `awaiting_approval`, escalate → `escalated`, ignore → `ignored`, pause → `paused`. In auto mode it also marks the draft `approved` (`decided_by` null = system) and writes `draft_auto_approved`. The decision, reason and mode go into the status_changed audit row.
+- `drafts.needs_human` and `drafts.needs_human_reason` columns (migration `draft_needs_human`) carry `DraftResult.needsHuman`.
+- Settings UI ("Reply autonomy"): a mode selector for **faq** and **lead** only. Complaints and unclear messages always escalate and spam is always ignored (steps 2-3), so those rows are shown as fixed rather than offering a setting that would do nothing. The Server Action updates `mode` through RLS and writes `autonomy_mode_changed` (from → to) with the owner as actor.
+
 ## 12. Billing
 
 - Stripe Checkout for the subscription; webhook `/api/webhooks/stripe` verifies the signature and handles `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` → update `tenants.subscription_status`.
