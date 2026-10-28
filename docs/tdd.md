@@ -408,6 +408,17 @@ The tenant threshold (default 0.85) is still applied by `policy()` step 4 (§11)
   - Public comments never ask for or repeat personal contact details; move those to DM.
 - Record every call in `ai_usage`.
 
+As built (T8, `features/knowledge-base`):
+
+- **Model:** `openai/text-embedding-3-small` through OpenRouter, 1536 dimensions. `kb_entries.embedding` is `vector(1536)` with an HNSW index (`vector_cosine_ops`); `toVectorLiteral` rejects any other length, so changing `EMBEDDING_MODEL` to a model with another dimension fails loudly and needs a migration.
+- **Embedded text:** `title + "
+
+" + content`.
+- **On save:** owners create, edit and delete entries on `/knowledge-base` (Server Actions through RLS; `kb_entry_created/updated/deleted` audit rows with the owner as actor). The embedding is computed after the response (`after()`), with the service client, since the column isn't client-writable. The write is conditional on the `updated_at` that was read, so an embedding of old text never lands on newer text.
+- **Re-embedding:** the job route runs `embedPendingEntries` each tick (when the LLM is configured and time remains): every entry whose `embedding is null` (new, edited via the T1 trigger, or a failed embed). Entries waiting for an embedding aren't retrievable (shown as "Indexing…").
+- **Retrieval:** `retrieveKbEntries` embeds the message (`ai_usage` purpose `embed`, against the item) and calls `public.match_kb_entries(tenant, embedding, 5)`: service role only, one tenant, cosine similarity, best first, limit capped at 20.
+- **Tests:** `tests/integration/kb.test.ts` runs the real client → OpenRouter HTTP → pgvector path, with OpenRouter faked by a deterministic bag-of-words embedding (plumbing, ordering, tenant scoping, stale writes; not model quality).
+
 ## 11. Policy check (`features/approvals/policy.ts`, pure function)
 
 Input: item, classification, draft, tenant, account, autonomy mode, now. Output: `'send' | 'approve' | 'escalate' | 'ignore'` + reason.
@@ -494,6 +505,5 @@ Setup notes (T2): `@zernio/node` 0.2.1369 (pinned: it publishes daily), `ai` 7.0
 ## 18. Open technical questions
 
 - Jev: production endpoint (TypeSafe cloud vs `jevtypesafeai.com`), pricing, rate limits, DPA and measured latency (shape confirmed, §9.1).
-- Embedding model and dimension (T8; `openai/text-embedding-3-small` via OpenRouter is the default in `.env.example`, 1536 dims).
 - Option to evaluate in T7: OpenRouter also serves Jev (`typesafe/jev-1.13`) through its Decisions API (`openrouter.evaluationModel()`, alpha). It would put Jev on the same balance; it is not used now because the shape is alpha and our adapter speaks the §9.1 wire format.
 - Whether to add the webhook fast path in Pass 1 or rely on the 1-minute cron.

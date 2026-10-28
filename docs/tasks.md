@@ -43,7 +43,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       _Done when:_ every item gets a category; forced Jev failure uses LLM; local Jev report runs.
       _Note:_ also evaluate Jev through OpenRouter's Decisions API (`typesafe/jev-1.13`, alpha) alongside the current endpoint.
 
-- [ ] **T8. Knowledge base**
+- [x] **T8. Knowledge base**
       CRUD UI, embeddings on save, retrieval function (top 5 by similarity, tenant-scoped). Choose the embedding model, then a migration sets `kb_entries.embedding` to `vector(N)` and adds the HNSW index (deferred from T1). Re-embedding picks up entries where `embedding is null` (a T1 trigger clears it whenever title or content changes).
       _Done when:_ retrieval returns the right entry for sample questions.
 

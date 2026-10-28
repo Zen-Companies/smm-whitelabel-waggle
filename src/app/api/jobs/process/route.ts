@@ -1,7 +1,9 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { processDueItems, PRODUCTION_STEPS } from "@/features/inbox";
+import { embedPendingEntries } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
+import { getLlmClientOrNull } from "@/lib/llm";
 import { getServiceClient } from "@/lib/supabase/service";
 
 // Called every minute by pg_cron + pg_net with `Authorization: Bearer CRON_SECRET` (§7.2).
@@ -20,12 +22,18 @@ function authorized(request: Request): boolean {
 export async function POST(request: Request): Promise<Response> {
   if (!authorized(request)) return Response.json({ error: "unauthorized" }, { status: 401 });
   try {
-    const summary = await processDueItems({
-      db: getServiceClient(),
-      steps: PRODUCTION_STEPS,
-      deadline: createDeadline(),
-    });
-    return Response.json(summary);
+    const db = getServiceClient();
+    const deadline = createDeadline();
+    const items = await processDueItems({ db, steps: PRODUCTION_STEPS, deadline });
+
+    // Knowledge base entries without an embedding (new, edited, or a failed embed: T8).
+    const llm = getLlmClientOrNull();
+    const kb =
+      llm && deadline.canStartItem()
+        ? await embedPendingEntries({ db, llm }, { shouldContinue: deadline.canStartItem })
+        : { embedded: 0, failed: 0 };
+
+    return Response.json({ ...items, kbEmbedded: kb.embedded, kbEmbedFailed: kb.failed });
   } catch (error) {
     Sentry.captureException(error);
     return Response.json({ error: "processing failed" }, { status: 500 });

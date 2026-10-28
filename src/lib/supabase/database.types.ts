@@ -666,6 +666,19 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      match_kb_entries: {
+        Args: {
+          p_limit?: number
+          p_query_embedding: string
+          p_tenant_id: string
+        }
+        Returns: {
+          content: string
+          id: string
+          similarity: number
+          title: string
+        }[]
+      }
       transition_account_items: {
         Args: {
           p_from: string[]

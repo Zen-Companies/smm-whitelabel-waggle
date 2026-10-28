@@ -22,3 +22,12 @@ export function getLlmClient(): LlmClient {
   });
   return client;
 }
+
+/** The LLM client, or null when it isn't configured yet (e.g. no OPENROUTER_API_KEY locally). */
+export function getLlmClientOrNull(): LlmClient | null {
+  try {
+    return getLlmClient();
+  } catch {
+    return null;
+  }
+}
