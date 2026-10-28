@@ -29,7 +29,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 
 ## Phase 2: Inbox pipeline
 
-- [ ] **T5. Webhook receiver**
+- [x] **T5. Webhook receiver**
       `/api/webhooks/zernio`: raw body, HMAC verify, dedupe into `webhook_events`, event mapping (TDD §7.1), return 200 fast. Fixtures in `tests/fixtures/zernio/`.
       _Done when:_ replaying the same fixture twice creates one item; a bad signature returns 400.
 

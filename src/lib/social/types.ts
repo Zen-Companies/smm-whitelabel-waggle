@@ -1,4 +1,9 @@
-export type SocialPlatform = "instagram" | "facebook";
+export const SOCIAL_PLATFORMS = ["instagram", "facebook"] as const;
+export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+
+export function isSocialPlatform(platform: string): platform is SocialPlatform {
+  return (SOCIAL_PLATFORMS as readonly string[]).includes(platform);
+}
 
 export interface CreatePostInput {
   content: string;

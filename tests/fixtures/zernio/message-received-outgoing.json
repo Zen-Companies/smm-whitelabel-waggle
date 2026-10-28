@@ -1,0 +1,41 @@
+{
+  "id": "evt_message_out_01",
+  "event": "message.received",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "message": {
+    "id": "msg_02",
+    "conversationId": "conv_01",
+    "platform": "instagram",
+    "platformMessageId": "aWdfZAG1faXRlbTox",
+    "direction": "outgoing",
+    "text": "Sure, see you Friday!",
+    "attachments": [],
+    "sender": {
+      "id": "17841400000000000",
+      "name": "Demo Coffee Shop",
+      "username": "democafe"
+    },
+    "sentAt": "2026-10-28T10:05:00.000Z",
+    "isRead": false
+  },
+  "conversation": {
+    "id": "conv_01",
+    "platformConversationId": "aWdfZAG06MTpJR01lc3NhZA",
+    "participantId": "17840000000000002",
+    "participantName": "Sam Rivera",
+    "participantUsername": "sam.rivera",
+    "status": "active"
+  },
+  "account": {
+    "id": "__ACCOUNT_ID__",
+    "accountId": "__ACCOUNT_ID__",
+    "platform": "instagram",
+    "username": "democafe"
+  },
+  "timestamp": "2026-10-28T10:00:01.000Z"
+}

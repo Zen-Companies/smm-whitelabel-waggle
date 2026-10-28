@@ -1,0 +1,18 @@
+{
+  "id": "evt_account_connected_01",
+  "event": "account.connected",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "account": {
+    "accountId": "__ACCOUNT_ID__",
+    "profileId": "__PROFILE_ID__",
+    "platform": "instagram",
+    "username": "democafe",
+    "displayName": "Demo Coffee Shop"
+  },
+  "timestamp": "2026-10-28T08:00:00.000Z"
+}

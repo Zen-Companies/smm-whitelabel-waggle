@@ -3,7 +3,7 @@ import { createZernioProvider } from "./zernio";
 import type { SocialProvider } from "./types";
 
 export { createZernioProvider, ZernioSocialProvider } from "./zernio";
-export { SocialProviderError } from "./types";
+export { isSocialPlatform, SOCIAL_PLATFORMS, SocialProviderError } from "./types";
 export type {
   AccountHealth,
   CreatePostInput,

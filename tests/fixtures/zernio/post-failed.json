@@ -1,0 +1,27 @@
+{
+  "id": "evt_post_failed_01",
+  "event": "post.failed",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "post": {
+    "id": "__POST_ID__",
+    "content": "Fresh croissants today!",
+    "status": "failed",
+    "scheduledFor": "2026-10-28T07:00:00.000Z",
+    "platforms": [
+      {
+        "platform": "instagram",
+        "status": "failed",
+        "accountId": "__ACCOUNT_ID__",
+        "error": "Media could not be processed",
+        "errorCategory": "user_content",
+        "errorSource": "user"
+      }
+    ]
+  },
+  "timestamp": "2026-10-28T07:00:05.000Z"
+}

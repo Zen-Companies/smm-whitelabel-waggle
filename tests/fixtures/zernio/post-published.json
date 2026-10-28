@@ -1,0 +1,27 @@
+{
+  "id": "evt_post_published_01",
+  "event": "post.published",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "post": {
+    "id": "__POST_ID__",
+    "content": "Fresh croissants today!",
+    "status": "published",
+    "scheduledFor": "2026-10-28T07:00:00.000Z",
+    "publishedAt": "2026-10-28T07:00:04.000Z",
+    "platforms": [
+      {
+        "platform": "instagram",
+        "status": "published",
+        "accountId": "__ACCOUNT_ID__",
+        "platformPostId": "17890000000000001",
+        "publishedUrl": "https://www.instagram.com/p/DEMO01/"
+      }
+    ]
+  },
+  "timestamp": "2026-10-28T07:00:05.000Z"
+}

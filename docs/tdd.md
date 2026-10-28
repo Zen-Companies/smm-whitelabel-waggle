@@ -157,6 +157,17 @@ Confirmed (T2, docs.zernio.com/webhooks and the `@zernio/node` 0.2.1369 types `W
 - `comment.received`: `id`, `profiles`, `comment { id, postId (Zernio id, null for posts not published through Zernio), platformPostId, platform, text, author { id, username?, name?, isOwnAccount? }, createdAt, isReply, parentCommentId }`, `post { id, platformPostId, content, imageUrl, permalink }`, `account { id, accountId, platform, username }`, `timestamp`. Meta re-delivers our own replies as comments: **skip `author.isOwnAccount = true`** (T5).
 - `message.received`: `message { id, conversationId, platform, platformMessageId, direction, text (nullable), attachments[], sender { id, name?, username? } }`, plus `account`. Only `direction = 'incoming'` creates items.
 
+As built (T5): `src/app/api/webhooks/zernio/route.ts` → `features/inbox` (`receiveZernioEvent`). Decisions:
+
+- **Responses:** bad or missing signature → 400 (nothing stored); valid signature but not JSON / no `id` → 400; mapping error → 500 (Zernio retries); everything else → 200 with the outcome (`processed`, `duplicate`, `skipped` + reason, `rejected` + reason). Missing `ZERNIO_WEBHOOK_SECRET` → 500.
+- **Dedupe:** `webhook_events` insert `on conflict (id) do nothing`. Seen before and `processed_at` set → `duplicate`. Seen before but not processed (an earlier attempt failed) → mapped again; mapping is idempotent (unique `zernio_comment_id` / `zernio_message_id` / `zernio_conversation_id`), so a redelivery under a new event id also creates nothing new. A failure stores `webhook_events.error` and returns 500.
+- **Tenant guard (all mapped events):** `profiles[0].externalId` must be an existing tenant **and** `profiles[0].id` must equal that tenant's `zernio_profile_id`. Otherwise `webhook_events.error = 'unknown_tenant'`, `processed_at` set, 200, nothing created. `account.*` events also require `account.profileId` to match (`profile_mismatch`).
+- **Unknown account** on a comment/DM of a verified tenant: the account is upserted from the event's `account` block (same path as `account.connected`, so a username match reuses an existing row). A Zernio account or conversation id that belongs to another tenant → rejected (`foreign_account` / `foreign_conversation`), nothing attached.
+- **Skips (stored, processed, no rows):** `test: true` events, `author.isOwnAccount = true` comments, outgoing messages, platforms other than Instagram/Facebook, `message.failed` (the send step handles it in T12), posts without a row here, unsubscribed event types.
+- **Mapping:** comment → `inbound_items` (`zernio_post_id = comment.platformPostId`, `author_name = author.username ?? name`, `received_at = createdAt`). DM → conversation upsert (participant from `sender`, `last_customer_message_at` only moves forward, from `message.sentAt`) + item; attachment-only DMs get empty text. New items write `item_received` (ids only). `post.published/partial/failed` → `posts.status` and `last_error` (per-platform errors) + `post_status_changed`. `account.*` → T4 handlers.
+- **Invalid payload** for a subscribed event (zod fails) → `rejected: invalid_payload`, reported to Sentry by event id.
+- **Fixtures:** `tests/fixtures/zernio/*.json` follow the SDK payload types; they are not live captures yet (replace in T18). `pnpm test:integration` replays them through the real route against local Supabase.
+
 ### 7.2 Job processing (`/api/jobs/process`)
 
 - `pg_cron` runs every minute and calls the route via `pg_net` with header `Authorization: Bearer CRON_SECRET`.

@@ -1,16 +1,13 @@
 import { pauseAccountItems, resumeAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
-import type { SocialPlatform } from "@/lib/social/types";
+import { isSocialPlatform, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
 
 // account.connected / account.disconnected, called by the webhook mapping (T5) with a tenant it
 // has already verified. Both are safe to run twice for the same event.
 
-export const SUPPORTED_PLATFORMS = ["instagram", "facebook"] as const satisfies SocialPlatform[];
-
-export function isSupportedPlatform(platform: string): platform is SocialPlatform {
-  return (SUPPORTED_PLATFORMS as readonly string[]).includes(platform);
-}
+export const SUPPORTED_PLATFORMS = SOCIAL_PLATFORMS;
+export const isSupportedPlatform = isSocialPlatform;
 
 export type ConnectOutcome = "created" | "existing" | "reconnected" | "foreign";
 

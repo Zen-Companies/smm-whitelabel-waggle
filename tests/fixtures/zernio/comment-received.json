@@ -1,0 +1,41 @@
+{
+  "id": "evt_comment_01",
+  "event": "comment.received",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "comment": {
+    "id": "17900000000000001",
+    "postId": null,
+    "platformPostId": "17890000000000001",
+    "platform": "instagram",
+    "text": "What time do you open on Sunday?",
+    "author": {
+      "id": "17840000000000001",
+      "username": "hungry.harriet",
+      "name": "Harriet",
+      "picture": null,
+      "isOwnAccount": false
+    },
+    "createdAt": "2026-10-28T09:15:00.000Z",
+    "isReply": false,
+    "parentCommentId": null
+  },
+  "post": {
+    "id": null,
+    "platformPostId": "17890000000000001",
+    "content": "Fresh croissants today!",
+    "imageUrl": null,
+    "permalink": "https://www.instagram.com/p/DEMO01/"
+  },
+  "account": {
+    "id": "__ACCOUNT_ID__",
+    "accountId": "__ACCOUNT_ID__",
+    "platform": "instagram",
+    "username": "democafe"
+  },
+  "timestamp": "2026-10-28T09:15:02.000Z"
+}

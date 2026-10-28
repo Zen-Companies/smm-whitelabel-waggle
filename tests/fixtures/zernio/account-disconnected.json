@@ -1,0 +1,20 @@
+{
+  "id": "evt_account_disconnected_01",
+  "event": "account.disconnected",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "account": {
+    "accountId": "__ACCOUNT_ID__",
+    "profileId": "__PROFILE_ID__",
+    "platform": "instagram",
+    "username": "democafe",
+    "displayName": "Demo Coffee Shop",
+    "disconnectionType": "unintentional",
+    "reason": "Access token expired"
+  },
+  "timestamp": "2026-10-28T11:00:00.000Z"
+}

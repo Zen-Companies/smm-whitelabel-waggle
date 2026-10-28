@@ -1,0 +1,41 @@
+{
+  "id": "evt_comment_own_01",
+  "event": "comment.received",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "comment": {
+    "id": "17900000000000002",
+    "postId": null,
+    "platformPostId": "17890000000000001",
+    "platform": "instagram",
+    "text": "Thanks Harriet! We open at 8am on Sundays.",
+    "author": {
+      "id": "17841400000000000",
+      "username": "democafe",
+      "name": "Demo Coffee Shop",
+      "picture": null,
+      "isOwnAccount": true
+    },
+    "createdAt": "2026-10-28T09:15:00.000Z",
+    "isReply": true,
+    "parentCommentId": "17900000000000001"
+  },
+  "post": {
+    "id": null,
+    "platformPostId": "17890000000000001",
+    "content": "Fresh croissants today!",
+    "imageUrl": null,
+    "permalink": "https://www.instagram.com/p/DEMO01/"
+  },
+  "account": {
+    "id": "__ACCOUNT_ID__",
+    "accountId": "__ACCOUNT_ID__",
+    "platform": "instagram",
+    "username": "democafe"
+  },
+  "timestamp": "2026-10-28T09:15:02.000Z"
+}
