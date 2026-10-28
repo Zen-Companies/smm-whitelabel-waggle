@@ -2,6 +2,7 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import type { Database } from "./database.types";
 
@@ -12,6 +13,9 @@ export async function createServerSupabase() {
   if (!url || !anonKey) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set");
   }
+  // Request-time only: the client reads the clock (session expiry), which Cache Components
+  // refuses during prerendering.
+  await connection();
   const cookieStore = await cookies();
   return createServerClient<Database>(url, anonKey, {
     cookies: {

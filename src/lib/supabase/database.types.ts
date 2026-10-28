@@ -648,6 +648,33 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      transition_account_items: {
+        Args: {
+          p_from: string[]
+          p_reason: string
+          p_social_account_id: string
+          p_tenant_id: string
+          p_to: string
+        }
+        Returns: {
+          from_status: string
+          item_id: string
+        }[]
+      }
+      upsert_connected_account: {
+        Args: {
+          p_platform: string
+          p_tenant_id: string
+          p_username: string
+          p_zernio_account_id: string
+        }
+        Returns: {
+          account_id: string
+          outcome: string
+          previous_status: string
+          previous_zernio_account_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

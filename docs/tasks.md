@@ -22,9 +22,10 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Supabase Auth signup → tenant + member → Zernio profile (handle 409 conflict).
       _Done when:_ signup creates exactly one tenant and one linked Zernio profile, even on retry.
 
-- [ ] **T4. Connect accounts**
+- [x] **T4. Connect accounts**
       Settings page with Connect Instagram / Facebook buttons → Zernio connect URL → redirect back.
       _Done when:_ a test Instagram account connects and appears after `account.connected`.
+      _Status:_ verified with the `account.connected` handler and a recorded webhook (T5) against local Supabase; a live Instagram connect needs a Zernio API key and is still to do on staging (T18).
 
 ## Phase 2: Inbox pipeline
 
