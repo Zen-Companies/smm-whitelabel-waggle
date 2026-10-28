@@ -32,3 +32,8 @@ insert into public.kb_entries (tenant_id, title, content) values
   ('10000000-0000-4000-8000-000000000001', 'Opening hours', 'Mon-Fri 7am-6pm, Sat-Sun 8am-4pm.'),
   ('10000000-0000-4000-8000-000000000001', 'Location', '12 Harbour Street, next to the ferry terminal.'),
   ('10000000-0000-4000-8000-000000000001', 'Catering', 'We cater events of 10-60 people. Ask for a quote by DM.');
+
+-- Local job runner: pg_cron → pg_net → the dev server (docs/tdd.md §7.2). Must match CRON_SECRET
+-- in .env.local. Other environments set their own Vault secrets.
+select vault.create_secret('http://host.docker.internal:3000/api/jobs/process', 'job_process_url');
+select vault.create_secret('local-dev-cron-secret', 'cron_secret');

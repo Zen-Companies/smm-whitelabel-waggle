@@ -33,7 +33,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       `/api/webhooks/zernio`: raw body, HMAC verify, dedupe into `webhook_events`, event mapping (TDD §7.1), return 200 fast. Fixtures in `tests/fixtures/zernio/`.
       _Done when:_ replaying the same fixture twice creates one item; a bad signature returns 400.
 
-- [ ] **T6. Status machine and job runner**
+- [x] **T6. Status machine and job runner**
       `features/inbox/status.ts` (`nextStatus`), `/api/jobs/process` with claim query (§7.2), retries (§14), pg_cron + pg_net migration calling it with `CRON_SECRET`.
       _Done when:_ seeded `new` items move through mocked steps; a failing step retries 3 times then fails and escalates.
       _Note:_ the job route tracks its own deadline and stops claiming items before Vercel's max function duration.

@@ -189,6 +189,16 @@ As built (T5): `src/app/api/webhooks/zernio/route.ts` → `features/inbox` (`rec
 - Same route also: nudges owners about drafts waiting > 30 min (one email), escalates DMs whose 24-hour window will close within 1 hour, and runs an hourly account health check (`getAllAccountsHealth`).
 - Optional fast path: after inserting an item, the webhook route may trigger processing for that item without waiting for cron, but must still return within 5 seconds.
 
+As built (T6):
+
+- **Route:** `POST /api/jobs/process`, `Authorization: Bearer CRON_SECRET` (constant-time compare, else 401), `maxDuration = 60`. Cron fires every minute, so runs don't overlap.
+- **Deadline budget** (`lib/jobs`): stop claiming after 45 s; start an item (or its next step) only if at least 20 s of the 60 s remain; claimed items that don't start are unlocked at once for the next tick. Each Zernio or LLM call in a step uses `ctx.callSignal()`: 20 s or the rest of the run, whichever is shorter (Jev keeps its 3 s). The 5-minute stale-lock window is unchanged.
+- **Claim:** `public.claim_items(limit)` is the §7.2 query (batch 20) and also returns the account status. A non-active account's open items are paused instead of processed (§11 step 1; the billing check comes in T15).
+- **Steps:** one per processing status (`new` → classify T7, `classified` → draft T9, `drafted` → policy T10, `sending` → send T12) in `features/inbox/steps.ts`. A step returns an event; `nextStatus()` (pure, `features/inbox/status.ts`) maps it, and `public.transition_item` applies it with its audit row. Until a step exists its items are left untouched. Steps run back to back within a run while time allows, keeping the lock, so a message reaches its draft in one run rather than one step per minute (PRD §7).
+- **Retries (§14):** a failed step → `attempts + 1`, `last_error`, `next_run_at = now + 2^attempts min` (2, 4 min). The 3rd failed attempt → `failed` + an `escalated` audit row (`retries_exhausted`; the email is T13). That is 3 attempts in total, per §14 ("after 3 attempts"); tasks.md's "retries 3 times" reads as 4 attempts, and `MAX_ATTEMPTS` is one constant if 4 is wanted. Attempts count per step: a successful step resets them. `RetryLaterError(seconds)` (429) reschedules without counting an attempt.
+- **Cron:** `pg_cron` job `process-inbound-items` (`* * * * *`) calls `private.trigger_job_processing()`, which reads `job_process_url` and `cron_secret` from Supabase Vault and `net.http_post`s with a 65 s timeout (longer than the run, so pg_net never drops it). Without both secrets a tick does nothing. Local: `supabase/seed.sql` sets them to `http://host.docker.internal:3000/api/jobs/process` and `local-dev-cron-secret`. Each environment adds its own with `vault.create_secret`.
+- Not yet in the route: draft nudges, DM-window escalation (T13) and the hourly health check (T16).
+
 ### 7.3 Approval
 
 - UI subscribes to `drafts` (Realtime, filtered by tenant).

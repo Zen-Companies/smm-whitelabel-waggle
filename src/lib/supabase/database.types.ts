@@ -641,6 +641,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_items: {
+        Args: { p_limit: number }
+        Returns: {
+          account_status: string
+          attempts: number
+          id: string
+          kind: string
+          social_account_id: string
+          status: string
+          tenant_id: string
+        }[]
+      }
       create_owner_tenant: {
         Args: { p_name: string; p_user_id: string }
         Returns: {
@@ -660,6 +672,17 @@ export type Database = {
           from_status: string
           item_id: string
         }[]
+      }
+      transition_item: {
+        Args: {
+          p_details?: Json
+          p_from: string
+          p_item_id: string
+          p_keep_lock?: boolean
+          p_reason: string
+          p_to: string
+        }
+        Returns: boolean
       }
       upsert_connected_account: {
         Args: {
