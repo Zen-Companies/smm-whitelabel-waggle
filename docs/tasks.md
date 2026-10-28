@@ -47,7 +47,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       CRUD UI, embeddings on save, retrieval function (top 5 by similarity, tenant-scoped). Choose the embedding model, then a migration sets `kb_entries.embedding` to `vector(N)` and adds the HNSW index (deferred from T1). Re-embedding picks up entries where `embedding is null` (a T1 trigger clears it whenever title or content changes).
       _Done when:_ retrieval returns the right entry for sample questions.
 
-- [ ] **T9. Drafting**
+- [x] **T9. Drafting**
       `generateObject` with `DraftResult` schema, prompt rules (TDD §10), lead extraction, `ai_usage` rows.
       _Done when:_ covered questions get correct drafts; uncovered ones set `needsHuman`.
 

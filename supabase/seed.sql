@@ -23,15 +23,12 @@ insert into auth.identities (
 
 -- The tenants trigger adds the default autonomy settings.
 insert into public.tenants (id, name)
-values ('10000000-0000-4000-8000-000000000001', 'Demo Coffee Shop');
+values ('10000000-0000-4000-8000-000000000001', 'Harbour Bean Café');
 
 insert into public.tenant_members (tenant_id, user_id, role)
 values ('10000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000001', 'owner');
 
-insert into public.kb_entries (tenant_id, title, content) values
-  ('10000000-0000-4000-8000-000000000001', 'Opening hours', 'Mon-Fri 7am-6pm, Sat-Sun 8am-4pm.'),
-  ('10000000-0000-4000-8000-000000000001', 'Location', '12 Harbour Street, next to the ferry terminal.'),
-  ('10000000-0000-4000-8000-000000000001', 'Catering', 'We cater events of 10-60 people. Ask for a quote by DM.');
+-- The demo knowledge base is supabase/demo_kb.sql (T9), loaded after this file.
 
 -- Local job runner: pg_cron → pg_net → the dev server (docs/tdd.md §7.2). Must match CRON_SECRET
 -- in .env.local. Other environments set their own Vault secrets.

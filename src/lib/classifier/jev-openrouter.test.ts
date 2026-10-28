@@ -29,10 +29,7 @@ const decisions = (noul: Record<string, number>, status = 200) =>
 function setup(respond: () => Response) {
   const fetchMock = vi.fn<typeof fetch>(async () => respond());
   const usage = memoryUsage();
-  const jev = new OpenRouterJevClassifier(
-    { apiKey: "sk-or-test" },
-    { usage, fetch: fetchMock },
-  );
+  const jev = new OpenRouterJevClassifier({ apiKey: "sk-or-test" }, { usage, fetch: fetchMock });
   return { jev, fetchMock, usage };
 }
 
