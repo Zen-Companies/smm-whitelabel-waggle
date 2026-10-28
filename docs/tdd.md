@@ -154,6 +154,7 @@ Confirmed (T2, docs.zernio.com/webhooks and the `@zernio/node` 0.2.1369 types `W
 
 - Signature: `X-Zernio-Signature` = lowercase hex HMAC-SHA256 of the raw body, no timestamp or prefix. Other headers: `X-Zernio-Event` (event name), `X-Zernio-Event-Id` (= payload `id`, stable across retries: the dedupe key).
 - Delivery: at least once; 2xx within 5 s; up to 7 attempts (immediate, 10 s, 1 m 40 s, 16 m 40 s, 2 h 46 m 40 s, 24 h, 24 h), then dead-letter. The account lives at `account.accountId` (`account.id` is the same value).
+- Redelivery (from Zernio's delivery log) re-sends the same event id to the endpoint's **current** URL, so a delivery that failed because of a wrong URL can be fixed and redelivered (observed 2026-10-28). The `X-Zernio-Signature` uses the secret configured on the endpoint; a mismatch with `ZERNIO_WEBHOOK_SECRET` returns 400 on every delivery, test events included.
 - `comment.received`: `id`, `profiles`, `comment { id, postId (Zernio id, null for posts not published through Zernio), platformPostId, platform, text, author { id, username?, name?, isOwnAccount? }, createdAt, isReply, parentCommentId }`, `post { id, platformPostId, content, imageUrl, permalink }`, `account { id, accountId, platform, username }`, `timestamp`. Meta re-delivers our own replies as comments: **skip `author.isOwnAccount = true`** (T5).
 - `message.received`: `message { id, conversationId, platform, platformMessageId, direction, text (nullable), attachments[], sender { id, name?, username? } }`, plus `account`. Only `direction = 'incoming'` creates items.
 

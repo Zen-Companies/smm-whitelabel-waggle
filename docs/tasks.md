@@ -25,7 +25,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 - [x] **T4. Connect accounts**
       Settings page with Connect Instagram / Facebook buttons → Zernio connect URL → redirect back.
       _Done when:_ a test Instagram account connects and appears after `account.connected`.
-      _Status:_ verified with the `account.connected` handler and a recorded webhook (T5) against local Supabase; a live Instagram connect needs a Zernio API key and is still to do on staging (T18).
+      _Status:_ verified live on 2026-10-28: a test Instagram account (`beachater_test_page`) connected through Zernio and appeared after a real `account.connected` delivery (local app via ngrok). Also covered by the handler and webhook fixture tests.
 
 ## Phase 2: Inbox pipeline
 
