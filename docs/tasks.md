@@ -108,6 +108,10 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       The adapter reads only `X-RateLimit-Reset` (through the SDK's `RateLimitError`); Zernio's multi-tenant page says to wait for `Retry-After`. Use whichever is present (`Retry-After` seconds or HTTP date first, then `X-RateLimit-Reset`), with a fallback, for every Zernio call.
       _Done when:_ adapter tests cover both headers and neither.
 
+- [ ] **T22. Pre-pilot classifier check on Jev 1.13**
+      Run `pnpm triage:report --only jev-openrouter` (paid, about $0.004 for the labeled set) with the current questions (`JEV_QUESTIONS_VERSION` 2026-10-29.1) and compare with local jevos; decide the production Jev endpoint and thresholds.
+      _Done when:_ per-category accuracy on jev-1.13 is recorded in TDD §9.6 and the endpoint is chosen.
+
 ## Later
 
 - [ ] **T21. Customer offboarding**

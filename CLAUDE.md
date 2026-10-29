@@ -9,6 +9,7 @@ Read before working:
 - `docs/prd.md`: what we're building and acceptance criteria.
 - `docs/tdd.md`: how it's built (data model, status machine, flows, interfaces).
 - `docs/tasks.md`: the ordered task list. Work on one task at a time.
+- `docs/design.md`: the design system. **All UI follows it** (tokens, type, components, copy). **No toasts, ever:** feedback happens in place (design.md §4).
 
 ## Stack
 
