@@ -47,3 +47,6 @@ supabase/.temp
 
 # sentry
 .env.sentry-build-plugin
+
+# Design hand-off archive (contents live in docs/design.md and public/illustrations)
+design_files.zip
