@@ -429,7 +429,7 @@ As built (T7):
 - **Production classifier** (`getClassifier()`): `FallbackClassifier(jev, llm)` when both are configured, otherwise whichever is (Jev alone then has only the 20 s cap, not 3 s), otherwise none, and the job leaves `new` items alone instead of failing them.
 - **Jev via OpenRouter** (`OpenRouterJevClassifier`, `typesafe/jev-1.13`, Decisions API alpha): the same four questions and `pickCategory()`, for comparison in the report only. It calls the provider model's `doEvaluate` directly: `ai` 7.0.155's `experimental_decide` passes `state` as typed parts, which `@openrouter/ai-sdk-provider` 3.1.0 forwards unchanged, so OpenRouter would receive `[{ type: "json", value }]`. Recheck when either package is upgraded.
 - **Labeled set** (`tests/fixtures/triage/`): 30 messages per category plus 25 ambiguous cases (each with a note), English and Taglish, for the demo café. A starter set to review: about 35 per category, not the ~50 planned above.
-- **Report** (`pnpm triage:report`, `scripts/triage-report.ts`): runs every configured classifier directly (no fallback, 30 s timeout, concurrency 4): `jev` (`JEV_API_URL`), extra Jev endpoints from `TRIAGE_JEV_ENDPOINTS=name=url,...` (key `JEV_API_KEY_<NAME>`), `jev-openrouter` and `llm` (`OPENROUTER_API_KEY` + LLM config). Prints accuracy, recall and precision per category, the confusion matrix, accuracy by language and on the ambiguous set, p50/p95/max latency, total AI cost and the misclassified messages; `--json` writes everything. No DB writes.
+- **Report** (`pnpm triage:report`, `scripts/triage-report.ts`): runs the configured classifiers directly (no fallback, 30 s timeout, concurrency 4): `jev` (`JEV_API_URL`) and extra Jev endpoints from `TRIAGE_JEV_ENDPOINTS=name=url,...` (key `JEV_API_KEY_<NAME>`) by default; `jev-openrouter` and `llm` (`OPENROUTER_API_KEY` + LLM config) only when named in `--only`, because they spend money or free-tier quota (rule 14). `--only` matches whole names (`jev` never selects `jev-openrouter`). Prints accuracy, recall and precision per category, the confusion matrix, accuracy by language and on the ambiguous set, p50/p95/max latency, total AI cost and the misclassified messages; `--json` writes everything. No DB writes.
 
 ## 10. LLM drafting
 
@@ -449,7 +449,7 @@ As built (T7):
 
 As built (T8, `features/knowledge-base`):
 
-- **Model:** `openai/text-embedding-3-small` through OpenRouter, 1536 dimensions. `kb_entries.embedding` is `vector(1536)` with an HNSW index (`vector_cosine_ops`); `toVectorLiteral` rejects any other length, so changing `EMBEDDING_MODEL` to a model with another dimension fails loudly and needs a migration.
+- **Model:** `openai/text-embedding-3-small` through OpenRouter, 1536 dimensions. `kb_entries.embedding` is `vector(1536)` with an HNSW index (`vector_cosine_ops`); `toVectorLiteral` rejects any other length, so changing `EMBEDDING_MODEL` to a model with another dimension fails loudly and needs a migration. Every embedding request sends `dimensions: 1536` (`EMBEDDING_DIMENSIONS`, `lib/llm/provider.ts`), so a model that can shorten its output also fits: for free local testing `nvidia/nemotron-3.5-embed-1b:free` (2048 natively) returns 1536 at $0 (checked 2026-10-29). Embeddings from different models are not comparable: re-embed the KB (clear `embedding`) after switching models.
 - **Embedded text:** `title + "
 
 " + content`.
@@ -555,4 +555,5 @@ Setup notes (T2): `@zernio/node` 0.2.1369 (pinned: it publishes daily), `ai` 7.0
 - Jev: production endpoint (TypeSafe cloud vs `jevtypesafeai.com`), pricing, rate limits, DPA and measured latency (shape confirmed, §9.1).
 - Option to evaluate in T7: OpenRouter also serves Jev (`typesafe/jev-1.13`) through its Decisions API (`openrouter.evaluationModel()`, alpha). It would put Jev on the same balance; it is not used now because the shape is alpha and our adapter speaks the §9.1 wire format.
 - Whether to add the webhook fast path in Pass 1 or rely on the 1-minute cron.
+- Jev lead question (§9.2): on the labeled set (2026-10-29) local jevos-v5 scored 38.9% and jev-1.13 (OpenRouter) 78.9%; both send most FAQs to `lead` (faq recall 11% / 23%). The lead question includes "or ask about availability", which matches "Do you have oat milk?", and lead outranks faq. Candidate fix: drop availability from the lead question.
 - DM window escalation (T13): §7.2 says to escalate waiting DMs an hour before the window closes, which takes the draft out of the approval inbox. An alternative is an urgent email that leaves the draft approvable until the window actually closes (the send step already escalates at 24 h).

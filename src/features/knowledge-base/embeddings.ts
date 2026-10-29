@@ -1,9 +1,11 @@
 import * as Sentry from "@sentry/nextjs";
 import type { LlmClient } from "@/lib/llm/client";
+import { EMBEDDING_DIMENSIONS } from "@/lib/llm/provider";
 import type { ServiceClient } from "@/lib/supabase/service";
 
-// KB embeddings (docs/tdd.md §10). The column is vector(1536): openai/text-embedding-3-small.
-export const EMBEDDING_DIMENSIONS = 1536;
+// KB embeddings (docs/tdd.md §10). The column is vector(1536); every embedding call asks the
+// model for that size (lib/llm/provider.ts).
+export { EMBEDDING_DIMENSIONS };
 
 export interface KbDeps {
   db: ServiceClient;

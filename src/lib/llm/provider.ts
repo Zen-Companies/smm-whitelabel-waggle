@@ -2,6 +2,13 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { EmbeddingModel, LanguageModel } from "ai";
 import type { LlmConfig } from "./config";
 
+/**
+ * kb_entries.embedding is vector(1536). Sent as `dimensions` on every embedding call, so any
+ * model that can shorten its output fits: text-embedding-3-small is 1536 natively; free
+ * models such as nvidia/nemotron-3.5-embed-1b:free (2048) return 1536 when asked.
+ */
+export const EMBEDDING_DIMENSIONS = 1536;
+
 export interface ResolvedModel<M> {
   model: M;
   /** The configured id; stored in ai_usage when the response doesn't name the served model. */
@@ -37,7 +44,9 @@ export function resolveModels(
     classify: chat(config.LLM_CLASSIFY_MODEL),
     draft: chat(config.LLM_DRAFT_MODEL),
     embedding: {
-      model: openrouter.textEmbeddingModel(config.EMBEDDING_MODEL),
+      model: openrouter.textEmbeddingModel(config.EMBEDDING_MODEL, {
+        extraBody: { dimensions: EMBEDDING_DIMENSIONS },
+      }),
       id: config.EMBEDDING_MODEL,
       provider: config.EMBEDDING_PROVIDER,
     },

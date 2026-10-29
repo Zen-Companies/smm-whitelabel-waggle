@@ -4,6 +4,11 @@
  *
  *   pnpm triage:report [--concurrency 4] [--only jev,llm] [--limit 20] [--json out.json]
  *
+ * By default only the Jev endpoints run (local jevos is free). The OpenRouter classifiers cost
+ * money or free-tier quota (one call per message: 175 > the 50 free calls a day), so they run
+ * only when named in --only (CLAUDE.md rule 14). --only matches whole names: `jev` selects `jev`
+ * and `jev:<name>`, never `jev-openrouter`.
+ *
  * Classifiers (each runs only if configured in .env.local / the environment):
  *   jev             JEV_API_URL (+ JEV_API_KEY): the direct adapter (§9.1)
  *   jev:<name>      TRIAGE_JEV_ENDPOINTS="local=http://127.0.0.1:8017/v1/systemone,cloud=https://..."
@@ -53,6 +58,9 @@ function memoryUsage(): UsageRecorder & { records: AiUsageRecord[] } {
   const records: AiUsageRecord[] = [];
   return { records, record: async (r) => void records.push(r) };
 }
+
+/** Classifiers that call OpenRouter: run only when named in --only. */
+const OPT_IN = ["jev-openrouter", "llm"];
 
 function candidates(): { ready: Candidate[]; skipped: string[] } {
   const ready: Candidate[] = [];
@@ -104,11 +112,17 @@ function candidates(): { ready: Candidate[]; skipped: string[] } {
     );
   }
 
-  const only = args.only?.split(",");
-  return {
-    ready: only ? ready.filter((c) => only.some((o) => c.name.startsWith(o))) : ready,
-    skipped,
-  };
+  const only = args.only?.split(",").map((o) => o.trim());
+  const base = (name: string) => name.split(/[: ]/)[0];
+  const selected = ready.filter((c) =>
+    only ? only.some((o) => o === c.name || o === base(c.name)) : !OPT_IN.includes(base(c.name)),
+  );
+  for (const c of ready) {
+    if (!only && OPT_IN.includes(base(c.name))) {
+      skipped.push(`${c.name} (uses OpenRouter: run with --only ${base(c.name)})`);
+    }
+  }
+  return { ready: selected, skipped };
 }
 
 async function runOne(

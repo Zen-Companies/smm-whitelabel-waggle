@@ -125,6 +125,9 @@ describe("createLlmClient.embed", () => {
 
     expect(result).toEqual({ embedding: [0.1, 0.2, 0.3], model: "openai/text-embedding-3-small" });
     expect(String(fetchMock.mock.calls[0][0])).toBe("https://openrouter.ai/api/v1/embeddings");
+    // The column is vector(1536): models that can shorten their output are asked to.
+    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    expect(body).toMatchObject({ model: "openai/text-embedding-3-small", dimensions: 1536 });
     expect(usage.records).toEqual([
       {
         tenantId: "tenant-1",
