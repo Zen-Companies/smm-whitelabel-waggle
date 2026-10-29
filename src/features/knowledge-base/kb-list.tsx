@@ -1,30 +1,187 @@
+import Link from "next/link";
+import { shortTime } from "@/components/app/time";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { cn } from "cn";
 import { KbEntryForm } from "./kb-entry-form";
+import { KB_TITLE_MAX } from "./limits";
+import { matchTopics, usageByEntry, usageText } from "./usage";
 
-export async function KbList() {
+// Business info (design v2): topics with search and how often each was used | the one topic being
+// edited | questions customers asked that the info didn't answer, with "Add an answer".
+
+const weekAgo = () => new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
+
+/** "today" instead of a clock time. */
+const dayOnly = (label: string) => (/\d:\d/.test(label) ? "today" : label);
+
+function href(p: { topic?: string; q?: string; from?: string }) {
+  const s = new URLSearchParams();
+  if (p.q) s.set("q", p.q);
+  if (p.topic) s.set("topic", p.topic);
+  if (p.from) s.set("from", p.from);
+  const out = s.toString();
+  return out ? `/knowledge-base?${out}` : "/knowledge-base";
+}
+
+export async function KbList({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const str = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
+  const q = str("q") ?? "";
+  const topicParam = str("topic");
+  const from = str("from");
+
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
-  const { data: entries } = await supabase
-    .from("kb_entries")
-    .select("id, title, content, embedding")
-    .eq("tenant_id", tenant.id)
-    .order("created_at");
+  const since = weekAgo();
+  const [{ data: entryRows }, { data: drafts }, { data: gapRows }] = await Promise.all([
+    supabase
+      .from("kb_entries")
+      .select("id, title, content, embedding, updated_at")
+      .eq("tenant_id", tenant.id)
+      .order("created_at"),
+    supabase
+      .from("drafts")
+      .select("kb_entry_ids")
+      .eq("tenant_id", tenant.id)
+      .gte("created_at", since),
+    // Questions the info couldn't answer that are still waiting for the owner.
+    supabase
+      .from("drafts")
+      .select("item_id, created_at, inbound_items!inner (text, author_name, status)")
+      .eq("tenant_id", tenant.id)
+      .eq("needs_human", true)
+      .eq("inbound_items.status", "escalated")
+      .order("created_at", { ascending: false })
+      .limit(5),
+  ]);
+  const entries = entryRows ?? [];
+  const usage = usageByEntry(drafts ?? []);
+  const gaps = (gapRows ?? []) as unknown as {
+    item_id: string;
+    created_at: string;
+    inbound_items: { text: string; author_name: string | null; status: string };
+  }[];
+  const shown = matchTopics(entries, q);
+  const isNew = topicParam === "new" || entries.length === 0;
+  const selected = isNew ? undefined : (entries.find((e) => e.id === topicParam) ?? shown[0]);
+  const gap = from ? gaps.find((g) => g.item_id === from) : undefined;
+  const prefill = gap?.inbound_items.text.slice(0, KB_TITLE_MAX);
 
   return (
-    <div className="flex flex-col gap-4">
-      <KbEntryForm />
-      {(entries ?? []).length > 0 && (
-        <h2 className="section-title mt-4">
-          What the receptionist knows <span className="meta">({entries!.length})</span>
-        </h2>
-      )}
-      {(entries ?? []).map((e) => (
-        <KbEntryForm
-          key={e.id}
-          entry={{ id: e.id, title: e.title, content: e.content, searchable: e.embedding !== null }}
-        />
-      ))}
-    </div>
+    <>
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="flex flex-1 flex-col gap-1">
+          <h1 className="page-title">Business info</h1>
+          <p className="text-gray-700">
+            The only facts the receptionist uses in replies. If it isn&apos;t here, it asks you.
+          </p>
+        </div>
+        <Link href={href({ topic: "new", q })} className={buttonVariants({ variant: "primary" })}>
+          Add a topic
+        </Link>
+      </header>
+
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,320px)]">
+        <div className="flex flex-col gap-2">
+          {entries.length > 0 ? (
+            <>
+              <form action="/knowledge-base" className="flex flex-col gap-2" role="search">
+                <label htmlFor="find" className="meta">
+                  Find a topic
+                </label>
+                <input
+                  id="find"
+                  name="q"
+                  type="search"
+                  defaultValue={q}
+                  placeholder="e.g. parking"
+                  className="field"
+                />
+              </form>
+              <ul aria-label="Topics" className="mt-1 flex flex-col">
+                {shown.map((e) => (
+                  <li key={e.id}>
+                    <Link
+                      href={href({ topic: e.id, q })}
+                      aria-current={e.id === selected?.id ? "true" : undefined}
+                      className={cn(
+                        "flex flex-col rounded-md px-3 py-2.5 transition-colors duration-150",
+                        e.id === selected?.id ? "bg-lavender" : "hover:bg-gray-50",
+                      )}
+                    >
+                      <span className={e.id === selected?.id ? "font-semibold" : "font-medium"}>
+                        {e.title}
+                      </span>
+                      <span className="meta">{usageText(usage.get(e.id) ?? 0)}</span>
+                    </Link>
+                  </li>
+                ))}
+                {shown.length === 0 && <li className="meta px-3 py-2">No topic matches.</li>}
+              </ul>
+            </>
+          ) : (
+            <p className="meta px-1">
+              No topics yet. Start with the basics: hours, location, prices and what you offer.
+            </p>
+          )}
+        </div>
+
+        {selected ? (
+          <KbEntryForm
+            key={selected.id}
+            entry={{
+              id: selected.id,
+              title: selected.title,
+              content: selected.content,
+              searchable: selected.embedding !== null,
+            }}
+            changed={dayOnly(shortTime(selected.updated_at))}
+          />
+        ) : (
+          <KbEntryForm key={`new-${from ?? ""}`} prefillTitle={prefill} />
+        )}
+
+        <aside
+          aria-labelledby="gaps"
+          className="card flex flex-col gap-3 p-4 lg:col-start-2 xl:col-start-3"
+        >
+          <h2 id="gaps" className="font-semibold">
+            Questions your info didn&apos;t answer
+          </h2>
+          {gaps.length === 0 ? (
+            <p className="meta">
+              None waiting. When a customer asks something your info doesn&apos;t cover, it shows up
+              here.
+            </p>
+          ) : (
+            <>
+              <p className="meta">Add an answer once and the receptionist can reply next time.</p>
+              <ul className="flex flex-col divide-y">
+                {gaps.map((g) => (
+                  <li key={g.item_id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
+                    <span className="text-sm">&ldquo;{g.inbound_items.text}&rdquo;</span>
+                    <span className="meta">
+                      {g.inbound_items.author_name ?? "A customer"} · {shortTime(g.created_at)}
+                    </span>
+                    <Link
+                      href={href({ topic: "new", from: g.item_id })}
+                      className="text-violet-strong -ml-3 flex min-h-11 items-center self-start px-3 text-sm font-medium"
+                    >
+                      Add an answer
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </aside>
+      </div>
+    </>
   );
 }

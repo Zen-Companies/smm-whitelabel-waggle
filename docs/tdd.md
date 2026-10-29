@@ -474,6 +474,7 @@ As built (T8, `features/knowledge-base`):
 
 " + content`.
 - **On save:** owners create, edit and delete entries on `/knowledge-base` (Server Actions through RLS; `kb_entry_created/updated/deleted` audit rows with the owner as actor). The embedding is computed after the response (`after()`), with the service client, since the column isn't client-writable. The write is conditional on the `updated_at` that was read, so an embedding of old text never lands on newer text.
+- **Page (design v2):** topic list with search (`?q=`) and "Used in N replies this week" (drafts of the last 7 days by `kb_entry_ids`, `usage.ts`) | the one topic being edited (`?topic=<id>|new`; a new topic opens itself after saving) | "Questions your info didn't answer": items still `escalated` whose draft has `needs_human`, with "Add an answer" (`?topic=new&from=<item id>` prefills the topic with the question; the URL carries the id, never the text).
 - **Re-embedding:** the job route runs `embedPendingEntries` each tick (when the LLM is configured and time remains): every entry whose `embedding is null` (new, edited via the T1 trigger, or a failed embed). Entries waiting for an embedding aren't retrievable (shown as "Indexing…").
 - **Retrieval:** `retrieveKbEntries` embeds the message (`ai_usage` purpose `embed`, against the item) and calls `public.match_kb_entries(tenant, embedding, 5)`: service role only, one tenant, cosine similarity, best first, limit capped at 20.
 As built (T9, `features/drafting`):

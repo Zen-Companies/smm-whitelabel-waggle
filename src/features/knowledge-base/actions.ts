@@ -2,6 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
 import { getCurrentTenant } from "@/features/tenants";
@@ -60,7 +61,8 @@ export async function createKbEntry(_prev: KbFormState, formData: FormData): Pro
   });
   embedLater(data.id);
   revalidatePath("/knowledge-base");
-  return { saved: true, savedAt: Date.now() };
+  // Open the new topic in the editor (design v2: one topic at a time).
+  redirect(`/knowledge-base?topic=${data.id}`);
 }
 
 export async function updateKbEntry(_prev: KbFormState, formData: FormData): Promise<KbFormState> {
@@ -109,4 +111,5 @@ export async function deleteKbEntry(formData: FormData): Promise<void> {
     });
   }
   revalidatePath("/knowledge-base");
+  redirect("/knowledge-base");
 }
