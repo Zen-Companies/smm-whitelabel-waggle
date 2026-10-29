@@ -64,6 +64,7 @@ tests/fixtures    recorded webhook payloads
 12. **Never add a `Co-Authored-By: Claude` (or any Claude attribution) line to commits.**
 13. **Never run `supabase db reset` or any destructive DB command without asking first.** Apply migrations with `supabase migration up --local`.
 14. **Never make real calls to Zernio or paid AI APIs (OpenRouter, Jev) in tests or smoke tests unless explicitly asked.** Tests use mocks. For local smoke tests set `SOCIAL_PROVIDER_MODE=mock` (the default under Vitest) so signup and connect don't reach Zernio.
+15. **Any table added to the Realtime publication must pass `tests/integration/realtime-isolation.test.ts` first** (extend it to the new table). Never use `REPLICA IDENTITY FULL` on tenant tables, and never publish deletes (Realtime sends DELETE events without an RLS check).
 
 ## Conventions
 

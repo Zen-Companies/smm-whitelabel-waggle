@@ -25,9 +25,11 @@ export function InboxLive({ tenantId }: { tenantId: string }) {
 
     // Join with the owner's token, not the anon key: RLS decides which rows Realtime delivers,
     // and a channel joined before the session loads would receive nothing.
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(async ({ data }) => {
       if (cancelled) return;
-      if (data.session) supabase.realtime.setAuth(data.session.access_token);
+      // Awaited: setAuth is async, and a join sent before it finishes goes out with the anon key.
+      if (data.session) await supabase.realtime.setAuth(data.session.access_token);
+      if (cancelled) return;
       channel = supabase
         .channel(`inbox:${tenantId}`)
         .on("postgres_changes", { event: "*", schema: "public", table: "drafts", filter }, refresh)

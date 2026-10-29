@@ -47,14 +47,15 @@ async function owner(name: string): Promise<Owner> {
   };
 }
 
-/** The owner's own client: RLS applies, as in the browser. */
+/**
+ * The owner's own client: RLS applies, as in the browser. `accessToken` (not a header + setAuth)
+ * so Realtime always joins with the owner's token: without a session, supabase-js would hand
+ * Realtime the anon key on a cold server, and the join fails closed.
+ */
 function ownerClient(o: Owner) {
-  const client = createClient<Database>(inject("supabaseUrl"), inject("supabaseAnonKey"), {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${o.token}` } },
+  return createClient<Database>(inject("supabaseUrl"), inject("supabaseAnonKey"), {
+    accessToken: async () => o.token,
   });
-  client.realtime.setAuth(o.token);
-  return client;
 }
 
 let kbHours: string;
@@ -240,36 +241,54 @@ describe("approval inbox", () => {
   });
 
   it("a new draft reaches the owner's Realtime subscription; another tenant's doesn't", async () => {
+    // Cross-tenant isolation in depth (unfiltered, B's filter, updates, deletes) is
+    // realtime-isolation.test.ts; this is the inbox's own subscription.
     const client = ownerClient(a);
     const received: string[] = [];
-    const channel = client.channel(`test-inbox-${a.tenantId}`).on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "drafts",
-        filter: `tenant_id=eq.${a.tenantId}`,
-      },
-      (payload) => received.push((payload.new as { item_id: string }).item_id),
-    );
-    // Without a filter too: RLS must still keep B's rows out.
     const unfiltered: string[] = [];
-    channel.on("postgres_changes", { event: "INSERT", schema: "public", table: "drafts" }, (p) =>
-      unfiltered.push((p.new as { tenant_id: string }).tenant_id),
-    );
-    // SUBSCRIBED comes before the postgres_changes listener is registered; Realtime confirms
-    // that with a system message, and rows inserted before it are not delivered.
-    await new Promise<void>((resolve, reject) => {
-      const t = setTimeout(() => reject(new Error("subscribe timed out")), 15_000);
-      channel.on("system", {}, (msg: { extension?: string; status?: string; message?: string }) => {
-        if (msg.extension === "postgres_changes") {
-          clearTimeout(t);
-          if (msg.status === "ok") resolve();
-          else reject(new Error(`postgres_changes: ${msg.message}`));
-        }
-      });
-      channel.subscribe();
-    });
+    // A freshly started local Realtime can refuse early joins: retry the join. SUBSCRIBED comes before the postgres_changes
+    // listener is registered; Realtime confirms that with a system message.
+    // The token callback is async: a join sent before it resolves carries only the anon key.
+    await client.realtime.setAuth();
+    let channel!: ReturnType<typeof client.channel>;
+    for (let attempt = 1; ; attempt++) {
+      channel = client
+        .channel(`test-inbox-${a.tenantId}-${attempt}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "drafts",
+            filter: `tenant_id=eq.${a.tenantId}`,
+          },
+          (payload) => received.push((payload.new as { item_id: string }).item_id),
+        )
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "drafts" }, (p) =>
+          unfiltered.push((p.new as { tenant_id: string }).tenant_id),
+        );
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const t = setTimeout(() => reject(new Error("subscribe timed out")), 15_000);
+          channel.on(
+            "system",
+            {},
+            (msg: { extension?: string; status?: string; message?: string }) => {
+              if (msg.extension !== "postgres_changes") return;
+              clearTimeout(t);
+              if (msg.status === "ok") resolve();
+              else reject(new Error(`postgres_changes: ${msg.message}`));
+            },
+          );
+          channel.subscribe();
+        });
+        break;
+      } catch (error) {
+        await client.removeChannel(channel);
+        if (attempt >= 5) throw error;
+        await new Promise((r) => setTimeout(r, 2_000));
+      }
+    }
 
     const other = await waitingItem(b);
     const mine = await waitingItem(a);
