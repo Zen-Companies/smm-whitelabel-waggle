@@ -16,7 +16,8 @@
     "gen:types": "supabase gen types typescript --local > src/lib/supabase/database.types.ts",
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "triage:report": "tsx --tsconfig tsconfig.scripts.json scripts/triage-report.ts",
-    "draft:preview": "tsx --tsconfig tsconfig.scripts.json scripts/draft-preview.ts"
+    "draft:preview": "tsx --tsconfig tsconfig.scripts.json scripts/draft-preview.ts",
+    "local:owner": "tsx --tsconfig tsconfig.scripts.json scripts/local-owner.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
