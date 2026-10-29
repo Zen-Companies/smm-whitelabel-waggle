@@ -31,6 +31,7 @@ const postSchema = z.object({
     ]),
   }),
 });
+const presignSchema = z.object({ uploadUrl: z.url(), publicUrl: z.url() });
 const replySchema = z.object({ data: z.object({ commentId: z.string().min(1) }) });
 const dmSchema = z.object({ data: z.object({ messageId: z.string().min(1) }) });
 const messagesSchema = z.object({
@@ -210,6 +211,49 @@ export class ZernioSocialProvider implements SocialProvider {
       );
       const { post } = parse(postSchema, data, "createPost");
       return { providerPostId: post._id, status: post.status };
+    });
+  }
+
+  async uploadMedia(input: {
+    filename: string;
+    contentType: string;
+    bytes: Uint8Array;
+    signal?: AbortSignal;
+  }): Promise<{ publicUrl: string }> {
+    const { uploadUrl, publicUrl } = await call("uploadMedia", async (withFetch) => {
+      const { data } = await this.zernio.media.getMediaPresignedUrl(
+        withFetch({
+          signal: input.signal,
+          body: {
+            filename: input.filename,
+            contentType: input.contentType as never,
+            size: input.bytes.byteLength,
+          },
+        }),
+      );
+      return parse(presignSchema, data, "uploadMedia");
+    });
+    // The upload URL is pre-signed storage, not the Zernio API: a plain PUT.
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": input.contentType },
+      body: input.bytes as BodyInit,
+      signal: input.signal,
+    }).catch(() => null);
+    if (!res?.ok) {
+      throw new SocialProviderError(`Zernio media upload failed (${res?.status ?? "network"})`, {
+        status: res?.status,
+        ambiguous: false,
+      });
+    }
+    return { publicUrl };
+  }
+
+  async deletePost(input: { postId: string; signal?: AbortSignal }): Promise<void> {
+    await call("deletePost", async (withFetch) => {
+      await this.zernio.posts.deletePost(
+        withFetch({ signal: input.signal, path: { postId: input.postId } }),
+      );
     });
   }
 

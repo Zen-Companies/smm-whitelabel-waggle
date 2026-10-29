@@ -74,11 +74,19 @@ export const messageFailedSchema = z.object({
 });
 
 export const postEventSchema = z.object({
-  event: z.enum(["post.published", "post.partial", "post.failed"]),
+  event: z.enum(["post.published", "post.partial", "post.failed", "post.cancelled"]),
   post: z.object({
     id: z.string().min(1),
+    publishedAt: z.string().optional(),
     platforms: z.array(
-      z.object({ platform: z.string(), status: z.string(), error: z.string().optional() }),
+      z.object({
+        platform: z.string(),
+        status: z.string(),
+        publishedUrl: z.string().optional(),
+        error: z.string().optional(),
+        errorCategory: z.string().optional(),
+        errorSource: z.string().optional(),
+      }),
     ),
   }),
 });

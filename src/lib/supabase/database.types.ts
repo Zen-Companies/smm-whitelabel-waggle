@@ -571,12 +571,17 @@ export type Database = {
       }
       posts: {
         Row: {
+          attempts: number
           content: string
           created_at: string
+          failure_reason: string | null
           id: string
           idempotency_key: string
           last_error: string | null
           media: Json
+          next_attempt_at: string | null
+          platform_results: Json
+          published_at: string | null
           scheduled_for: string | null
           status: string
           target_account_ids: string[]
@@ -584,12 +589,17 @@ export type Database = {
           zernio_post_id: string | null
         }
         Insert: {
+          attempts?: number
           content: string
           created_at?: string
+          failure_reason?: string | null
           id?: string
           idempotency_key?: string
           last_error?: string | null
           media?: Json
+          next_attempt_at?: string | null
+          platform_results?: Json
+          published_at?: string | null
           scheduled_for?: string | null
           status?: string
           target_account_ids?: string[]
@@ -597,12 +607,17 @@ export type Database = {
           zernio_post_id?: string | null
         }
         Update: {
+          attempts?: number
           content?: string
           created_at?: string
+          failure_reason?: string | null
           id?: string
           idempotency_key?: string
           last_error?: string | null
           media?: Json
+          next_attempt_at?: string | null
+          platform_results?: Json
+          published_at?: string | null
           scheduled_for?: string | null
           status?: string
           target_account_ids?: string[]

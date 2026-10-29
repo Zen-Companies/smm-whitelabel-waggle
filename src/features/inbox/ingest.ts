@@ -161,6 +161,7 @@ async function mapEvent(
     "post.published": (t) => mapPost(deps.db, t.tenantId, payload),
     "post.partial": (t) => mapPost(deps.db, t.tenantId, payload),
     "post.failed": (t) => mapPost(deps.db, t.tenantId, payload),
+    "post.cancelled": (t) => mapPost(deps.db, t.tenantId, payload),
     "account.connected": (t) => mapAccountConnected(deps, t, payload),
     "account.disconnected": (t) => mapAccountDisconnected(deps, t, payload),
     "message.failed": (t) => mapMessageFailed(deps.db, t.tenantId, payload),
@@ -335,7 +336,15 @@ const POST_STATUS = {
   "post.published": "published",
   "post.partial": "partial",
   "post.failed": "failed",
+  "post.cancelled": "cancelled",
 } as const;
+
+/**
+ * A post that came due while Zernio paused the team fails "with a payment error" and is not
+ * retried (docs.zernio.com/multi-tenant). We know we're paused (platform_state) or the error says
+ * so; either way the owner has to reschedule. VERIFY the exact error on a real pause.
+ */
+const PAYMENT_ERROR = /payment|billing|PAYMENT_REQUIRED|402/i;
 
 async function mapPost(
   db: ServiceClient,
@@ -349,10 +358,33 @@ async function mapPost(
     .filter((p) => p.error)
     .map((p) => `${p.platform}: ${p.error}`)
     .join("; ");
+  let failureReason: "zernio_paused" | "account_removed" | null = null;
+  if (status === "failed") {
+    const { data: pause } = await db
+      .from("platform_state")
+      .select("value")
+      .eq("key", "zernio_pause")
+      .maybeSingle();
+    const paused = !!(pause?.value as { pausedAt?: string } | null)?.pausedAt;
+    if (paused || PAYMENT_ERROR.test(errors)) failureReason = "zernio_paused";
+  }
+  // Cancelled by Zernio: its only account was removed after the disconnect grace period.
+  if (status === "cancelled") failureReason = "account_removed";
 
   const { data, error } = await db
     .from("posts")
-    .update({ status, last_error: errors || null })
+    .update({
+      status,
+      last_error: errors || null,
+      failure_reason: failureReason,
+      platform_results: e.post.platforms.map((p) => ({
+        platform: p.platform,
+        status: p.status,
+        url: p.publishedUrl ?? null,
+        error: p.error ?? null,
+      })),
+      ...(e.post.publishedAt ? { published_at: e.post.publishedAt } : {}),
+    })
     .eq("tenant_id", tenantId)
     .eq("zernio_post_id", e.post.id)
     .select("id");
@@ -364,7 +396,7 @@ async function mapPost(
     tenantId,
     action: "post_status_changed",
     actor: "system",
-    details: { postId: data[0].id, zernioPostId: e.post.id, status },
+    details: { postId: data[0].id, zernioPostId: e.post.id, status, failureReason },
   });
   return { outcome: "processed", detail: status };
 }

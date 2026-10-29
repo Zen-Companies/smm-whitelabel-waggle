@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   AccountHealth,
   CreatePostInput,
@@ -25,8 +28,21 @@ export interface MockSend {
   message: string;
 }
 
+/** Where mock-mode post images live; served by /api/mock-media/[name] (mock mode only). */
+export const MOCK_MEDIA_DIR = join(tmpdir(), "ai-receptionist-mock-media");
+const MEDIA_EXT: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/jpg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
 export class MockSocialProvider implements SocialProvider {
   readonly sends: MockSend[] = [];
+  readonly posts = new Map<string, CreatePostInput & { status: ProviderPostStatus | "deleted" }>();
+
+  constructor(private readonly appUrl = process.env.APP_URL ?? "http://localhost:3000") {}
 
   async createProfile(input: { name: string; externalId: string }) {
     return { profileId: idFrom("mock_profile", input.externalId), alreadyExisted: false };
@@ -42,10 +58,23 @@ export class MockSocialProvider implements SocialProvider {
   async createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }> {
-    return {
-      providerPostId: idFrom("mock_post", input.idempotencyKey),
-      status: input.publishAt ? "scheduled" : "publishing",
-    };
+    const providerPostId = idFrom("mock_post", input.idempotencyKey);
+    const status: ProviderPostStatus = input.publishAt ? "scheduled" : "publishing";
+    if (!this.posts.has(providerPostId)) this.posts.set(providerPostId, { ...input, status });
+    return { providerPostId, status };
+  }
+
+  async uploadMedia(input: { filename: string; contentType: string; bytes: Uint8Array }) {
+    const ext = MEDIA_EXT[input.contentType] ?? "bin";
+    const name = `${createHash("sha256").update(input.bytes).digest("hex").slice(0, 24)}.${ext}`;
+    await mkdir(MOCK_MEDIA_DIR, { recursive: true });
+    await writeFile(join(MOCK_MEDIA_DIR, name), input.bytes);
+    return { publicUrl: `${this.appUrl}/api/mock-media/${name}` };
+  }
+
+  async deletePost(input: { postId: string }) {
+    const post = this.posts.get(input.postId);
+    if (post) post.status = "deleted";
   }
 
   async replyToComment(input: {

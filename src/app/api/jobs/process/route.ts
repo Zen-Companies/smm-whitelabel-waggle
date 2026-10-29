@@ -8,10 +8,11 @@ import {
 } from "@/features/alerts";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, processDueItems } from "@/features/inbox";
+import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
 import { embedPendingEntries } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
-import { getSocialProvider } from "@/lib/social";
+import { getSocialProvider, resolveSocialProviderMode } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 
 // Called every minute by pg_cron + pg_net with `Authorization: Bearer CRON_SECRET` (§7.2).
@@ -49,6 +50,15 @@ export async function POST(request: Request): Promise<Response> {
         ? await embedPendingEntries({ db, llm }, { shouldContinue: deadline.canStartItem })
         : { embedded: 0, failed: 0 };
 
+    // T14: posts still queued (after a pause, a rate limit or an unclear error). In mock mode no
+    // post webhooks arrive, so due mock posts are settled as published here.
+    const posts = await publishQueuedPosts({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+    if (resolveSocialProviderMode(process.env) === "mock") await settleMockPosts(db);
+
     // T13: DMs about to lose their reply window, drafts waiting > 30 min, then the alert outbox
     // (escalations, leads, disconnects, nudges). Each sweep is cheap; delivery stops when time's up.
     const dmWindowsEscalated = await escalateClosingDmWindows(db);
@@ -68,6 +78,7 @@ export async function POST(request: Request): Promise<Response> {
       nudges,
       alerts,
       platform,
+      posts,
     });
   } catch (error) {
     Sentry.captureException(error);

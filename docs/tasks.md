@@ -71,9 +71,10 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 
 ## Phase 3: Publishing and billing
 
-- [ ] **T14. Publishing**
+- [x] **T14. Publishing**
       Compose page (text + image, target accounts, now or scheduled), `createPost` with idempotency key, status from `post.*` webhooks, retry on failure. VERIFY Zernio scheduling and media fields first.
       _Done when:_ a post publishes now and on schedule, and status shows correctly.
+      _Note:_ verified with the mock provider (integration tests); the media presign upload and a real post are for the live session.
       _Note:_ show a friendly message for Zernio's 409 duplicate-content error (same content to the same account within 24 h).
       _Note:_ surface `post.failed` caused by a Zernio pause (402 `PAYMENT_REQUIRED`, docs.zernio.com/multi-tenant): Zernio doesn't retry posts that came due while the team was paused, so show them as "failed: needs rescheduling" with a reschedule action. Also subscribe to `post.cancelled` (a post targeting only an account deleted after its 1-hour disconnect grace period is cancelled).
       _Note:_ `POST /v1/posts` accepts any account id the Zernio team owns; only ever send the tenant's own accounts (map `posts.target_account_ids` to that tenant's `zernio_account_id`s).

@@ -30,7 +30,7 @@ export type {
   SocialProvider,
 } from "./types";
 
-export { MockSocialProvider, resolveSocialProviderMode } from "./mock";
+export { MOCK_MEDIA_DIR, MockSocialProvider, resolveSocialProviderMode } from "./mock";
 
 let provider: SocialProvider | undefined;
 

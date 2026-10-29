@@ -71,6 +71,19 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }>;
+  /**
+   * Uploads one image for a post: `POST /v1/media/presign` then a PUT of the bytes to the
+   * returned `uploadUrl`. Returns the public URL to pass in `CreatePostInput.mediaUrls`.
+   */
+  uploadMedia(
+    input: {
+      filename: string;
+      contentType: string;
+      bytes: Uint8Array;
+    } & CallOptions,
+  ): Promise<{ publicUrl: string }>;
+  /** Cancels a scheduled post (`DELETE /v1/posts/{postId}`). */
+  deletePost(input: { postId: string } & CallOptions): Promise<void>;
   /** `postId` is the Zernio post id or the platform's post id. */
   replyToComment(
     input: {

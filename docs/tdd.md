@@ -150,7 +150,7 @@ Added in T12: `sending → awaiting_approval` (the mode changed between an auto-
    - `account.connected` / `account.disconnected` → upsert `social_accounts`; on disconnect set its open items to `paused` and enqueue an alert.
 4. Return 200. Target well under 5 seconds; Zernio retries up to 7 times on failure.
 
-Subscribe only to: `comment.received`, `message.received`, `message.failed`, `post.published`, `post.partial`, `post.failed`, `account.connected`, `account.disconnected`.
+Subscribe only to: `comment.received`, `message.received`, `message.failed`, `post.published`, `post.partial`, `post.failed`, `post.cancelled` (T14), `account.connected`, `account.disconnected`.
 
 Confirmed (T2, docs.zernio.com/webhooks and the `@zernio/node` 0.2.1369 types `WebhookPayloadComment` / `WebhookPayloadMessage`):
 
@@ -250,6 +250,15 @@ As built (T12, `features/approvals/send-step.ts`, the `sending` job step):
 - `SocialProvider.createPost({ content, mediaUrls, targets, publishAt, idempotencyKey })` → Zernio `POST /v1/posts`. Confirmed: `scheduledFor` (ISO 8601 with `Z`/offset) or `publishNow: true` (`publishAt = null`); `platforms: [{ platform, accountId }]`; media as `mediaItems: [{ url }]` (the SDK README's `mediaUrls` is outdated). Header `Idempotency-Key` (24 h; a retry returns the original post with 200, `409 idempotency_conflict` + `Retry-After` while the first is in flight). Separately, identical content to the same account within 24 h is rejected with 409 and `existingPostId`.
 - Media: `POST /v1/media/presign { filename, contentType, size? }` → `{ uploadUrl, publicUrl }`; `PUT` the file to `uploadUrl`; pass `publicUrl` in `mediaItems`. Store the URLs in `posts.media`.
 - Status comes from `post.*` webhooks, not from polling.
+
+As built (T14, `features/publishing`, `/posts`):
+
+- **Statuses** (migration `posts_publishing`): `queued` (saved, not yet accepted by Zernio) → `scheduled` / `publishing` (Zernio's answer) → `published` / `partial` / `failed` / `cancelled` (from webhooks). New columns: `platform_results` (per platform: status, URL, error), `published_at`, `failure_reason` (`zernio_paused`, `account_removed`), `attempts`, `next_attempt_at`.
+- **Compose** (Server Action `composePost`): text (max 2,200), optional image (JPG/PNG/WebP, max 5 MB; `serverActions.bodySizeLimit` 6 MB), accounts (only the tenant's own, connected ones: Zernio accepts any account of the team), now or a local date/time sent as ISO (at least 5 minutes ahead). The image goes through `SocialProvider.uploadMedia` (presign, then a server-side PUT, so no browser CORS on the upload URL; VERIFY on the live session). The post is inserted `queued` and handed to Zernio at once (`publishPost`), so "Post now" is immediate; the outcome shows in place.
+- **`publishPost`**: refuses targets that aren't the tenant's or aren't active (owner-facing fix in the error); `createPost` with the post's idempotency key, `publishAt` null for now or a time already past; 402 → platform pause (T19), stays `queued`; 429 / 409 `idempotency_conflict` → `next_attempt_at` from `Retry-After`; other 409 (same content to the same account within 24 h) and 4xx → `failed` with a plain-words reason; unclear errors retry up to 3 attempts (same key). The job route's `publishQueuedPosts` retries queued posts.
+- **Webhooks**: `post.published/partial/failed/cancelled` (now subscribing to `post.cancelled` too) update status, `platform_results`, `published_at`. A `post.failed` while `platform_state` shows a Zernio pause, or whose error mentions payment/billing, gets `failure_reason = 'zernio_paused'` (VERIFY the real error text on a pause); `post.cancelled` gets `account_removed` (its only account was deleted after the disconnect grace period).
+- **Owner actions**: cancel a scheduled post (`DELETE /v1/posts/{id}`, then `cancelled`); retry or reschedule a failed or cancelled-with-reason post with a **new** idempotency key (the old one would replay the failure).
+- **Mock mode**: `MockSocialProvider` records posts, stores images under the OS temp dir (served by `/api/mock-media/[name]`, 404 unless mock mode), and the job route settles due mock posts as published (no webhooks locally).
 
 ### 7.6 Signup and connect
 

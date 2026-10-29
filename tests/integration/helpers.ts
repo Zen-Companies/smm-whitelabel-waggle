@@ -54,6 +54,8 @@ export function fakeZernio() {
     listCommentReplies: notImplemented,
     getAccountsHealth: notImplemented,
     ping: notImplemented,
+    uploadMedia: notImplemented,
+    deletePost: notImplemented,
   };
   return {
     provider,
