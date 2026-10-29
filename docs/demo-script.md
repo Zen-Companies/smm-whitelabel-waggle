@@ -61,15 +61,15 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 ## 8. The trail behind a reply (3:45)
 
-**Click:** **Inbox** → **Sent** → kenji.o's oat milk question → **Open the conversation** → expand **History and costs**.
+**Click:** **Inbox** → **Sent** → kenji.o's oat milk question. Point at **Activity** on the right.
 
-**Say:** "Every reply can be traced: when it came in, how it was sorted, the draft, who approved it, when it was sent. And what the AI behind it cost, a fraction of a cent per message."
+**Say:** "Every reply can be traced, in plain words: when it came in, what kind of message it was, which of your business info the reply was written from, who approved it, when it was sent." (What the AI cost per message is on the operator's Costs page, not in the owner's view.)
 
 ## 9. Posts (4:15)
 
-**Click:** **Posts**. Type a short post (for example "Fresh croissants out of the oven!"), keep **Post now**, click **Post now**.
+**Click:** **Posts**. Type a short post (for example "Fresh croissants out of the oven!"), keep **Now**, click **Post now**.
 
-**Say:** "The same app publishes posts. Below: a weekend post scheduled for tomorrow, which you can cancel, and one that couldn't go out while posting was paused, with a button to pick a new time."
+**Say:** "The same app publishes posts, on a calendar: you see at a glance which days have a post. A post scheduled for tomorrow sits on its day, and the amber line says one couldn't go out while posting was paused, with a button to pick a new time. Click any empty day to plan a post for it."
 
 ## 10. Settings and business info (4:40)
 
