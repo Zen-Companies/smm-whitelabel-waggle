@@ -1,6 +1,6 @@
 # Design system: Friendly Local (refined)
 
-Status: v1 · Brand name TBD (use `[Brand]` everywhere a name would go) · Source: design canvas "AI Receptionist Brand Directions", Friendly Local boards.
+Status: v2 · Brand name TBD (use `[Brand]` everywhere a name would go) · Sources: design canvas "AI Receptionist Brand Directions", Friendly Local boards (tokens, components); canvas "AI Receptionist: screen design v2" (layout and screens, §8).
 
 Warm and a little playful, never cheap. Personality lives in the display type, the words, spot illustrations and a few signature moments. Everything else is calm, neutral and precise.
 
@@ -10,6 +10,7 @@ Warm and a little playful, never cheap. Personality lives in the display type, t
 2. **Precise everywhere else:** lists, forms, settings are quiet: neutral grays, tight alignment, no decoration.
 3. **Color with a job:** violet = act here, coral = a lead, amber = needs attention. No job → gray.
 4. **Feedback on the thing:** no toasts, ever. What you act on changes in place; errors stay where they happened.
+5. **Outcomes, not machinery:** owners read "Recognized as a lead", never model names, tokens or costs. Those live only on the operator's Costs page.
 
 ## 2. Tokens
 
@@ -75,7 +76,12 @@ Balance: ~75% neutral surfaces, ~13% gray structure/text, under 15% color. Never
 - **Status:** inline text + icon, never colored chips.
 - **Avatars:** customer's real profile photo from the platform; fallback = `--gray-50` circle with a 1.75px person icon. Never colored initials.
 - **Inbox list:** dividers, not boxes. Selected row = `--lavender`, 12px radius. Unread = name 600. Time in meta style.
-- **Approval card:** Lifted card, 16px radius. Header: avatar, name, platform + time, category label. Customer message, then draft in a `--gray-50` box (editable textarea when editing). Footer: primary "Approve and send" pill, secondary "Edit", quiet "Don't reply". Keyboard hints at right: `A` approve, `E` edit, `J` next (implement the shortcuts).
+- **Conversation (inbox detail):** lifted card, 16px radius. Header: avatar, name, platform + kind, category label. The thread: customer messages left on `--gray-50` (bottom-left corner 4px), your replies right on white with a 1px border and "Sent by you" / "Auto" under them; day separators in meta style. The footer is the action:
+  - **Suggested reply (composer):** 1px `--gray-200` box, 16px radius, at the bottom of the conversation. "Suggested reply" + "Based on your business info: X" on one line, the draft (textarea when editing), then primary "Approve and send", secondary "Edit", quiet "Don't reply", and at right the DM window ("23 h left to reply") and the keyboard hints `A` approve, `E` edit, `J` next.
+  - **Needs you:** the reply that couldn't go out (if any), then the problem where the send button would be: a danger box "Couldn't send: …" for send failures, or a calm `--gray-50` line for complaints and questions the info doesn't cover. Primary "Mark as handled", secondary "Copy reply".
+  - **Sent:** one `--gray-50` line with the check icon, "Sent · 2:14 PM".
+- **Context panel:** flat cards, 16px padding, meta-style headings, in this order: Customer (who is this), Lead (Wants / Contact, "Saved" chip, "View in Leads"), Activity (a few plain lines with times).
+- **Calendar (Posts):** flat card, 7 columns Sunday first, 92px cells with 1px `--gray-100` dividers, the day number in meta style (today = violet circle). Post chips: 12px text, 8px radius, icon + text: published = `--gray-50` with a success check; scheduled = white with a `--gray-200` border and a clock; needs a new time = amber-soft with an amber border. A day picked for a new post = `--lavender` cell with a dashed violet "New post" chip. A legend under the grid.
 - **Icons:** lucide-react, 1.75px stroke, `--ink` (or `--gray-700` in nav). No icon tiles or colored icon backgrounds, except notification type circles (below).
 - **Loading:** skeletons shaped like the content, never spinners on lists.
 
@@ -119,6 +125,23 @@ Files in `public/illustrations/`: `inbox-clear.svg`, `connect-accounts.svg`, `ne
 
 ## 8. Layout
 
-- App shell: white sidebar (210–240px) with `[Brand]` wordmark (Bricolage 24/800) + violet dot logo placeholder; main area on `--gray-25`, 32–40px padding, max content width ~1200px.
-- Pages are responsive: sidebar stacks on phone widths, two-pane inbox becomes list → detail.
-- Screens to style: Inbox (list + detail), item conversation page, Posts (list + compose + schedule), Leads, Business info (knowledge base), Settings (accounts, autonomy, notifications), login/signup, notification panel.
+Rules for every page (screen design v2):
+
+1. **Use the width.** Content sits left-aligned next to the sidebar and grows to ~1440px (32px side padding, 16px on phones). No narrow centered column with empty margins.
+2. **One header row per page:** title on the left, the page's one primary action or its filters on the same row. The work starts high on the screen.
+3. **Work pages are list → detail → context:** list on the left, the thing you act on in the middle, supporting facts on the right. Same in Inbox, Leads and Business info, so owners learn it once. Selection lives in the URL (`?item=`, `?lead=`, `?topic=`) so links land on the right thing.
+4. **Supporting facts go in the right panel,** never stacked under the main card.
+5. **Owners see outcomes, not machinery** (§1.5).
+6. **No dead-end links.** If something needs more room, the page gives it room instead of linking away. `/inbox/items/<id>` (from emails and notifications) redirects into the inbox with the item selected.
+
+- App shell: white sidebar (224px) with `[Brand]` wordmark (Bricolage 24/800) + violet dot logo placeholder and the bell; main area on `--gray-25`.
+- Responsive: the sidebar stacks on phone widths; three-pane pages become list → detail (a "← All messages" link back), and the context panel moves under the detail below `xl`.
+
+Screens:
+
+- **Inbox:** header = title + tabs (To approve / Needs you / Sent, with counts). List (320px, oldest waiting first) | conversation with the footer for the tab (§3) | context panel (300px).
+- **Leads:** header = title + tabs (All / Not replied yet). A table (Name, Wants, Contact, From, Status "Reply waiting for you" / "Replied" with an icon, Received) | the selected lead: contact with coral "Copy number" + "Call", Wants, Latest message, primary "Open in inbox".
+- **Posts:** header = title, previous / month / next, Today, and a Month / List switch at right. A month calendar (§3) with one amber line above it for posts that need a new time ("Pick a new time" opens the post) | the composer, always visible: text, a dashed 64px "Add photo" box, accounts, Now / Schedule with Day and Time, and a button that says what will happen ("Schedule for Sun 7:00 AM"). Click a day to plan a post for it. A clicked post opens above the composer with its actions.
+- **Business info:** header = title + subtitle + primary "Add a topic". Topic list with "Find a topic" and "Used in N replies this week" | one topic in the editor (Topic, What customers should be told, Save, "Last changed …", "Delete topic") | "Questions your info didn't answer" with "Add an answer" (opens a new topic prefilled with the question).
+- **Settings:** a section list (Accounts with "N connected", Replies, Notifications, Business) and one section at a time. Replies: one full-width row per kind of message with a plain sentence and the segmented control; the fixed kinds read "Always you" / "Hidden" instead of a disabled control.
+- **Notification panel:** unchanged (§5).
