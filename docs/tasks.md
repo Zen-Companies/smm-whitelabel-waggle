@@ -55,7 +55,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Pure `policy()` (TDD §11) with full unit tests; settings UI per category.
       _Done when:_ all policy branches are tested; changing a mode changes the next item's outcome.
 
-- [ ] **T11. Approval inbox**
+- [x] **T11. Approval inbox**
       Inbox page: original message, draft, category; approve / edit / reject; Realtime updates.
       _Done when:_ a new draft appears live; approve, edit and reject each work.
 

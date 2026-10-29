@@ -1,5 +1,10 @@
-export { updateAutonomyMode } from "./actions";
-export type { AutonomyFormState } from "./actions";
+export { decideDraft, updateAutonomyMode } from "./actions";
+export type { AutonomyFormState, DecisionFormState } from "./actions";
+export { approveDraft, rejectDraft, REPLY_MAX } from "./decisions";
+export type { DecisionResult } from "./decisions";
+export { InboxList } from "./inbox-list";
+export { loadInbox } from "./inbox-data";
+export type { InboxData, InboxEntry } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";
 export {
   AUTONOMY_MODES,
