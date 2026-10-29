@@ -35,7 +35,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 
 - [x] **T6. Status machine and job runner**
       `features/inbox/status.ts` (`nextStatus`), `/api/jobs/process` with claim query (§7.2), retries (§14), pg_cron + pg_net migration calling it with `CRON_SECRET`.
-      _Done when:_ seeded `new` items move through mocked steps; a failing step retries 3 times then fails and escalates.
+      _Done when:_ seeded `new` items move through mocked steps; a failing step is tried 3 times in total, then fails and escalates.
       _Note:_ the job route tracks its own deadline and stops claiming items before Vercel's max function duration.
 
 - [x] **T7. Triage**

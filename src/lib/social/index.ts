@@ -1,4 +1,5 @@
 import "server-only";
+import { MockSocialProvider, resolveSocialProviderMode } from "./mock";
 import { createZernioProvider } from "./zernio";
 import type { SocialProvider } from "./types";
 
@@ -13,13 +14,20 @@ export type {
   SocialProvider,
 } from "./types";
 
+export { MockSocialProvider, resolveSocialProviderMode } from "./mock";
+
 let provider: SocialProvider | undefined;
 
+/** Zernio, or the in-process mock when `SOCIAL_PROVIDER_MODE=mock` (default under Vitest). */
 export function getSocialProvider(): SocialProvider {
   if (!provider) {
-    const apiKey = process.env.ZERNIO_API_KEY;
-    if (!apiKey) throw new Error("ZERNIO_API_KEY must be set");
-    provider = createZernioProvider({ apiKey });
+    if (resolveSocialProviderMode(process.env) === "mock") {
+      provider = new MockSocialProvider();
+    } else {
+      const apiKey = process.env.ZERNIO_API_KEY;
+      if (!apiKey) throw new Error("ZERNIO_API_KEY must be set");
+      provider = createZernioProvider({ apiKey });
+    }
   }
   return provider;
 }

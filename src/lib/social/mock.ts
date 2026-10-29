@@ -1,0 +1,123 @@
+import { createHash } from "node:crypto";
+import type {
+  AccountHealth,
+  CreatePostInput,
+  ProviderMessage,
+  ProviderPostStatus,
+  SocialPlatform,
+  SocialProvider,
+} from "./types";
+
+// SOCIAL_PROVIDER_MODE=mock (CLAUDE.md rule 14): a stand-in for Zernio for tests and local smoke
+// tests. Nothing leaves the process. Ids are derived from the input, so a retry with the same
+// idempotency key gets the same id, like Zernio's replay.
+const idFrom = (prefix: string, ...parts: string[]) =>
+  `${prefix}_${createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 24)}`;
+
+export interface MockSend {
+  kind: "comment" | "dm";
+  accountId: string;
+  targetId: string;
+  idempotencyKey: string;
+  providerId: string;
+  /** Kept in memory for assertions only; never logged (rule 10). */
+  message: string;
+}
+
+export class MockSocialProvider implements SocialProvider {
+  readonly sends: MockSend[] = [];
+
+  async createProfile(input: { name: string; externalId: string }) {
+    return { profileId: idFrom("mock_profile", input.externalId), alreadyExisted: false };
+  }
+
+  /** Sends the browser straight back to the app; no account is connected. */
+  async getConnectUrl(input: { platform: SocialPlatform; profileId: string; redirectUrl: string }) {
+    const url = new URL(input.redirectUrl);
+    url.searchParams.set("mock_connect", "1");
+    return { authUrl: url.toString() };
+  }
+
+  async createPost(
+    input: CreatePostInput,
+  ): Promise<{ providerPostId: string; status: ProviderPostStatus }> {
+    return {
+      providerPostId: idFrom("mock_post", input.idempotencyKey),
+      status: input.publishAt ? "scheduled" : "publishing",
+    };
+  }
+
+  async replyToComment(input: {
+    accountId: string;
+    postId: string;
+    commentId: string;
+    message: string;
+    idempotencyKey: string;
+  }) {
+    const providerReplyId = this.record("comment", input.accountId, input.commentId, input);
+    return { providerReplyId };
+  }
+
+  async sendDm(input: {
+    accountId: string;
+    conversationId: string;
+    message: string;
+    idempotencyKey: string;
+  }) {
+    const providerMessageId = this.record("dm", input.accountId, input.conversationId, input);
+    return { providerMessageId };
+  }
+
+  async listConversationMessages(input: {
+    conversationId: string;
+    accountId: string;
+  }): Promise<ProviderMessage[]> {
+    return this.sends
+      .filter((s) => s.kind === "dm" && s.targetId === input.conversationId)
+      .reverse()
+      .map((s) => ({
+        id: s.providerId,
+        direction: "outgoing",
+        text: s.message,
+        createdAt: new Date().toISOString(),
+      }));
+  }
+
+  async getAccountsHealth(): Promise<AccountHealth[]> {
+    return [];
+  }
+
+  private record(
+    kind: MockSend["kind"],
+    accountId: string,
+    targetId: string,
+    input: { message: string; idempotencyKey: string },
+  ): string {
+    const existing = this.sends.find((s) => s.idempotencyKey === input.idempotencyKey);
+    if (existing) return existing.providerId;
+    const providerId = idFrom(`mock_${kind}`, input.idempotencyKey);
+    this.sends.push({ kind, accountId, targetId, providerId, ...input });
+    console.info(`[mock social] ${kind} send ${providerId} (key ${input.idempotencyKey})`);
+    return providerId;
+  }
+}
+
+export type SocialProviderMode = "zernio" | "mock";
+
+/**
+ * `SOCIAL_PROVIDER_MODE` wins; otherwise mock under Vitest, Zernio everywhere else. Mock is
+ * refused on a Vercel production deployment, where it would silently drop replies.
+ */
+export function resolveSocialProviderMode(
+  env: Record<string, string | undefined>,
+): SocialProviderMode {
+  const raw = env.SOCIAL_PROVIDER_MODE?.trim().toLowerCase();
+  if (raw && raw !== "mock" && raw !== "zernio") {
+    throw new Error(`SOCIAL_PROVIDER_MODE must be "mock" or "zernio", got "${raw}"`);
+  }
+  const mode: SocialProviderMode = (raw as SocialProviderMode) || (env.VITEST ? "mock" : "zernio");
+  if (mode === "mock" && env.VERCEL_ENV === "production") {
+    throw new Error("SOCIAL_PROVIDER_MODE=mock is not allowed in production");
+  }
+  return mode;
+}

@@ -29,7 +29,8 @@ pnpm gen:types        # regenerate src/lib/supabase/database.types.ts after a mi
 pnpm triage:report    # labeled set → every configured classifier (accuracy, confusion, latency)
 pnpm draft:preview    # sample messages → drafts from the demo KB (needs OpenRouter keys)
 supabase start        # local Supabase (ports 553xx, see supabase/config.toml)
-supabase db reset     # re-apply migrations + seed
+supabase migration up --local   # apply new migrations, keeps data
+supabase db reset     # DESTRUCTIVE: wipes local data (rule 13: ask first)
 supabase migration new <name>
 ```
 
@@ -61,6 +62,8 @@ tests/fixtures    recorded webhook payloads
 10. **Never log customer message text** to Sentry or console in production; log ids.
 11. **Every state change and owner action writes to `audit_log`.**
 12. **Never add a `Co-Authored-By: Claude` (or any Claude attribution) line to commits.**
+13. **Never run `supabase db reset` or any destructive DB command without asking first.** Apply migrations with `supabase migration up --local`.
+14. **Never make real calls to Zernio or paid AI APIs (OpenRouter, Jev) in tests or smoke tests unless explicitly asked.** Tests use mocks. For local smoke tests set `SOCIAL_PROVIDER_MODE=mock` (the default under Vitest) so signup and connect don't reach Zernio.
 
 ## Conventions
 
