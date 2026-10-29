@@ -17,6 +17,7 @@ export type { InboxData, InboxEntry, InboxTab } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";
 export {
   AUTONOMY_MODES,
+  CATEGORY_HINTS,
   CATEGORY_LABELS,
   CONFIGURABLE_CATEGORIES,
   FIXED_BEHAVIOUR,

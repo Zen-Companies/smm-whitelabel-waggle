@@ -18,10 +18,12 @@ import type { AutonomyMode } from "./policy";
 export function AutonomyForm({
   category,
   label,
+  hint,
   mode,
 }: {
   category: ConfigurableCategory;
   label: string;
+  hint: string;
   mode: AutonomyMode;
 }) {
   const [state, action, pending] = useActionState<AutonomyFormState, FormData>(
@@ -32,14 +34,17 @@ export function AutonomyForm({
   const formRef = useRef<HTMLFormElement>(null);
 
   return (
-    <form ref={formRef} action={action} className="flex flex-col gap-2 py-4">
+    <form ref={formRef} action={action} className="p-5">
       <input type="hidden" name="category" value={category} />
-      <fieldset className="flex flex-wrap items-center justify-between gap-3">
+      <fieldset className="grid grid-cols-1 items-center gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]">
         <legend className="sr-only">{label}</legend>
-        <span className="font-medium" aria-hidden>
-          {label}
+        <span className="flex flex-col" aria-hidden>
+          <span className="font-semibold">{label}</span>
+          <span className="text-sm text-gray-700">
+            {hint} {MODE_DESCRIPTIONS[value]}
+          </span>
         </span>
-        <span className="segmented" role="radiogroup" aria-label={label}>
+        <span className="segmented justify-self-start" role="radiogroup" aria-label={label}>
           {AUTONOMY_MODES.map((m) => (
             <label key={m} data-active={value === m || undefined}>
               <input
@@ -59,18 +64,20 @@ export function AutonomyForm({
           ))}
         </span>
       </fieldset>
-      <p className="meta flex items-center gap-2">
-        {MODE_DESCRIPTIONS[value]}
-        {pending && <span>Saving…</span>}
-        {!pending && state.saved && (
-          <span role="status" className="inline-flex items-center gap-1 text-gray-700">
-            <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
-            Saved
-          </span>
-        )}
-      </p>
+      {(pending || state.saved) && (
+        <p className="meta mt-2 flex items-center gap-2">
+          {pending ? (
+            "Saving…"
+          ) : (
+            <span role="status" className="inline-flex items-center gap-1 text-gray-700">
+              <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
+              Saved
+            </span>
+          )}
+        </p>
+      )}
       {state.error && (
-        <p role="alert" className="text-danger text-sm">
+        <p role="alert" className="text-danger mt-2 text-sm">
           {state.error}
         </p>
       )}

@@ -11,7 +11,7 @@ export const AUTONOMY_MODES = ["off", "approve", "auto"] as const satisfies Auto
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   faq: "Questions",
-  lead: "Leads (bookings, orders, quotes)",
+  lead: "Leads",
   complaint: "Complaints",
   unclear: "Unclear messages",
   spam: "Spam",
@@ -30,9 +30,18 @@ export const MODE_DESCRIPTIONS: Record<AutonomyMode, string> = {
   auto: "Replies go out on their own when your business info covers the question.",
 };
 
-/** What always happens to the categories the owner can't change. */
+/** What always happens to the categories the owner can't change ("Always you", design v2). */
 export const FIXED_BEHAVIOUR: Record<Exclude<Category, ConfigurableCategory>, string> = {
-  complaint: "Always sent to you",
-  unclear: "Always sent to you",
-  spam: "Ignored",
+  complaint: "Always you",
+  unclear: "Always you",
+  spam: "Hidden",
+};
+
+/** One plain sentence per kind of message, so the choice is understood before it's made. */
+export const CATEGORY_HINTS: Record<Category, string> = {
+  faq: "Hours, prices, menu, parking.",
+  lead: "Bookings, orders and quote requests. Details are saved to Leads and emailed to you either way.",
+  complaint: "Always handed to you, never answered automatically.",
+  unclear: "When the receptionist can't tell what someone wants.",
+  spam: "Sales pitches and scams are hidden from your inbox.",
 };

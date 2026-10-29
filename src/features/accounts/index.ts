@@ -1,5 +1,5 @@
 export { AccountBanner } from "./account-banner";
-export { AccountsCard } from "./accounts-card";
+export { AccountsCard, ConnectedCount } from "./accounts-card";
 export { connectAccount } from "./actions";
 export { connectBanner } from "./connect-banner";
 export type { ConnectBanner } from "./connect-banner";

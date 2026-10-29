@@ -113,3 +113,15 @@ export async function AccountsCard({
     </section>
   );
 }
+
+/** "2 connected" next to Accounts in the Settings section list. */
+export async function ConnectedCount() {
+  const tenant = await getCurrentTenant();
+  const supabase = await createServerSupabase();
+  const { count } = await supabase
+    .from("social_accounts")
+    .select("*", { count: "exact", head: true })
+    .eq("tenant_id", tenant.id)
+    .eq("status", "active");
+  return count ? <span className="meta">{count} connected</span> : null;
+}
