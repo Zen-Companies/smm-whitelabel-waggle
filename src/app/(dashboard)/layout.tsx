@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { AccountBanner } from "@/features/accounts";
+import { Bell } from "@/features/alerts";
 import { AppSidebar } from "@/features/tenants";
 
 // App shell (docs/design.md §8): white sidebar, main area on gray-25, 32–40px padding,
@@ -8,7 +9,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
       <Suspense fallback={<div className="bg-surface border-b md:h-dvh md:w-56 md:border-r" />}>
-        <AppSidebar />
+        <AppSidebar bell={<Bell />} />
       </Suspense>
       <div className="flex min-w-0 flex-1 flex-col">
         <Suspense fallback={null}>

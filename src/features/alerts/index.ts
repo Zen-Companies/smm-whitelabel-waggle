@@ -8,3 +8,7 @@ export type { Email, Mailer } from "./mailer";
 export { handlePlatformPause } from "./platform";
 export type { PlatformPauseResult } from "./platform";
 export { NotificationSettings } from "./notification-settings";
+export { Bell } from "./bell";
+export { MarkItemRead } from "./mark-item-read";
+export { countUnreadNeedingAction, describeNotification, loadNotifications } from "./notifications";
+export type { NotificationKind, NotificationView } from "./notifications";

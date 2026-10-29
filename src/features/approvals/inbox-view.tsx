@@ -5,6 +5,7 @@ import { CategoryLabel } from "@/components/app/category-label";
 import { IllustratedEmpty } from "@/components/app/illustrated-empty";
 import { clockTime, platformName, shortTime } from "@/components/app/time";
 import { buttonVariants } from "@/components/ui/button";
+import { MarkItemRead } from "@/features/alerts";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "cn";
@@ -196,6 +197,7 @@ export async function InboxView({
                 ← All messages
               </Link>
             )}
+            {selected && <MarkItemRead itemId={selected.itemId} />}
             {selected &&
               (tab === "waiting" ? (
                 <ApprovalCard

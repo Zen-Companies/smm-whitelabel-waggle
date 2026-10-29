@@ -551,6 +551,73 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          details: Json
+          id: string
+          item_id: string | null
+          kind: string
+          needs_action: boolean
+          post_id: string | null
+          read_at: string | null
+          social_account_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          details?: Json
+          id?: string
+          item_id?: string | null
+          kind: string
+          needs_action?: boolean
+          post_id?: string | null
+          read_at?: string | null
+          social_account_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          details?: Json
+          id?: string
+          item_id?: string | null
+          kind?: string
+          needs_action?: boolean
+          post_id?: string | null
+          read_at?: string | null
+          social_account_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_item_id_tenant_id_fkey"
+            columns: ["item_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "inbound_items"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "notifications_social_account_id_tenant_id_fkey"
+            columns: ["social_account_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "notifications_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       platform_state: {
         Row: {
           key: string

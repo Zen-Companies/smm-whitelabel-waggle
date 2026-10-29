@@ -2,6 +2,7 @@ import { CircleCheck } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { clockTime, shortTime } from "@/components/app/time";
+import { MarkItemRead } from "@/features/alerts";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ApprovalCard, MessageHeader, RecentSends } from "./approval-card";
@@ -75,6 +76,7 @@ export async function ItemDetail({ params }: { params: Promise<{ id: string }> }
         </p>
       </div>
 
+      <MarkItemRead itemId={id} />
       <RecentSends />
       <ol className="flex flex-col gap-6">
         {entries.map((entry) => {
