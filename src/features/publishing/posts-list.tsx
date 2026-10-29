@@ -1,11 +1,11 @@
 import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Loader } from "lucide-react";
-import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { needsNewTime } from "./calendar";
 import { CancelPostButton, RetryPostForm } from "./post-actions";
 
-// Posts (PRD F3): needs attention, upcoming, published. Read through RLS.
+// Posts (PRD F3): one post with its status and actions, and the List view. Read through RLS.
 
-interface PostRow {
+export interface PostRow {
   id: string;
   content: string;
   media: { url?: string }[];
@@ -87,12 +87,20 @@ function problem(post: PostRow): string | null {
   return null;
 }
 
-function Post({ post, accounts }: { post: PostRow; accounts: Map<string, string> }) {
+export function Post({
+  post,
+  accounts,
+  as: Tag = "li",
+}: {
+  post: PostRow;
+  accounts: Map<string, string>;
+  as?: "li" | "div";
+}) {
   const issue = problem(post);
   const image = post.media[0]?.url;
   const live = post.platform_results.find((r) => r.url)?.url;
   return (
-    <li className="flex gap-4 py-4">
+    <Tag className="flex gap-4 py-4">
       {image && (
         // eslint-disable-next-line @next/next/no-img-element -- remote post media, any host
         <img src={image} alt="" className="size-16 shrink-0 rounded-lg border object-cover" />
@@ -125,9 +133,19 @@ function Post({ post, accounts }: { post: PostRow; accounts: Map<string, string>
           )}
         </div>
       </div>
-    </li>
+    </Tag>
   );
 }
+
+export const accountNames = (
+  accounts: { id: string; platform: string; username: string | null }[],
+) =>
+  new Map(
+    accounts.map((a) => [
+      a.id,
+      `${a.platform === "facebook" ? "Facebook" : "Instagram"} @${a.username ?? "account"}`,
+    ]),
+  );
 
 export async function loadPosts(tenantId: string) {
   const supabase = await createServerSupabase();
@@ -152,21 +170,9 @@ export async function loadPosts(tenantId: string) {
   };
 }
 
-export async function PostsList() {
-  const tenant = await getCurrentTenant();
-  const { posts, accounts } = await loadPosts(tenant.id);
-  const names = new Map(
-    accounts.map((a) => [
-      a.id,
-      `${a.platform === "facebook" ? "Facebook" : "Instagram"} @${a.username ?? "account"}`,
-    ]),
-  );
-  const attention = posts.filter(
-    (p) =>
-      p.status === "failed" ||
-      p.status === "partial" ||
-      (p.status === "cancelled" && p.failure_reason),
-  );
+/** The List view: needs attention, upcoming, published. */
+export function PostsList({ posts, names }: { posts: PostRow[]; names: Map<string, string> }) {
+  const attention = posts.filter(needsNewTime);
   const upcoming = posts
     .filter((p) => ["queued", "scheduled", "publishing"].includes(p.status))
     .sort((a, b) =>
@@ -192,9 +198,9 @@ export async function PostsList() {
   );
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="card flex flex-col gap-8 p-5">
       {attention.length > 0 && section("Needs attention", attention, "")}
-      {section("Upcoming", upcoming, "Nothing scheduled. Plan a post above.")}
+      {section("Upcoming", upcoming, "Nothing scheduled. Plan one with the composer.")}
       {section("Published", published, "Your published posts show up here.")}
     </div>
   );

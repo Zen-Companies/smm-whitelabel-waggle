@@ -13,19 +13,39 @@ export interface ComposeAccount {
 
 const OUTCOME: Record<NonNullable<ComposeState["outcome"]>, string> = {
   published: "Posted. It shows as published as soon as Instagram/Facebook confirm.",
-  scheduled: "Scheduled. It's in your upcoming posts below.",
+  scheduled: "Scheduled. It's on the calendar.",
   waiting: "Saved. It goes out as soon as posting is possible again.",
-  failed: "Saved, but it couldn't be posted. See below.",
+  failed: "Saved, but it couldn't be posted. It's marked on the calendar.",
 };
 
-/** Compose a post: text, optional image, accounts, now or later (PRD F3). */
-export function ComposeForm({ accounts }: { accounts: ComposeAccount[] }) {
+/** "Sun 7:00 AM" for the Schedule button, so the owner sees exactly what will happen. */
+function whenLabel(date: string, time: string): string {
+  const at = new Date(`${date}T${time}`);
+  if (Number.isNaN(at.getTime())) return "";
+  return `${at.toLocaleDateString(undefined, { weekday: "short" })} ${at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+}
+
+const localDay = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/**
+ * Compose a post: text, optional photo, accounts, now or on a day and time (PRD F3, design v2).
+ * `day` (YYYY-MM-DD) comes from clicking a day on the calendar and preselects Schedule.
+ */
+export function ComposeForm({
+  accounts,
+  day = null,
+}: {
+  accounts: ComposeAccount[];
+  day?: string | null;
+}) {
   const [state, action, pending] = useActionState<ComposeState, FormData>(composePost, {});
   // A saved post changes savedAt, which remounts the fields: text, counter and time reset.
   return (
     <ComposeFields
       key={state.savedAt}
       accounts={accounts}
+      day={day}
       state={state}
       action={action}
       pending={pending}
@@ -35,20 +55,25 @@ export function ComposeForm({ accounts }: { accounts: ComposeAccount[] }) {
 
 function ComposeFields({
   accounts,
+  day,
   state,
   action,
   pending,
 }: {
   accounts: ComposeAccount[];
+  day: string | null;
   state: ComposeState;
   action: (formData: FormData) => void;
   pending: boolean;
 }) {
-  const [when, setWhen] = useState<"now" | "later">("now");
-  const [local, setLocal] = useState("");
+  const [when, setWhen] = useState<"now" | "later">(day ? "later" : "now");
+  const [date, setDate] = useState(() => day ?? localDay(new Date(Date.now() + 24 * 3_600_000)));
+  const [time, setTime] = useState("09:00");
   const [length, setLength] = useState(0);
-  // The datetime-local value is the owner's local time; send it as an absolute ISO time.
-  const scheduledFor = local ? new Date(local).toISOString() : "";
+  const [photo, setPhoto] = useState<string | null>(null);
+  // Day and time are the owner's local time; send them as an absolute ISO time.
+  const at = date && time ? new Date(`${date}T${time}`) : null;
+  const scheduledFor = at && !Number.isNaN(at.getTime()) ? at.toISOString() : "";
   const fieldError = (field: ComposeState["field"]) =>
     state.field === field && state.error ? (
       <p role="alert" className="text-danger text-sm">
@@ -79,16 +104,23 @@ function ComposeFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="post-image" className="text-sm font-medium">
-          Image (optional)
-        </label>
-        <input
-          id="post-image"
-          name="image"
-          type="file"
-          accept={POST_IMAGE_TYPES.join(",")}
-          className="file:bg-surface file:text-ink text-sm text-gray-700 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-md file:border file:border-gray-200 file:px-4 file:text-sm file:font-medium hover:file:bg-gray-50"
-        />
+        <div className="flex items-center gap-3">
+          <label
+            htmlFor="post-image"
+            className="flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-gray-200 text-center text-xs text-gray-600 hover:bg-gray-50 has-[:focus-visible]:outline-2"
+          >
+            {photo ? "Change photo" : "Add photo"}
+            <input
+              id="post-image"
+              name="image"
+              type="file"
+              accept={POST_IMAGE_TYPES.join(",")}
+              onChange={(e) => setPhoto(e.target.files?.[0]?.name ?? null)}
+              className="sr-only"
+            />
+          </label>
+          <span className="meta min-w-0 truncate">{photo ?? "JPG or PNG, up to 5 MB"}</span>
+        </div>
         {fieldError("image")}
       </div>
 
@@ -119,23 +151,38 @@ function ComposeFields({
                 onChange={() => setWhen(v)}
                 className="sr-only"
               />
-              {v === "now" ? "Post now" : "Schedule"}
+              {v === "now" ? "Now" : "Schedule"}
             </label>
           ))}
         </div>
         {when === "later" && (
-          <div className="flex flex-col gap-2">
-            <label htmlFor="post-when" className="text-sm font-medium">
-              Date and time
-            </label>
-            <input
-              id="post-when"
-              type="datetime-local"
-              value={local}
-              onChange={(e) => setLocal(e.target.value)}
-              className="field max-w-xs"
-              required
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="post-day" className="text-sm font-medium">
+                Day
+              </label>
+              <input
+                id="post-day"
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="field"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="post-time" className="text-sm font-medium">
+                Time
+              </label>
+              <input
+                id="post-time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+                className="field"
+                required
+              />
+            </div>
             <input type="hidden" name="scheduledFor" value={scheduledFor} />
           </div>
         )}
@@ -144,7 +191,11 @@ function ComposeFields({
 
       <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="primary" disabled={pending || accounts.length === 0}>
-          {pending ? "Saving…" : when === "now" ? "Post now" : "Schedule post"}
+          {pending
+            ? "Saving…"
+            : when === "now"
+              ? "Post now"
+              : `Schedule${whenLabel(date, time) ? ` for ${whenLabel(date, time)}` : ""}`}
         </Button>
         {state.outcome && (
           <p role="status" className="text-sm">

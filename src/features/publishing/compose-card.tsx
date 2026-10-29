@@ -2,7 +2,8 @@ import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ComposeForm } from "./compose-form";
 
-export async function ComposeCard() {
+/** The composer, always beside the calendar (design v2). `day` comes from a clicked day. */
+export async function ComposeCard({ day = null }: { day?: string | null }) {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
   const { data: accounts } = await supabase
@@ -12,11 +13,23 @@ export async function ComposeCard() {
     .eq("status", "active")
     .order("created_at");
   return (
-    <section className="card flex flex-col gap-4 p-6" aria-labelledby="compose-heading">
-      <h2 id="compose-heading" className="section-title">
-        New post
-      </h2>
-      <ComposeForm accounts={accounts ?? []} />
+    <section className="card-lifted flex flex-col gap-4 p-5" aria-labelledby="compose-heading">
+      <div className="flex flex-col">
+        <h2 id="compose-heading" className="section-title">
+          New post
+        </h2>
+        {day && (
+          <span className="meta">
+            For{" "}
+            {new Date(`${day}T12:00`).toLocaleDateString(undefined, {
+              weekday: "long",
+              month: "short",
+              day: "numeric",
+            })}
+          </span>
+        )}
+      </div>
+      <ComposeForm key={day ?? "any"} accounts={accounts ?? []} day={day} />
     </section>
   );
 }
