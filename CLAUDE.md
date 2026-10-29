@@ -29,6 +29,8 @@ pnpm test:integration # Vitest against local Supabase (tests/integration); needs
 pnpm gen:types        # regenerate src/lib/supabase/database.types.ts after a migration
 pnpm triage:report    # labeled set → every configured classifier (accuracy, confusion, latency)
 pnpm draft:preview    # sample messages → drafts from the demo KB (needs OpenRouter keys)
+pnpm demo:seed        # local demo: refills Harbour Bean Café (use with SOCIAL_PROVIDER_MODE=mock)
+pnpm local:owner --email you@x --tenant <uuid>   # local: attach a login to a tenant, print a sign-in link
 supabase start        # local Supabase (ports 553xx, see supabase/config.toml)
 supabase migration up --local   # apply new migrations, keeps data
 supabase db reset     # DESTRUCTIVE: wipes local data (rule 13: ask first)

@@ -556,6 +556,10 @@ As built (T17):
 - **Integration:** Supabase local; job route against seeded items with `SocialProvider` and `Classifier` mocked.
 - **Manual smoke (staging):** a test Zernio profile with a test Instagram account; webhook endpoint scoped to that profile (`profileIds`) so test traffic never hits production.
 
+### Demo mode (local)
+
+`pnpm demo:seed` (`scripts/demo-seed.ts`, local Supabase only) refills the seeded demo tenant, Harbour Bean Café (`owner@example.com` / `password123`, `supabase/seed.sql`), and nothing else: Instagram and Facebook accounts, 14 messages through the real status transitions (4 waiting for approval incl. a lead, a held complaint, an unclear message, a question the business info doesn't cover, a DM whose 24-hour window closed before the approved reply went out, 4 sent replies incl. 2 auto-sent, a handled one, spam), 2 leads, 3 posts (published, scheduled, failed during a Zernio pause), the alerts and notifications those produce, and AI cost rows at illustrative production prices. The business info (`demo_kb.sql`) is kept. It sets a placeholder Zernio profile id so logging in never creates a real profile. With `SOCIAL_PROVIDER_MODE=mock` in `.env.local` the whole app can be clicked through with no external calls (approving a reply sends it through the mock; posts publish through the mock and settle on the next job tick).
+
 ## 17. Environment variables
 
 ```

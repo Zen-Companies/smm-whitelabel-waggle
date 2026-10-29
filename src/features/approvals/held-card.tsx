@@ -69,7 +69,7 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
         <div role="alert" className="danger-box flex flex-col gap-1">
           <p className="font-semibold">Couldn&apos;t send.</p>
           <p>
-            {failed} Reply on {platform} yourself{reply ? " (copy the reply below)" : ""}, then mark
+            {failed} Reply on {platform} yourself{reply ? " (copy the reply above)" : ""}, then mark
             it as handled.
           </p>
         </div>
