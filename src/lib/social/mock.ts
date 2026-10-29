@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import type {
   AccountHealth,
   CreatePostInput,
+  ProviderCommentReply,
   ProviderMessage,
   ProviderPostStatus,
   SocialPlatform,
@@ -81,6 +82,16 @@ export class MockSocialProvider implements SocialProvider {
         text: s.message,
         createdAt: new Date().toISOString(),
       }));
+  }
+
+  async listCommentReplies(input: {
+    accountId: string;
+    postId: string;
+    commentId: string;
+  }): Promise<ProviderCommentReply[]> {
+    return this.sends
+      .filter((s) => s.kind === "comment" && s.targetId === input.commentId)
+      .map((s) => ({ id: s.providerId, text: s.message, fromOwner: true, createdAt: null }));
   }
 
   async getAccountsHealth(): Promise<AccountHealth[]> {

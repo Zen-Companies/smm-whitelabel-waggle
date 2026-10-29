@@ -24,3 +24,4 @@ export type {
   SubscriptionStatus,
 } from "./policy";
 export { createPolicyStep, loadPolicyInput } from "./policy-step";
+export { createSendStep } from "./send-step";

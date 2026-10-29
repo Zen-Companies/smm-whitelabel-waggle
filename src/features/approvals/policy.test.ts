@@ -148,6 +148,31 @@ describe("policy (TDD §11, in order)", () => {
       ).toBe("send");
     });
   });
+
+  describe("at send time: the owner's approval counts in approve mode", () => {
+    const approved = { needsHuman: false, approvedByOwner: true };
+    it("approve mode + owner approved → send", () => {
+      expect(run({ draft: approved })).toEqual({ decision: "send", reason: "owner_approved" });
+    });
+    it("a DM whose window closed while waiting still escalates", () => {
+      expect(run({ ...dm(DM_REPLY_WINDOW_MS + 1), draft: approved })).toEqual({
+        decision: "escalate",
+        reason: "dm_window_closed",
+      });
+    });
+    it("a disconnected account still pauses, mode off still escalates", () => {
+      expect(run({ draft: approved, account: { status: "disconnected" } }).decision).toBe("pause");
+      expect(run({ draft: approved, autonomyMode: "off" })).toEqual({
+        decision: "escalate",
+        reason: "mode_off",
+      });
+    });
+    it("auto mode doesn't need it", () => {
+      expect(
+        run({ draft: { needsHuman: false, approvedByOwner: false }, autonomyMode: "auto" }),
+      ).toEqual({ decision: "send", reason: "auto_send" });
+    });
+  });
 });
 
 describe("triage (steps 1-4, before drafting)", () => {

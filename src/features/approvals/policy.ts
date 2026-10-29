@@ -11,8 +11,11 @@ export const DM_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 export interface PolicyInput {
   item: { kind: "comment" | "dm" };
   classification: { category: Category; confidence: number };
-  /** null before drafting (triage), or when no draft was written. */
-  draft: { needsHuman: boolean } | null;
+  /**
+   * null before drafting (triage), or when no draft was written. `approvedByOwner`: the owner
+   * approved it in the inbox (checked again at send time, T12).
+   */
+  draft: { needsHuman: boolean; approvedByOwner?: boolean } | null;
   tenant: { subscriptionStatus: SubscriptionStatus; confidenceThreshold: number };
   account: { status: "active" | "disconnected" | "error" };
   autonomyMode: AutonomyMode;
@@ -32,7 +35,8 @@ export type PolicyReason =
   | "low_confidence"
   | "dm_window_closed"
   | "approval_required"
-  | "auto_send";
+  | "auto_send"
+  | "owner_approved";
 
 export type PolicyDecision =
   | { decision: "pause"; reason: "tenant_inactive" | "account_inactive" }
@@ -48,7 +52,7 @@ export type PolicyDecision =
         | "dm_window_closed";
     }
   | { decision: "approve"; reason: "approval_required" }
-  | { decision: "send"; reason: "auto_send" };
+  | { decision: "send"; reason: "auto_send" | "owner_approved" };
 
 const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
 
@@ -91,8 +95,9 @@ export function policy(input: PolicyInput): PolicyDecision {
     }
   }
 
-  // 6-7.
-  return input.autonomyMode === "auto"
-    ? { decision: "send", reason: "auto_send" }
+  // 6-7. In approve mode, the owner's approval is what allows the send.
+  if (input.autonomyMode === "auto") return { decision: "send", reason: "auto_send" };
+  return input.draft.approvedByOwner
+    ? { decision: "send", reason: "owner_approved" }
     : { decision: "approve", reason: "approval_required" };
 }

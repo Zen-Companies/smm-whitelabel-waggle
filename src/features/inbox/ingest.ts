@@ -5,12 +5,14 @@ import type { ServiceClient } from "@/lib/supabase/service";
 import { isSocialPlatform, type SocialPlatform } from "@/lib/social/types";
 import { writeAudit } from "@/lib/audit";
 import { insertInboundItem } from "./items";
+import { transitionItem } from "./status";
 import {
   accountConnectedSchema,
   accountDisconnectedSchema,
   commentEventSchema,
   envelopeSchema,
   messageEventSchema,
+  messageFailedSchema,
   postEventSchema,
   zernioAccountIdOf,
   type ZernioEnvelope,
@@ -161,14 +163,51 @@ async function mapEvent(
     "post.failed": (t) => mapPost(deps.db, t.tenantId, payload),
     "account.connected": (t) => mapAccountConnected(deps, t, payload),
     "account.disconnected": (t) => mapAccountDisconnected(deps, t, payload),
+    "message.failed": (t) => mapMessageFailed(deps.db, t.tenantId, payload),
   };
   const handler = handlers[event.event];
-  // message.failed (subscribed) is handled by the send step in T12; others aren't subscribed.
-  if (!handler) return skipped(event.event === "message.failed" ? "handled_by_send" : "not_mapped");
+  if (!handler) return skipped("not_mapped");
 
   const tenant = await resolveTenant(deps.db, event.profiles);
   if (!tenant) return rejected("unknown_tenant");
   return handler(tenant);
+}
+
+/** A reply we sent was not delivered: its draft and item fail, and the owner is told (T13). */
+async function mapMessageFailed(
+  db: ServiceClient,
+  tenantId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(messageFailedSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  const ids = [e.message.platformMessageId, e.message.id].filter((id): id is string => !!id);
+  const { data: draft } = await db
+    .from("drafts")
+    .select("id, item_id, status")
+    .eq("tenant_id", tenantId)
+    .in("zernio_reply_id", ids)
+    .limit(1)
+    .maybeSingle();
+  if (!draft) return skipped("unknown_message");
+  if (draft.status !== "sent") return { outcome: "processed", detail: "already_failed" };
+
+  await db.from("drafts").update({ status: "failed" }).eq("id", draft.id).eq("status", "sent");
+  const { applied } = await transitionItem(db, {
+    itemId: draft.item_id,
+    from: "sent",
+    event: "delivery_failed",
+    details: { draftId: draft.id },
+  });
+  await writeAudit(db, {
+    tenantId,
+    itemId: draft.item_id,
+    action: "delivery_failed",
+    actor: "system",
+    // Platform error code and title only; never message text.
+    details: { draftId: draft.id, code: e.error?.code ?? null, title: e.error?.title ?? null },
+  });
+  return { outcome: "processed", detail: applied ? "delivery_failed" : "item_moved" };
 }
 
 type AccountBlock = { id: string; accountId?: string; platform: string; username: string };

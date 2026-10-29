@@ -51,6 +51,7 @@ export function fakeZernio() {
     replyToComment: notImplemented,
     sendDm: notImplemented,
     listConversationMessages: notImplemented,
+    listCommentReplies: notImplemented,
     getAccountsHealth: notImplemented,
   };
   return {

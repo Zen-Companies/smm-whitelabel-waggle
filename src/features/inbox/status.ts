@@ -43,7 +43,7 @@ export type StatusEvent =
   | "ignore"
   /** complaint/unclear, mode off, policy failed, DM window closed */
   | "escalate"
-  /** policy: approve first */
+  /** policy: approve first (also at send time, if the mode changed after an auto-approval) */
   | "await_approval"
   /** policy auto, or the owner approved */
   | "send"
@@ -53,7 +53,9 @@ export type StatusEvent =
   | "pause"
   | "resume"
   /** retries exhausted */
-  | "fail";
+  | "fail"
+  /** the platform reported a sent reply as undelivered (message.failed) */
+  | "delivery_failed";
 
 const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> = {
   new: { classified: "classified", pause: "paused", escalate: "escalated", fail: "failed" },
@@ -73,9 +75,14 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
     fail: "failed",
   },
   awaiting_approval: { send: "sending", reject: "rejected", escalate: "escalated" },
-  sending: { sent: "sent", escalate: "escalated", fail: "failed" },
+  sending: {
+    sent: "sent",
+    escalate: "escalated",
+    fail: "failed",
+    await_approval: "awaiting_approval",
+  },
   paused: { resume: "new" },
-  sent: {},
+  sent: { delivery_failed: "failed" },
   rejected: {},
   ignored: {},
   escalated: {},

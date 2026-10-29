@@ -26,6 +26,8 @@ beforeEach(() => {
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const request = new Request(input, init);
+      // Like real fetch: an aborted signal rejects before anything is sent.
+      if (request.signal.aborted) throw request.signal.reason;
       const text = await request.text();
       const req: Captured = {
         method: request.method,
@@ -206,6 +208,56 @@ describe("ZernioSocialProvider", () => {
       limit: "20",
       sortOrder: "desc",
     });
+  });
+
+  it("listCommentReplies reads one comment's replies and marks our own", async () => {
+    respond = () =>
+      json({
+        status: "success",
+        comment: { id: "c_1", message: "Open Sunday?" },
+        comments: [
+          {
+            id: "r_1",
+            message: "Yes, 8am to 10pm.",
+            createdTime: "2026-10-28T10:01:00Z",
+            from: { id: "me", isOwner: true },
+          },
+          { id: "r_2", message: "same q", from: { id: "x", isOwner: false } },
+        ],
+      });
+
+    await expect(
+      provider.listCommentReplies({ accountId: "acc_1", postId: "1789", commentId: "c_1" }),
+    ).resolves.toEqual([
+      { id: "r_1", text: "Yes, 8am to 10pm.", fromOwner: true, createdAt: "2026-10-28T10:01:00Z" },
+      { id: "r_2", text: "same q", fromOwner: false, createdAt: null },
+    ]);
+    const [req] = captured;
+    expect(req.method).toBe("GET");
+    expect(req.url.pathname).toBe("/api/v1/inbox/comments/1789");
+    expect(Object.fromEntries(req.url.searchParams)).toEqual({
+      accountId: "acc_1",
+      commentId: "c_1",
+      limit: "50",
+    });
+  });
+
+  it("a send aborts when the caller's signal fires (ambiguous)", async () => {
+    respond = () => json({ success: true, data: { messageId: "m_1" } });
+    const controller = new AbortController();
+    controller.abort();
+    const error = (await provider
+      .sendDm({
+        accountId: "acc_1",
+        conversationId: "conv_1",
+        message: "Hi!",
+        idempotencyKey: "dm-key",
+        signal: controller.signal,
+      })
+      .catch((e: unknown) => e)) as SocialProviderError;
+    expect(error).toBeInstanceOf(SocialProviderError);
+    expect(error.details.ambiguous).toBe(true);
+    expect(captured).toHaveLength(0);
   });
 
   it("getAccountsHealth filters by profile and maps accounts", async () => {

@@ -7,7 +7,9 @@ export { createZernioProvider, ZernioSocialProvider } from "./zernio";
 export { isSocialPlatform, SOCIAL_PLATFORMS, SocialProviderError } from "./types";
 export type {
   AccountHealth,
+  CallOptions,
   CreatePostInput,
+  ProviderCommentReply,
   ProviderMessage,
   ProviderPostStatus,
   SocialPlatform,

@@ -136,6 +136,8 @@ any step: error ──▶ retry (attempts+1, next_run_at backoff) ──▶ afte
 
 Transitions live in one module (`features/inbox/status.ts`) with a pure `nextStatus()` function. Nothing else writes `status` directly.
 
+Added in T12: `sending → awaiting_approval` (the mode changed between an auto-approval and the send) and `sent → failed` (`delivery_failed`, from a `message.failed` webhook).
+
 ## 7. Flows
 
 ### 7.1 Webhook ingest (`/api/webhooks/zernio`)
@@ -220,6 +222,16 @@ As built (T11, `features/approvals`):
 - A Zernio `5xx`, timeout or network error on send is ambiguous (may have been delivered): list the conversation's messages (or the post's comments) to reconcile before retrying; Zernio warns an empty list is inconclusive. The adapter marks these errors `ambiguous: true`.
 - `429`: the SDK exposes `X-RateLimit-Reset` (not `Retry-After`); the adapter turns it into `retryAfterSeconds`.
 
+As built (T12, `features/approvals/send-step.ts`, the `sending` job step):
+
+- **Policy again at send time (rule 6).** The step reloads the item, account, tenant, mode, conversation and the approved draft and runs `policy()`. `PolicyInput.draft.approvedByOwner` (the draft has `decided_by`) makes an approve-mode item `send` (`owner_approved`); auto mode is `auto_send` as before. Anything else does not send: `dm_window_closed` (the 24-hour check, measured at send time), an inactive account or tenant, mode `off` → `escalated` with the policy reason; `approve` (auto-approved, then the owner switched the category to approve) → back to `awaiting_approval` with the draft `pending` (new transition `sending → awaiting_approval`). No approved draft → `escalated` (`no_approved_draft`).
+- **Send.** Comment → `replyToComment` (`postId` = the item's `zernio_post_id`, i.e. the webhook's `platformPostId`; `commentId`); DM → `sendDm` (the conversation's Zernio id). Message = `edited_body ?? body`; `Idempotency-Key` = `drafts.idempotency_key`; the abort signal is the job's per-call budget (20 s), replacing the SDK's 60 s. Success → draft `sent`, `sent_at`, `zernio_reply_id`, `reply_sent` audit (ids only) → item `sent`.
+- **Reconcile before resending (rule 7).** Migration `draft_send_attempts` adds `drafts.send_attempted_at`, set just before the request leaves and cleared once the outcome is known. If it is still set when the step runs (the last attempt got a 5xx, timed out or crashed), the step first looks for the reply on the platform: DMs via `listConversationMessages` (an outgoing message with the same text, not older than the first attempt minus 5 min), comments via the new `SocialProvider.listCommentReplies` (`GET /v1/inbox/comments/{postId}?commentId=…`: the comment's replies; ours have `from.isOwner`). Found → recorded as sent (`reconciled: true`), no second request. Not found is inconclusive (Zernio's warning), so it resends with the **same** idempotency key: if the first request did go through, Zernio replays its response instead of posting again.
+- **Errors.** `429` → `RetryLaterError(retryAfterSeconds from X-RateLimit-Reset, else 60 s)`: rescheduled, no attempt counted, attempt mark cleared (nothing was delivered). `409` (same key in flight) → retry in 30 s, mark kept. Other non-ambiguous errors (400/401/403/404/422) → draft `failed`, `send_failed` audit (status and code), item `escalated` at once: retrying won't help. Ambiguous errors (5xx, timeout, network) count as an attempt (§14 backoff); the third → `failed` + `escalated`.
+- **`message.failed` webhook** (`features/inbox/ingest.ts`): the draft whose `zernio_reply_id` equals `message.platformMessageId` (the send response's `data.messageId` is the platform message id, per the SDK docs; `message.id` is also tried) → draft `failed`, item `sent → failed` (new event `delivery_failed`), `delivery_failed` audit with the platform error code and title only. Unknown id → `skipped: unknown_message`. Zernio documents `message.failed` for WhatsApp, SMS and RCS only, so it should not arrive for Instagram/Facebook today.
+- **Mock mode.** `SOCIAL_PROVIDER_MODE=mock` swaps in `MockSocialProvider` (in-process, replays by idempotency key, lists its own sends for reconcile), which the integration tests use with scripted failures (`tests/integration/sending.test.ts`). The real adapter is covered by the fetch-stubbed unit tests.
+- Not built: a fast path from the approve action. An approved reply goes out on the next cron tick (within a minute).
+
 ### 7.5 Publishing
 
 - `SocialProvider.createPost({ content, mediaUrls, targets, publishAt, idempotencyKey })` → Zernio `POST /v1/posts`. Confirmed: `scheduledFor` (ISO 8601 with `Z`/offset) or `publishNow: true` (`publishAt = null`); `platforms: [{ platform, accountId }]`; media as `mediaItems: [{ url }]` (the SDK README's `mediaUrls` is outdated). Header `Idempotency-Key` (24 h; a retry returns the original post with 200, `409 idempotency_conflict` + `Retry-After` while the first is in flight). Separately, identical content to the same account within 24 h is rejected with 409 and `existingPostId`.
@@ -257,6 +269,7 @@ export interface SocialProvider {
   replyToComment(input: { accountId: string; postId: string; commentId: string; message: string; idempotencyKey: string }): Promise<{ providerReplyId: string }>;
   sendDm(input: { accountId: string; conversationId: string; message: string; idempotencyKey: string }): Promise<{ providerMessageId: string }>;
   listConversationMessages(input: { conversationId: string; accountId: string; limit?: number }): Promise<ProviderMessage[]>; // newest first
+  listCommentReplies(input: { accountId: string; postId: string; commentId: string; limit?: number }): Promise<ProviderCommentReply[]>; // T12 reconcile
   getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
 }
 export interface CreatePostInput {
@@ -268,6 +281,7 @@ export interface CreatePostInput {
 }
 // Every adapter error is a SocialProviderError { status?, code?, ambiguous, retryAfterSeconds? }.
 // ambiguous = 5xx / timeout / network: the request may have taken effect, reconcile before retrying.
+// Sends and lists take an optional `signal` (T12: the job's per-call budget).
 
 // lib/classifier/types.ts
 export type Category = "faq" | "lead" | "complaint" | "spam" | "unclear";

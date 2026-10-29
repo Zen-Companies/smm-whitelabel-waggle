@@ -32,6 +32,19 @@ export interface ProviderMessage {
   createdAt: string;
 }
 
+export interface ProviderCommentReply {
+  id: string;
+  text: string | null;
+  /** Written by the connected account (our own reply). */
+  fromOwner: boolean;
+  createdAt: string | null;
+}
+
+/** Per call: abort after the job's budget (docs/tdd.md §7.2). Defaults to the adapter timeout. */
+export interface CallOptions {
+  signal?: AbortSignal;
+}
+
 export interface AccountHealth {
   accountId: string;
   platform: string;
@@ -59,25 +72,40 @@ export interface SocialProvider {
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }>;
   /** `postId` is the Zernio post id or the platform's post id. */
-  replyToComment(input: {
-    accountId: string;
-    postId: string;
-    commentId: string;
-    message: string;
-    idempotencyKey: string;
-  }): Promise<{ providerReplyId: string }>;
-  sendDm(input: {
-    accountId: string;
-    conversationId: string;
-    message: string;
-    idempotencyKey: string;
-  }): Promise<{ providerMessageId: string }>;
+  replyToComment(
+    input: {
+      accountId: string;
+      postId: string;
+      commentId: string;
+      message: string;
+      idempotencyKey: string;
+    } & CallOptions,
+  ): Promise<{ providerReplyId: string }>;
+  sendDm(
+    input: {
+      accountId: string;
+      conversationId: string;
+      message: string;
+      idempotencyKey: string;
+    } & CallOptions,
+  ): Promise<{ providerMessageId: string }>;
   /** Newest first. Used to reconcile an ambiguous send before retrying (rule 7). */
-  listConversationMessages(input: {
-    conversationId: string;
-    accountId: string;
-    limit?: number;
-  }): Promise<ProviderMessage[]>;
+  listConversationMessages(
+    input: {
+      conversationId: string;
+      accountId: string;
+      limit?: number;
+    } & CallOptions,
+  ): Promise<ProviderMessage[]>;
+  /** Replies to one comment (Instagram/Facebook). Used to reconcile an ambiguous comment reply. */
+  listCommentReplies(
+    input: {
+      accountId: string;
+      postId: string;
+      commentId: string;
+      limit?: number;
+    } & CallOptions,
+  ): Promise<ProviderCommentReply[]>;
   getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
 }
 

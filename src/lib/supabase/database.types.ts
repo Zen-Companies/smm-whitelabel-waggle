@@ -88,6 +88,89 @@ export type Database = {
           },
         ]
       }
+      alerts: {
+        Row: {
+          attempts: number
+          created_at: string
+          dedupe_key: string
+          details: Json
+          id: string
+          item_id: string | null
+          kind: string
+          last_error: string | null
+          lead_id: string | null
+          next_attempt_at: string | null
+          provider_id: string | null
+          sent_at: string | null
+          social_account_id: string | null
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          dedupe_key: string
+          details?: Json
+          id?: string
+          item_id?: string | null
+          kind: string
+          last_error?: string | null
+          lead_id?: string | null
+          next_attempt_at?: string | null
+          provider_id?: string | null
+          sent_at?: string | null
+          social_account_id?: string | null
+          status?: string
+          tenant_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string
+          details?: Json
+          id?: string
+          item_id?: string | null
+          kind?: string
+          last_error?: string | null
+          lead_id?: string | null
+          next_attempt_at?: string | null
+          provider_id?: string | null
+          sent_at?: string | null
+          social_account_id?: string | null
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alerts_item_id_tenant_id_fkey"
+            columns: ["item_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "inbound_items"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "alerts_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alerts_social_account_id_tenant_id_fkey"
+            columns: ["social_account_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "alerts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -227,6 +310,8 @@ export type Database = {
           model: string | null
           needs_human: boolean
           needs_human_reason: string | null
+          nudged_at: string | null
+          send_attempted_at: string | null
           sent_at: string | null
           status: string
           tenant_id: string
@@ -245,6 +330,8 @@ export type Database = {
           model?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
+          nudged_at?: string | null
+          send_attempted_at?: string | null
           sent_at?: string | null
           status?: string
           tenant_id: string
@@ -263,6 +350,8 @@ export type Database = {
           model?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
+          nudged_at?: string | null
+          send_attempted_at?: string | null
           sent_at?: string | null
           status?: string
           tenant_id?: string
@@ -666,6 +755,7 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      enqueue_draft_nudges: { Args: { p_older_than: string }; Returns: number }
       match_kb_entries: {
         Args: {
           p_limit?: number

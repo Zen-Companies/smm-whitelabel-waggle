@@ -4,6 +4,7 @@ import {
   SocialProviderError,
   type AccountHealth,
   type CreatePostInput,
+  type ProviderCommentReply,
   type ProviderMessage,
   type ProviderPostStatus,
   type SocialProvider,
@@ -41,6 +42,18 @@ const messagesSchema = z.object({
       createdAt: z.string(),
     }),
   ),
+});
+const commentRepliesSchema = z.object({
+  comments: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        message: z.string().nullish(),
+        createdTime: z.string().nullish(),
+        from: z.object({ isOwner: z.boolean().optional() }).nullish(),
+      }),
+    )
+    .optional(),
 });
 const healthSchema = z.object({
   accounts: z.array(
@@ -154,9 +167,11 @@ export class ZernioSocialProvider implements SocialProvider {
     commentId: string;
     message: string;
     idempotencyKey: string;
+    signal?: AbortSignal;
   }) {
     return call("replyToComment", async () => {
       const { data } = await this.zernio.comments.replyToInboxPost({
+        signal: input.signal,
         path: { postId: input.postId },
         body: { accountId: input.accountId, commentId: input.commentId, message: input.message },
         headers: { "Idempotency-Key": input.idempotencyKey },
@@ -170,9 +185,11 @@ export class ZernioSocialProvider implements SocialProvider {
     conversationId: string;
     message: string;
     idempotencyKey: string;
+    signal?: AbortSignal;
   }) {
     return call("sendDm", async () => {
       const { data } = await this.zernio.messages.sendInboxMessage({
+        signal: input.signal,
         path: { conversationId: input.conversationId },
         body: { accountId: input.accountId, message: input.message },
         headers: { "Idempotency-Key": input.idempotencyKey },
@@ -185,9 +202,11 @@ export class ZernioSocialProvider implements SocialProvider {
     conversationId: string;
     accountId: string;
     limit?: number;
+    signal?: AbortSignal;
   }): Promise<ProviderMessage[]> {
     return call("listConversationMessages", async () => {
       const { data } = await this.zernio.messages.getInboxConversationMessages({
+        signal: input.signal,
         path: { conversationId: input.conversationId },
         query: { accountId: input.accountId, limit: input.limit ?? 20, sortOrder: "desc" },
       });
@@ -196,6 +215,29 @@ export class ZernioSocialProvider implements SocialProvider {
         direction: m.direction,
         text: m.message ?? null,
         createdAt: m.createdAt,
+      }));
+    });
+  }
+
+  /** `GET /v1/inbox/comments/{postId}?commentId=…`: on Instagram/Facebook, that comment's replies. */
+  async listCommentReplies(input: {
+    accountId: string;
+    postId: string;
+    commentId: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<ProviderCommentReply[]> {
+    return call("listCommentReplies", async () => {
+      const { data } = await this.zernio.comments.getInboxPostComments({
+        signal: input.signal,
+        path: { postId: input.postId },
+        query: { accountId: input.accountId, commentId: input.commentId, limit: input.limit ?? 50 },
+      });
+      return (parse(commentRepliesSchema, data, "listCommentReplies").comments ?? []).map((c) => ({
+        id: c.id,
+        text: c.message ?? null,
+        fromOwner: c.from?.isOwner ?? false,
+        createdAt: c.createdTime ?? null,
       }));
     });
   }

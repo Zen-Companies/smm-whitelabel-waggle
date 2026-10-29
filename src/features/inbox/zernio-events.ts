@@ -59,6 +59,20 @@ export const messageEventSchema = z.object({
   account: accountBlock,
 });
 
+/**
+ * WebhookPayloadMessageDeliveryStatus. `message.platformMessageId` is the id our send got back
+ * (send response `data.messageId`). Zernio only reports failures for WhatsApp, SMS and RCS today,
+ * so for Instagram/Facebook this never fires; handled in case that changes.
+ */
+export const messageFailedSchema = z.object({
+  event: z.literal("message.failed"),
+  message: z.object({
+    id: z.string().min(1),
+    platformMessageId: z.string().optional(),
+  }),
+  error: z.object({ code: z.number().optional(), title: z.string().optional() }).nullish(),
+});
+
 export const postEventSchema = z.object({
   event: z.enum(["post.published", "post.partial", "post.failed"]),
   post: z.object({

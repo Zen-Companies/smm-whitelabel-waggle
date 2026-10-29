@@ -1,0 +1,329 @@
+import * as Sentry from "@sentry/nextjs";
+import type { Step, StepResult } from "@/features/inbox";
+import { writeAudit } from "@/lib/audit";
+import { RetryLaterError } from "@/lib/jobs";
+import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
+import type { ServiceClient } from "@/lib/supabase/service";
+import {
+  policy,
+  type AutonomyMode,
+  type Category,
+  type PolicyInput,
+  type SubscriptionStatus,
+} from "./policy";
+
+// The `sending` step (docs/tdd.md §7.4): policy check again (rule 6), then one reply through
+// SocialProvider with the draft's idempotency key (rule 7). A request whose outcome is unknown
+// (5xx, timeout, crash) leaves drafts.send_attempted_at set, and the next attempt looks for the
+// reply on the platform before sending again.
+
+/** Retry delay when Zernio says the same idempotency key is still in flight (409). */
+const IN_FLIGHT_RETRY_SECONDS = 30;
+/** 429 without a reset header. */
+const RATE_LIMIT_FALLBACK_SECONDS = 60;
+/** A reconciled DM must be no older than the first attempt (minus clock skew). */
+const RECONCILE_SKEW_MS = 5 * 60 * 1000;
+
+interface SendContext {
+  tenantId: string;
+  kind: "comment" | "dm";
+  zernioCommentId: string | null;
+  zernioPostId: string | null;
+  account: { zernioAccountId: string; status: PolicyInput["account"]["status"] };
+  conversation: { zernioConversationId: string; lastCustomerMessageAt: string | null } | null;
+  input: Omit<PolicyInput, "draft" | "now">;
+  draft: {
+    id: string;
+    message: string;
+    status: string;
+    needsHuman: boolean;
+    approvedByOwner: boolean;
+    idempotencyKey: string;
+    sendAttemptedAt: string | null;
+    zernioReplyId: string | null;
+  } | null;
+}
+
+async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendContext> {
+  const { data, error } = await db
+    .from("inbound_items")
+    .select(
+      "tenant_id, kind, category, confidence, zernio_comment_id, zernio_post_id, " +
+        "social_accounts!inner (zernio_account_id, status), " +
+        "tenants!inner (subscription_status, confidence_threshold), " +
+        "conversations (zernio_conversation_id, last_customer_message_at)",
+    )
+    .eq("id", itemId)
+    .single();
+  if (error) throw new Error(`send: item lookup failed: ${error.message}`);
+  const row = data as unknown as {
+    tenant_id: string;
+    kind: "comment" | "dm";
+    category: Category | null;
+    confidence: number | null;
+    zernio_comment_id: string | null;
+    zernio_post_id: string | null;
+    social_accounts: { zernio_account_id: string; status: PolicyInput["account"]["status"] };
+    tenants: { subscription_status: SubscriptionStatus; confidence_threshold: number };
+    conversations: {
+      zernio_conversation_id: string;
+      last_customer_message_at: string | null;
+    } | null;
+  };
+  if (!row.category || row.confidence === null) throw new Error("send: item is not classified");
+
+  const [{ data: setting }, { data: draft }] = await Promise.all([
+    db
+      .from("autonomy_settings")
+      .select("mode")
+      .eq("tenant_id", row.tenant_id)
+      .eq("category", row.category)
+      .maybeSingle(),
+    db
+      .from("drafts")
+      .select(
+        "id, body, edited_body, status, needs_human, decided_by, idempotency_key, " +
+          "send_attempted_at, zernio_reply_id",
+      )
+      .eq("item_id", itemId)
+      .in("status", ["approved", "sent"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const d = draft as unknown as {
+    id: string;
+    body: string;
+    edited_body: string | null;
+    status: string;
+    needs_human: boolean;
+    decided_by: string | null;
+    idempotency_key: string;
+    send_attempted_at: string | null;
+    zernio_reply_id: string | null;
+  } | null;
+
+  const last = row.conversations?.last_customer_message_at ?? null;
+  return {
+    tenantId: row.tenant_id,
+    kind: row.kind,
+    zernioCommentId: row.zernio_comment_id,
+    zernioPostId: row.zernio_post_id,
+    account: {
+      zernioAccountId: row.social_accounts.zernio_account_id,
+      status: row.social_accounts.status,
+    },
+    conversation: row.conversations
+      ? {
+          zernioConversationId: row.conversations.zernio_conversation_id,
+          lastCustomerMessageAt: last,
+        }
+      : null,
+    input: {
+      item: { kind: row.kind },
+      classification: { category: row.category, confidence: Number(row.confidence) },
+      tenant: {
+        subscriptionStatus: row.tenants.subscription_status,
+        confidenceThreshold: Number(row.tenants.confidence_threshold),
+      },
+      account: { status: row.social_accounts.status },
+      autonomyMode: (setting?.mode as AutonomyMode | undefined) ?? "off",
+      lastCustomerMessageAt: last ? new Date(last) : null,
+    },
+    draft: d
+      ? {
+          id: d.id,
+          message: d.edited_body ?? d.body,
+          status: d.status,
+          needsHuman: d.needs_human,
+          approvedByOwner: d.decided_by !== null,
+          idempotencyKey: d.idempotency_key,
+          sendAttemptedAt: d.send_attempted_at,
+          zernioReplyId: d.zernio_reply_id,
+        }
+      : null,
+  };
+}
+
+const normalize = (text: string | null) => (text ?? "").replace(/\s+/g, " ").trim();
+
+/** The reply's provider id if it is already on the platform, else null (inconclusive). */
+async function findDelivered(
+  social: SocialProvider,
+  c: SendContext,
+  message: string,
+  attemptedAt: Date,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const wanted = normalize(message);
+  if (c.kind === "comment") {
+    const replies = await social.listCommentReplies({
+      accountId: c.account.zernioAccountId,
+      postId: c.zernioPostId!,
+      commentId: c.zernioCommentId!,
+      signal,
+    });
+    return replies.find((r) => r.fromOwner && normalize(r.text) === wanted)?.id ?? null;
+  }
+  const messages = await social.listConversationMessages({
+    accountId: c.account.zernioAccountId,
+    conversationId: c.conversation!.zernioConversationId,
+    signal,
+  });
+  const since = attemptedAt.getTime() - RECONCILE_SKEW_MS;
+  return (
+    messages.find(
+      (m) =>
+        m.direction === "outgoing" &&
+        normalize(m.text) === wanted &&
+        new Date(m.createdAt).getTime() >= since,
+    )?.id ?? null
+  );
+}
+
+export function createSendStep(opts: { social: () => SocialProvider; now?: () => Date }): Step {
+  return async (item, ctx): Promise<StepResult> => {
+    const { db } = ctx;
+    const now = opts.now?.() ?? new Date();
+    const c = await loadSendContext(db, item.id);
+    const draft = c.draft;
+
+    // Zernio answered but the status change was lost: finish without sending again.
+    if (draft?.status === "sent") {
+      return { event: "sent", details: { draftId: draft.id, recovered: true } };
+    }
+    if (!draft) return { event: "escalate", details: { sendReason: "no_approved_draft" } };
+
+    // Rule 6, at the moment of sending: the DM window may have closed or the account dropped
+    // while the draft waited.
+    const decision = policy({
+      ...c.input,
+      draft: { needsHuman: draft.needsHuman, approvedByOwner: draft.approvedByOwner },
+      now,
+    });
+    if (decision.decision !== "send") {
+      if (decision.decision === "approve") {
+        // Auto-approved, then the owner switched the category to approve: their call now.
+        await db
+          .from("drafts")
+          .update({ status: "pending", decided_at: null, send_attempted_at: null })
+          .eq("id", draft.id)
+          .eq("status", "approved");
+        return {
+          event: "await_approval",
+          details: { draftId: draft.id, policyReason: decision.reason },
+        };
+      }
+      return {
+        event: "escalate",
+        details: { draftId: draft.id, decision: decision.decision, policyReason: decision.reason },
+      };
+    }
+
+    const social = opts.social();
+    const markSent = async (providerId: string, reconciled: boolean): Promise<StepResult> => {
+      const { error } = await db
+        .from("drafts")
+        .update({
+          status: "sent",
+          sent_at: now.toISOString(),
+          zernio_reply_id: providerId,
+          send_attempted_at: null,
+        })
+        .eq("id", draft.id);
+      if (error) throw new Error(`send: recording the sent reply failed: ${error.message}`);
+      await writeAudit(db, {
+        tenantId: c.tenantId,
+        itemId: item.id,
+        action: "reply_sent",
+        actor: "system",
+        details: { draftId: draft.id, kind: c.kind, providerId, reconciled },
+      });
+      return { event: "sent", details: { draftId: draft.id, providerId, reconciled } };
+    };
+
+    // Rule 7: an earlier attempt may have gone through. Look before sending again; if the
+    // platform doesn't show it (Zernio: an empty list is inconclusive), the resend reuses the
+    // idempotency key, so a delivered first request is replayed rather than repeated.
+    if (draft.sendAttemptedAt) {
+      const found = await findDelivered(
+        social,
+        c,
+        draft.message,
+        new Date(draft.sendAttemptedAt),
+        ctx.callSignal(),
+      );
+      if (found) return markSent(found, true);
+    } else {
+      const { error } = await db
+        .from("drafts")
+        .update({ send_attempted_at: now.toISOString() })
+        .eq("id", draft.id);
+      if (error) throw new Error(`send: marking the attempt failed: ${error.message}`);
+    }
+
+    const clearAttempt = () =>
+      db.from("drafts").update({ send_attempted_at: null }).eq("id", draft.id);
+
+    let providerId: string;
+    try {
+      providerId =
+        c.kind === "comment"
+          ? (
+              await social.replyToComment({
+                accountId: c.account.zernioAccountId,
+                postId: c.zernioPostId!,
+                commentId: c.zernioCommentId!,
+                message: draft.message,
+                idempotencyKey: draft.idempotencyKey,
+                signal: ctx.callSignal(),
+              })
+            ).providerReplyId
+          : (
+              await social.sendDm({
+                accountId: c.account.zernioAccountId,
+                conversationId: c.conversation!.zernioConversationId,
+                message: draft.message,
+                idempotencyKey: draft.idempotencyKey,
+                signal: ctx.callSignal(),
+              })
+            ).providerMessageId;
+    } catch (error) {
+      if (!(error instanceof SocialProviderError)) throw error;
+      const { status, code, ambiguous, retryAfterSeconds } = error.details;
+      if (status === 429) {
+        // Not delivered. Wait for X-RateLimit-Reset; no attempt counted (§14).
+        await clearAttempt();
+        throw new RetryLaterError(retryAfterSeconds ?? RATE_LIMIT_FALLBACK_SECONDS);
+      }
+      if (status === 409) {
+        // The same key is still in flight: the first request may yet succeed. Keep the mark.
+        throw new RetryLaterError(retryAfterSeconds ?? IN_FLIGHT_RETRY_SECONDS);
+      }
+      if (!ambiguous) {
+        // A definite refusal (bad request, permissions, deleted comment): retrying won't help.
+        await db
+          .from("drafts")
+          .update({ status: "failed", send_attempted_at: null })
+          .eq("id", draft.id);
+        await writeAudit(db, {
+          tenantId: c.tenantId,
+          itemId: item.id,
+          action: "send_failed",
+          actor: "system",
+          details: { draftId: draft.id, status: status ?? null, code: code ?? null },
+        });
+        Sentry.captureMessage("reply send rejected", {
+          extra: { itemId: item.id, draftId: draft.id, status, code },
+        });
+        return {
+          event: "escalate",
+          details: { draftId: draft.id, sendReason: "send_rejected", status: status ?? null },
+        };
+      }
+      // Ambiguous: counted as an attempt and retried; the next attempt reconciles first.
+      throw error;
+    }
+    return markSent(providerId, false);
+  };
+}

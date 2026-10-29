@@ -279,8 +279,8 @@ describe("approval inbox", () => {
     }
     await client.removeChannel(channel);
 
-    expect(received).toContain(mine.itemId);
-    expect(received).not.toContain(other.itemId);
-    expect(unfiltered).not.toContain(b.tenantId);
+    expect(received, "own new draft delivered").toContain(mine.itemId);
+    expect(received, "filtered channel: no other-tenant draft").not.toContain(other.itemId);
+    expect(unfiltered, "RLS: other tenant's draft never delivered").not.toContain(b.tenantId);
   }, 30_000);
 });

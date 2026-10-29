@@ -14,6 +14,8 @@ describe("nextStatus", () => {
     ["awaiting_approval", "reject", "rejected"],
     ["sending", "sent", "sent"],
     ["sending", "escalate", "escalated"],
+    ["sending", "await_approval", "awaiting_approval"],
+    ["sent", "delivery_failed", "failed"],
     ["paused", "resume", "new"],
   ])("%s --%s--> %s (TDD §6)", (from, event, to) => {
     expect(nextStatus(from, event)).toBe(to);
@@ -61,6 +63,12 @@ describe("nextStatus", () => {
     expect(nextStatus("new", "send")).toBeNull();
     expect(nextStatus("classified", "send")).toBeNull();
     expect(nextStatus("awaiting_approval", "sent")).toBeNull();
+  });
+
+  it("only a sent reply can fail delivery", () => {
+    for (const status of ITEM_STATUSES.filter((s) => s !== "sent")) {
+      expect(nextStatus(status, "delivery_failed")).toBeNull();
+    }
   });
 
   it("covers every status", () => {
