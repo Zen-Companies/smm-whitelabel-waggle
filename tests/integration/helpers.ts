@@ -53,6 +53,7 @@ export function fakeZernio() {
     listConversationMessages: notImplemented,
     listCommentReplies: notImplemented,
     getAccountsHealth: notImplemented,
+    ping: notImplemented,
   };
   return {
     provider,
@@ -65,9 +66,9 @@ export function fakeZernio() {
 
 /** claimItems narrowed to one tenant: other (live) items are released untouched. */
 export function claimFor(tenantId: () => string) {
-  return async (client: ServiceClient, limit: number) => {
+  return async (client: ServiceClient, limit: number, statuses?: string[]) => {
     const { claimItems, releaseItems } = await import("@/lib/jobs");
-    const items = await claimItems(client, limit);
+    const items = await claimItems(client, limit, { statuses });
     await releaseItems(
       client,
       items.filter((i) => i.tenantId !== tenantId()).map((i) => i.id),

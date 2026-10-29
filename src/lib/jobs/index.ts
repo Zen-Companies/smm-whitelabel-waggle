@@ -10,6 +10,8 @@ export const JOB_MIN_ITEM_MS = 20_000;
 /** Cap for any Zernio or LLM call made by a job step (Jev keeps its own 3 s). */
 export const JOB_EXTERNAL_TIMEOUT_MS = 20_000;
 export const JOB_BATCH_SIZE = 20;
+/** At most this many of a batch per tenant (T6b fairness: one tenant's burst can't fill it). */
+export const JOB_CLAIM_PER_TENANT = 5;
 /** Attempts per item before it fails and escalates (§14). */
 export const MAX_ATTEMPTS = 3;
 
@@ -72,8 +74,13 @@ export interface ClaimedItem {
 export async function claimItems(
   db: ServiceClient,
   limit = JOB_BATCH_SIZE,
+  opts: { perTenant?: number; statuses?: string[] } = {},
 ): Promise<ClaimedItem[]> {
-  const { data, error } = await db.rpc("claim_items", { p_limit: limit });
+  const { data, error } = await db.rpc("claim_items", {
+    p_limit: limit,
+    p_per_tenant: opts.perTenant ?? JOB_CLAIM_PER_TENANT,
+    ...(opts.statuses ? { p_statuses: opts.statuses } : {}),
+  });
   if (error) throw new Error(`claim_items failed: ${error.message}`);
   return data.map((r) => ({
     id: r.id,

@@ -14,8 +14,12 @@ let tenantId: string;
 let accountId: string;
 
 /** Only this test's tenant: other (live) items are released untouched. */
-async function ownClaim(client: ServiceClient, limit: number): Promise<ClaimedItem[]> {
-  const items = await claimItems(client, limit);
+async function ownClaim(
+  client: ServiceClient,
+  limit: number,
+  statuses?: string[],
+): Promise<ClaimedItem[]> {
+  const items = await claimItems(client, limit, { statuses });
   const foreign = items.filter((i) => i.tenantId !== tenantId).map((i) => i.id);
   await releaseItems(client, foreign);
   return items.filter((i) => i.tenantId === tenantId);
@@ -239,10 +243,10 @@ describe("processDueItems", () => {
     expect((await items([id])).get(id)?.status).toBe("paused");
   });
 
-  it("leaves items whose step isn't built yet untouched and unlocked", async () => {
+  it("leaves items whose step isn't built yet untouched and unlocked (not even claimed, T6b)", async () => {
     const [id] = await seedItems(1);
-    const summary = await run({});
-    expect(summary).toMatchObject({ claimed: 1, released: 1, advanced: 0 });
+    const summary = await run({ classified: async () => ({ event: "drafted" }) });
+    expect(summary).toMatchObject({ claimed: 0, released: 0, advanced: 0 });
     expect((await items([id])).get(id)).toMatchObject({
       status: "new",
       attempts: 0,

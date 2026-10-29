@@ -51,8 +51,11 @@ export interface ProcessDeps {
   steps: Steps;
   deadline: Deadline;
   now?: () => Date;
-  /** Defaults to claimItems (all tenants). Tests narrow it to their own tenant. */
-  claim?: (db: ServiceClient, limit: number) => Promise<ClaimedItem[]>;
+  /**
+   * Defaults to claimItems (all tenants). Gets the statuses that have a step, so items waiting
+   * for an unconfigured step don't take a tenant's slots (T6b). Tests narrow it to their tenant.
+   */
+  claim?: (db: ServiceClient, limit: number, statuses: string[]) => Promise<ClaimedItem[]>;
 }
 
 export interface ProcessSummary {
@@ -78,9 +81,14 @@ export async function processDueItems(deps: ProcessDeps): Promise<ProcessSummary
   // Items released for lack of a step would be claimed again in the same run; skip them.
   const seen = new Set<string>();
 
+  const statuses = Object.keys(deps.steps);
+  if (statuses.length === 0) return summary;
+  const claim =
+    deps.claim ??
+    ((client: ServiceClient, limit: number, s: string[]) =>
+      claimItems(client, limit, { statuses: s }));
   while (deadline.canClaim()) {
-    const claim = deps.claim ?? claimItems;
-    const claimed = await claim(db, JOB_BATCH_SIZE);
+    const claimed = await claim(db, JOB_BATCH_SIZE, statuses);
     // An item handled earlier in this run (advanced to a status that is due again, or released)
     // waits for the next run: unlock it again instead of leaving it locked for 5 minutes.
     const again = claimed.filter((item) => seen.has(item.id)).map((item) => item.id);
