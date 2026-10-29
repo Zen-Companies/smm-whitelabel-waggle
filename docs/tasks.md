@@ -75,6 +75,8 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Compose page (text + image, target accounts, now or scheduled), `createPost` with idempotency key, status from `post.*` webhooks, retry on failure. VERIFY Zernio scheduling and media fields first.
       _Done when:_ a post publishes now and on schedule, and status shows correctly.
       _Note:_ show a friendly message for Zernio's 409 duplicate-content error (same content to the same account within 24 h).
+      _Note:_ surface `post.failed` caused by a Zernio pause (402 `PAYMENT_REQUIRED`, docs.zernio.com/multi-tenant): Zernio doesn't retry posts that came due while the team was paused, so show them as "failed: needs rescheduling" with a reschedule action. Also subscribe to `post.cancelled` (a post targeting only an account deleted after its 1-hour disconnect grace period is cancelled).
+      _Note:_ `POST /v1/posts` accepts any account id the Zernio team owns; only ever send the tenant's own accounts (map `posts.target_account_ids` to that tenant's `zernio_account_id`s).
 
 - [ ] **T15. Billing**
       Stripe Checkout, `/api/webhooks/stripe`, subscription status sync, processing gate + billing banner.
@@ -82,14 +84,32 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 
 ## Phase 4: Pilot hardening
 
-- [ ] **T16. Health and backfill**
-      Hourly account health check, reconnect emails, inbox backfill sweep after connect.
+- [ ] **T16. Health and backfill** (required before launch)
+      Hourly account health check (`GET /v1/accounts/health?profileId=…`, `needsReconnect`, `issues`), reconnect emails, inbox backfill sweep after connect and after a Zernio pause ends (inbox polling stops while the team is paused).
       _Done when:_ a disconnected account is detected without a webhook and the owner is emailed.
 
 - [ ] **T17. Audit and cost view**
-      Audit trail on each item; simple admin page with AI cost per tenant and per message.
+      Audit trail on each item; simple admin page with AI cost per tenant and per message, plus Zernio cost per tenant from `GET /v1/usage?range=cycle&groupBy=profile` (`attribution.groups[]` by profile id; credits and other team-level fees are `unattributed`).
       _Done when:_ any sent reply can be traced to its draft, decision and AI calls.
 
 - [ ] **T18. Staging smoke test**
       Staging webhook scoped to a test profile; run the full loop end to end.
       _Done when:_ post → comment → classify → draft → approve → reply works on staging.
+
+- [ ] **T6b. Per-tenant fairness in the job claim** (T6 follow-up)
+      Cap items per tenant per tick in `claim_items` (at most N of the batch of 20 per tenant, oldest first within a tenant), so one tenant's burst can't starve the others. Zernio's rate limit is one team-wide budget shared by every tenant (docs.zernio.com/multi-tenant: queue bursts per customer).
+      _Done when:_ a tenant with 100 due items and one with 1 both get processed in the same tick.
+
+- [ ] **T19. Zernio 402 PAYMENT_REQUIRED is platform-wide**
+      A 402 with `code: "PAYMENT_REQUIRED"` means the whole Zernio team is paused (every profile, reads included). Treat it as a platform state, not an item failure: pause sending for all tenants (no attempts counted), alert the operator once (not the owners), don't escalate per item to customers, and resume automatically when a probe call succeeds. Then run the T16 backfill.
+      _Done when:_ a mocked 402 on send pauses all sending, sends one operator alert, escalates nothing, and sending resumes after the mock clears.
+
+- [ ] **T20. 429: accept Retry-After and X-RateLimit-Reset**
+      The adapter reads only `X-RateLimit-Reset` (through the SDK's `RateLimitError`); Zernio's multi-tenant page says to wait for `Retry-After`. Use whichever is present (`Retry-After` seconds or HTTP date first, then `X-RateLimit-Reset`), with a fallback, for every Zernio call.
+      _Done when:_ adapter tests cover both headers and neither.
+
+## Later
+
+- [ ] **T21. Customer offboarding**
+      When a tenant leaves: disconnect each of its accounts (`DELETE /v1/accounts/{accountId}`; active accounts block profile deletion with 400), then delete the Zernio profile, then delete or anonymize the tenant's data per the retention policy. Audit each step.
+      _Done when:_ offboarding a test tenant leaves no connected accounts or profile on Zernio and no tenant rows here.
