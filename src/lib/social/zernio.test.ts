@@ -265,6 +265,52 @@ describe("ZernioSocialProvider", () => {
     expect(captured).toHaveLength(0);
   });
 
+  it("listCommentedPosts asks for posts with comments since a time (T16)", async () => {
+    respond = () =>
+      json({ data: [{ id: "1789", commentCount: 3 }], pagination: { hasMore: false } });
+    await expect(
+      provider.listCommentedPosts({ accountId: "acc_1", since: new Date("2026-10-28T10:00:00Z") }),
+    ).resolves.toEqual([{ postId: "1789" }]);
+    const [req] = captured;
+    expect(req.url.pathname).toBe("/api/v1/inbox/comments");
+    expect(Object.fromEntries(req.url.searchParams)).toEqual({
+      accountId: "acc_1",
+      since: "2026-10-28T10:00:00.000Z",
+      limit: "20",
+      minComments: "1",
+      sortBy: "date",
+      sortOrder: "desc",
+    });
+  });
+
+  it("listPostComments maps a post's comments (T16)", async () => {
+    respond = () =>
+      json({
+        comments: [
+          {
+            id: "c_1",
+            message: "Open Sunday?",
+            createdTime: "2026-10-28T10:01:00Z",
+            from: { username: "mika.r", isOwner: false },
+          },
+          { id: "c_2", message: "Yes!", from: { name: "Cafe", isOwner: true } },
+        ],
+      });
+    await expect(
+      provider.listPostComments({ accountId: "acc_1", postId: "1789" }),
+    ).resolves.toEqual([
+      {
+        id: "c_1",
+        text: "Open Sunday?",
+        authorName: "mika.r",
+        fromOwner: false,
+        createdAt: "2026-10-28T10:01:00Z",
+      },
+      { id: "c_2", text: "Yes!", authorName: "Cafe", fromOwner: true, createdAt: null },
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/inbox/comments/1789");
+  });
+
   it("getAccountsHealth filters by profile and maps accounts", async () => {
     respond = () =>
       json({

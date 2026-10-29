@@ -56,6 +56,29 @@ const commentRepliesSchema = z.object({
     )
     .optional(),
 });
+const commentedPostsSchema = z.object({
+  data: z
+    .array(z.object({ id: z.string().min(1), commentCount: z.number().optional() }))
+    .optional(),
+});
+const postCommentsSchema = z.object({
+  comments: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        message: z.string().nullish(),
+        createdTime: z.string().nullish(),
+        from: z
+          .object({
+            name: z.string().nullish(),
+            username: z.string().nullish(),
+            isOwner: z.boolean().optional(),
+          })
+          .nullish(),
+      }),
+    )
+    .optional(),
+});
 const healthSchema = z.object({
   accounts: z.array(
     z.object({
@@ -344,6 +367,56 @@ export class ZernioSocialProvider implements SocialProvider {
       return (parse(commentRepliesSchema, data, "listCommentReplies").comments ?? []).map((c) => ({
         id: c.id,
         text: c.message ?? null,
+        fromOwner: c.from?.isOwner ?? false,
+        createdAt: c.createdTime ?? null,
+      }));
+    });
+  }
+
+  async listCommentedPosts(input: {
+    accountId: string;
+    since: Date;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<{ postId: string }[]> {
+    return call("listCommentedPosts", async (withFetch) => {
+      const { data } = await this.zernio.comments.listInboxComments(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            since: input.since.toISOString(),
+            limit: input.limit ?? 20,
+            minComments: 1,
+            sortBy: "date",
+            sortOrder: "desc",
+          },
+        }),
+      );
+      return (parse(commentedPostsSchema, data, "listCommentedPosts").data ?? []).map((p) => ({
+        postId: p.id,
+      }));
+    });
+  }
+
+  async listPostComments(input: {
+    accountId: string;
+    postId: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }) {
+    return call("listPostComments", async (withFetch) => {
+      const { data } = await this.zernio.comments.getInboxPostComments(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          query: { accountId: input.accountId, limit: input.limit ?? 50 },
+        }),
+      );
+      return (parse(postCommentsSchema, data, "listPostComments").comments ?? []).map((c) => ({
+        id: c.id,
+        text: c.message ?? "",
+        authorName: c.from?.username ?? c.from?.name ?? null,
         fromOwner: c.from?.isOwner ?? false,
         createdAt: c.createdTime ?? null,
       }));

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type {
   AccountHealth,
   CreatePostInput,
+  ProviderComment,
   ProviderCommentReply,
   ProviderMessage,
   ProviderPostStatus,
@@ -124,6 +125,14 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   async ping(): Promise<void> {}
+
+  async listCommentedPosts(): Promise<{ postId: string }[]> {
+    return [];
+  }
+
+  async listPostComments(): Promise<ProviderComment[]> {
+    return [];
+  }
 
   async getAccountsHealth(): Promise<AccountHealth[]> {
     return [];

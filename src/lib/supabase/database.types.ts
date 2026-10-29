@@ -636,6 +636,7 @@ export type Database = {
       }
       social_accounts: {
         Row: {
+          backfill_from: string | null
           created_at: string
           id: string
           platform: string
@@ -645,6 +646,7 @@ export type Database = {
           zernio_account_id: string
         }
         Insert: {
+          backfill_from?: string | null
           created_at?: string
           id?: string
           platform: string
@@ -654,6 +656,7 @@ export type Database = {
           zernio_account_id: string
         }
         Update: {
+          backfill_from?: string | null
           created_at?: string
           id?: string
           platform?: string
@@ -708,6 +711,7 @@ export type Database = {
         Row: {
           confidence_threshold: number
           created_at: string
+          health_checked_at: string | null
           id: string
           name: string
           stripe_customer_id: string | null
@@ -717,6 +721,7 @@ export type Database = {
         Insert: {
           confidence_threshold?: number
           created_at?: string
+          health_checked_at?: string | null
           id?: string
           name: string
           stripe_customer_id?: string | null
@@ -726,6 +731,7 @@ export type Database = {
         Update: {
           confidence_threshold?: number
           created_at?: string
+          health_checked_at?: string | null
           id?: string
           name?: string
           stripe_customer_id?: string | null

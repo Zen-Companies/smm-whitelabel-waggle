@@ -23,6 +23,7 @@ export type {
   AccountHealth,
   CallOptions,
   CreatePostInput,
+  ProviderComment,
   ProviderCommentReply,
   ProviderMessage,
   ProviderPostStatus,

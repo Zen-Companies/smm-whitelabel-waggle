@@ -6,6 +6,9 @@ import type { ServiceClient } from "@/lib/supabase/service";
 // account.connected / account.disconnected, called by the webhook mapping (T5) with a tenant it
 // has already verified. Both are safe to run twice for the same event.
 
+/** On a (re)connect, look this far back for comments (T16 backfill). */
+export const BACKFILL_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export const SUPPORTED_PLATFORMS = SOCIAL_PLATFORMS;
 export const isSupportedPlatform = isSocialPlatform;
 
@@ -29,6 +32,11 @@ export async function handleAccountConnected(
   if (outcome === "foreign") return { accountId: row.account_id, outcome, resumedItems: 0 };
 
   if (outcome !== "existing" || row.previous_status !== "active") {
+    // T16: pull comments that arrived while the account was away (or before it was connected).
+    await db
+      .from("social_accounts")
+      .update({ backfill_from: new Date(Date.now() - BACKFILL_WINDOW_MS).toISOString() })
+      .eq("id", row.account_id);
     await writeAudit(db, {
       tenantId: input.tenantId,
       action: "account_connected",

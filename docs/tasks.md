@@ -85,9 +85,10 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 
 ## Phase 4: Pilot hardening
 
-- [ ] **T16. Health and backfill** (required before launch)
+- [x] **T16. Health and backfill** (required before launch)
       Hourly account health check (`GET /v1/accounts/health?profileId=…`, `needsReconnect`, `issues`), reconnect emails, inbox backfill sweep after connect and after a Zernio pause ends (inbox polling stops while the team is paused).
       _Done when:_ a disconnected account is detected without a webhook and the owner is emailed.
+      _Note:_ comments are backfilled; DMs are not until the list endpoint's message ids are confirmed to match the webhook's (VERIFY on the live session).
 
 - [ ] **T17. Audit and cost view**
       Audit trail on each item; simple admin page with AI cost per tenant and per message, plus Zernio cost per tenant from `GET /v1/usage?range=cycle&groupBy=profile` (`attribution.groups[]` by profile id; credits and other team-level fees are `unattributed`).

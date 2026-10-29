@@ -45,6 +45,15 @@ export interface CallOptions {
   signal?: AbortSignal;
 }
 
+/** A top-level comment on a post (inbox backfill, T16). Ids are the platform's, as in webhooks. */
+export interface ProviderComment {
+  id: string;
+  text: string;
+  authorName: string | null;
+  fromOwner: boolean;
+  createdAt: string | null;
+}
+
 export interface AccountHealth {
   accountId: string;
   platform: string;
@@ -120,6 +129,22 @@ export interface SocialProvider {
     } & CallOptions,
   ): Promise<ProviderCommentReply[]>;
   getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
+  /** Recent posts of an account that have comments (`GET /v1/inbox/comments`), newest first. */
+  listCommentedPosts(
+    input: {
+      accountId: string;
+      since: Date;
+      limit?: number;
+    } & CallOptions,
+  ): Promise<{ postId: string }[]>;
+  /** A post's top-level comments (`GET /v1/inbox/comments/{postId}`). */
+  listPostComments(
+    input: {
+      accountId: string;
+      postId: string;
+      limit?: number;
+    } & CallOptions,
+  ): Promise<ProviderComment[]>;
   /** A cheap read (list one profile). Throws like any call; used to see whether a pause ended. */
   ping(): Promise<void>;
 }

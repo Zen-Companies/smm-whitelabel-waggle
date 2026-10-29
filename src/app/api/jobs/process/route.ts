@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
+import { backfillComments, checkAccountsHealth, requestBackfillForAll } from "@/features/accounts";
 import {
   deliverPendingAlerts,
   enqueueDraftNudges,
@@ -40,6 +41,7 @@ export async function POST(request: Request): Promise<Response> {
       mailer: getMailer(),
       operatorEmail: process.env.OPERATOR_ALERT_EMAIL,
       appUrl: process.env.APP_URL ?? "",
+      onResume: (pausedAt) => requestBackfillForAll(db, pausedAt),
     });
     const items = await processDueItems({ db, steps: getProductionSteps(), deadline });
 
@@ -58,6 +60,19 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
     if (resolveSocialProviderMode(process.env) === "mock") await settleMockPosts(db);
+
+    // T16: hourly account health check (catches a missed disconnect webhook) and the comment
+    // backfill after a connect, a recovery or a Zernio pause.
+    const health = await checkAccountsHealth({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+    const backfill = await backfillComments({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
 
     // T13: DMs about to lose their reply window, drafts waiting > 30 min, then the alert outbox
     // (escalations, leads, disconnects, nudges). Each sweep is cheap; delivery stops when time's up.
@@ -79,6 +94,8 @@ export async function POST(request: Request): Promise<Response> {
       alerts,
       platform,
       posts,
+      health,
+      backfill,
     });
   } catch (error) {
     Sentry.captureException(error);

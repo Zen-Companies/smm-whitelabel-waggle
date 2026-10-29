@@ -27,6 +27,8 @@ export async function handlePlatformPause(deps: {
   operatorEmail: string | undefined;
   appUrl: string;
   now?: Date;
+  /** Called once the pause ends, with when it began (the job route requests a backfill). */
+  onResume?: (pausedAt: Date) => Promise<void>;
 }): Promise<PlatformPauseResult> {
   const { db } = deps;
   const now = deps.now ?? new Date();
@@ -72,6 +74,8 @@ export async function handlePlatformPause(deps: {
     try {
       await deps.social().ping();
       await clearPlatformPause(db);
+      // T16: comments that arrived while Zernio wasn't polling inboxes.
+      await deps.onResume?.(new Date(pause.pausedAt));
       return { ...result, paused: false, resumed: true };
     } catch (error) {
       await updatePlatformPause(db, { lastProbeAt: now.toISOString() });
