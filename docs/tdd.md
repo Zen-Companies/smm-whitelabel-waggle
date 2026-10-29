@@ -379,7 +379,7 @@ Content-Type: application/json
 | Key         | Instructions (starting wording)                                                                                                            |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `complaint` | Is the customer unhappy, complaining, reporting a bad experience or a problem with the business, or asking for a refund?                   |
-| `lead`      | Does the customer want to book, buy, order, reserve or get a quote, or ask about availability or how to get started?                       |
+| `lead`      | Is the customer asking to make a booking or reservation, to place an order, for a price or quote for a specific order they want to make, or sharing their contact details so the business can contact them? |
 | `faq`       | Is the customer asking a question that the business's own information could answer, such as hours, location, prices, services or policies? |
 | `spam`      | Is this an unsolicited sales pitch, scam, promotion of another business, or something that has nothing to do with this business?           |
 
@@ -388,6 +388,8 @@ Lessons from the test repo, applied above:
 - "Is this spam/junk?" wordings scored near zero; describe it as unsolicited pitches **or nothing to do with the business** (hence `business` in `state`).
 - Short replies ("ok", "thanks", "hello") score high on the off-topic question: messages under `SPAM_MIN_WORDS` (4) can never be `spam`.
 - Avoid wordings that overlap through negation ("not cancelling"); jevos-v4 ignored negation (fixed in v5, but keep wordings positive).
+
+**Lead = purchase intent only** (2026-10-29, `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` `2026-10-29.1`): a booking or reservation request, placing an order, a price or quote for a specific order, or sharing contact details to be contacted. A general question about prices, the menu, stock or availability is `faq`. The starting wording ended "…or ask about availability or how to get started?", which matched "Do you have oat milk?", and lead outranks faq (§9.3). The LLM classifier's definition says the same. Labeled set on local jevos-v5 (`pnpm triage:report`): accuracy 38.9% → 49.1%; faq recall 11.4% → 48.6%; lead precision 30.4% → 87.5% (recall 81.6% → 55.3%); unclear recall 37.5% → 81.3%; complaint unchanged (55.3%); spam still ~0% (3.1%). Most remaining misses on jevos-v5 now land in `unclear` (they escalate rather than get a wrong reply). Not re-measured on jev-1.13 (paid).
 
 ### 9.3 Picking the category
 
@@ -558,5 +560,4 @@ Setup notes (T2): `@zernio/node` 0.2.1369 (pinned: it publishes daily), `ai` 7.0
 - Jev: production endpoint (TypeSafe cloud vs `jevtypesafeai.com`), pricing, rate limits, DPA and measured latency (shape confirmed, §9.1).
 - Option to evaluate in T7: OpenRouter also serves Jev (`typesafe/jev-1.13`) through its Decisions API (`openrouter.evaluationModel()`, alpha). It would put Jev on the same balance; it is not used now because the shape is alpha and our adapter speaks the §9.1 wire format.
 - Whether to add the webhook fast path in Pass 1 or rely on the 1-minute cron.
-- Jev lead question (§9.2): on the labeled set (2026-10-29) local jevos-v5 scored 38.9% and jev-1.13 (OpenRouter) 78.9%; both send most FAQs to `lead` (faq recall 11% / 23%). The lead question includes "or ask about availability", which matches "Do you have oat milk?", and lead outranks faq. Candidate fix: drop availability from the lead question.
 - DM window escalation (T13): §7.2 says to escalate waiting DMs an hour before the window closes, which takes the draft out of the approval inbox. An alternative is an urgent email that leaves the draft approvable until the window actually closes (the send step already escalates at 24 h).

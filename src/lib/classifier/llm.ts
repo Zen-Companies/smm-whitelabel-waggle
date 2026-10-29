@@ -10,12 +10,12 @@ import {
 } from "./types";
 
 // Versioned with the Jev questions; T7 compares both on the same fixtures.
-export const LLM_CLASSIFY_PROMPT_VERSION = "2026-10-28.1";
+export const LLM_CLASSIFY_PROMPT_VERSION = "2026-10-29.1";
 
 const SYSTEM_PROMPT = `You sort messages that customers send to a local business on Instagram or Facebook.
 Pick exactly one category:
 - complaint: unhappy, complaining, reporting a bad experience or a problem, or asking for a refund.
-- lead: wants to book, buy, order, reserve or get a quote, or asks about availability or how to get started.
+- lead: purchase intent only: asks to make a booking or reservation, to place an order, for a price or quote for a specific order they want to make, or shares contact details to be contacted. A general question about prices, menu, stock or availability is faq.
 - faq: a question the business's own information could answer (hours, location, prices, services, policies).
 - spam: an unsolicited sales pitch, a scam, promotion of another business, or nothing to do with this business.
 - unclear: none of the above, or you are not sure.
