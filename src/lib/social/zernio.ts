@@ -7,6 +7,7 @@ import {
   type ProviderCommentReply,
   type ProviderMessage,
   type ProviderPostStatus,
+  type ProviderUsage,
   type SocialProvider,
 } from "./types";
 
@@ -77,6 +78,18 @@ const postCommentsSchema = z.object({
           .nullish(),
       }),
     )
+    .optional(),
+});
+const usageSlice = z.object({ totalUsd: z.number().optional() });
+const usageSchema = z.object({
+  period: z.object({ start: z.string().optional(), end: z.string().optional() }).optional(),
+  totals: z.object({ total: z.number().optional() }).optional(),
+  attribution: z
+    .object({
+      groups: z.array(usageSlice.extend({ key: z.string() })).optional(),
+      unattributed: usageSlice.optional(),
+      totals: usageSlice.optional(),
+    })
     .optional(),
 });
 const healthSchema = z.object({
@@ -420,6 +433,25 @@ export class ZernioSocialProvider implements SocialProvider {
         fromOwner: c.from?.isOwner ?? false,
         createdAt: c.createdTime ?? null,
       }));
+    });
+  }
+
+  async getUsageByProfile(input: { signal?: AbortSignal } = {}): Promise<ProviderUsage> {
+    return call("getUsageByProfile", async (withFetch) => {
+      const { data } = await this.zernio.usage.getUsage(
+        withFetch({ signal: input.signal, query: { range: "cycle", groupBy: "profile" } }),
+      );
+      const u = parse(usageSchema, data, "getUsageByProfile");
+      return {
+        periodStart: u.period?.start ?? null,
+        periodEnd: u.period?.end ?? null,
+        totalUsd: u.attribution?.totals?.totalUsd ?? u.totals?.total ?? 0,
+        unattributedUsd: u.attribution?.unattributed?.totalUsd ?? 0,
+        byProfile: (u.attribution?.groups ?? []).map((g) => ({
+          profileId: g.key,
+          totalUsd: g.totalUsd ?? 0,
+        })),
+      };
     });
   }
 

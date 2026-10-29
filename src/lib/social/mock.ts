@@ -9,6 +9,7 @@ import type {
   ProviderCommentReply,
   ProviderMessage,
   ProviderPostStatus,
+  ProviderUsage,
   SocialPlatform,
   SocialProvider,
 } from "./types";
@@ -125,6 +126,11 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   async ping(): Promise<void> {}
+
+  /** No Zernio account behind the mock: usage isn't available. */
+  async getUsageByProfile(): Promise<ProviderUsage | null> {
+    return null;
+  }
 
   async listCommentedPosts(): Promise<{ postId: string }[]> {
     return [];

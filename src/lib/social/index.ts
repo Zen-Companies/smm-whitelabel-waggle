@@ -27,6 +27,7 @@ export type {
   ProviderCommentReply,
   ProviderMessage,
   ProviderPostStatus,
+  ProviderUsage,
   SocialPlatform,
   SocialProvider,
 } from "./types";

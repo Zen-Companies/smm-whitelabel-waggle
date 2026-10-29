@@ -541,6 +541,11 @@ As built (T10, `features/approvals`):
 - `audit_log` for every state change and owner action.
 - `ai_usage` for cost per tenant; a simple admin query shows cost per message.
 
+As built (T17):
+
+- **Item history** (`features/approvals/item-history.tsx`, on `/inbox/items/[id]`): every `audit_log` row of the item in plain words (received, sorted, drafted from your business info, you approved, sent, …) and its `ai_usage` rows (purpose, model, tokens, cost), read through RLS. A sent reply traces to its draft (`draftId` in each row), the decision (`decided_by` / `draft_approved` actor, or `draft_auto_approved`) and its AI calls.
+- **Cost view** (`/admin/costs`, `features/billing`): operator only (`OPERATOR_EMAILS`, comma-separated; unset = any signed-in user in local development, nobody in production; others get a 404). Last 30 days per business: messages, replies sent, AI calls, AI cost, AI cost per message (`public.cost_by_tenant`, service role), the latest 50 messages with their AI calls and cost (`public.cost_by_item`), and Zernio's spend for the billing cycle per business from `SocialProvider.getUsageByProfile` (`GET /v1/usage?range=cycle&groupBy=profile`, `attribution.groups[].key` = profile id; `unattributed` shown separately). Mock mode has no Zernio usage, so that column shows "not available".
+
 ## 16. Testing
 
 - **Unit (Vitest):** `nextStatus()`, `policy()`, signature verification, event mapping (with recorded webhook fixtures in `tests/fixtures/zernio/`), prompt output parsing.
@@ -555,7 +560,7 @@ ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET
 JEV_API_URL, JEV_API_KEY, JEV_MODEL, JEV_TIMEOUT_MS, JEV_COST_PER_MTOK_INPUT
 LLM_PROVIDER (openrouter), OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL
 EMBEDDING_PROVIDER (openrouter), EMBEDDING_MODEL
-RESEND_API_KEY, ALERT_FROM_EMAIL, OPERATOR_ALERT_EMAIL
+RESEND_API_KEY, ALERT_FROM_EMAIL, OPERATOR_ALERT_EMAIL, OPERATOR_EMAILS
 SOCIAL_PROVIDER_MODE (mock | zernio)
 STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
 CRON_SECRET

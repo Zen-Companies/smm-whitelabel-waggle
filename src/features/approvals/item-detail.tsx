@@ -4,6 +4,7 @@ import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { DraftCard, MessageHeader } from "./draft-card";
 import { loadEntries, type InboxEntry } from "./inbox-data";
+import { ItemHistory } from "./item-history";
 
 // One message and its conversation (PRD F11/F12: the link in alert emails and on the leads page).
 
@@ -99,6 +100,7 @@ export async function ItemDetail({ params }: { params: Promise<{ id: string }> }
                 )}
               </article>
             )}
+            {entry.itemId === id && <ItemHistory itemId={id} />}
             {lead && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 text-sm">
                 <dt className="text-muted-foreground">Lead</dt>

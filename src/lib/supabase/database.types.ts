@@ -787,6 +787,33 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      cost_by_item: {
+        Args: { p_limit?: number; p_since: string }
+        Returns: {
+          ai_calls: number
+          ai_cost_usd: number
+          category: string
+          item_id: string
+          kind: string
+          purposes: string[]
+          received_at: string
+          status: string
+          tenant_id: string
+          tenant_name: string
+        }[]
+      }
+      cost_by_tenant: {
+        Args: { p_since: string }
+        Returns: {
+          ai_calls: number
+          ai_cost_usd: number
+          messages: number
+          replies_sent: number
+          tenant_id: string
+          tenant_name: string
+          zernio_profile_id: string
+        }[]
+      }
       create_owner_tenant: {
         Args: { p_name: string; p_user_id: string }
         Returns: {

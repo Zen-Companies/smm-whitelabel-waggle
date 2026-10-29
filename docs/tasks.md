@@ -90,7 +90,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       _Done when:_ a disconnected account is detected without a webhook and the owner is emailed.
       _Note:_ comments are backfilled; DMs are not until the list endpoint's message ids are confirmed to match the webhook's (VERIFY on the live session).
 
-- [ ] **T17. Audit and cost view**
+- [x] **T17. Audit and cost view**
       Audit trail on each item; simple admin page with AI cost per tenant and per message, plus Zernio cost per tenant from `GET /v1/usage?range=cycle&groupBy=profile` (`attribution.groups[]` by profile id; credits and other team-level fees are `unattributed`).
       _Done when:_ any sent reply can be traced to its draft, decision and AI calls.
 

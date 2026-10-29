@@ -399,8 +399,11 @@ describe("Zernio 402 PAYMENT_REQUIRED (T19)", () => {
         expect(s.draft).toMatchObject({ status: "approved", send_attempted_at: null });
         expect(s.audit.some((a) => ["escalated", "send_failed"].includes(a.action))).toBe(false);
       }
-      // Only the first item tried Zernio; the second waited on the pause without calling it.
-      expect(social.sendCalls.filter((c) => c.idempotencyKey === second.key)).toEqual([]);
+      // Only one item tried Zernio (whichever was claimed first); the other waited on the
+      // recorded pause without calling it.
+      expect(
+        social.sendCalls.filter((c) => [first.key, second.key].includes(c.idempotencyKey)),
+      ).toHaveLength(1);
       const { count: alerts } = await db
         .from("alerts")
         .select("*", { count: "exact", head: true })

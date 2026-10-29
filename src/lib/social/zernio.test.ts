@@ -311,6 +311,39 @@ describe("ZernioSocialProvider", () => {
     expect(captured[0].url.pathname).toBe("/api/v1/inbox/comments/1789");
   });
 
+  it("getUsageByProfile reads the cycle's spend per profile (T17)", async () => {
+    respond = () =>
+      json({
+        supported: true,
+        period: { start: "2026-10-01", end: "2026-10-31", source: "cycle" },
+        totals: { total: 42.5 },
+        attribution: {
+          groupBy: "profile",
+          groups: [
+            { key: "prof_a", totalUsd: 30, byProduct: { accounts: 30 } },
+            { key: "prof_b", totalUsd: 10.5 },
+          ],
+          unattributed: { totalUsd: 2 },
+          totals: { totalUsd: 42.5 },
+        },
+      });
+    await expect(provider.getUsageByProfile()).resolves.toEqual({
+      periodStart: "2026-10-01",
+      periodEnd: "2026-10-31",
+      totalUsd: 42.5,
+      unattributedUsd: 2,
+      byProfile: [
+        { profileId: "prof_a", totalUsd: 30 },
+        { profileId: "prof_b", totalUsd: 10.5 },
+      ],
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/usage");
+    expect(Object.fromEntries(captured[0].url.searchParams)).toEqual({
+      range: "cycle",
+      groupBy: "profile",
+    });
+  });
+
   it("getAccountsHealth filters by profile and maps accounts", async () => {
     respond = () =>
       json({

@@ -58,6 +58,7 @@ export function fakeZernio() {
     deletePost: notImplemented,
     listCommentedPosts: notImplemented,
     listPostComments: notImplemented,
+    getUsageByProfile: notImplemented,
   };
   return {
     provider,

@@ -54,6 +54,16 @@ export interface ProviderComment {
   createdAt: string | null;
 }
 
+/** Zernio's spend this billing cycle, split by profile (= tenant). T17. */
+export interface ProviderUsage {
+  periodStart: string | null;
+  periodEnd: string | null;
+  totalUsd: number;
+  /** Credits, 10DLC, Verify: not tied to a profile. */
+  unattributedUsd: number;
+  byProfile: { profileId: string; totalUsd: number }[];
+}
+
 export interface AccountHealth {
   accountId: string;
   platform: string;
@@ -145,6 +155,8 @@ export interface SocialProvider {
       limit?: number;
     } & CallOptions,
   ): Promise<ProviderComment[]>;
+  /** `GET /v1/usage?range=cycle&groupBy=profile`; null where usage isn't available (mock). */
+  getUsageByProfile(input?: CallOptions): Promise<ProviderUsage | null>;
   /** A cheap read (list one profile). Throws like any call; used to see whether a pause ended. */
   ping(): Promise<void>;
 }
