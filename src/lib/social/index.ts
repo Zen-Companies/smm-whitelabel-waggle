@@ -34,18 +34,23 @@ export type {
 
 export { MOCK_MEDIA_DIR, MockSocialProvider, resolveSocialProviderMode } from "./mock";
 
-let provider: SocialProvider | undefined;
+const providers: Partial<Record<"mock" | "zernio", SocialProvider>> = {};
 
-/** Zernio, or the in-process mock when `SOCIAL_PROVIDER_MODE=mock` (default under Vitest). */
+/**
+ * Zernio, or the in-process mock when `SOCIAL_PROVIDER_MODE=mock` (default under Vitest). The
+ * mode is read on every call, so changing it (e.g. in .env.local while `next dev` runs) never
+ * leaves a cached instance of the other kind in use.
+ */
 export function getSocialProvider(): SocialProvider {
-  if (!provider) {
-    if (resolveSocialProviderMode(process.env) === "mock") {
-      provider = new MockSocialProvider();
+  const mode = resolveSocialProviderMode(process.env);
+  if (!providers[mode]) {
+    if (mode === "mock") {
+      providers.mock = new MockSocialProvider();
     } else {
       const apiKey = process.env.ZERNIO_API_KEY;
       if (!apiKey) throw new Error("ZERNIO_API_KEY must be set");
-      provider = createZernioProvider({ apiKey });
+      providers.zernio = createZernioProvider({ apiKey });
     }
   }
-  return provider;
+  return providers[mode]!;
 }

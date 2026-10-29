@@ -112,3 +112,45 @@ export async function enqueue(
     .eq("id", itemId);
   if (error) throw new Error(`enqueue failed: ${error.message}`);
 }
+
+/**
+ * Claims one item for an immediate run (e.g. a reply right after its undo window), with the
+ * same rules as claim_items: due, in `status`, not locked by a live run. null if it isn't.
+ */
+export async function claimItem(
+  db: ServiceClient,
+  itemId: string,
+  status: string,
+): Promise<ClaimedItem | null> {
+  const now = new Date();
+  const stale = new Date(now.getTime() - 5 * 60_000).toISOString();
+  const { data, error } = await db
+    .from("inbound_items")
+    .update({ locked_at: now.toISOString() })
+    .eq("id", itemId)
+    .eq("status", status)
+    .or(`next_run_at.is.null,next_run_at.lte.${now.toISOString()}`)
+    .or(`locked_at.is.null,locked_at.lt.${stale}`)
+    .select("id, tenant_id, social_account_id, kind, status, attempts, social_accounts (status)")
+    .maybeSingle();
+  if (error) throw new Error(`claiming item failed: ${error.message}`);
+  if (!data) return null;
+  const row = data as unknown as {
+    id: string;
+    tenant_id: string;
+    social_account_id: string;
+    kind: ClaimedItem["kind"];
+    status: string;
+    attempts: number;
+    social_accounts: { status: string } | null;
+  };
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    socialAccountId: row.social_account_id,
+    kind: row.kind,
+    status: row.status,
+    attempts: row.attempts,
+    accountStatus: row.social_accounts?.status ?? "active",
+  };
+}

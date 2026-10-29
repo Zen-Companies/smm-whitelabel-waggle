@@ -14,6 +14,11 @@ export async function KbList() {
   return (
     <div className="flex flex-col gap-4">
       <KbEntryForm />
+      {(entries ?? []).length > 0 && (
+        <h2 className="section-title mt-4">
+          What the receptionist knows <span className="meta">({entries!.length})</span>
+        </h2>
+      )}
       {(entries ?? []).map((e) => (
         <KbEntryForm
           key={e.id}

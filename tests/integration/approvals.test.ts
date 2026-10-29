@@ -2,7 +2,13 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { inject } from "vitest";
-import { approveDraft, rejectDraft } from "@/features/approvals/decisions";
+import {
+  approveDraft,
+  markHandled,
+  rejectDraft,
+  undoApproval,
+  UNDO_WINDOW_MS,
+} from "@/features/approvals/decisions";
 import { loadInbox } from "@/features/approvals/inbox-data";
 import type { Database } from "@/lib/supabase/database.types";
 import { anonClient, serviceClient, uniqueEmail } from "./helpers";
@@ -238,6 +244,71 @@ describe("approval inbox", () => {
       await approveDraft(db, { tenantId: a.tenantId, userId: a.userId, itemId, draftId }),
     ).toEqual({ ok: true });
     expect((await row(itemId)).item?.status).toBe("sending");
+  });
+
+  it("approve holds the reply for the undo window; undo puts it back to waiting", async () => {
+    const { itemId, draftId } = await waitingItem(a);
+    const input = { tenantId: a.tenantId, userId: a.userId, itemId, draftId };
+    const before = Date.now();
+    expect(await approveDraft(db, { ...input, editedBody: "Yes, Sundays 8 to 10!" })).toEqual({
+      ok: true,
+    });
+    const { data: held } = await db
+      .from("inbound_items")
+      .select("next_run_at")
+      .eq("id", itemId)
+      .single();
+    const hold = new Date(held!.next_run_at!).getTime() - before;
+    expect(hold).toBeGreaterThan(UNDO_WINDOW_MS - 1000);
+    expect(hold).toBeLessThan(UNDO_WINDOW_MS + 2000);
+
+    // Another tenant can't undo it.
+    expect(await undoApproval(db, { ...input, tenantId: b.tenantId, userId: b.userId })).toEqual({
+      ok: false,
+      error: "not_found",
+    });
+    expect(await undoApproval(db, input)).toEqual({ ok: true });
+    const { item, draft, audit } = await row(itemId);
+    expect(item?.status).toBe("awaiting_approval");
+    expect(draft).toMatchObject({ status: "pending", decided_by: null, edited_body: null });
+    expect(audit?.map((r) => r.action)).toContain("draft_approval_undone");
+  });
+
+  it("undo is refused once the send has started or the window has passed", async () => {
+    const started = await waitingItem(a);
+    const input = { tenantId: a.tenantId, userId: a.userId, ...started };
+    await approveDraft(db, input);
+    await db
+      .from("drafts")
+      .update({ send_attempted_at: new Date().toISOString() })
+      .eq("id", started.draftId);
+    expect(await undoApproval(db, input)).toEqual({ ok: false, error: "already_decided" });
+
+    const late = await waitingItem(a);
+    const lateInput = { tenantId: a.tenantId, userId: a.userId, ...late };
+    await approveDraft(db, lateInput);
+    expect(
+      await undoApproval(db, { ...lateInput, now: new Date(Date.now() + UNDO_WINDOW_MS + 5_000) }),
+    ).toEqual({ ok: false, error: "already_decided" });
+  });
+
+  it("mark as handled clears an escalated item; not another tenant's, not a waiting one", async () => {
+    const { itemId } = await waitingItem(a);
+    expect(await markHandled(db, { tenantId: a.tenantId, userId: a.userId, itemId })).toEqual({
+      ok: false,
+      error: "already_decided",
+    });
+    await db.from("inbound_items").update({ status: "escalated" }).eq("id", itemId);
+    expect(await markHandled(db, { tenantId: b.tenantId, userId: b.userId, itemId })).toEqual({
+      ok: false,
+      error: "not_found",
+    });
+    expect(await markHandled(db, { tenantId: a.tenantId, userId: a.userId, itemId })).toEqual({
+      ok: true,
+    });
+    const { item, audit } = await row(itemId);
+    expect(item?.status).toBe("handled");
+    expect(audit?.find((r) => r.action === "item_handled")?.actor).toBe(a.userId);
   });
 
   it("a new draft reaches the owner's Realtime subscription; another tenant's doesn't", async () => {

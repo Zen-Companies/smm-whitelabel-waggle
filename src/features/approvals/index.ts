@@ -1,17 +1,26 @@
-export { decideDraft, updateAutonomyMode } from "./actions";
+export { decideDraft, markHandledAction, undoApprovalAction, updateAutonomyMode } from "./actions";
 export type { AutonomyFormState, DecisionFormState } from "./actions";
-export { approveDraft, rejectDraft, REPLY_MAX } from "./decisions";
+export {
+  approveDraft,
+  markHandled,
+  rejectDraft,
+  REPLY_MAX,
+  undoApproval,
+  UNDO_WINDOW_MS,
+} from "./decisions";
 export type { DecisionResult } from "./decisions";
-export { InboxList } from "./inbox-list";
-export { loadEntries, loadInbox } from "./inbox-data";
+export { InboxSkeleton } from "./inbox-skeleton";
+export { InboxView } from "./inbox-view";
+export { countInboxTabs, heldReason, loadEntries, loadInbox, loadInboxTab } from "./inbox-data";
 export { ItemDetail } from "./item-detail";
-export type { InboxData, InboxEntry } from "./inbox-data";
+export type { InboxData, InboxEntry, InboxTab } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";
 export {
   AUTONOMY_MODES,
   CATEGORY_LABELS,
   CONFIGURABLE_CATEGORIES,
   FIXED_BEHAVIOUR,
+  MODE_DESCRIPTIONS,
   MODE_LABELS,
 } from "./autonomy";
 export type { ConfigurableCategory } from "./autonomy";

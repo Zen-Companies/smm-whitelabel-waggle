@@ -16,6 +16,7 @@ export const ITEM_STATUSES = [
   "escalated",
   "paused",
   "failed",
+  "handled",
 ] as const;
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
@@ -55,7 +56,9 @@ export type StatusEvent =
   /** retries exhausted */
   | "fail"
   /** the platform reported a sent reply as undelivered (message.failed) */
-  | "delivery_failed";
+  | "delivery_failed"
+  /** the owner dealt with an escalated or failed item themselves */
+  | "handle";
 
 const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> = {
   new: { classified: "classified", pause: "paused", escalate: "escalated", fail: "failed" },
@@ -85,8 +88,9 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
   sent: { delivery_failed: "failed" },
   rejected: {},
   ignored: {},
-  escalated: {},
-  failed: {},
+  escalated: { handle: "handled" },
+  failed: { handle: "handled" },
+  handled: {},
 };
 
 /** The status after `event`, or null if the event isn't allowed from `current`. Pure. */

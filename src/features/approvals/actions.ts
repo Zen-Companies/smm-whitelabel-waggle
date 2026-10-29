@@ -1,13 +1,22 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { z } from "zod";
 import { getCurrentTenant } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { AUTONOMY_MODES, CONFIGURABLE_CATEGORIES } from "./autonomy";
-import { approveDraft, rejectDraft, REPLY_MAX, type DecisionResult } from "./decisions";
+import {
+  approveDraft,
+  markHandled,
+  rejectDraft,
+  REPLY_MAX,
+  undoApproval,
+  type DecisionResult,
+} from "./decisions";
+import { sendApprovedReplyAfterUndoWindow } from "./send-now";
 
 export interface AutonomyFormState {
   error?: string;
@@ -59,6 +68,9 @@ export async function updateAutonomyMode(
 
 export interface DecisionFormState {
   error?: string;
+  /** Approved: the card collapses into "Sent to [name]" with Undo (design.md §4). */
+  approved?: { at: string };
+  rejected?: boolean;
 }
 
 const decisionSchema = z.object({
@@ -75,7 +87,7 @@ const DECISION_ERRORS: Record<Exclude<DecisionResult, { ok: true }>["error"], st
   too_long: `Keep the reply under ${REPLY_MAX} characters.`,
 };
 
-/** Approve as is, approve an edited reply, or reject (PRD F8). Tenant from the session only. */
+/** Approve as is, approve an edited reply, or don't reply (PRD F8). Tenant from the session. */
 export async function decideDraft(
   _prev: DecisionFormState,
   formData: FormData,
@@ -87,10 +99,51 @@ export async function decideDraft(
   const db = getServiceClient();
   const input = { tenantId: tenant.id, userId: tenant.userId, itemId, draftId };
 
-  const result =
-    intent === "approve"
-      ? await approveDraft(db, { ...input, editedBody: body ?? null })
-      : await rejectDraft(db, input);
+  if (intent === "reject") {
+    const result = await rejectDraft(db, input);
+    revalidatePath("/inbox", "layout");
+    return result.ok ? { rejected: true } : { error: DECISION_ERRORS[result.error] };
+  }
+  const result = await approveDraft(db, { ...input, editedBody: body ?? null });
+  if (!result.ok) return { error: DECISION_ERRORS[result.error] };
+  // Sent right after the undo window rather than on the next cron tick.
+  after(() => sendApprovedReplyAfterUndoWindow(db, itemId));
+  // No revalidate here: the card shows the Sent row with Undo first, then refreshes itself.
+  return { approved: { at: new Date().toISOString() } };
+}
+
+/** Undo within the window: the reply goes back to waiting (design.md §4). */
+export async function undoApprovalAction(
+  _prev: DecisionFormState,
+  formData: FormData,
+): Promise<DecisionFormState> {
+  const parsed = decisionSchema
+    .pick({ itemId: true, draftId: true })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getCurrentTenant();
+  const result = await undoApproval(getServiceClient(), {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    ...parsed.data,
+  });
+  revalidatePath("/inbox", "layout");
+  return result.ok ? {} : { error: "Too late to undo: the reply is already on its way." };
+}
+
+/** The owner replied on the platform (or nothing is needed): it leaves "Needs you". */
+export async function markHandledAction(
+  _prev: DecisionFormState,
+  formData: FormData,
+): Promise<DecisionFormState> {
+  const parsed = z.object({ itemId: z.uuid() }).safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getCurrentTenant();
+  const result = await markHandled(getServiceClient(), {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    itemId: parsed.data.itemId,
+  });
   revalidatePath("/inbox", "layout");
   return result.ok ? {} : { error: DECISION_ERRORS[result.error] };
 }

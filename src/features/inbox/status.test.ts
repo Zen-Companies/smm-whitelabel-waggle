@@ -16,6 +16,8 @@ describe("nextStatus", () => {
     ["sending", "escalate", "escalated"],
     ["sending", "await_approval", "awaiting_approval"],
     ["sent", "delivery_failed", "failed"],
+    ["escalated", "handle", "handled"],
+    ["failed", "handle", "handled"],
     ["paused", "resume", "new"],
   ])("%s --%s--> %s (TDD §6)", (from, event, to) => {
     expect(nextStatus(from, event)).toBe(to);
@@ -53,7 +55,14 @@ describe("nextStatus", () => {
       "resume",
       "fail",
     ];
-    for (const terminal of ["sent", "rejected", "ignored", "escalated", "failed"] as const) {
+    for (const terminal of [
+      "sent",
+      "rejected",
+      "ignored",
+      "escalated",
+      "failed",
+      "handled",
+    ] as const) {
       for (const event of events) expect(nextStatus(terminal, event)).toBeNull();
     }
   });

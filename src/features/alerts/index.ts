@@ -7,3 +7,4 @@ export { createResendMailer, getMailer, logMailer, MailerError } from "./mailer"
 export type { Email, Mailer } from "./mailer";
 export { handlePlatformPause } from "./platform";
 export type { PlatformPauseResult } from "./platform";
+export { NotificationSettings } from "./notification-settings";

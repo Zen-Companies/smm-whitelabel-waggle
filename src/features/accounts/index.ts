@@ -1,3 +1,4 @@
+export { AccountBanner } from "./account-banner";
 export { AccountsCard } from "./accounts-card";
 export { connectAccount } from "./actions";
 export { connectBanner } from "./connect-banner";

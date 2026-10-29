@@ -119,6 +119,8 @@ async function approvedItem(opts: {
     editedBody: opts.edit ?? "Sundays 8am to 10pm.",
   });
   expect(result).toEqual({ ok: true });
+  // As if the 8-second undo window had passed (approveDraft holds the reply until then).
+  await db.from("inbound_items").update({ next_run_at: null }).eq("id", itemId);
   return { itemId, draftId: draft!.id, key: draft!.idempotency_key };
 }
 

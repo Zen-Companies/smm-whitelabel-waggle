@@ -3,9 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { signIn, signUp, type AuthFormState } from "./actions";
 
 export function AuthForm({ mode }: { mode: "signup" | "login" }) {
@@ -16,60 +14,75 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
   const isSignup = mode === "signup";
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <CardTitle>{isSignup ? "Create your account" : "Sign in"}</CardTitle>
-        <CardDescription>
+    <div className="card w-full max-w-md p-6 md:p-8">
+      <div className="mb-6 flex flex-col gap-2">
+        <h1 className="display-title">{isSignup ? "Set up your receptionist" : "Welcome back"}</h1>
+        <p className="text-gray-700">
           {isSignup
-            ? "Set up the AI receptionist for your business."
-            : "Welcome back to your AI receptionist."}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form action={formAction} className="flex flex-col gap-4">
-          {isSignup && (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="businessName">Business name</Label>
-              <Input id="businessName" name="businessName" required maxLength={100} />
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" autoComplete="email" required />
+            ? "It answers your Instagram and Facebook messages from your business info, and checks with you first."
+            : "Sign in to see what's waiting for you."}
+        </p>
+      </div>
+      <form action={formAction} className="flex flex-col gap-4">
+        {isSignup && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="businessName" className="text-sm font-medium">
+              Business name
+            </label>
+            <Input id="businessName" name="businessName" required maxLength={100} />
           </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete={isSignup ? "new-password" : "current-password"}
-              minLength={isSignup ? 8 : undefined}
-              required
-            />
-          </div>
+        )}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="email" className="text-sm font-medium">
+            Email
+          </label>
+          <Input id="email" name="email" type="email" autoComplete="email" required />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="password" className="text-sm font-medium">
+            Password
+          </label>
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            autoComplete={isSignup ? "new-password" : "current-password"}
+            minLength={isSignup ? 8 : undefined}
+            aria-invalid={state.error ? true : undefined}
+            required
+          />
           {state.error && (
-            <p role="alert" className="text-destructive text-sm">
+            <p role="alert" className="text-danger text-sm">
               {state.error}
             </p>
           )}
-          {state.message && <p className="text-muted-foreground text-sm">{state.message}</p>}
-          <Button type="submit" disabled={pending}>
-            {pending ? "Please wait…" : isSignup ? "Create account" : "Sign in"}
-          </Button>
-          <p className="text-muted-foreground text-center text-sm">
-            {isSignup ? (
-              <>
-                Already have an account? <Link href="/login">Sign in</Link>
-              </>
-            ) : (
-              <>
-                New here? <Link href="/signup">Create an account</Link>
-              </>
-            )}
+        </div>
+        {state.message && (
+          <p role="status" className="text-sm text-gray-700">
+            {state.message}
           </p>
-        </form>
-      </CardContent>
-    </Card>
+        )}
+        <Button type="submit" variant="primary" disabled={pending} className="w-full">
+          {pending ? "Please wait…" : isSignup ? "Create account" : "Sign in"}
+        </Button>
+        <p className="text-center text-sm text-gray-700">
+          {isSignup ? (
+            <>
+              Already have an account?{" "}
+              <Link href="/login" className="text-ink font-medium underline underline-offset-4">
+                Sign in
+              </Link>
+            </>
+          ) : (
+            <>
+              New here?{" "}
+              <Link href="/signup" className="text-ink font-medium underline underline-offset-4">
+                Create an account
+              </Link>
+            </>
+          )}
+        </p>
+      </form>
+    </div>
   );
 }

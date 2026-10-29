@@ -21,6 +21,29 @@ const OUTCOME: Record<NonNullable<ComposeState["outcome"]>, string> = {
 /** Compose a post: text, optional image, accounts, now or later (PRD F3). */
 export function ComposeForm({ accounts }: { accounts: ComposeAccount[] }) {
   const [state, action, pending] = useActionState<ComposeState, FormData>(composePost, {});
+  // A saved post changes savedAt, which remounts the fields: text, counter and time reset.
+  return (
+    <ComposeFields
+      key={state.savedAt}
+      accounts={accounts}
+      state={state}
+      action={action}
+      pending={pending}
+    />
+  );
+}
+
+function ComposeFields({
+  accounts,
+  state,
+  action,
+  pending,
+}: {
+  accounts: ComposeAccount[];
+  state: ComposeState;
+  action: (formData: FormData) => void;
+  pending: boolean;
+}) {
   const [when, setWhen] = useState<"now" | "later">("now");
   const [local, setLocal] = useState("");
   const [length, setLength] = useState(0);
@@ -34,7 +57,7 @@ export function ComposeForm({ accounts }: { accounts: ComposeAccount[] }) {
     ) : null;
 
   return (
-    <form key={state.savedAt} action={action} className="flex flex-col gap-4">
+    <form action={action} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <label htmlFor="post-content" className="text-sm font-medium">
           What do you want to share?
@@ -64,7 +87,7 @@ export function ComposeForm({ accounts }: { accounts: ComposeAccount[] }) {
           name="image"
           type="file"
           accept={POST_IMAGE_TYPES.join(",")}
-          className="text-sm"
+          className="file:bg-surface file:text-ink text-sm text-gray-700 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-md file:border file:border-gray-200 file:px-4 file:text-sm file:font-medium hover:file:bg-gray-50"
         />
         {fieldError("image")}
       </div>
@@ -85,7 +108,7 @@ export function ComposeForm({ accounts }: { accounts: ComposeAccount[] }) {
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">When</legend>
-        <div className="segmented" role="radiogroup">
+        <div className="segmented self-start" role="radiogroup">
           {(["now", "later"] as const).map((v) => (
             <label key={v} data-active={when === v || undefined}>
               <input

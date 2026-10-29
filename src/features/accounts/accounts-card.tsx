@@ -1,5 +1,6 @@
+import { CircleAlert, CircleCheck } from "lucide-react";
+import { IllustratedEmpty } from "@/components/app/illustrated-empty";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { connectAccount } from "./actions";
@@ -7,12 +8,9 @@ import { connectBanner } from "./connect-banner";
 import { SUPPORTED_PLATFORMS } from "./events";
 
 const PLATFORM_NAMES = { instagram: "Instagram", facebook: "Facebook" } as const;
-const STATUS_LABELS: Record<string, string> = {
-  active: "Connected",
-  disconnected: "Disconnected",
-  error: "Needs attention",
-};
+const name = (p: string) => PLATFORM_NAMES[p as keyof typeof PLATFORM_NAMES] ?? p;
 
+/** Connected accounts (Settings). Status is inline text + icon, never a colored chip. */
 export async function AccountsCard({
   searchParams,
 }: {
@@ -26,61 +24,92 @@ export async function AccountsCard({
     .select("id, platform, username, status")
     .eq("tenant_id", tenant.id)
     .order("created_at");
+  const down = (accounts ?? []).find((a) => a.status !== "active");
+
+  const connectButtons = (variant: "primary" | "secondary") => (
+    <div className="flex flex-wrap gap-2">
+      {SUPPORTED_PLATFORMS.map((platform, i) => (
+        <form key={platform} action={connectAccount}>
+          <input type="hidden" name="platform" value={platform} />
+          <Button type="submit" variant={i === 0 ? variant : "secondary"}>
+            Connect {name(platform)}
+          </Button>
+        </form>
+      ))}
+    </div>
+  );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Connected accounts</CardTitle>
-        <CardDescription>
-          Instagram and Facebook accounts the receptionist answers for.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        {banner && (
-          <p
-            role={banner.tone === "error" ? "alert" : "status"}
-            className={banner.tone === "error" ? "text-destructive text-sm" : "text-sm"}
-          >
-            {banner.text}
-          </p>
-        )}
-        {accounts && accounts.length > 0 ? (
-          <ul className="flex flex-col gap-2">
+    <section className="flex flex-col gap-4" aria-labelledby="accounts-heading">
+      <div>
+        <h2 id="accounts-heading" className="section-title">
+          Accounts
+        </h2>
+        <p className="meta">The Instagram and Facebook accounts the receptionist answers for.</p>
+      </div>
+      {banner && (
+        <p
+          role={banner.tone === "error" ? "alert" : "status"}
+          className={banner.tone === "error" ? "danger-box" : "text-sm text-gray-700"}
+        >
+          {banner.text}
+        </p>
+      )}
+
+      {!accounts?.length ? (
+        <IllustratedEmpty
+          illustration="connect-accounts"
+          title="Connect your Instagram"
+          action={connectButtons("primary")}
+        >
+          Comments and messages start arriving as soon as an account is connected.
+        </IllustratedEmpty>
+      ) : (
+        <>
+          {down && (
+            <IllustratedEmpty illustration="reconnect" title="Let's reconnect" tint="gray">
+              {name(down.platform)}
+              {down.username ? ` @${down.username}` : ""} lost its connection. Messages that arrive
+              meanwhile wait here until you reconnect it.
+            </IllustratedEmpty>
+          )}
+          <ul className="card flex flex-col divide-y">
             {accounts.map((account) => (
-              <li key={account.id} className="flex items-center justify-between gap-4 text-sm">
-                <span>
-                  {PLATFORM_NAMES[account.platform as keyof typeof PLATFORM_NAMES] ??
-                    account.platform}
-                  {account.username ? ` · @${account.username}` : ""}
-                </span>
-                <span className="flex items-center gap-3">
-                  <span className="text-muted-foreground">
-                    {STATUS_LABELS[account.status] ?? account.status}
+              <li
+                key={account.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
+              >
+                <span className="flex flex-col">
+                  <span className="font-medium">
+                    {name(account.platform)}
+                    {account.username ? ` @${account.username}` : ""}
                   </span>
-                  {account.status !== "active" && (
-                    <form action={connectAccount}>
-                      <input type="hidden" name="platform" value={account.platform} />
-                      <Button type="submit" size="sm" variant="outline">
-                        Reconnect
-                      </Button>
-                    </form>
+                  {account.status === "active" ? (
+                    <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+                      <CircleCheck className="text-success size-4" strokeWidth={1.75} aria-hidden />
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="text-amber-text inline-flex items-center gap-1.5 text-sm">
+                      <CircleAlert className="text-amber size-4" strokeWidth={1.75} aria-hidden />
+                      Disconnected
+                    </span>
                   )}
                 </span>
+                {account.status !== "active" && (
+                  <form action={connectAccount}>
+                    <input type="hidden" name="platform" value={account.platform} />
+                    <Button type="submit" variant="primary">
+                      Reconnect
+                    </Button>
+                  </form>
+                )}
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="text-muted-foreground text-sm">No accounts connected yet.</p>
-        )}
-        <div className="flex flex-wrap gap-2">
-          {SUPPORTED_PLATFORMS.map((platform) => (
-            <form key={platform} action={connectAccount}>
-              <input type="hidden" name="platform" value={platform} />
-              <Button type="submit">Connect {PLATFORM_NAMES[platform]}</Button>
-            </form>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          {connectButtons("secondary")}
+        </>
+      )}
+    </section>
   );
 }
