@@ -27,7 +27,12 @@ export interface ConversationContext {
     messages: number;
     firstSeenAt: string;
   };
-  lead: { name: string | null; contact: string | null; request: string | null } | null;
+  lead: {
+    id: string;
+    name: string | null;
+    contact: string | null;
+    request: string | null;
+  } | null;
   activity: ActivityLine[];
 }
 
@@ -171,7 +176,7 @@ export async function loadConversation(
       .order("created_at"),
     supabase
       .from("leads")
-      .select("name, contact, request, created_at")
+      .select("id, name, contact, request, created_at")
       .in("item_id", ids)
       .order("created_at", { ascending: false })
       .limit(1),
@@ -234,7 +239,12 @@ export async function loadConversation(
           seen[0]?.received_at ?? (threadItems ?? [])[0]?.received_at ?? new Date().toISOString(),
       },
       lead: leads?.[0]
-        ? { name: leads[0].name, contact: leads[0].contact, request: leads[0].request }
+        ? {
+            id: leads[0].id,
+            name: leads[0].name,
+            contact: leads[0].contact,
+            request: leads[0].request,
+          }
         : null,
       activity: activityLines(
         (audit ?? []).map((a) => ({
