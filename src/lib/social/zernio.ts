@@ -79,14 +79,43 @@ function parse<T>(schema: z.ZodType<T>, data: unknown, operation: string): T {
   return parsed.data;
 }
 
-function toSocialError(error: unknown, operation: string): SocialProviderError {
+/**
+ * Seconds to wait from a `Retry-After` header: delta-seconds or an HTTP date (RFC 9110).
+ * Zernio's multi-tenant guide says to honour it on 429; the SDK only surfaces
+ * X-RateLimit-Reset, so the adapter reads the raw response itself (T20).
+ */
+export function parseRetryAfter(
+  value: string | null | undefined,
+  now = Date.now(),
+): number | undefined {
+  const v = value?.trim();
+  if (!v) return undefined;
+  if (/^\d+$/.test(v)) return Number(v);
+  const at = Date.parse(v);
+  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - now) / 1000));
+}
+
+/** Zernio team paused for billing: every call returns 402 PAYMENT_REQUIRED (T19). */
+export function isPlatformPaused(error: unknown): boolean {
+  return (
+    error instanceof SocialProviderError &&
+    error.details.status === 402 &&
+    (error.details.code === undefined || error.details.code === "PAYMENT_REQUIRED")
+  );
+}
+
+function toSocialError(error: unknown, operation: string, headers?: Headers): SocialProviderError {
   if (error instanceof SocialProviderError) return error;
   if (error instanceof ZernioApiError) {
     return new SocialProviderError(`Zernio ${operation} failed (${error.statusCode})`, {
       status: error.statusCode,
       code: error.code,
       ambiguous: error.statusCode >= 500,
-      retryAfterSeconds: error instanceof RateLimitError ? error.getSecondsUntilReset() : undefined,
+      // Retry-After first (429, and 409 while the same idempotency key is in flight), then
+      // the SDK's X-RateLimit-Reset.
+      retryAfterSeconds:
+        parseRetryAfter(headers?.get("Retry-After")) ??
+        (error instanceof RateLimitError ? error.getSecondsUntilReset() : undefined),
     });
   }
   // Timeouts (TimeoutError) and network failures: the request may have been delivered.
@@ -94,11 +123,28 @@ function toSocialError(error: unknown, operation: string): SocialProviderError {
   return new SocialProviderError(`Zernio ${operation} failed (${name})`, { ambiguous: true });
 }
 
-async function call<T>(operation: string, run: () => Promise<T>): Promise<T> {
+/** Keeps the last response's headers for the error mapping (the SDK drops Retry-After). */
+function headerCapture() {
+  const captured: { headers?: Headers } = {};
+  const fetchWithHeaders: typeof fetch = async (input, init) => {
+    const response = await globalThis.fetch(input, init);
+    captured.headers = response.headers;
+    return response;
+  };
+  return { captured, fetchWithHeaders };
+}
+
+/** The SDK's request options don't declare `fetch`, but its client honours a per-call one. */
+type WithFetch = <O extends object>(options: O) => O;
+
+async function call<T>(operation: string, run: (withFetch: WithFetch) => Promise<T>): Promise<T> {
+  const { captured, fetchWithHeaders } = headerCapture();
+  const withFetch: WithFetch = (options) =>
+    ({ ...options, fetch: fetchWithHeaders }) as typeof options;
   try {
-    return await run();
+    return await run(withFetch);
   } catch (error) {
-    throw toSocialError(error, operation);
+    throw toSocialError(error, operation, captured.headers);
   }
 }
 
@@ -106,10 +152,12 @@ export class ZernioSocialProvider implements SocialProvider {
   constructor(private readonly zernio: Zernio) {}
 
   async createProfile(input: { name: string; externalId: string; idempotencyKey?: string }) {
+    const { captured, fetchWithHeaders } = headerCapture();
     try {
       const { data } = await this.zernio.profiles.createProfile({
         body: { name: input.name, externalId: input.externalId },
         headers: input.idempotencyKey ? { "Idempotency-Key": input.idempotencyKey } : undefined,
+        ...({ fetch: fetchWithHeaders } as object),
       });
       const { profile } = parse(profileSchema, data, "createProfile");
       return { profileId: profile._id, alreadyExisted: false };
@@ -123,7 +171,7 @@ export class ZernioSocialProvider implements SocialProvider {
         const { existingProfileId } = parse(profileConflictSchema, error.details, "createProfile");
         return { profileId: existingProfileId, alreadyExisted: true };
       }
-      throw toSocialError(error, "createProfile");
+      throw toSocialError(error, "createProfile", captured.headers);
     }
   }
 
@@ -132,11 +180,13 @@ export class ZernioSocialProvider implements SocialProvider {
     profileId: string;
     redirectUrl: string;
   }) {
-    return call("getConnectUrl", async () => {
-      const { data } = await this.zernio.connect.getConnectUrl({
-        path: { platform: input.platform },
-        query: { profileId: input.profileId, redirect_url: input.redirectUrl },
-      });
+    return call("getConnectUrl", async (withFetch) => {
+      const { data } = await this.zernio.connect.getConnectUrl(
+        withFetch({
+          path: { platform: input.platform },
+          query: { profileId: input.profileId, redirect_url: input.redirectUrl },
+        }),
+      );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
     });
   }
@@ -144,18 +194,20 @@ export class ZernioSocialProvider implements SocialProvider {
   async createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }> {
-    return call("createPost", async () => {
-      const { data } = await this.zernio.posts.createPost({
-        body: {
-          content: input.content,
-          mediaItems: input.mediaUrls?.map((url) => ({ url })),
-          platforms: input.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })),
-          ...(input.publishAt
-            ? { scheduledFor: input.publishAt.toISOString() }
-            : { publishNow: true }),
-        },
-        headers: { "Idempotency-Key": input.idempotencyKey },
-      });
+    return call("createPost", async (withFetch) => {
+      const { data } = await this.zernio.posts.createPost(
+        withFetch({
+          body: {
+            content: input.content,
+            mediaItems: input.mediaUrls?.map((url) => ({ url })),
+            platforms: input.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })),
+            ...(input.publishAt
+              ? { scheduledFor: input.publishAt.toISOString() }
+              : { publishNow: true }),
+          },
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
       const { post } = parse(postSchema, data, "createPost");
       return { providerPostId: post._id, status: post.status };
     });
@@ -169,13 +221,15 @@ export class ZernioSocialProvider implements SocialProvider {
     idempotencyKey: string;
     signal?: AbortSignal;
   }) {
-    return call("replyToComment", async () => {
-      const { data } = await this.zernio.comments.replyToInboxPost({
-        signal: input.signal,
-        path: { postId: input.postId },
-        body: { accountId: input.accountId, commentId: input.commentId, message: input.message },
-        headers: { "Idempotency-Key": input.idempotencyKey },
-      });
+    return call("replyToComment", async (withFetch) => {
+      const { data } = await this.zernio.comments.replyToInboxPost(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          body: { accountId: input.accountId, commentId: input.commentId, message: input.message },
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
       return { providerReplyId: parse(replySchema, data, "replyToComment").data.commentId };
     });
   }
@@ -187,13 +241,15 @@ export class ZernioSocialProvider implements SocialProvider {
     idempotencyKey: string;
     signal?: AbortSignal;
   }) {
-    return call("sendDm", async () => {
-      const { data } = await this.zernio.messages.sendInboxMessage({
-        signal: input.signal,
-        path: { conversationId: input.conversationId },
-        body: { accountId: input.accountId, message: input.message },
-        headers: { "Idempotency-Key": input.idempotencyKey },
-      });
+    return call("sendDm", async (withFetch) => {
+      const { data } = await this.zernio.messages.sendInboxMessage(
+        withFetch({
+          signal: input.signal,
+          path: { conversationId: input.conversationId },
+          body: { accountId: input.accountId, message: input.message },
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
       return { providerMessageId: parse(dmSchema, data, "sendDm").data.messageId };
     });
   }
@@ -204,12 +260,14 @@ export class ZernioSocialProvider implements SocialProvider {
     limit?: number;
     signal?: AbortSignal;
   }): Promise<ProviderMessage[]> {
-    return call("listConversationMessages", async () => {
-      const { data } = await this.zernio.messages.getInboxConversationMessages({
-        signal: input.signal,
-        path: { conversationId: input.conversationId },
-        query: { accountId: input.accountId, limit: input.limit ?? 20, sortOrder: "desc" },
-      });
+    return call("listConversationMessages", async (withFetch) => {
+      const { data } = await this.zernio.messages.getInboxConversationMessages(
+        withFetch({
+          signal: input.signal,
+          path: { conversationId: input.conversationId },
+          query: { accountId: input.accountId, limit: input.limit ?? 20, sortOrder: "desc" },
+        }),
+      );
       return parse(messagesSchema, data, "listConversationMessages").messages.map((m) => ({
         id: m.id,
         direction: m.direction,
@@ -227,12 +285,18 @@ export class ZernioSocialProvider implements SocialProvider {
     limit?: number;
     signal?: AbortSignal;
   }): Promise<ProviderCommentReply[]> {
-    return call("listCommentReplies", async () => {
-      const { data } = await this.zernio.comments.getInboxPostComments({
-        signal: input.signal,
-        path: { postId: input.postId },
-        query: { accountId: input.accountId, commentId: input.commentId, limit: input.limit ?? 50 },
-      });
+    return call("listCommentReplies", async (withFetch) => {
+      const { data } = await this.zernio.comments.getInboxPostComments(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          query: {
+            accountId: input.accountId,
+            commentId: input.commentId,
+            limit: input.limit ?? 50,
+          },
+        }),
+      );
       return (parse(commentRepliesSchema, data, "listCommentReplies").comments ?? []).map((c) => ({
         id: c.id,
         text: c.message ?? null,
@@ -242,11 +306,19 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async ping(): Promise<void> {
+    await call("ping", async (withFetch) => {
+      await this.zernio.profiles.listProfiles(withFetch({ query: { limit: 1 } }));
+    });
+  }
+
   async getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]> {
-    return call("getAccountsHealth", async () => {
-      const { data } = await this.zernio.accounts.getAllAccountsHealth({
-        query: { profileId: input.profileId },
-      });
+    return call("getAccountsHealth", async (withFetch) => {
+      const { data } = await this.zernio.accounts.getAllAccountsHealth(
+        withFetch({
+          query: { profileId: input.profileId },
+        }),
+      );
       return parse(healthSchema, data, "getAccountsHealth").accounts.map((a) => ({
         accountId: a.accountId,
         platform: a.platform,

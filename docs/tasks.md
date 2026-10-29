@@ -96,15 +96,15 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Staging webhook scoped to a test profile; run the full loop end to end.
       _Done when:_ post → comment → classify → draft → approve → reply works on staging.
 
-- [ ] **T6b. Per-tenant fairness in the job claim** (T6 follow-up)
+- [x] **T6b. Per-tenant fairness in the job claim** (T6 follow-up)
       Cap items per tenant per tick in `claim_items` (at most N of the batch of 20 per tenant, oldest first within a tenant), so one tenant's burst can't starve the others. Zernio's rate limit is one team-wide budget shared by every tenant (docs.zernio.com/multi-tenant: queue bursts per customer).
       _Done when:_ a tenant with 100 due items and one with 1 both get processed in the same tick.
 
-- [ ] **T19. Zernio 402 PAYMENT_REQUIRED is platform-wide**
+- [x] **T19. Zernio 402 PAYMENT_REQUIRED is platform-wide**
       A 402 with `code: "PAYMENT_REQUIRED"` means the whole Zernio team is paused (every profile, reads included). Treat it as a platform state, not an item failure: pause sending for all tenants (no attempts counted), alert the operator once (not the owners), don't escalate per item to customers, and resume automatically when a probe call succeeds. Then run the T16 backfill.
       _Done when:_ a mocked 402 on send pauses all sending, sends one operator alert, escalates nothing, and sending resumes after the mock clears.
 
-- [ ] **T20. 429: accept Retry-After and X-RateLimit-Reset**
+- [x] **T20. 429: accept Retry-After and X-RateLimit-Reset**
       The adapter reads only `X-RateLimit-Reset` (through the SDK's `RateLimitError`); Zernio's multi-tenant page says to wait for `Retry-After`. Use whichever is present (`Retry-After` seconds or HTTP date first, then `X-RateLimit-Reset`), with a fallback, for every Zernio call.
       _Done when:_ adapter tests cover both headers and neither.
 

@@ -199,6 +199,7 @@ As built (T6):
 - **Steps:** one per processing status (`new` → classify T7, `classified` → draft T9, `drafted` → policy T10, `sending` → send T12) in `features/inbox/steps.ts`. A step returns an event; `nextStatus()` (pure, `features/inbox/status.ts`) maps it, and `public.transition_item` applies it with its audit row. Until a step exists its items are left untouched. Steps run back to back within a run while time allows, keeping the lock, so a message reaches its draft in one run rather than one step per minute (PRD §7).
 - **Retries (§14):** a failed step → `attempts + 1`, `last_error`, `next_run_at = now + 2^attempts min` (2, 4 min). The 3rd failed attempt → `failed` + an `escalated` audit row (`retries_exhausted`; the email is T13). That is 3 attempts in total (§14, tasks.md T6; `MAX_ATTEMPTS`). Attempts count per step: a successful step resets them. `RetryLaterError(seconds)` (429) reschedules without counting an attempt.
 - **Cron:** `pg_cron` job `process-inbound-items` (`* * * * *`) calls `private.trigger_job_processing()`, which reads `job_process_url` and `cron_secret` from Supabase Vault and `net.http_post`s with a 65 s timeout (longer than the run, so pg_net never drops it). Without both secrets a tick does nothing. Local: `supabase/seed.sql` sets them to `http://host.docker.internal:3000/api/jobs/process` and `local-dev-cron-secret`. Each environment adds its own with `vault.create_secret`.
+- **Per-tenant fairness (T6b):** `claim_items(p_limit, p_per_tenant = 5, p_statuses)` takes at most 5 due items per tenant per batch (oldest first within the tenant, then oldest first overall) and only statuses the runner has a step for, so items waiting for an unconfigured step don't take a tenant's slots. The runner claims batches until its deadline, so a backlog still drains (tested: a tenant with 100 due items and one with 1 are both processed in the same tick).
 - Not yet in the route: the hourly health check (T16). Draft nudges, DM-window escalation and alert delivery were added in T13 (below).
 
 As built (T13, `features/alerts`, `features/leads`):
@@ -231,7 +232,8 @@ As built (T11, `features/approvals`):
 - Before sending a DM, check `conversations.last_customer_message_at > now() - 24h`; otherwise escalate.
 - Idempotency (confirmed for both sends): same key + same body within 24 h replays the original response; same key + different body → 422; key in flight → 409. Only 2xx responses are stored, so a failure releases the key.
 - A Zernio `5xx`, timeout or network error on send is ambiguous (may have been delivered): list the conversation's messages (or the post's comments) to reconcile before retrying; Zernio warns an empty list is inconclusive. The adapter marks these errors `ambiguous: true`.
-- `429`: the SDK exposes `X-RateLimit-Reset` (not `Retry-After`); the adapter turns it into `retryAfterSeconds`.
+- `429` (T20): Zernio's multi-tenant guide says to wait for `Retry-After`; the SDK only surfaces `X-RateLimit-Reset` (`RateLimitError`). The adapter passes a per-call `fetch` (the SDK's client honours it, though its types don't declare it) to keep the raw response headers, and sets `retryAfterSeconds` from `Retry-After` (seconds or HTTP date), else `X-RateLimit-Reset`, else undefined (callers fall back: 60 s for sends). The same applies to `409` while an idempotency key is in flight.
+- **`402 PAYMENT_REQUIRED` (T19):** Zernio has paused the whole team (every tenant, reads included). The adapter's `isPlatformPaused(error)` recognises it. The send step records it in `platform_state['zernio_pause']` (migration `platform_pause`, server-only), clears the attempt mark (nothing was delivered) and reschedules in 5 min without counting an attempt or escalating; while the pause is recorded, every send waits without calling Zernio. The job route (`handlePlatformPause`) emails the operator once per pause (`OPERATOR_ALERT_EMAIL`, logged if unset; Sentry event) and probes Zernio (`SocialProvider.ping`, list one profile) at most every 5 minutes; the first successful probe clears the pause and sending resumes. Owners are never emailed about it; the app shows them one banner (UI pass).
 
 As built (T12, `features/approvals/send-step.ts`, the `sending` job step):
 
@@ -542,7 +544,8 @@ ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET
 JEV_API_URL, JEV_API_KEY, JEV_MODEL, JEV_TIMEOUT_MS, JEV_COST_PER_MTOK_INPUT
 LLM_PROVIDER (openrouter), OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL
 EMBEDDING_PROVIDER (openrouter), EMBEDDING_MODEL
-RESEND_API_KEY, ALERT_FROM_EMAIL
+RESEND_API_KEY, ALERT_FROM_EMAIL, OPERATOR_ALERT_EMAIL
+SOCIAL_PROVIDER_MODE (mock | zernio)
 STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
 CRON_SECRET
 SENTRY_DSN

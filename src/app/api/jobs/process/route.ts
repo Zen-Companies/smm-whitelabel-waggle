@@ -1,11 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
-import { deliverPendingAlerts, enqueueDraftNudges, getMailer } from "@/features/alerts";
+import {
+  deliverPendingAlerts,
+  enqueueDraftNudges,
+  getMailer,
+  handlePlatformPause,
+} from "@/features/alerts";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, processDueItems } from "@/features/inbox";
 import { embedPendingEntries } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
+import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 
 // Called every minute by pg_cron + pg_net with `Authorization: Bearer CRON_SECRET` (§7.2).
@@ -26,6 +32,14 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const db = getServiceClient();
     const deadline = createDeadline();
+    // T19: if Zernio is paused, alert the operator once and probe; resumes before sending.
+    const platform = await handlePlatformPause({
+      db,
+      social: getSocialProvider,
+      mailer: getMailer(),
+      operatorEmail: process.env.OPERATOR_ALERT_EMAIL,
+      appUrl: process.env.APP_URL ?? "",
+    });
     const items = await processDueItems({ db, steps: getProductionSteps(), deadline });
 
     // Knowledge base entries without an embedding (new, edited, or a failed embed: T8).
@@ -53,6 +67,7 @@ export async function POST(request: Request): Promise<Response> {
       dmWindowsEscalated,
       nudges,
       alerts,
+      platform,
     });
   } catch (error) {
     Sentry.captureException(error);

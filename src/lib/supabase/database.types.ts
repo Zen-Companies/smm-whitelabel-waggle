@@ -551,6 +551,24 @@ export type Database = {
           },
         ]
       }
+      platform_state: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value?: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       posts: {
         Row: {
           content: string
@@ -737,7 +755,7 @@ export type Database = {
     }
     Functions: {
       claim_items: {
-        Args: { p_limit: number }
+        Args: { p_limit: number; p_per_tenant?: number; p_statuses?: string[] }
         Returns: {
           account_status: string
           attempts: number

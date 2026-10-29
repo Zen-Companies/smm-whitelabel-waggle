@@ -2,7 +2,13 @@ import * as Sentry from "@sentry/nextjs";
 import type { Step, StepResult } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { RetryLaterError } from "@/lib/jobs";
+import {
+  getPlatformPause,
+  PLATFORM_PAUSE_RETRY_SECONDS,
+  recordPlatformPause,
+} from "@/lib/social/platform-pause";
 import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
+import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import {
   policy,
@@ -220,6 +226,15 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
       };
     }
 
+    // T19: Zernio paused for billing (every call 402s). Wait without counting an attempt and
+    // without escalating; the job route probes and clears the pause.
+    if (await getPlatformPause(db)) throw new RetryLaterError(PLATFORM_PAUSE_RETRY_SECONDS);
+    const pausedNow = async (error: unknown) => {
+      if (!isPlatformPaused(error)) return;
+      await recordPlatformPause(db);
+      throw new RetryLaterError(PLATFORM_PAUSE_RETRY_SECONDS);
+    };
+
     const social = opts.social();
     const markSent = async (providerId: string, reconciled: boolean): Promise<StepResult> => {
       const { error } = await db
@@ -252,7 +267,10 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
         draft.message,
         new Date(draft.sendAttemptedAt),
         ctx.callSignal(),
-      );
+      ).catch(async (error: unknown) => {
+        await pausedNow(error);
+        throw error;
+      });
       if (found) return markSent(found, true);
     } else {
       const { error } = await db
@@ -290,9 +308,14 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
             ).providerMessageId;
     } catch (error) {
       if (!(error instanceof SocialProviderError)) throw error;
+      if (isPlatformPaused(error)) {
+        // 402: nothing was delivered. Not the item's fault: no attempt, no escalation.
+        await clearAttempt();
+        await pausedNow(error);
+      }
       const { status, code, ambiguous, retryAfterSeconds } = error.details;
       if (status === 429) {
-        // Not delivered. Wait for X-RateLimit-Reset; no attempt counted (§14).
+        // Not delivered. Wait for Retry-After / X-RateLimit-Reset; no attempt counted (§14).
         await clearAttempt();
         throw new RetryLaterError(retryAfterSeconds ?? RATE_LIMIT_FALLBACK_SECONDS);
       }

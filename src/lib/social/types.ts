@@ -107,6 +107,8 @@ export interface SocialProvider {
     } & CallOptions,
   ): Promise<ProviderCommentReply[]>;
   getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
+  /** A cheap read (list one profile). Throws like any call; used to see whether a pause ended. */
+  ping(): Promise<void>;
 }
 
 export class SocialProviderError extends Error {

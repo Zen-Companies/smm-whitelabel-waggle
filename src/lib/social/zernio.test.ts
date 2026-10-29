@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SocialProviderError } from "./types";
-import { createZernioProvider, type ZernioSocialProvider } from "./zernio";
+import {
+  createZernioProvider,
+  isPlatformPaused,
+  parseRetryAfter,
+  type ZernioSocialProvider,
+} from "./zernio";
 
 // The real @zernio/node SDK runs; only fetch is replaced, so no call reaches Zernio.
 interface Captured {
@@ -329,6 +334,56 @@ describe("ZernioSocialProvider", () => {
       expect(error.details.retryAfterSeconds).toBeLessThanOrEqual(30);
     });
 
+    it("429 prefers Retry-After (seconds) over X-RateLimit-Reset (T20)", async () => {
+      const reset = Math.floor(Date.now() / 1000) + 300;
+      respond = () =>
+        json({ error: "Too many requests" }, 429, {
+          "Retry-After": "12",
+          "X-RateLimit-Reset": String(reset),
+        });
+      const error = (await send().catch((e: unknown) => e)) as SocialProviderError;
+      expect(error.details).toMatchObject({ status: 429, retryAfterSeconds: 12, ambiguous: false });
+    });
+
+    it("429 reads Retry-After as an HTTP date", async () => {
+      const at = new Date(Date.now() + 45_000).toUTCString();
+      respond = () => json({ error: "Too many requests" }, 429, { "Retry-After": at });
+      const error = (await send().catch((e: unknown) => e)) as SocialProviderError;
+      expect(error.details.retryAfterSeconds).toBeGreaterThan(40);
+      expect(error.details.retryAfterSeconds).toBeLessThanOrEqual(45);
+    });
+
+    it("429 with neither header leaves the wait to the caller's fallback", async () => {
+      respond = () => json({ error: "Too many requests" }, 429);
+      const error = (await send().catch((e: unknown) => e)) as SocialProviderError;
+      expect(error.details).toMatchObject({ status: 429 });
+      expect(error.details.retryAfterSeconds).toBeUndefined();
+    });
+
+    it("409 with the key still in flight carries Retry-After", async () => {
+      respond = () =>
+        json({ error: "in flight", code: "idempotency_conflict" }, 409, { "Retry-After": "3" });
+      const error = (await send().catch((e: unknown) => e)) as SocialProviderError;
+      expect(error.details).toMatchObject({ status: 409, retryAfterSeconds: 3 });
+    });
+
+    it("402 PAYMENT_REQUIRED is recognised as a platform pause (T19)", async () => {
+      respond = () =>
+        json(
+          {
+            error: "Payment required",
+            code: "PAYMENT_REQUIRED",
+            billingUrl: "https://zernio.com/billing",
+          },
+          402,
+        );
+      const error = await send().catch((e: unknown) => e);
+      expect(isPlatformPaused(error)).toBe(true);
+      expect(
+        isPlatformPaused(new SocialProviderError("x", { status: 400, ambiguous: false })),
+      ).toBe(false);
+    });
+
     it("marks a network failure as ambiguous", async () => {
       respond = () => {
         throw new TypeError("fetch failed");
@@ -356,5 +411,16 @@ describe("ZernioSocialProvider", () => {
         .catch((e: unknown) => e)) as Error;
       expect(error.message).not.toContain("secret customer text");
     });
+  });
+});
+
+describe("parseRetryAfter", () => {
+  const now = Date.parse("2026-10-29T12:00:00Z");
+  it("reads seconds and HTTP dates, ignores junk", () => {
+    expect(parseRetryAfter("30", now)).toBe(30);
+    expect(parseRetryAfter("Thu, 29 Oct 2026 12:01:00 GMT", now)).toBe(60);
+    expect(parseRetryAfter("Thu, 29 Oct 2026 11:00:00 GMT", now)).toBe(0);
+    expect(parseRetryAfter("soon", now)).toBeUndefined();
+    expect(parseRetryAfter(null, now)).toBeUndefined();
   });
 });

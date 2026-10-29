@@ -2,12 +2,15 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { POST } from "@/app/api/webhooks/zernio/route";
+import { handlePlatformPause } from "@/features/alerts/platform";
+import type { Email, Mailer } from "@/features/alerts/mailer";
 import { approveDraft } from "@/features/approvals/decisions";
 import { createSendStep } from "@/features/approvals/send-step";
 import { processDueItems } from "@/features/inbox/processor";
 import { signZernioBody } from "@/features/inbox/signature";
 import { createDeadline } from "@/lib/jobs";
 import { MockSocialProvider } from "@/lib/social/mock";
+import { clearPlatformPause, getPlatformPause } from "@/lib/social/platform-pause";
 import { SocialProviderError } from "@/lib/social/types";
 import { anonClient, claimFor, serviceClient, uniqueEmail } from "./helpers";
 
@@ -362,6 +365,99 @@ describe("send step", () => {
     expect(item.status).toBe("awaiting_approval");
     expect(draft.status).toBe("pending");
     expect(sendsFor(key)).toEqual([]);
+  });
+});
+
+describe("Zernio 402 PAYMENT_REQUIRED (T19)", () => {
+  const paid = () =>
+    new SocialProviderError("Zernio sendDm failed (402)", {
+      status: 402,
+      code: "PAYMENT_REQUIRED",
+      ambiguous: false,
+    });
+
+  it("pauses all sending: no attempt, no escalation; one operator alert; resumes after a good probe", async () => {
+    social = new ScriptedSocial();
+    social.script.push({ error: paid() });
+    const first = await approvedItem({ kind: "dm" });
+    const second = await approvedItem({ kind: "comment" });
+    const emails: Email[] = [];
+    const mailer: Mailer = {
+      async send(email) {
+        emails.push(email);
+        return { providerId: "re_op", mode: "sent" };
+      },
+    };
+    try {
+      await run();
+
+      // The 402 paused the platform; neither item failed, escalated or counted an attempt.
+      expect(await getPlatformPause(db)).not.toBeNull();
+      for (const id of [first.itemId, second.itemId]) {
+        const s = await state(id);
+        expect(s.item).toMatchObject({ status: "sending", attempts: 0 });
+        expect(s.draft).toMatchObject({ status: "approved", send_attempted_at: null });
+        expect(s.audit.some((a) => ["escalated", "send_failed"].includes(a.action))).toBe(false);
+      }
+      // Only the first item tried Zernio; the second waited on the pause without calling it.
+      expect(social.sendCalls.filter((c) => c.idempotencyKey === second.key)).toEqual([]);
+      const { count: alerts } = await db
+        .from("alerts")
+        .select("*", { count: "exact", head: true })
+        .in("item_id", [first.itemId, second.itemId]);
+      expect(alerts).toBe(0);
+
+      // Job route sweep: one operator email, however many ticks; no probe yet (just paused).
+      const opts = {
+        db,
+        social: () => social,
+        mailer,
+        operatorEmail: "ops@example.com",
+        appUrl: "",
+      };
+      await handlePlatformPause(opts);
+      await handlePlatformPause(opts);
+      expect(emails.map((e) => e.to)).toEqual([["ops@example.com"]]);
+      expect(emails[0].subject).toContain("Zernio paused");
+
+      // Five minutes later the probe succeeds: the pause ends and both replies go out.
+      const later = new Date(Date.now() + 6 * 60_000);
+      expect(await handlePlatformPause({ ...opts, now: later })).toMatchObject({ resumed: true });
+      expect(await getPlatformPause(db)).toBeNull();
+      await dueNow(first.itemId);
+      await dueNow(second.itemId);
+      await run();
+      expect((await state(first.itemId)).item.status).toBe("sent");
+      expect((await state(second.itemId)).item.status).toBe("sent");
+    } finally {
+      await clearPlatformPause(db);
+    }
+  });
+
+  it("a probe that still gets 402 keeps the pause and waits another 5 minutes", async () => {
+    social = new ScriptedSocial();
+    social.ping = async () => {
+      throw paid();
+    };
+    const { recordPlatformPause } = await import("@/lib/social/platform-pause");
+    await recordPlatformPause(db, new Date(Date.now() - 10 * 60_000));
+    try {
+      const result = await handlePlatformPause({
+        db,
+        social: () => social,
+        mailer: { send: async () => ({ providerId: null, mode: "logged" }) },
+        operatorEmail: undefined,
+        appUrl: "",
+      });
+      expect(result).toMatchObject({ paused: true });
+      expect(result.resumed).toBeUndefined();
+      const pause = await getPlatformPause(db);
+      expect(pause?.lastProbeAt && Date.parse(pause.lastProbeAt)).toBeGreaterThan(
+        Date.now() - 5_000,
+      );
+    } finally {
+      await clearPlatformPause(db);
+    }
   });
 });
 

@@ -94,6 +94,8 @@ export class MockSocialProvider implements SocialProvider {
       .map((s) => ({ id: s.providerId, text: s.message, fromOwner: true, createdAt: null }));
   }
 
+  async ping(): Promise<void> {}
+
   async getAccountsHealth(): Promise<AccountHealth[]> {
     return [];
   }
