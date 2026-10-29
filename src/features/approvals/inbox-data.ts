@@ -37,15 +37,33 @@ export async function loadInbox(
   supabase: SupabaseClient<Database>,
   tenantId: string,
 ): Promise<InboxData> {
-  const { data: items, error } = await supabase
+  const entries = await loadEntries(supabase, tenantId, {
+    statuses: ["awaiting_approval", ...ESCALATED],
+  });
+  return {
+    // Oldest first: the customer who has waited longest is at the top.
+    waiting: entries.filter((e) => e.status === "awaiting_approval" && e.draft).reverse(),
+    needsYou: entries.filter((e) => e.status !== "awaiting_approval"),
+  };
+}
+
+/** Items with their latest draft, newest first (or oldest first for a thread). */
+export async function loadEntries(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  filter: { statuses?: string[]; itemIds?: string[] },
+): Promise<(InboxEntry & { status: string })[]> {
+  let query = supabase
     .from("inbound_items")
     .select(
       "id, kind, status, author_name, text, received_at, category, confidence, classifier_used, " +
         "social_accounts (platform), conversations (last_customer_message_at)",
     )
-    .eq("tenant_id", tenantId)
-    .in("status", ["awaiting_approval", ...ESCALATED])
-    .order("received_at", { ascending: false })
+    .eq("tenant_id", tenantId);
+  if (filter.statuses) query = query.in("status", filter.statuses);
+  if (filter.itemIds) query = query.in("id", filter.itemIds);
+  const { data: items, error } = await query
+    .order("received_at", { ascending: !!filter.itemIds })
     .limit(100);
   if (error) throw new Error(`inbox load failed: ${error.message}`);
   const rows = (items ?? []) as unknown as {
@@ -61,7 +79,7 @@ export async function loadInbox(
     social_accounts: { platform: string } | null;
     conversations: { last_customer_message_at: string | null } | null;
   }[];
-  if (rows.length === 0) return { waiting: [], needsYou: [] };
+  if (rows.length === 0) return [];
 
   const { data: drafts } = await supabase
     .from("drafts")
@@ -80,7 +98,7 @@ export async function loadInbox(
     : { data: [] };
   const titles = new Map((kb ?? []).map((e) => [e.id, e.title]));
 
-  const entries = rows.map((r): InboxEntry & { status: string } => {
+  return rows.map((r): InboxEntry & { status: string } => {
     const d = latest.get(r.id);
     const last = r.conversations?.last_customer_message_at;
     return {
@@ -111,10 +129,4 @@ export async function loadInbox(
           : null,
     };
   });
-
-  return {
-    // Oldest first: the customer who has waited longest is at the top.
-    waiting: entries.filter((e) => e.status === "awaiting_approval" && e.draft).reverse(),
-    needsYou: entries.filter((e) => e.status !== "awaiting_approval"),
-  };
 }

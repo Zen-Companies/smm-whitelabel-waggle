@@ -91,6 +91,6 @@ export async function decideDraft(
     intent === "approve"
       ? await approveDraft(db, { ...input, editedBody: body ?? null })
       : await rejectDraft(db, input);
-  revalidatePath("/inbox");
+  revalidatePath("/inbox", "layout");
   return result.ok ? {} : { error: DECISION_ERRORS[result.error] };
 }

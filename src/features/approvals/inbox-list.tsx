@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { DraftCard, MessageHeader } from "./draft-card";
@@ -59,6 +60,9 @@ export async function InboxList() {
                 {e.text || "(no text)"}
               </blockquote>
               <p className="text-muted-foreground text-xs">{escalationNote(e)}</p>
+              <Link href={`/inbox/items/${e.itemId}`} className="text-xs underline">
+                Open conversation
+              </Link>
             </article>
           ))}
         </section>

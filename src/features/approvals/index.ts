@@ -3,7 +3,8 @@ export type { AutonomyFormState, DecisionFormState } from "./actions";
 export { approveDraft, rejectDraft, REPLY_MAX } from "./decisions";
 export type { DecisionResult } from "./decisions";
 export { InboxList } from "./inbox-list";
-export { loadInbox } from "./inbox-data";
+export { loadEntries, loadInbox } from "./inbox-data";
+export { ItemDetail } from "./item-detail";
 export type { InboxData, InboxEntry } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";
 export {
@@ -25,3 +26,4 @@ export type {
 } from "./policy";
 export { createPolicyStep, loadPolicyInput } from "./policy-step";
 export { createSendStep } from "./send-step";
+export { DM_WINDOW_WARNING_MS, escalateClosingDmWindows } from "./sweeps";

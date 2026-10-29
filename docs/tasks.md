@@ -64,9 +64,10 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       _Done when:_ an approved reply posts exactly once on the test account; an expired DM window escalates.
       _Note:_ verified against the mock provider (integration tests); the live post on the test account is the next live session.
 
-- [ ] **T13. Escalation, alerts and leads**
+- [x] **T13. Escalation, alerts and leads**
       Resend emails (escalation, lead, disconnect, waiting-draft nudge); leads list page.
       _Done when:_ each alert type sends one email; leads appear with a link to the conversation.
+      _Note:_ without `RESEND_API_KEY` alerts are logged (status `logged`); verified with a fake mailer in the integration tests.
 
 ## Phase 3: Publishing and billing
 

@@ -35,7 +35,10 @@ async function main() {
   if (listError) throw listError;
   let user = list.users.find((u) => u.email?.toLowerCase() === args.email!.toLowerCase());
   if (!user) {
-    const { data, error } = await db.auth.admin.createUser({ email: args.email, email_confirm: true });
+    const { data, error } = await db.auth.admin.createUser({
+      email: args.email,
+      email_confirm: true,
+    });
     if (error) throw error;
     user = data.user;
     console.log(`created user ${user.id}`);

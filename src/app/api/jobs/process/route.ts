@@ -1,5 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
+import { deliverPendingAlerts, enqueueDraftNudges, getMailer } from "@/features/alerts";
+import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, processDueItems } from "@/features/inbox";
 import { embedPendingEntries } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
@@ -33,7 +35,25 @@ export async function POST(request: Request): Promise<Response> {
         ? await embedPendingEntries({ db, llm }, { shouldContinue: deadline.canStartItem })
         : { embedded: 0, failed: 0 };
 
-    return Response.json({ ...items, kbEmbedded: kb.embedded, kbEmbedFailed: kb.failed });
+    // T13: DMs about to lose their reply window, drafts waiting > 30 min, then the alert outbox
+    // (escalations, leads, disconnects, nudges). Each sweep is cheap; delivery stops when time's up.
+    const dmWindowsEscalated = await escalateClosingDmWindows(db);
+    const nudges = await enqueueDraftNudges(db);
+    const alerts = await deliverPendingAlerts({
+      db,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 10_000,
+    });
+
+    return Response.json({
+      ...items,
+      kbEmbedded: kb.embedded,
+      kbEmbedFailed: kb.failed,
+      dmWindowsEscalated,
+      nudges,
+      alerts,
+    });
   } catch (error) {
     Sentry.captureException(error);
     return Response.json({ error: "processing failed" }, { status: 500 });

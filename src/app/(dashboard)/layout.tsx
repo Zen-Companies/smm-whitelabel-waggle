@@ -5,6 +5,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
     <>
       <nav className="mx-auto flex w-full max-w-2xl gap-4 px-6 pt-6 text-sm">
         <Link href="/inbox">Inbox</Link>
+        <Link href="/leads">Leads</Link>
         <Link href="/knowledge-base">Knowledge base</Link>
         <Link href="/settings">Settings</Link>
       </nav>
