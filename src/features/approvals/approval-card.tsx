@@ -1,11 +1,9 @@
 "use client";
 
-import { CircleCheck, LoaderCircle } from "lucide-react";
+import { CircleCheck, Clock3, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Avatar } from "@/components/app/avatar";
-import { CategoryLabel } from "@/components/app/category-label";
-import { clockTime, platformName, shortTime } from "@/components/app/time";
+import { clockTime } from "@/components/app/time";
 import { Button } from "@/components/ui/button";
 import { decideDraft, undoApprovalAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
@@ -51,29 +49,12 @@ export function RecentSends() {
 /** How long the Sent row offers Undo (decisions.ts UNDO_WINDOW_MS; the server allows a bit more). */
 const UNDO_MS = 8_000;
 
-function windowNote(closesAt: string | null) {
+/** The 24-hour DM window, next to the button it affects (design v2). */
+function windowLeft(closesAt: string | null) {
   if (!closesAt) return null;
   const hours = (new Date(closesAt).getTime() - Date.now()) / 3_600_000;
-  if (hours <= 0) return "Instagram's 24-hour reply window has closed.";
-  return hours < 1
-    ? "The 24-hour reply window closes in under an hour."
-    : `The 24-hour reply window closes in about ${Math.floor(hours)} h.`;
-}
-
-export function MessageHeader({ entry }: { entry: InboxEntry }) {
-  return (
-    <div className="flex items-start gap-3">
-      <Avatar />
-      <div className="min-w-0 flex-1">
-        <p className="truncate font-semibold">{entry.authorName ?? "A customer"}</p>
-        <p className="meta">
-          {platformName(entry.platform)} {entry.kind === "dm" ? "DM" : "comment"} ·{" "}
-          <time dateTime={entry.receivedAt}>{shortTime(entry.receivedAt)}</time>
-        </p>
-      </div>
-      <CategoryLabel category={entry.category} />
-    </div>
-  );
+  if (hours <= 0) return "Reply window closed";
+  return hours < 1 ? "Under 1 h left to reply" : `${Math.floor(hours)} h left to reply`;
 }
 
 /** "Sent to [name] · 2:14 PM · Undo" for 8 seconds, then the item leaves the queue (§4). */
@@ -136,8 +117,8 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
 }
 
 /**
- * The approval card (docs/design.md §3): customer message, the draft in a gray-50 box (editable),
- * "Approve and send" pill, "Edit", "Don't reply", and keyboard shortcuts A / E / J.
+ * The suggested reply as the composer under the conversation (design v2): the draft (editable),
+ * what it's based on, "Approve and send", "Edit", "Don't reply", the DM window, and A / E / J.
  */
 export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref: string | null }) {
   const router = useRouter();
@@ -197,113 +178,110 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
   }, [state.approved]);
 
   if (state.approved) return null;
-  const note = windowNote(entry.dmWindowClosesAt);
+  const left = windowLeft(entry.dmWindowClosesAt);
   const sending = pending && intent === "approve";
 
   return (
-    <article
+    <form
+      ref={formRef}
       id={`item-${entry.itemId}`}
-      className="card-lifted flex flex-col gap-4 p-5 md:p-6"
-      aria-label={`Reply to ${entry.authorName ?? "a customer"}`}
+      aria-label="Suggested reply"
+      action={(fd) => {
+        setIntent(fd.get("intent") === "reject" ? "reject" : "approve");
+        return action(fd);
+      }}
+      className="m-4 mt-0 flex flex-col gap-3 rounded-xl border border-gray-200 p-4 md:m-5 md:mt-0"
     >
-      <MessageHeader entry={entry} />
-      <p className="whitespace-pre-wrap">{entry.text || "(no text)"}</p>
-
-      <form
-        ref={formRef}
-        action={(fd) => {
-          setIntent(fd.get("intent") === "reject" ? "reject" : "approve");
-          return action(fd);
-        }}
-        className="flex flex-col gap-3"
-      >
-        <input type="hidden" name="itemId" value={entry.itemId} />
-        <input type="hidden" name="draftId" value={draft.id} />
-        <div className="flex flex-col gap-2 rounded-md bg-gray-50 p-4">
-          <label htmlFor={`reply-${entry.itemId}`} className="meta">
-            Suggested reply
-          </label>
-          {editing ? (
-            <textarea
-              ref={textRef}
-              id={`reply-${entry.itemId}`}
-              name="body"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") setEditing(false);
-              }}
-              maxLength={REPLY_MAX}
-              rows={4}
-              className="field"
-            />
-          ) : (
-            <>
-              <p id={`reply-${entry.itemId}`} className="whitespace-pre-wrap">
-                {text}
-              </p>
-              <input type="hidden" name="body" value={text} />
-            </>
-          )}
-        </div>
-        <p className="meta">
+      <input type="hidden" name="itemId" value={entry.itemId} />
+      <input type="hidden" name="draftId" value={draft.id} />
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <label htmlFor={`reply-${entry.itemId}`} className="text-sm font-semibold">
+          Suggested reply
+        </label>
+        <span className="meta">
           {draft.facts.length
             ? `Based on your business info: ${draft.facts.join(", ")}`
-            : "Written without business info."}
-          {note && <span className="block">{note}</span>}
+            : "Written without business info"}
+        </span>
+      </div>
+      {editing ? (
+        <textarea
+          ref={textRef}
+          id={`reply-${entry.itemId}`}
+          name="body"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setEditing(false);
+          }}
+          maxLength={REPLY_MAX}
+          rows={4}
+          className="field"
+        />
+      ) : (
+        <>
+          <p id={`reply-${entry.itemId}`} className="whitespace-pre-wrap">
+            {text}
+          </p>
+          <input type="hidden" name="body" value={text} />
+        </>
+      )}
+      {state.error && (
+        <p role="alert" className="danger-box">
+          {state.error}
         </p>
-        {state.error && (
-          <p role="alert" className="danger-box">
-            {state.error}
-          </p>
-        )}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            ref={approveRef}
-            type="submit"
-            name="intent"
-            value="approve"
-            variant="primary"
-            disabled={pending}
-            data-busy={sending || undefined}
-          >
-            {sending ? (
-              <>
-                <LoaderCircle className="animate-spin" strokeWidth={1.75} aria-hidden />
-                Sending
-              </>
-            ) : (
-              "Approve and send"
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            onClick={() => setEditing((v) => !v)}
-            disabled={pending}
-          >
-            {editing ? "Done editing" : "Edit"}
-          </Button>
-          <Button
-            type="submit"
-            name="intent"
-            value="reject"
-            variant="quiet"
-            disabled={pending}
-            formNoValidate
-          >
-            Don&apos;t reply
-          </Button>
-          <p className="meta ml-auto hidden items-center gap-2 lg:flex" aria-hidden>
-            <span className="kbd">A</span> approve <span className="kbd">E</span> edit
-            {nextHref && (
-              <>
-                <span className="kbd">J</span> next
-              </>
-            )}
-          </p>
-        </div>
-      </form>
-    </article>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          ref={approveRef}
+          type="submit"
+          name="intent"
+          value="approve"
+          variant="primary"
+          disabled={pending}
+          data-busy={sending || undefined}
+        >
+          {sending ? (
+            <>
+              <LoaderCircle className="animate-spin" strokeWidth={1.75} aria-hidden />
+              Sending
+            </>
+          ) : (
+            "Approve and send"
+          )}
+        </Button>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => setEditing((v) => !v)}
+          disabled={pending}
+        >
+          {editing ? "Done editing" : "Edit"}
+        </Button>
+        <Button
+          type="submit"
+          name="intent"
+          value="reject"
+          variant="quiet"
+          disabled={pending}
+          formNoValidate
+        >
+          Don&apos;t reply
+        </Button>
+        <span className="meta ml-auto flex items-center gap-2">
+          {left && (
+            <span className="inline-flex items-center gap-1.5">
+              <Clock3 className="size-4" strokeWidth={1.75} aria-hidden />
+              {left}
+            </span>
+          )}
+          <span className="hidden items-center gap-1 lg:inline-flex" aria-hidden>
+            <span className="kbd">A</span>
+            <span className="kbd">E</span>
+            {nextHref && <span className="kbd">J</span>}
+          </span>
+        </span>
+      </div>
+    </form>
   );
 }

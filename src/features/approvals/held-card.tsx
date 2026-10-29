@@ -3,7 +3,6 @@
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { markHandledAction, type DecisionFormState } from "./actions";
-import { MessageHeader } from "./approval-card";
 import type { InboxEntry } from "./inbox-data";
 
 /** Reasons that mean a reply was ready but couldn't go out (danger box, §4 "Couldn't send"). */
@@ -40,8 +39,9 @@ export function heldText(reason: string | null, entry: InboxEntry): string {
 }
 
 /**
- * A message that needs the owner: why, the reply that couldn't go out (if any) with
- * "Copy reply", and "Mark as handled" once they've answered on Instagram/Facebook.
+ * The footer of a conversation that needs the owner (design v2): the reply that couldn't go out
+ * (if any), the problem in one sentence where the send button would be, then the fix:
+ * "Mark as handled" (primary) and "Copy reply".
  */
 export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string | null }) {
   const [state, action, pending] = useActionState<DecisionFormState, FormData>(
@@ -55,24 +55,27 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
   const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
 
   return (
-    <article id={`item-${entry.itemId}`} className="card-lifted flex flex-col gap-4 p-5 md:p-6">
-      <MessageHeader entry={entry} />
-      <p className="whitespace-pre-wrap">{entry.text || "(no text)"}</p>
-      {!failed && <p className="text-gray-700">{heldText(reason, entry)}</p>}
+    <div id={`item-${entry.itemId}`} className="m-4 mt-0 flex flex-col gap-3 md:m-5 md:mt-0">
       {reply && (
-        <div className="flex flex-col gap-2 rounded-md bg-gray-50 p-4">
-          <p className="meta">{failed ? "The reply that couldn't go out" : "Suggested reply"}</p>
+        <div className="flex flex-col gap-2 rounded-xl border border-gray-200 p-4">
+          <p className="text-sm font-medium text-gray-700">
+            {failed ? "The reply that couldn't go out" : "Suggested reply"}
+          </p>
           <p className="whitespace-pre-wrap">{reply}</p>
         </div>
       )}
-      {failed && (
+      {failed ? (
         <div role="alert" className="danger-box flex flex-col gap-1">
-          <p className="font-semibold">Couldn&apos;t send.</p>
+          <p className="font-semibold">Couldn&apos;t send: {failed}</p>
           <p>
-            {failed} Reply on {platform} yourself{reply ? " (copy the reply above)" : ""}, then mark
-            it as handled.
+            Reply on {platform} yourself{reply ? " (copy the reply above)" : ""}, then mark it as
+            handled.
           </p>
         </div>
+      ) : (
+        <p className="rounded-xl bg-gray-50 px-4 py-3 text-gray-700">
+          {heldText(reason, entry)} Reply on {platform}, then mark it as handled.
+        </p>
       )}
       <form action={action} className="flex flex-wrap items-center gap-2">
         <input type="hidden" name="itemId" value={entry.itemId} />
@@ -98,6 +101,6 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
           </p>
         )}
       </form>
-    </article>
+    </div>
   );
 }

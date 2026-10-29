@@ -18,3 +18,8 @@ export const clockTime = (iso: string) =>
 
 export const platformName = (p: string | null | undefined) =>
   p === "facebook" ? "Facebook" : "Instagram";
+
+/** Day separator in a thread: "Today", "Yesterday", "Oct 28". */
+export function dayLabel(iso: string, now = new Date()): string {
+  return new Date(iso).toDateString() === now.toDateString() ? "Today" : shortTime(iso, now);
+}

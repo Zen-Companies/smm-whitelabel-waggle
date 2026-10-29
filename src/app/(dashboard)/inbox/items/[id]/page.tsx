@@ -1,14 +1,27 @@
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
-import { ItemDetail } from "@/features/approvals";
+import { tabForStatus } from "@/features/approvals";
+import { getCurrentTenant } from "@/features/tenants";
+import { createServerSupabase } from "@/lib/supabase/server";
 
-export const metadata = { title: "Conversation" };
+// Alert emails and notifications link here; the conversation lives in the inbox (design v2).
+async function ToInbox({ params }: { params: Promise<{ id: string }> }): Promise<never> {
+  const { id } = await params;
+  const tenant = await getCurrentTenant();
+  const supabase = await createServerSupabase();
+  const { data } = await supabase
+    .from("inbound_items")
+    .select("status")
+    .eq("id", id)
+    .eq("tenant_id", tenant.id)
+    .maybeSingle();
+  redirect(data ? `/inbox?tab=${tabForStatus(data.status)}&item=${id}` : "/inbox");
+}
 
 export default function InboxItemPage({ params }: PageProps<"/inbox/items/[id]">) {
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-10 md:py-8">
-      <Suspense fallback={<div className="skeleton h-96 rounded-xl" />}>
-        <ItemDetail params={params} />
-      </Suspense>
-    </main>
+    <Suspense fallback={null}>
+      <ToInbox params={params} />
+    </Suspense>
   );
 }

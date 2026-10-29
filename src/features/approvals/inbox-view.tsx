@@ -9,7 +9,9 @@ import { MarkItemRead } from "@/features/alerts";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "cn";
-import { ApprovalCard, MessageHeader, RecentSends } from "./approval-card";
+import { ApprovalCard, RecentSends } from "./approval-card";
+import { loadConversation } from "./conversation-data";
+import { ContextPanel, ConversationPane } from "./conversation-pane";
 import { HeldCard } from "./held-card";
 import {
   countInboxTabs,
@@ -21,8 +23,8 @@ import {
 } from "./inbox-data";
 import { InboxLive } from "./inbox-live";
 
-// Two-pane inbox (docs/design.md §3, §8): list with dividers on the left, the selected message on
-// the right. On phone widths it's list → detail.
+// Inbox (design v2): list | conversation with the reply composer at the bottom | context panel
+// (customer, lead, activity). One header row: title + tabs. On phone widths it's list → detail.
 
 const href = (tab: InboxTab, item?: string) => `/inbox?tab=${tab}${item ? `&item=${item}` : ""}`;
 
@@ -69,35 +71,23 @@ function Row({
   );
 }
 
-function SentCard({ entry }: { entry: InboxEntry & { status: string } }) {
-  const reply = entry.draft ? (entry.draft.editedBody ?? entry.draft.body) : null;
+function SentFooter({ entry }: { entry: InboxEntry & { status: string } }) {
   return (
-    <article className="card-lifted flex flex-col gap-4 p-5 md:p-6">
-      <MessageHeader entry={entry} />
-      <p className="whitespace-pre-wrap">{entry.text || "(no text)"}</p>
-      {reply && (
-        <div className="flex flex-col gap-2 rounded-md bg-gray-50 p-4">
-          <p className="meta">Your reply</p>
-          <p className="whitespace-pre-wrap">{reply}</p>
-        </div>
+    <p className="m-4 mt-0 inline-flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm md:m-5 md:mt-0">
+      {entry.status === "sent" || entry.status === "handled" ? (
+        <>
+          <CircleCheck className="text-success" strokeWidth={1.75} aria-hidden />
+          {entry.status === "handled"
+            ? "Marked as handled"
+            : `Sent${entry.draft?.sentAt ? ` · ${clockTime(entry.draft.sentAt)}` : ""}`}
+        </>
+      ) : (
+        <>
+          <Clock3 strokeWidth={1.75} aria-hidden />
+          Sending now
+        </>
       )}
-      <p className="inline-flex items-center gap-2 text-sm">
-        {entry.status === "sent" ? (
-          <>
-            <CircleCheck className="text-success" strokeWidth={1.75} aria-hidden />
-            Sent{entry.draft?.sentAt ? ` · ${clockTime(entry.draft.sentAt)}` : ""}
-          </>
-        ) : (
-          <>
-            <Clock3 strokeWidth={1.75} aria-hidden />
-            Sending now
-          </>
-        )}
-      </p>
-      <Link href={`/inbox/items/${entry.itemId}`} className="text-sm underline underline-offset-4">
-        Open the conversation
-      </Link>
-    </article>
+    </p>
   );
 }
 
@@ -132,21 +122,25 @@ export async function InboxView({
       ? await heldReason(supabase, selected.itemId, selected.status)
       : null;
 
-  const tabs = (
-    <nav aria-label="Inbox filters" className="segmented max-w-full self-start overflow-x-auto">
-      {INBOX_TABS.map((t) => (
-        <Link key={t.key} href={href(t.key)} data-active={t.key === tab || undefined}>
-          {t.label}
-          <span className="meta ml-2 tabular-nums">{counts[t.key]}</span>
-        </Link>
-      ))}
-    </nav>
+  const header = (
+    <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
+      <h1 className="page-title">Inbox</h1>
+      <nav aria-label="Inbox filters" className="segmented max-w-full overflow-x-auto">
+        {INBOX_TABS.map((t) => (
+          <Link key={t.key} href={href(t.key)} data-active={t.key === tab || undefined}>
+            {t.label}
+            <span className="meta ml-2 tabular-nums">{counts[t.key]}</span>
+          </Link>
+        ))}
+      </nav>
+    </header>
   );
 
   // First run: nothing connected yet.
   if (!accounts) {
     return (
       <div className="flex flex-col gap-6">
+        <h1 className="page-title">Inbox</h1>
         <IllustratedEmpty
           illustration="connect-accounts"
           title="Connect your Instagram"
@@ -174,51 +168,68 @@ export async function InboxView({
       </p>
     );
 
+  const conversation = selected
+    ? await loadConversation(supabase, tenant.id, selected.itemId)
+    : null;
+  const footer = !selected ? null : tab === "waiting" ? (
+    <ApprovalCard
+      key={selected.itemId}
+      entry={selected}
+      nextHref={next ? href(tab, next.itemId) : null}
+    />
+  ) : tab === "needs" ? (
+    <HeldCard key={selected.itemId} entry={selected} reason={reason} />
+  ) : (
+    <SentFooter entry={selected} />
+  );
+
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <InboxLive tenantId={tenant.id} />
-      {tabs}
+      {header}
       <RecentSends />
       {entries.length === 0 ? (
         empty
       ) : (
-        <div className="grid gap-6 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)] xl:grid-cols-[minmax(240px,320px)_minmax(0,1fr)_minmax(240px,300px)]">
           <ul
-            className={cn("flex flex-col divide-y", itemParam && "hidden md:flex")}
+            className={cn("flex flex-col divide-y", itemParam && "hidden lg:flex")}
             aria-label="Messages"
           >
             {entries.map((e) => (
               <Row key={e.itemId} entry={e} tab={tab} selected={e.itemId === selected?.itemId} />
             ))}
           </ul>
-          <section className={cn("flex flex-col gap-3", !itemParam && "hidden md:flex")}>
-            {itemParam && (
-              <Link href={href(tab)} className="text-sm text-gray-700 md:hidden">
-                ← All messages
-              </Link>
-            )}
-            {selected && <MarkItemRead itemId={selected.itemId} />}
-            {selected &&
-              (tab === "waiting" ? (
-                <ApprovalCard
-                  key={selected.itemId}
-                  entry={selected}
-                  nextHref={next ? href(tab, next.itemId) : null}
-                />
-              ) : tab === "needs" ? (
-                <HeldCard key={selected.itemId} entry={selected} reason={reason} />
-              ) : (
-                <SentCard entry={selected} />
-              ))}
-            {selected && tab !== "sent" && (
-              <Link
-                href={`/inbox/items/${selected.itemId}`}
-                className="text-sm text-gray-700 underline underline-offset-4"
-              >
-                Open the full conversation
-              </Link>
-            )}
-          </section>
+          {selected && (
+            <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
+              {itemParam && (
+                <Link href={href(tab)} className="text-sm text-gray-700 lg:hidden">
+                  ← All messages
+                </Link>
+              )}
+              <MarkItemRead itemId={selected.itemId} />
+              <ConversationPane
+                entry={selected}
+                thread={
+                  conversation?.thread ?? [
+                    {
+                      key: selected.itemId,
+                      from: "customer",
+                      text: selected.text,
+                      at: selected.receivedAt,
+                      itemId: selected.itemId,
+                    },
+                  ]
+                }
+                footer={footer}
+              />
+            </div>
+          )}
+          {selected && conversation && (
+            <div className={cn("lg:col-start-2 xl:col-start-3", !itemParam && "hidden lg:block")}>
+              <ContextPanel context={conversation.context} />
+            </div>
+          )}
         </div>
       )}
     </div>
