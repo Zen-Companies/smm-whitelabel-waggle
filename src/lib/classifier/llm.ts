@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { LlmClient } from "@/lib/llm/client";
+import { asMessageData } from "@/lib/llm/prompt-data";
 import { countWords, MIN_CONFIDENCE, SPAM_MIN_WORDS } from "./pick-category";
 import {
   CATEGORIES,
@@ -62,7 +63,7 @@ export class LlmClassifier implements Classifier {
       `Channel: ${input.kind === "dm" ? "direct message" : "public comment"}`,
       "Customer message:",
       "<message>",
-      input.text,
+      asMessageData(input.text),
       "</message>",
     ]
       .filter((line) => line !== null)

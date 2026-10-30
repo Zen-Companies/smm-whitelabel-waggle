@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { asMessageData } from "@/lib/llm/prompt-data";
 
 // Drafting prompt (docs/tdd.md §10). Bump the version on any wording change; drafts record the
 // model, and ai_usage records cost, so versions can be compared.
@@ -37,7 +38,7 @@ export function draftUserPrompt(input: {
     `Category: ${input.category}`,
     "Customer message:",
     "<message>",
-    input.text,
+    asMessageData(input.text),
     "</message>",
     "",
     "BUSINESS INFO:",

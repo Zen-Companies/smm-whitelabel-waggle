@@ -150,7 +150,8 @@ Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items
 
 Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
 
-- [ ] **T29. Prompt safety and version records:** escape or strip the `<message>` delimiters in customer text (draft prompt and LLM classifier); record `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` with each classification.
+- [x] **T29. Prompt safety and version records:** escape or strip the `<message>` delimiters in customer text (draft prompt and LLM classifier); record `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` with each classification.
+      _Note:_ `asMessageData()` (`lib/llm/prompt-data.ts`) replaces any `<message>` / `</message>` tag the customer typed (any case or spacing) with `[tag removed]`; the prompt wording is unchanged, so no version bump. The classify step's status_changed row records `promptVersion` (Jev's question version when Jev answered, the LLM prompt version when the fallback did).
 - [ ] **T30. Thread history:** the last few messages of a DM thread go into the draft prompt and the retrieval query (bounded: more customer text reaches the AI providers).
 - [ ] **T31. Relevance floor:** a minimum similarity in `match_kb_entries`, tuned with T28, not by feel.
 - [ ] **T32. Monthly AI spend cap per business** from `ai_usage` (live and practice; lab excluded).

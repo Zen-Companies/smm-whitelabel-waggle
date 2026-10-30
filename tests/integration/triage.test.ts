@@ -4,7 +4,8 @@ import { processDueItems } from "@/features/inbox/processor";
 import { createClassifyStep } from "@/features/triage/classify-step";
 import { FallbackClassifier } from "@/lib/classifier/fallback";
 import { JevClassifier } from "@/lib/classifier/jev";
-import { LlmClassifier } from "@/lib/classifier/llm";
+import { JEV_QUESTIONS_VERSION } from "@/lib/classifier/jev-questions";
+import { LLM_CLASSIFY_PROMPT_VERSION, LlmClassifier } from "@/lib/classifier/llm";
 import { createDeadline } from "@/lib/jobs";
 import { createLlmClient } from "@/lib/llm/client";
 import { chatCompletion, fakeOpenRouter } from "@/lib/llm/test-utils";
@@ -143,7 +144,10 @@ describe("classify step", () => {
     const before = await seed("Do you deliver?");
     await run();
     expect(lastJevState?.business).toBe("Triage Cafe");
-    expect(await statusAudit(before)).toMatchObject({ businessContext: "name" });
+    expect(await statusAudit(before)).toMatchObject({
+      businessContext: "name",
+      promptVersion: JEV_QUESTIONS_VERSION,
+    });
 
     await db
       .from("tenants")
@@ -208,6 +212,7 @@ describe("classify step", () => {
       expect(audit?.find((a) => a.action === "status_changed")?.details).toMatchObject({
         fallbackReason: reason,
         classifierUsed: "llm",
+        promptVersion: LLM_CLASSIFY_PROMPT_VERSION,
       });
     },
   );

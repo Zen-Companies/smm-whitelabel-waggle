@@ -1,6 +1,8 @@
 import type { Step } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { businessContext } from "@/lib/classifier/business-context";
+import { JEV_QUESTIONS_VERSION } from "@/lib/classifier/jev-questions";
+import { LLM_CLASSIFY_PROMPT_VERSION } from "@/lib/classifier/llm";
 import type { Classifier } from "@/lib/classifier/types";
 import type { Json } from "@/lib/supabase/database.types";
 
@@ -70,6 +72,9 @@ export function createClassifyStep(deps: { classifier: Classifier }): Step {
         fallbackReason: result.fallbackReason,
         scores: (result.scores ?? undefined) as Json | undefined,
         businessContext: context.source,
+        // T29: which wording classified it (the job always runs the current versions).
+        promptVersion:
+          result.provider === "jev" ? JEV_QUESTIONS_VERSION : LLM_CLASSIFY_PROMPT_VERSION,
         profileUpdatedAt:
           context.source === "profile" ? tenants.business_profile_updated_at : undefined,
       },
