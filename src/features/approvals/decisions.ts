@@ -205,7 +205,8 @@ export async function undoApproval(
 /** The owner dealt with an escalated or failed item themselves: it leaves "Needs you". */
 export async function markHandled(
   db: ServiceClient,
-  input: { tenantId: string; userId: string; itemId: string },
+  /** asSpam: "It's spam: hide it" on a message the receptionist wasn't sure about. */
+  input: { tenantId: string; userId: string; itemId: string; asSpam?: boolean },
 ): Promise<DecisionResult> {
   const { data: item } = await db
     .from("inbound_items")
@@ -221,13 +222,13 @@ export async function markHandled(
     itemId: item.id,
     from: item.status,
     event: "handle",
-    details: { handledBy: input.userId },
+    details: { handledBy: input.userId, ...(input.asSpam ? { hiddenAsSpam: true } : {}) },
   });
   if (!applied) return { ok: false, error: "already_decided" };
   await writeAudit(db, {
     tenantId: input.tenantId,
     itemId: item.id,
-    action: "item_handled",
+    action: input.asSpam ? "item_hidden_as_spam" : "item_handled",
     actor: input.userId,
     details: {},
   });

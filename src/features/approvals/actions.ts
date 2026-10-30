@@ -136,13 +136,16 @@ export async function markHandledAction(
   _prev: DecisionFormState,
   formData: FormData,
 ): Promise<DecisionFormState> {
-  const parsed = z.object({ itemId: z.uuid() }).safeParse(Object.fromEntries(formData));
+  const parsed = z
+    .object({ itemId: z.uuid(), asSpam: z.literal("1").optional() })
+    .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
   const tenant = await getCurrentTenant();
   const result = await markHandled(getServiceClient(), {
     tenantId: tenant.id,
     userId: tenant.userId,
     itemId: parsed.data.itemId,
+    asSpam: parsed.data.asSpam === "1",
   });
   revalidatePath("/inbox", "layout");
   return result.ok ? {} : { error: DECISION_ERRORS[result.error] };

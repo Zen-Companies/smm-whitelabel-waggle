@@ -8,7 +8,7 @@ export type NewInboundItem = {
   text: string;
   receivedAt: string;
 } & (
-  | { kind: "comment"; zernioCommentId: string; zernioPostId: string }
+  | { kind: "comment"; zernioCommentId: string; zernioPostId: string; permalink?: string | null }
   | { kind: "dm"; zernioMessageId: string; conversationId: string }
 );
 
@@ -31,7 +31,12 @@ export async function insertInboundItem(
   const [row, conflictColumn, zernioId] =
     item.kind === "comment"
       ? [
-          { ...common, zernio_comment_id: item.zernioCommentId, zernio_post_id: item.zernioPostId },
+          {
+            ...common,
+            zernio_comment_id: item.zernioCommentId,
+            zernio_post_id: item.zernioPostId,
+            permalink: item.permalink ?? null,
+          },
           "zernio_comment_id" as const,
           item.zernioCommentId,
         ]

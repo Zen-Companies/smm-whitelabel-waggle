@@ -265,6 +265,7 @@ async function mapComment(
     zernioCommentId: e.comment.id,
     // Set even for posts not published through Zernio; the reply endpoint accepts it (§7.4).
     zernioPostId: e.comment.platformPostId,
+    permalink: e.post?.permalink ?? null,
     authorName: e.comment.author.username ?? e.comment.author.name ?? null,
     text: e.comment.text,
     receivedAt: e.comment.createdAt,

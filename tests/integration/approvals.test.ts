@@ -311,6 +311,17 @@ describe("approval inbox", () => {
     expect(audit?.find((r) => r.action === "item_handled")?.actor).toBe(a.userId);
   });
 
+  it("hide as spam clears an unsure item and says why in the audit trail", async () => {
+    const { itemId } = await waitingItem(a);
+    await db.from("inbound_items").update({ status: "escalated" }).eq("id", itemId);
+    expect(
+      await markHandled(db, { tenantId: a.tenantId, userId: a.userId, itemId, asSpam: true }),
+    ).toEqual({ ok: true });
+    const { item, audit } = await row(itemId);
+    expect(item?.status).toBe("handled");
+    expect(audit?.find((r) => r.action === "item_hidden_as_spam")?.actor).toBe(a.userId);
+  });
+
   it("a new draft reaches the owner's Realtime subscription; another tenant's doesn't", async () => {
     // Cross-tenant isolation in depth (unfiltered, B's filter, updates, deletes) is
     // realtime-isolation.test.ts; this is the inbox's own subscription.

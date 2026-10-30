@@ -392,6 +392,7 @@ export type Database = {
           last_error: string | null
           locked_at: string | null
           next_run_at: string | null
+          permalink: string | null
           received_at: string
           social_account_id: string
           status: string
@@ -415,6 +416,7 @@ export type Database = {
           last_error?: string | null
           locked_at?: string | null
           next_run_at?: string | null
+          permalink?: string | null
           received_at: string
           social_account_id: string
           status?: string
@@ -438,6 +440,7 @@ export type Database = {
           last_error?: string | null
           locked_at?: string | null
           next_run_at?: string | null
+          permalink?: string | null
           received_at?: string
           social_account_id?: string
           status?: string

@@ -25,6 +25,33 @@ const HELD: Record<string, string> = {
   dm_window_closing: "The 24-hour reply window closes within the hour.",
 };
 
+/** Reasons where the receptionist wasn't sure what the message is: offer to hide it as spam. */
+const UNSURE = new Set(["unclear", "low_confidence"]);
+
+const LOOKED_LIKE: Record<string, string> = {
+  faq: "a question",
+  lead: "someone who wants to buy or book",
+  complaint: "a complaint",
+  spam: "spam",
+};
+
+/** "It looked most like a question." for an unsure message whose best guess is known. */
+export function lookedLike(reason: string | null, entry: Pick<InboxEntry, "category">) {
+  if (!reason || !UNSURE.has(reason) || !entry.category) return null;
+  const guess = LOOKED_LIKE[entry.category];
+  return guess ? `It looked most like ${guess}.` : null;
+}
+
+/** Where to answer it yourself: the post for a comment, the platform's inbox for a DM. */
+export function openOnPlatformHref(
+  entry: Pick<InboxEntry, "kind" | "platform" | "permalink">,
+): string | null {
+  if (entry.kind === "comment") return entry.permalink;
+  return entry.platform === "facebook"
+    ? "https://www.facebook.com/messages/"
+    : "https://www.instagram.com/direct/inbox/";
+}
+
 export function heldText(reason: string | null, entry: InboxEntry): string {
   if (reason && HELD[reason]) {
     const extra =
@@ -53,6 +80,9 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
   const reply =
     entry.draft && !entry.draft.needsHuman ? (entry.draft.editedBody ?? entry.draft.body) : null;
   const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  const unsure = !failed && !!reason && UNSURE.has(reason);
+  const guess = lookedLike(reason, entry);
+  const openHref = openOnPlatformHref(entry);
 
   return (
     <div id={`item-${entry.itemId}`} className="m-4 mt-0 flex flex-col gap-3 md:m-5 md:mt-0">
@@ -74,7 +104,10 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
         </div>
       ) : (
         <p className="rounded-xl bg-gray-50 px-4 py-3 text-gray-700">
-          {heldText(reason, entry)} Reply on {platform}, then mark it as handled.
+          {heldText(reason, entry)} {guess ? `${guess} ` : ""}
+          {unsure
+            ? `Reply on ${platform} and mark it as handled, or hide it if it's spam.`
+            : `Reply on ${platform}, then mark it as handled.`}
         </p>
       )}
       <form action={action} className="flex flex-wrap items-center gap-2">
@@ -82,6 +115,11 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? "Saving…" : "Mark as handled"}
         </Button>
+        {unsure && (
+          <Button type="submit" name="asSpam" value="1" variant="secondary" disabled={pending}>
+            It&apos;s spam: hide it
+          </Button>
+        )}
         {reply && (
           <Button
             type="button"
@@ -94,6 +132,16 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
           >
             {copied ? "Copied" : "Copy reply"}
           </Button>
+        )}
+        {openHref && (
+          <a
+            href={openHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 items-center rounded-md px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            Open in {platform}
+          </a>
         )}
         {state.error && (
           <p role="alert" className="text-danger text-sm">

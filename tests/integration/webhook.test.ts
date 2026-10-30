@@ -115,7 +115,7 @@ describe("POST /api/webhooks/zernio", () => {
     expect(await second.json()).toEqual({ outcome: "duplicate" });
     const { data: items } = await db
       .from("inbound_items")
-      .select("tenant_id, kind, status, text, author_name, zernio_post_id")
+      .select("tenant_id, kind, status, text, author_name, zernio_post_id, permalink")
       .eq("zernio_comment_id", payload.comment.id);
     expect(items).toEqual([
       {
@@ -125,6 +125,7 @@ describe("POST /api/webhooks/zernio", () => {
         text: "What time do you open on Sunday?",
         author_name: "hungry.harriet",
         zernio_post_id: "17890000000000001",
+        permalink: "https://www.instagram.com/p/DEMO01/",
       },
     ]);
     expect(await count("webhook_events", "id", payload.id)).toBe(1);

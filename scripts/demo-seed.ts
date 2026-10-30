@@ -67,7 +67,7 @@ const MESSAGES: Message[] = [
     minutesAgo: 12,
     category: "faq",
     confidence: 0.96,
-    reply: "Hi Mika! On Sundays we're open 8:00am to 10:00pm. See you soon! ☕",
+    reply: "Hi Mika! On Sundays we're open 8:00am to 10:00pm, see you soon ☕",
     facts: ["Opening hours"],
   },
   {
@@ -80,7 +80,7 @@ const MESSAGES: Message[] = [
     category: "faq",
     confidence: 0.93,
     reply:
-      "Hi Bea! Yes po, you can bring your own birthday cake for a ₱300 cake corkage fee. Other outside food and drinks aren't allowed. Happy birthday in advance! 🎂",
+      "Hi Bea! Yes po, you can bring your own birthday cake for a ₱300 cake corkage fee. Other outside food and drinks aren't allowed. Happy birthday in advance!",
     facts: ["Outside food and corkage"],
   },
   {
@@ -92,7 +92,7 @@ const MESSAGES: Message[] = [
     minutesAgo: 95,
     category: "faq",
     confidence: 0.95,
-    reply: "Hi Paolo! Yes po, we accept GCash and Maya, plus cash and Visa/Mastercard. 😊",
+    reply: "Hi Paolo! Yes po, we accept GCash and Maya, plus cash and Visa/Mastercard.",
     facts: ["Payments"],
   },
   {
@@ -105,7 +105,7 @@ const MESSAGES: Message[] = [
     category: "lead",
     confidence: 0.94,
     reply:
-      "Hi Carlo! Happy birthday to your mom! 🎉 We take reservations for groups of 6 or more, so a table for 8 on Saturday at 7pm works. Our team will confirm by DM shortly.",
+      "Hi Carlo! Happy birthday to your mom! We take reservations for groups of 6 or more, so a table for 8 on Saturday at 7pm works. Our team will confirm by DM shortly.",
     facts: ["Reservations"],
     lead: {
       name: "Carlo Mendoza",
@@ -156,7 +156,7 @@ const MESSAGES: Message[] = [
     category: "faq",
     confidence: 0.9,
     reply:
-      "Hi Liza! The ube latte is on the menu all day. Just order at the counter or on GrabFood. 💜",
+      "Hi Liza! The ube latte is on the menu all day. Just order at the counter or on GrabFood.",
     facts: ["Coffee menu and prices"],
   },
   // Already answered.
@@ -170,7 +170,7 @@ const MESSAGES: Message[] = [
     category: "lead",
     confidence: 0.95,
     reply:
-      "Hi Ana! Thanks for thinking of us. 😊 We've sent you a DM so we can talk through the catering for your party.",
+      "Hi Ana! Thanks for thinking of us, we've sent you a DM to talk through the catering for your party.",
     facts: ["Catering and coffee cart"],
     lead: {
       name: "Ana Gomez",
@@ -187,7 +187,7 @@ const MESSAGES: Message[] = [
     minutesAgo: 5 * 60,
     category: "faq",
     confidence: 0.94,
-    reply: "Hi Kenji! Yes po, oat milk is available for +₱30 on any drink. 🌾",
+    reply: "Hi Kenji! Yes po, oat milk is available for +₱30 on any drink.",
     facts: ["Coffee menu and prices"],
   },
   {
@@ -199,7 +199,7 @@ const MESSAGES: Message[] = [
     minutesAgo: 3 * 60,
     category: "faq",
     confidence: 0.97,
-    reply: "Hi Trish! Yes po, there's free parking for 8 cars right in front of the café. 🚗",
+    reply: "Hi Trish! Yes po, there's free parking for 8 cars right in front of the café.",
     facts: ["Location and parking"],
   },
   {
@@ -212,7 +212,7 @@ const MESSAGES: Message[] = [
     category: "faq",
     confidence: 0.96,
     reply:
-      "Hi Joel! Free Wi-Fi for customers, and the password is on your receipt. There are power outlets along the window bar too. 💻",
+      "Hi Joel! Free Wi-Fi for customers (the password is on your receipt), and there are power outlets along the window bar.",
     facts: ["Pets, Wi-Fi and amenities"],
   },
   {

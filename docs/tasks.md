@@ -164,6 +164,9 @@ Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items
       _Done when:_ each item works on /lab, pure logic (examples, checklist, readiness grouping, card copy) has unit tests, and recent messages never send or change an item.
       _Note:_ examples use keyword rules on topic titles (`examples.ts`, no AI). Readiness groups changes by the draft's first `kb_entry_ids` entry (its best match). "Turn on Auto-send" reuses `updateAutonomyMode` (audited) after an in-place confirm. Recent messages: `recent-messages.ts`, integration-tested with a fake runner (items and drafts unchanged, one try stored per message). Checked in the browser as the test owner: checklist 3 of 5, examples from topics, readiness, recent tries. Not pressed with real AI calls by me.
 
+- [x] **T37. Quick wins after the live test (2026-10-30)**
+      Needs you: a message the receptionist wasn't sure about says what it looked most like and offers "It's spam: hide it" (handled, audited as `item_hidden_as_spam`). "Open in Instagram/Facebook": comments store the post link from the webhook (`inbound_items.permalink`, https only), DMs open the platform's inbox. Sign-in links opened through a tunnel redirect to the tunnel address (forwarded host), not https://localhost. Demo seed replies follow the draft rules (no emoji unless the customer used one, comments at most 2 sentences).
+
 Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
 
 - [x] **T29. Prompt safety and version records:** escape or strip the `<message>` delimiters in customer text (draft prompt and LLM classifier); record `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` with each classification.

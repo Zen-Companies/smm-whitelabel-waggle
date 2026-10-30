@@ -35,6 +35,15 @@ export const commentEventSchema = z.object({
     }),
     createdAt: z.string(),
   }),
+  // The post the comment is on; only its link is kept ("Open in Instagram"). https links only.
+  post: z
+    .object({
+      permalink: z
+        .url({ protocol: /^https$/ })
+        .optional()
+        .catch(undefined),
+    })
+    .optional(),
   account: accountBlock,
 });
 

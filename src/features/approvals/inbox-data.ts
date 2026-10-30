@@ -28,6 +28,8 @@ export interface InboxEntry {
   } | null;
   /** DMs: when Meta's 24-hour reply window closes (null if unknown). */
   dmWindowClosesAt: string | null;
+  /** Comments: the post on Instagram/Facebook, for "Open in Instagram" (null if not known). */
+  permalink: string | null;
 }
 
 export interface InboxData {
@@ -122,7 +124,7 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, author_name, text, received_at, category, confidence, classifier_used, " +
+      "id, kind, status, author_name, text, received_at, category, confidence, classifier_used, permalink, " +
         "social_accounts (platform), conversations (last_customer_message_at)",
     )
     .eq("tenant_id", tenantId);
@@ -142,6 +144,7 @@ export async function loadEntries(
     category: string | null;
     confidence: number | null;
     classifier_used: string | null;
+    permalink: string | null;
     social_accounts: { platform: string } | null;
     conversations: { last_customer_message_at: string | null } | null;
   }[];
@@ -194,6 +197,7 @@ export async function loadEntries(
             decidedByOwner: d.decided_by !== null,
           }
         : null,
+      permalink: r.permalink,
       dmWindowClosesAt:
         r.kind === "dm" && last
           ? new Date(new Date(last).getTime() + DM_REPLY_WINDOW_MS).toISOString()
