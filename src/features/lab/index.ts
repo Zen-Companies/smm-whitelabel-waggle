@@ -22,6 +22,6 @@ export { runLab, saveLabCase } from "./actions";
 export type { LabCaseState, LabRun, LabRunState } from "./actions";
 export { differences, outcomeOf, outcomeText } from "./compare";
 export { LabView } from "./lab-view";
-export { PracticeSection } from "./practice-section";
+export { OwnerLab } from "./owner-lab";
 export { PRACTICE_DAILY_LIMIT, practiceCard } from "./practice-copy";
 export type { PracticeCard } from "./practice-copy";

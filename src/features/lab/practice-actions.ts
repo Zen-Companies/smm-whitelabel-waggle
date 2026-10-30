@@ -7,7 +7,11 @@ import { CATEGORIES } from "@/lib/classifier/types";
 import type { Json } from "@/lib/supabase/database.types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { LAB_TEXT_MAX } from "./form";
-import { practiceCard, type PracticeCard } from "./practice-copy";
+import { practiceCard } from "./practice-copy";
+import type { RecentTry } from "./practice-data";
+import { RECENT_MESSAGES, recentMessagesFor, type RecentMessageResult } from "./recent-messages";
+
+export type { RecentMessageResult };
 import { practiceTriesLeft } from "./practice-limit";
 import { loadTenantSnapshot, runVariant } from "./run";
 import { currentVariant } from "./variants";
@@ -15,11 +19,7 @@ import { currentVariant } from "./variants";
 // The owner's practice box (T26): the business's own setup, real AI calls recorded as
 // `practice`, nothing sent and nothing written to the inbox. Limited per business per day.
 
-export interface PracticeTry {
-  text: string;
-  kind: "comment" | "dm";
-  card: PracticeCard;
-}
+export type PracticeTry = RecentTry;
 
 export type PracticeState = { tried?: PracticeTry; triesLeft?: number; error?: string };
 
@@ -45,18 +45,51 @@ export async function tryMessage(_prev: PracticeState, formData: FormData): Prom
     source: "practice",
     stopAfter: "policy",
   });
-  await db.from("lab_runs").insert({
-    tenant_id: tenant.id,
-    created_by: tenant.userId,
-    kind: parsed.data.kind,
-    text: parsed.data.text,
-    origin: "owner",
-    results: { practice: run } as unknown as Json,
-  });
+  const { data: saved } = await db
+    .from("lab_runs")
+    .insert({
+      tenant_id: tenant.id,
+      created_by: tenant.userId,
+      kind: parsed.data.kind,
+      text: parsed.data.text,
+      origin: "owner",
+      results: { practice: run } as unknown as Json,
+    })
+    .select("id, created_at")
+    .single();
   return {
-    tried: { ...parsed.data, card: practiceCard(run.result) },
+    tried: {
+      id: saved?.id ?? crypto.randomUUID(),
+      at: saved?.created_at ?? new Date().toISOString(),
+      ...parsed.data,
+      card: practiceCard(run.result),
+    },
     triesLeft: left - 1,
   };
+}
+
+export type RecentMessagesState = {
+  results?: RecentMessageResult[];
+  triesLeft?: number;
+  error?: string;
+};
+
+/**
+ * "Your recent messages" (T36 item 3): the business's last real messages through today's setup,
+ * next to what happened then. One try each; read-only on the inbox (see recent-messages.ts).
+ */
+export async function runRecentMessages(): Promise<RecentMessagesState> {
+  const tenant = await getCurrentTenant();
+  const db = getServiceClient();
+  const left = await practiceTriesLeft(db, tenant.id);
+  if (left <= 0) return { error: "No tries left today. More tomorrow.", triesLeft: 0 };
+  const results = await recentMessagesFor(db, {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    limit: Math.min(RECENT_MESSAGES, left),
+  });
+  if (!results.length) return { error: "No messages yet. They show up here once customers write." };
+  return { results, triesLeft: left - results.length };
 }
 
 export type CorrectionState = { saved?: boolean; error?: string };

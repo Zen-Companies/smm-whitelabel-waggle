@@ -63,3 +63,44 @@ export function readiness(c: ReadinessCounts): Readiness {
   }
   return { ready: true, summary, verdict: "Ready to reply on its own." };
 }
+
+/** The progress bar (T36 item 1): sent as written, out of the total or the minimum, whichever is more. */
+export function readinessProgress(c: ReadinessCounts): { done: number; of: number } {
+  const total = c.asWritten + c.edited + c.rejected;
+  return { done: c.asWritten, of: Math.max(total, READY_MIN_SENT) };
+}
+
+export interface TopicChanges {
+  /** null: the reply used no Business info. */
+  topicId: string | null;
+  title: string;
+  count: number;
+}
+
+/**
+ * Where the owner made changes (T36 item 2): edited or rejected drafts grouped by the Business info
+ * topic the reply was based on (its best match, the first of kb_entry_ids), most changes first.
+ */
+export function changesByTopic(
+  drafts: {
+    status: string;
+    edited_body: string | null;
+    decided_by: string | null;
+    kb_entry_ids: string[];
+  }[],
+  titles: Map<string, string>,
+): TopicChanges[] {
+  const groups = new Map<string, TopicChanges>();
+  for (const d of drafts) {
+    if (!d.decided_by) continue;
+    const changed = d.status === "rejected" || d.edited_body !== null;
+    if (!changed) continue;
+    const id = d.kb_entry_ids[0] ?? null;
+    const title = id ? (titles.get(id) ?? "A topic you removed") : "No business info";
+    const key = id ?? "none";
+    const g = groups.get(key) ?? { topicId: id && titles.has(id) ? id : null, title, count: 0 };
+    g.count += 1;
+    groups.set(key, g);
+  }
+  return [...groups.values()].sort((a, b) => b.count - a.count);
+}

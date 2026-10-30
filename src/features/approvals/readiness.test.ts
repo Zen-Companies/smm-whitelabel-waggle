@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countDecisions, readiness } from "./readiness";
+import { changesByTopic, countDecisions, readiness, readinessProgress } from "./readiness";
 
 const owner = "user-1";
 
@@ -46,5 +46,58 @@ describe("readiness", () => {
       summary: null,
       verdict: "Not ready yet: no replies checked in the last 14 days.",
     });
+  });
+});
+
+describe("readinessProgress", () => {
+  it("counts toward the minimum until there are more replies than that", () => {
+    expect(readinessProgress({ asWritten: 6, edited: 1, rejected: 0 })).toEqual({
+      done: 6,
+      of: 10,
+    });
+    expect(readinessProgress({ asWritten: 23, edited: 0, rejected: 0 })).toEqual({
+      done: 23,
+      of: 23,
+    });
+  });
+});
+
+describe("changesByTopic", () => {
+  const titles = new Map([
+    ["kb-1", "Reservations"],
+    ["kb-2", "Custom cakes"],
+  ]);
+  const d = (status: string, edited: string | null, ids: string[], owner = "u") => ({
+    status,
+    edited_body: edited,
+    decided_by: owner,
+    kb_entry_ids: ids,
+  });
+
+  it("groups edited and rejected replies by their best-matching topic", () => {
+    expect(
+      changesByTopic(
+        [
+          d("sent", "fixed", ["kb-1", "kb-2"]),
+          d("rejected", null, ["kb-1"]),
+          d("sent", "fixed", ["kb-2"]),
+          d("sent", null, ["kb-2"]),
+          d("sent", "fixed", []),
+          d("sent", "fixed", ["kb-gone"]),
+        ],
+        titles,
+      ),
+    ).toEqual([
+      { topicId: "kb-1", title: "Reservations", count: 2 },
+      { topicId: "kb-2", title: "Custom cakes", count: 1 },
+      { topicId: null, title: "No business info", count: 1 },
+      { topicId: null, title: "A topic you removed", count: 1 },
+    ]);
+  });
+
+  it("ignores replies nobody decided on", () => {
+    expect(changesByTopic([d("sent", "x", ["kb-1"], null as unknown as string)], titles)).toEqual(
+      [],
+    );
   });
 });

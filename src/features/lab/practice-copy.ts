@@ -31,7 +31,10 @@ export interface PracticeCard {
   category: Category | null;
   /** The reply it would send or suggest; null when it wouldn't reply. */
   reply: string | null;
-  usedInfo: string[];
+  /** The best-matching Business info topic only (T36 item 8): never a topic the reply didn't use. */
+  basedOn: string | null;
+  /** For someone who wants to buy or book: what would be saved to Leads. */
+  leadDetails: string | null;
   /** What happens next, one sentence. */
   next: string;
   /** "Add an answer" when the business info doesn't cover the question. */
@@ -45,7 +48,8 @@ export function practiceCard(result: PreviewResult): PracticeCard {
     looksLike: category ? LOOKS_LIKE[category] : null,
     category,
     reply: null,
-    usedInfo: [] as string[],
+    basedOn: null as string | null,
+    leadDetails: null as string | null,
     offerAddAnswer: false,
   };
   if (result.error || !result.triage) {
@@ -59,14 +63,20 @@ export function practiceCard(result: PreviewResult): PracticeCard {
   const decision = result.policy ?? result.triage;
   const reason = "reason" in decision ? decision.reason : undefined;
   const topic = category === "faq" || category === "lead" ? MODE_NAMES[category] : "these";
-  const usedInfo = (result.facts ?? []).slice(0, 3).map((f) => f.title);
+  const basedOn = result.facts?.[0]?.title ?? null;
+  const lead = result.draft?.lead;
+  const leadDetails =
+    category === "lead" && lead
+      ? [lead.name, lead.contact, lead.request].filter(Boolean).join(" · ") || null
+      : null;
 
   switch (decision.decision) {
     case "send":
       return {
         ...base,
         reply: result.draft?.reply ?? null,
-        usedInfo,
+        basedOn,
+        leadDetails,
         next: `I'd send this on my own: your setting for ${topic} is Auto-send.`,
         tone: "reply",
       };
@@ -74,7 +84,8 @@ export function practiceCard(result: PreviewResult): PracticeCard {
       return {
         ...base,
         reply: result.draft?.reply ?? null,
-        usedInfo,
+        basedOn,
+        leadDetails,
         next:
           reason === "replies_paused"
             ? "I'd ask you first: you've paused all replies."
@@ -107,7 +118,8 @@ export function practiceCard(result: PreviewResult): PracticeCard {
         case "needs_human":
           return {
             ...base,
-            usedInfo,
+            basedOn,
+            leadDetails,
             next: "I'd pass this to you: your business info doesn't answer it.",
             offerAddAnswer: true,
             tone: "owner",
@@ -138,4 +150,36 @@ export function practiceCard(result: PreviewResult): PracticeCard {
 export function triesLeftText(left: number): string {
   if (left <= 0) return "No tries left today. More tomorrow.";
   return left === 1 ? "1 try left today" : `${left} tries left today`;
+}
+
+/** What "Right / Not quite" does, said plainly (T36 item 6). */
+export const FEEDBACK_NOTE =
+  "Your answers are saved to check your receptionist as it changes. They don't change its replies on their own.";
+
+/** "Your recent messages" (T36 item 3): what happened to a real message back then, in plain words. */
+export function thenText(
+  status: string,
+  draft: { decidedByOwner: boolean; edited: boolean } | null,
+): string {
+  switch (status) {
+    case "sent":
+    case "sending":
+      if (!draft) return "Then: a reply was sent";
+      if (!draft.decidedByOwner) return "Then: sent on its own";
+      return draft.edited ? "Then: you edited the reply" : "Then: you approved the suggested reply";
+    case "awaiting_approval":
+      return "Then: waiting for your OK";
+    case "escalated":
+    case "failed":
+    case "handled":
+      return "Then: it came to you";
+    case "rejected":
+      return "Then: you chose not to reply";
+    case "ignored":
+      return "Then: hidden as spam";
+    case "paused":
+      return "Then: waiting while replies were paused";
+    default:
+      return "Then: still being sorted";
+  }
 }

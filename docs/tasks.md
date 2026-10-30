@@ -158,6 +158,11 @@ Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items
       _Done when:_ an owner sees Lab in the sidebar and the page works; Settings → Replies no longer holds the practice box or readiness.
       _Note:_ checked in the browser as the test owner (no admin role): sidebar shows Lab and no admin entries, `/admin/lab` is a 404, `/lab` shows the practice box, readiness (picked up the live-test draft) and the promises; Settings → Replies has the switches and a "Try it in Lab" link.
 
+- [x] **T36. Owner Lab v2 (design v2 canvas, row 4)**
+      Try on the left, the verdict on the right. (1) Readiness shows progress and, when ready, "Turn on Auto-send" with a one-time confirm. (2) When not ready, changes grouped by the Business info topic the reply used, with "Fix in Business info". (3) "Your recent messages": the last 5 real messages through today's setup, next to what happened then (one try each). (4) Example messages built from the business's own topics; generic ones only without topics. (5) Recent tries stay on the page. (6) "Right / Not quite" says honestly what it does. (7) A first-day checklist until setup is done. (8) "Based on" names only the best match; a buyer's try shows what would be saved to Leads.
+      _Done when:_ each item works on /lab, pure logic (examples, checklist, readiness grouping, card copy) has unit tests, and recent messages never send or change an item.
+      _Note:_ examples use keyword rules on topic titles (`examples.ts`, no AI). Readiness groups changes by the draft's first `kb_entry_ids` entry (its best match). "Turn on Auto-send" reuses `updateAutonomyMode` (audited) after an in-place confirm. Recent messages: `recent-messages.ts`, integration-tested with a fake runner (items and drafts unchanged, one try stored per message). Checked in the browser as the test owner: checklist 3 of 5, examples from topics, readiness, recent tries. Not pressed with real AI calls by me.
+
 Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
 
 - [x] **T29. Prompt safety and version records:** escape or strip the `<message>` delimiters in customer text (draft prompt and LLM classifier); record `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` with each classification.

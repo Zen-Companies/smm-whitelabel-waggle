@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PreviewResult } from "./engine";
-import { practiceCard, triesLeftText } from "./practice-copy";
+import { practiceCard, thenText, triesLeftText } from "./practice-copy";
 
 const result = (over: Partial<PreviewResult>): PreviewResult => ({
   classification: { category: "faq", confidence: 0.93, provider: "jev", model: "jevos-v5" },
@@ -24,7 +24,8 @@ describe("practiceCard", () => {
       looksLike: "a question",
       category: "faq",
       reply: "We open at 8am on Sundays!",
-      usedInfo: ["Opening hours", "Location"],
+      basedOn: "Opening hours",
+      leadDetails: null,
       next: "I'd ask you first: your setting for questions is Ask me first.",
       offerAddAnswer: false,
       tone: "reply",
@@ -84,6 +85,21 @@ describe("practiceCard", () => {
     expect(practiceCard(result({ error: { step: "classify", message: "x" } })).tone).toBe("error");
   });
 
+  it("a buyer's try shows what would be saved to Leads", () => {
+    const card = practiceCard(
+      result({
+        classification: { category: "lead", confidence: 0.9, provider: "jev", model: "m" },
+        draft: {
+          reply: "Our team will confirm!",
+          needsHuman: false,
+          lead: { name: "Carlo", request: "Table for 8, Saturday" },
+        },
+      }),
+    );
+    expect(card.leadDetails).toBe("Carlo · Table for 8, Saturday");
+    expect(card.basedOn).toBe("Opening hours");
+  });
+
   it("never shows scores or model names", () => {
     const text = JSON.stringify(practiceCard(result({})));
     expect(text).not.toMatch(/0\.93|jevos|jev|approval_required/);
@@ -93,5 +109,22 @@ describe("practiceCard", () => {
     expect(triesLeftText(20)).toBe("20 tries left today");
     expect(triesLeftText(1)).toBe("1 try left today");
     expect(triesLeftText(0)).toBe("No tries left today. More tomorrow.");
+  });
+});
+
+describe("thenText", () => {
+  it("says what happened to a real message", () => {
+    expect(thenText("sent", { decidedByOwner: true, edited: false })).toBe(
+      "Then: you approved the suggested reply",
+    );
+    expect(thenText("sent", { decidedByOwner: true, edited: true })).toBe(
+      "Then: you edited the reply",
+    );
+    expect(thenText("sent", { decidedByOwner: false, edited: false })).toBe(
+      "Then: sent on its own",
+    );
+    expect(thenText("escalated", null)).toBe("Then: it came to you");
+    expect(thenText("ignored", null)).toBe("Then: hidden as spam");
+    expect(thenText("new", null)).toBe("Then: still being sorted");
   });
 });
