@@ -19,6 +19,7 @@
     "draft:preview": "tsx --tsconfig tsconfig.scripts.json scripts/draft-preview.ts",
     "draft:check": "tsx --tsconfig tsconfig.scripts.json scripts/draft-check.ts",
     "local:owner": "tsx --tsconfig tsconfig.scripts.json scripts/local-owner.ts",
+    "local:operator": "tsx --tsconfig tsconfig.scripts.json scripts/local-operator.ts",
     "demo:seed": "tsx --tsconfig tsconfig.scripts.json scripts/demo-seed.ts"
   },
   "dependencies": {

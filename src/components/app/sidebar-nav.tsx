@@ -1,6 +1,14 @@
 "use client";
 
-import { BookOpen, FlaskConical, Inbox, Megaphone, Receipt, Settings, UserRound } from "lucide-react";
+import {
+  BookOpen,
+  FlaskConical,
+  Inbox,
+  Megaphone,
+  Receipt,
+  Settings,
+  UserRound,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
@@ -14,12 +22,13 @@ const ITEMS = [
 ] as const;
 
 /** Sidebar nav (docs/design.md §8). Active = lavender + violet-strong; 12px radius, 44px tall. */
-export function SidebarNav({ showCosts, inboxCount }: { showCosts: boolean; inboxCount: number }) {
+export function SidebarNav({ showAdmin, inboxCount }: { showAdmin: boolean; inboxCount: number }) {
   const pathname = usePathname();
-  const items = showCosts
+  // Admin pages only for the operator role (T34).
+  const items = showAdmin
     ? [
         ...ITEMS,
-        { href: "/admin/lab", label: "Lab", icon: FlaskConical } as const,
+        { href: "/admin/lab", label: "Admin lab", icon: FlaskConical } as const,
         { href: "/admin/costs", label: "Costs", icon: Receipt } as const,
       ]
     : ITEMS;

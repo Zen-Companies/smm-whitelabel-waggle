@@ -29,7 +29,7 @@ Stop with Ctrl+C (app) and `supabase stop` (database; data is kept).
 | App | http://localhost:3000 |
 | Supabase Studio (browse tables) | http://127.0.0.1:55323 |
 | Test emails (Inbucket) | http://127.0.0.1:55324 |
-| Costs (operator) | http://localhost:3000/admin/costs |
+| Admin lab and Costs (admin role) | http://localhost:3000/admin/lab, /admin/costs |
 
 ## Signing in
 
@@ -41,6 +41,13 @@ pnpm local:owner --email you@example.com --tenant <uuid>     # attach a login to
 The link uses `APP_URL`. If `APP_URL` is your ngrok address, swap it for `http://localhost:3000` before opening the link.
 
 Demo login: **owner@example.com** / **password123** (Harbour Bean Café, after `pnpm demo:seed`).
+
+Admin pages need the admin role on a login (nobody has it by default):
+
+```powershell
+pnpm local:operator --email you@example.com            # make a login an admin
+pnpm local:operator --email you@example.com --remove   # take it away
+```
 
 ## Demo (no real calls)
 

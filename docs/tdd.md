@@ -553,7 +553,7 @@ As built (T10, `features/approvals`):
 As built (T17):
 
 - **Item activity** (`activityLines` in `features/approvals/conversation-data.ts`, in the inbox context panel): the item's `audit_log` rows as a few plain lines (received, recognized as a lead, reply written from <topics>, approved by you, sent, handed to you and why). Owners see outcomes only: no model names, tokens or costs; those stay on the operator's `/admin/costs` page.
-- **Cost view** (`/admin/costs`, `features/billing`): operator only (`OPERATOR_EMAILS`, comma-separated; unset = any signed-in user in local development, nobody in production; others get a 404). Last 30 days per business: messages, replies sent, AI calls, AI cost, AI cost per message (`public.cost_by_tenant`, service role), the latest 50 messages with their AI calls and cost (`public.cost_by_item`), and Zernio's spend for the billing cycle per business from `SocialProvider.getUsageByProfile` (`GET /v1/usage?range=cycle&groupBy=profile`, `attribution.groups[].key` = profile id; `unattributed` shown separately). Mock mode has no Zernio usage, so that column shows "not available".
+- **Cost view** (`/admin/costs`, `features/billing`): operator only (the `operator` role in the login's `app_metadata`, T34; others get a 404). Last 30 days per business: messages, replies sent, AI calls, AI cost, AI cost per message (`public.cost_by_tenant`, service role), the latest 50 messages with their AI calls and cost (`public.cost_by_item`), and Zernio's spend for the billing cycle per business from `SocialProvider.getUsageByProfile` (`GET /v1/usage?range=cycle&groupBy=profile`, `attribution.groups[].key` = profile id; `unattributed` shown separately). Mock mode has no Zernio usage, so that column shows "not available".
 
 ## 16. Testing
 
@@ -573,7 +573,7 @@ ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET
 JEV_API_URL, JEV_API_KEY, JEV_MODEL, JEV_TIMEOUT_MS, JEV_COST_PER_MTOK_INPUT
 LLM_PROVIDER (openrouter), OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL
 EMBEDDING_PROVIDER (openrouter), EMBEDDING_MODEL
-RESEND_API_KEY, ALERT_FROM_EMAIL, OPERATOR_ALERT_EMAIL, OPERATOR_EMAILS
+RESEND_API_KEY, ALERT_FROM_EMAIL, OPERATOR_ALERT_EMAIL
 SOCIAL_PROVIDER_MODE (mock | zernio)
 STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
 CRON_SECRET
@@ -613,6 +613,8 @@ Goal: measure a change before it ships (operators), and let owners see exactly w
 **Dry-run engine (`features/lab`, T23).** `previewMessage(deps, { tenant, text, kind, businessContext, draftPromptVersion, stopAfter })` (wrapped by `runVariant`, which builds the variant's classifier and LLM client) runs classify → triage → retrieve → draft → grounding → `policy()` and returns every step's output. It writes nothing but `ai_usage` and never calls `SocialProvider`; it does not use `status.ts` (no item exists). A variant names code-held versions: classifier (`jevos`, `jev-cloud`, `llm`), question version, business context (`name`, `profile`, custom text), draft prompt version, model id. Prompt versions stay in code as named variants, so a winner ships as an ordinary code change with a new version. The only free text is the business context, because testing it is the point.
 
 **`ai_usage.source`** (`live` default, `lab`, `practice`). Lab calls are operator cost and never count toward a business's spend or its cap (T32); practice calls do. `cost_by_tenant` leaves lab calls out. `stopAfter: "triage"` gives classification-only runs (one call); a fresh message is assumed, so a DM's 24-hour window is open.
+
+**Roles (T34).** Owners: `tenant_members` (role `owner`, one per business for now; staff roles later). Admin: `app_metadata.role = "operator"`, set only by the server (`pnpm local:operator --email …` locally; on a hosted project from the dashboard or SQL), never by default and never from `user_metadata` (users can edit that). Admin pages, their Server Actions and the sidebar check it with `isOperator()`; admin pages read across tenants with the service role.
 
 **Admin Lab (`/admin/lab`, T24, T28).** Tabs: Try a message, Compare on a set, History (operator runs only; owners' practice tries are `lab_runs.origin = owner`). Operator only (same gate as `/admin/costs`). Shows scores, retrieved facts with similarity, policy reasons, cost, tokens and time. "Save as test case" stores the message and its correct category in a tenant-scoped labeled set (RLS); these sets join `tests/fixtures/triage` in the report. Batch runs show the call count and cost first and warn above the free daily limit.
 

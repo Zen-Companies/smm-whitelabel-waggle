@@ -148,6 +148,15 @@ Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items
       _Done when:_ a batch run on the labeled sets shows both variants' accuracy and the changed messages, and the draft checks run on the drafting samples.
       _Note:_ Lab tab "Compare on a set": repository sets (café, digital products, salon; local only, they live in `tests/`) and saved sets (`lab_cases`); 5 messages per server call with Stop; the estimate counts OpenRouter requests (LLM and Jev-via-OpenRouter always, production only when Jev fails) and asks to confirm above the free 50. Draft checks (`features/drafting/checks.ts`): grounding, needsHuman vs the sample's covered/NOT covered note, length, emoji, language, no contact details in comments. `pnpm draft:preview` prints them per sample (real calls); `pnpm draft:check` runs them over saved drafts with no AI calls (on the demo seed: 11 of 47 checks fail: emoji 8, length 3, in hand-written seed drafts). Checked in the browser with both setups on Jev while jevos was down: 20 messages, 4 chunks, 0 AI calls. The CLI form for CI is `draft:check`; a classification batch CLI is `triage:report`.
 
+- [x] **T34. Admin role on the login**
+      Replace the `OPERATOR_EMAILS` list with a role in the user's Supabase `app_metadata` (`role: "operator"`): only the server can set it, owners can't edit it. Nobody is an admin unless granted, locally too (no "everyone locally" default). `pnpm local:operator --email you@x [--remove]` grants or removes it on local Supabase. Admin pages (`/admin/lab`, `/admin/costs`), their actions and the sidebar entries check the role. Owner roles (staff) are not in scope.
+      _Done when:_ an owner without the role gets a 404 on admin pages and sees no admin entries; granting the role shows them; unit tests cover the check.
+      _Note:_ `isOperator()` reads `app_metadata.role` only (never `user_metadata`, which users can edit). Supabase merges `app_metadata` updates, so `--remove` sets the role to null. Checked: grant and remove on the local test login (it ends with no role).
+
+- [ ] **T35. Owner Lab (`/lab`)**
+      The owner's own page, in plain words: "Try a message", "Ready to reply on its own?" per kind of message with "See the ones you edited", and "What your receptionist will never do". Settings → Replies keeps only the switches (modes, Pause all replies) and links to it. Sidebar: "Lab" for owners; the admin page is listed as "Admin lab".
+      _Done when:_ an owner sees Lab in the sidebar and the page works; Settings → Replies no longer holds the practice box or readiness.
+
 Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
 
 - [x] **T29. Prompt safety and version records:** escape or strip the `<message>` delimiters in customer text (draft prompt and LLM classifier); record `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` with each classification.

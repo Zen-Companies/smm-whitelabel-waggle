@@ -1,19 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { isOperatorEmail } from "./operator";
+import { isOperator } from "./operator";
 
-describe("isOperatorEmail", () => {
-  it("matches the configured list, case-insensitively", () => {
-    const env = { OPERATOR_EMAILS: "Ops@Example.com, me@x.dev", NODE_ENV: "production" };
-    expect(isOperatorEmail("ops@example.com", env)).toBe(true);
-    expect(isOperatorEmail("owner@cafe.ph", env)).toBe(false);
-    expect(isOperatorEmail(null, env)).toBe(false);
+describe("isOperator", () => {
+  it("only the operator role in app_metadata counts", () => {
+    expect(isOperator({ app_metadata: { role: "operator" } })).toBe(true);
+    expect(isOperator({ app_metadata: { provider: "email" } })).toBe(false);
+    expect(isOperator({ app_metadata: { role: "owner" } })).toBe(false);
+    expect(isOperator(null)).toBe(false);
   });
 
-  it("unset: open in local development, closed in production", () => {
-    expect(isOperatorEmail("anyone@x.dev", { NODE_ENV: "development" })).toBe(true);
-    expect(isOperatorEmail("anyone@x.dev", { NODE_ENV: "production" })).toBe(false);
-    expect(
-      isOperatorEmail("anyone@x.dev", { NODE_ENV: "development", VERCEL_ENV: "production" }),
-    ).toBe(false);
+  it("user_metadata, which users can edit themselves, never counts", () => {
+    const user = { app_metadata: {}, user_metadata: { role: "operator" } };
+    expect(isOperator(user)).toBe(false);
   });
 });

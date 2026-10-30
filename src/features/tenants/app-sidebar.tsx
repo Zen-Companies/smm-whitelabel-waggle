@@ -2,7 +2,7 @@ import { LogOut } from "lucide-react";
 import { Brand } from "@/components/app/brand";
 import { SidebarNav } from "@/components/app/sidebar-nav";
 import { Button } from "@/components/ui/button";
-import { isOperatorEmail } from "@/features/billing";
+import { isOperator } from "@/features/billing";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 import { getCurrentTenant } from "./current-tenant";
@@ -23,7 +23,7 @@ export async function AppSidebar({ bell }: { bell?: React.ReactNode }) {
         <Brand />
         {bell}
       </div>
-      <SidebarNav showCosts={isOperatorEmail(user.email)} inboxCount={count ?? 0} />
+      <SidebarNav showAdmin={isOperator(user)} inboxCount={count ?? 0} />
       <div className="mt-auto hidden flex-col gap-1 border-t pt-4 md:flex">
         <p className="truncate text-sm font-medium" title={tenant.name}>
           {tenant.name}
