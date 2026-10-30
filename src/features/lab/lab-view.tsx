@@ -49,6 +49,7 @@ async function History({ runId }: { runId?: string }) {
   const { data } = await db
     .from("lab_runs")
     .select("id, created_at, kind, text, results, tenants (name)")
+    .eq("origin", "operator")
     .order("created_at", { ascending: false })
     .limit(30);
   const runs = (data ?? []) as unknown as StoredRun[];

@@ -559,6 +559,7 @@ export type Database = {
           created_by: string | null
           id: string
           kind: string
+          origin: string
           results: Json
           tenant_id: string
           text: string
@@ -568,6 +569,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           kind: string
+          origin?: string
           results: Json
           tenant_id: string
           text: string
@@ -577,6 +579,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           kind?: string
+          origin?: string
           results?: Json
           tenant_id?: string
           text?: string

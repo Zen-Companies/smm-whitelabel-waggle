@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
 import { AutonomyCard } from "@/features/approvals";
+import { PracticeSection } from "@/features/lab";
 import { BusinessSettings } from "@/features/tenants";
 import { cn } from "cn";
 
@@ -42,7 +43,12 @@ async function Body({ searchParams }: PageProps<"/settings">) {
       </nav>
       <div className="min-w-0 flex-1">
         {section === "accounts" && <AccountsCard searchParams={searchParams} />}
-        {section === "replies" && <AutonomyCard />}
+        {section === "replies" && (
+          <div className="flex flex-col gap-8">
+            <AutonomyCard />
+            <PracticeSection />
+          </div>
+        )}
         {section === "notifications" && <NotificationSettings />}
         {section === "business" && <BusinessSettings />}
       </div>
