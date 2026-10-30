@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createLlmClient } from "@/lib/llm/client";
 import { chatCompletion, fakeOpenRouter, memoryUsage } from "@/lib/llm/test-utils";
-import { LlmClassifier } from "./llm";
+import { LLM_CLASSIFY_PROMPT_VERSION, LLM_CLASSIFY_PROMPTS, LlmClassifier } from "./llm";
 import type { ClassifyInput } from "./types";
 
 const input: ClassifyInput = {
@@ -63,5 +63,14 @@ describe("LlmClassifier", () => {
   it("rejects a category outside the five", async () => {
     const { classifier } = setup({ category: "praise", confidence: 0.9 });
     await expect(classifier.classify(input)).rejects.toThrow();
+  });
+});
+
+describe("LLM classify prompt versions", () => {
+  it("the current prompt is for any kind of business, not only local shops (T25)", () => {
+    expect(LLM_CLASSIFY_PROMPTS[LLM_CLASSIFY_PROMPT_VERSION]).toContain(
+      "customers send to a business",
+    );
+    expect(LLM_CLASSIFY_PROMPTS["2026-10-29.1"]).toContain("a local business");
   });
 });

@@ -14,6 +14,7 @@ import { collectUsage, previewMessage, type TenantSnapshot } from "./engine";
 const tenant: TenantSnapshot = {
   id: "tenant-1",
   name: "Harbour Bean Café",
+  businessProfile: "",
   subscriptionStatus: "active",
   confidenceThreshold: 0.85,
   accountStatus: "active",

@@ -1,0 +1,142 @@
+[
+  {
+    "id": "salon-01",
+    "text": "Can I book a rebond for Saturday 2pm?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead"
+  },
+  {
+    "id": "salon-02",
+    "text": "Pa-reserve po ng mani-pedi bukas 10am, 2 kami",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "lead"
+  },
+  {
+    "id": "salon-03",
+    "text": "I'd like to book a haircut and color with Mia next week",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead"
+  },
+  {
+    "id": "salon-04",
+    "text": "Hi! Book me for a balayage, my number is 0917 555 0101",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead"
+  },
+  {
+    "id": "salon-05",
+    "text": "How much is a rebond for long hair?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq"
+  },
+  {
+    "id": "salon-06",
+    "text": "Open po kayo sa Sunday?",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "faq"
+  },
+  {
+    "id": "salon-07",
+    "text": "Do you accept walk-ins?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq"
+  },
+  {
+    "id": "salon-08",
+    "text": "Where exactly are you in Makati?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq"
+  },
+  {
+    "id": "salon-09",
+    "text": "My color faded after one wash. Very disappointed.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint"
+  },
+  {
+    "id": "salon-10",
+    "text": "Ang tagal ng wait kahit may appointment ako, 1 hour late",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "complaint"
+  },
+  {
+    "id": "salon-11",
+    "text": "The stylist cut way too short even after I said just a trim",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint"
+  },
+  {
+    "id": "salon-12",
+    "text": "I want a refund for the nail extensions, two already fell off",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint"
+  },
+  {
+    "id": "salon-13",
+    "text": "Earn from home! Click the link in my bio",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "spam"
+  },
+  {
+    "id": "salon-14",
+    "text": "Buy hair vitamins wholesale, DM for price list",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "spam"
+  },
+  {
+    "id": "salon-15",
+    "text": "Check out our new salon down the street, 50% off!",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "spam"
+  },
+  {
+    "id": "salon-16",
+    "text": "You won an iPhone! Claim here",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "spam"
+  },
+  {
+    "id": "salon-17",
+    "text": "💇‍♀️✨",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "unclear"
+  },
+  {
+    "id": "salon-18",
+    "text": "Hello",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "unclear"
+  },
+  {
+    "id": "salon-19",
+    "text": "Galing!",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "unclear"
+  },
+  {
+    "id": "salon-20",
+    "text": "Is this Ate Joy's salon?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "unclear"
+  }
+]

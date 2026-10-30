@@ -1,0 +1,177 @@
+[
+  {
+    "id": "dp-01",
+    "text": "How do I buy the Moody Film preset pack? I'll pay via GCash",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead"
+  },
+  {
+    "id": "dp-02",
+    "text": "pa-send po ng link for the Canva templates, bibili ako",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "lead"
+  },
+  {
+    "id": "dp-03",
+    "text": "I want the bundle, can you send the payment details?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead"
+  },
+  {
+    "id": "dp-04",
+    "text": "Can I order 3 licenses of the template pack for my team?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "lead"
+  },
+  {
+    "id": "dp-05",
+    "text": "Interested! Link please 🙏",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "lead"
+  },
+  {
+    "id": "dp-06",
+    "text": "Kukunin ko po yung e-book, paano magbayad?",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "lead"
+  },
+  {
+    "id": "dp-07",
+    "text": "Do the presets work on Lightroom mobile?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq"
+  },
+  {
+    "id": "dp-08",
+    "text": "Is it a one-time payment or monthly?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq"
+  },
+  {
+    "id": "dp-09",
+    "text": "Pwede ba sa Canva free account yung templates?",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "faq"
+  },
+  {
+    "id": "dp-10",
+    "text": "How much is the preset pack?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "faq"
+  },
+  {
+    "id": "dp-11",
+    "text": "Do I get updates if you add new presets?",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "faq"
+  },
+  {
+    "id": "dp-12",
+    "text": "May refund policy po ba kayo?",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "faq"
+  },
+  {
+    "id": "dp-13",
+    "text": "Paid 2 days ago and still no download link. Not happy.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint"
+  },
+  {
+    "id": "dp-14",
+    "text": "The presets make my photos look orange, this was a waste of money. Refund please.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint"
+  },
+  {
+    "id": "dp-15",
+    "text": "Hindi ma-open yung file na binili ko, sira ata",
+    "kind": "dm",
+    "lang": "taglish",
+    "expected": "complaint"
+  },
+  {
+    "id": "dp-16",
+    "text": "I was charged twice for the same template pack.",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "complaint"
+  },
+  {
+    "id": "dp-17",
+    "text": "The e-book is only 10 pages, feels like a scam honestly",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "complaint"
+  },
+  {
+    "id": "dp-18",
+    "text": "Get 10k followers in 24 hours! DM us",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "spam"
+  },
+  {
+    "id": "dp-19",
+    "text": "Check out my page for cheaper presets!!",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "spam"
+  },
+  {
+    "id": "dp-20",
+    "text": "Crypto opportunity, earn 5k daily, message me",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "spam"
+  },
+  {
+    "id": "dp-21",
+    "text": "Follow niyo page ko, may giveaway kami ng ibang brand",
+    "kind": "comment",
+    "lang": "taglish",
+    "expected": "spam"
+  },
+  {
+    "id": "dp-22",
+    "text": "😍😍😍",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "unclear"
+  },
+  {
+    "id": "dp-23",
+    "text": "ok",
+    "kind": "dm",
+    "lang": "en",
+    "expected": "unclear"
+  },
+  {
+    "id": "dp-24",
+    "text": "Nice edit!",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "unclear"
+  },
+  {
+    "id": "dp-25",
+    "text": "Who's the model in the 3rd photo?",
+    "kind": "comment",
+    "lang": "en",
+    "expected": "unclear"
+  }
+]

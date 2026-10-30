@@ -3,6 +3,11 @@
  * configured classifier and prints accuracy per category, a confusion matrix and p50/p95 latency.
  *
  *   pnpm triage:report [--concurrency 4] [--only jev,llm] [--limit 20] [--json out.json]
+ *                      [--fixtures tests/fixtures/triage-sets/digital-products] [--context name|profile]
+ *
+ * --context (T25): what the classifiers are told about the business. profile (default) is what
+ * production sends: the name plus the owner's profile from business.json; name is the name only,
+ * as before T25. Run both to compare.
  *
  * By default only the Jev endpoints run (local jevos is free). The OpenRouter classifiers cost
  * money or free-tier quota (one call per message: 175 > the 50 free calls a day), so they run
@@ -25,6 +30,7 @@ import { formatReport, summarizeRun, type RunResult } from "../src/features/tria
 import { loadLabeledSet } from "../src/features/triage/labeled-set";
 import { JevClassifier } from "../src/lib/classifier/jev";
 import { OpenRouterJevClassifier } from "../src/lib/classifier/jev-openrouter";
+import { businessContext } from "../src/lib/classifier/business-context";
 import { LlmClassifier } from "../src/lib/classifier/llm";
 import type { Classifier } from "../src/lib/classifier/types";
 import { createLlmClient } from "../src/lib/llm/client";
@@ -45,6 +51,7 @@ const { values: args } = parseArgs({
     limit: { type: "string" },
     json: { type: "string" },
     fixtures: { type: "string", default: "tests/fixtures/triage" },
+    context: { type: "string", default: "profile" },
   },
 });
 
@@ -172,7 +179,16 @@ async function main() {
   const messages = args.limit ? set.messages.slice(0, Number(args.limit)) : set.messages;
   const { ready, skipped } = candidates();
 
-  console.log(`Triage report: ${messages.length} labeled messages for ${set.business.name}`);
+  if (args.context !== "profile" && args.context !== "name") {
+    throw new Error("--context must be profile or name");
+  }
+  const context = businessContext({
+    name: set.business.name,
+    profile: args.context === "profile" ? set.business.profile : "",
+  });
+  console.log(
+    `Triage report: ${messages.length} labeled messages for ${set.business.name} (context: ${context.source})`,
+  );
   for (const s of skipped) console.log(`skipped: ${s}`);
   if (ready.length === 0) {
     console.log("No classifier configured; nothing to run.");
@@ -182,7 +198,7 @@ async function main() {
   const out: Record<string, unknown> = {};
   for (const candidate of ready) {
     console.log(`\nrunning ${candidate.name}…`);
-    const results = await runOne(candidate, messages, set.business.context);
+    const results = await runOne(candidate, messages, context.text);
     const summary = summarizeRun(results);
     const costUsd = candidate.usage.reduce((sum, u) => sum + u.costUsd, 0);
     console.log(formatReport(candidate.name, summary, { costUsd }));

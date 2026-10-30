@@ -38,7 +38,7 @@ export async function loadTenantSnapshot(
   const [{ data: tenant, error }, { data: modes }, { data: accounts }] = await Promise.all([
     db
       .from("tenants")
-      .select("id, name, subscription_status, confidence_threshold")
+      .select("id, name, business_profile, subscription_status, confidence_threshold")
       .eq("id", tenantId)
       .single(),
     db.from("autonomy_settings").select("category, mode").eq("tenant_id", tenantId),
@@ -49,6 +49,7 @@ export async function loadTenantSnapshot(
   return {
     id: tenant.id,
     name: tenant.name,
+    businessProfile: tenant.business_profile,
     subscriptionStatus: tenant.subscription_status as TenantSnapshot["subscriptionStatus"],
     confidenceThreshold: Number(tenant.confidence_threshold),
     accountStatus:

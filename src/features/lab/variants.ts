@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { DRAFT_PROMPT_VERSION, DRAFT_PROMPTS } from "@/features/drafting";
 import {
+  businessContext,
   JEV_QUESTION_SETS,
   JEV_QUESTIONS_VERSION,
   LLM_CLASSIFY_PROMPT_VERSION,
@@ -31,8 +32,12 @@ export const variantSchema = z.object({
   questionsVersion: z.enum(versionsOf(JEV_QUESTION_SETS)),
   classifyPromptVersion: z.enum(versionsOf(LLM_CLASSIFY_PROMPTS)),
   draftPromptVersion: z.enum(versionsOf(DRAFT_PROMPTS)),
-  /** name: the business name (what production sends today); custom: the text below. */
+  /**
+   * profile: the business's saved profile, or its name without one (what production sends);
+   * name: the name only (before T25); custom: the text below.
+   */
   context: z.discriminatedUnion("mode", [
+    z.object({ mode: z.literal("profile") }),
     z.object({ mode: z.literal("name") }),
     z.object({ mode: z.literal("custom"), text: z.string().trim().min(1).max(CONTEXT_MAX) }),
   ]),
@@ -50,11 +55,21 @@ export function currentVariant(): Variant {
     questionsVersion: JEV_QUESTIONS_VERSION,
     classifyPromptVersion: LLM_CLASSIFY_PROMPT_VERSION,
     draftPromptVersion: DRAFT_PROMPT_VERSION,
-    context: { mode: "name" },
+    context: { mode: "profile" },
   };
 }
 
 /** The business context a variant sends to the classifier. */
-export function resolveContext(variant: Variant, tenant: { name: string }): string {
-  return variant.context.mode === "custom" ? variant.context.text : tenant.name;
+export function resolveContext(
+  variant: Variant,
+  tenant: { name: string; businessProfile?: string },
+): string {
+  switch (variant.context.mode) {
+    case "custom":
+      return variant.context.text;
+    case "name":
+      return tenant.name;
+    case "profile":
+      return businessContext({ name: tenant.name, profile: tenant.businessProfile }).text;
+  }
 }

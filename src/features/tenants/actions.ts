@@ -1,8 +1,13 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { writeAudit } from "@/lib/audit";
+import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
+import { getCurrentTenant } from "./current-tenant";
 import { setupTenantForUser } from "./server";
 
 export interface AuthFormState {
@@ -62,4 +67,36 @@ export async function signOut(): Promise<void> {
   const supabase = await createServerSupabase();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+export type ProfileFormState = { saved?: boolean; error?: string };
+
+const profileSchema = z
+  .string()
+  .trim()
+  .max(BUSINESS_PROFILE_MAX, "Keep it under 1,000 characters.");
+
+/** Settings → Business: the description the receptionist sorts messages with (T25). */
+export async function updateBusinessProfile(
+  _prev: ProfileFormState,
+  formData: FormData,
+): Promise<ProfileFormState> {
+  const parsed = profileSchema.safeParse(formData.get("profile") ?? "");
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getCurrentTenant();
+  const supabase = await createServerSupabase();
+  const { error } = await supabase
+    .from("tenants")
+    .update({ business_profile: parsed.data })
+    .eq("id", tenant.id);
+  if (error) return { error: "Couldn't save. Try again." };
+  // Rule 11; the text itself stays out of the audit row.
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: "business_profile_changed",
+    actor: tenant.userId,
+    details: { length: parsed.data.length },
+  });
+  revalidatePath("/settings");
+  return { saved: true };
 }

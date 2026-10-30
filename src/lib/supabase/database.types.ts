@@ -861,6 +861,8 @@ export type Database = {
       }
       tenants: {
         Row: {
+          business_profile: string
+          business_profile_updated_at: string | null
           confidence_threshold: number
           created_at: string
           health_checked_at: string | null
@@ -871,6 +873,8 @@ export type Database = {
           zernio_profile_id: string | null
         }
         Insert: {
+          business_profile?: string
+          business_profile_updated_at?: string | null
           confidence_threshold?: number
           created_at?: string
           health_checked_at?: string | null
@@ -881,6 +885,8 @@ export type Database = {
           zernio_profile_id?: string | null
         }
         Update: {
+          business_profile?: string
+          business_profile_updated_at?: string | null
           confidence_threshold?: number
           created_at?: string
           health_checked_at?: string | null

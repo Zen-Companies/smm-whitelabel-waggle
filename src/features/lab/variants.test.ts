@@ -17,7 +17,7 @@ describe("variants", () => {
       questionsVersion: JEV_QUESTIONS_VERSION,
       classifyPromptVersion: LLM_CLASSIFY_PROMPT_VERSION,
       draftPromptVersion: DRAFT_PROMPT_VERSION,
-      context: { mode: "name" },
+      context: { mode: "profile" },
     });
   });
 
@@ -43,6 +43,18 @@ describe("variants", () => {
 
   it("resolves the business context", () => {
     expect(resolveContext(currentVariant(), { name: "Pixel Presets" })).toBe("Pixel Presets");
+    expect(
+      resolveContext(currentVariant(), {
+        name: "Pixel Presets",
+        businessProfile: "Sells Lightroom presets as instant downloads.",
+      }),
+    ).toBe("Pixel Presets. Sells Lightroom presets as instant downloads.");
+    expect(
+      resolveContext(
+        { ...currentVariant(), context: { mode: "name" } },
+        { name: "Pixel Presets", businessProfile: "Sells presets." },
+      ),
+    ).toBe("Pixel Presets");
     expect(
       resolveContext(
         { ...currentVariant(), context: { mode: "custom", text: "Sells Lightroom presets." } },

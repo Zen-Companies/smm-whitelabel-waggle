@@ -13,7 +13,8 @@ import {
 // the Lab (docs/tdd.md §19) runs them side by side.
 const classifyPrompt = (
   lead: string,
-) => `You sort messages that customers send to a local business on Instagram or Facebook.
+  business = "a local business",
+) => `You sort messages that customers send to ${business} on Instagram or Facebook.
 Pick exactly one category:
 - complaint: unhappy, complaining, reporting a bad experience or a problem, or asking for a refund.
 - lead: ${lead}
@@ -31,11 +32,16 @@ export const LLM_CLASSIFY_PROMPTS = {
   "2026-10-29.1": classifyPrompt(
     "purchase intent only: asks to make a booking or reservation, to place an order, for a price or quote for a specific order they want to make, or shares contact details to be contacted. A general question about prices, menu, stock or availability is faq.",
   ),
+  // Any kind of business, not only local shops (T25: the business profile says what it is).
+  "2026-10-30.1": classifyPrompt(
+    "purchase intent only: asks to make a booking or reservation, to place an order, to buy something, for a price or quote for a specific order they want to make, or shares contact details to be contacted. A general question about prices, products, stock or availability is faq.",
+    "a business",
+  ),
 } as const satisfies Record<string, string>;
 
 export type LlmClassifyPromptVersion = keyof typeof LLM_CLASSIFY_PROMPTS;
 
-export const LLM_CLASSIFY_PROMPT_VERSION: LlmClassifyPromptVersion = "2026-10-29.1";
+export const LLM_CLASSIFY_PROMPT_VERSION: LlmClassifyPromptVersion = "2026-10-30.1";
 
 const llmClassificationSchema = z.object({
   category: z.enum(CATEGORIES),

@@ -19,7 +19,7 @@ function sideFields(side: "a" | "b", extra: Record<string, string> = {}) {
     [`${side}_questionsVersion`]: v.questionsVersion,
     [`${side}_classifyPromptVersion`]: v.classifyPromptVersion,
     [`${side}_draftPromptVersion`]: v.draftPromptVersion,
-    [`${side}_contextMode`]: "name",
+    [`${side}_contextMode`]: "profile",
     ...Object.fromEntries(Object.entries(extra).map(([k, val]) => [`${side}_${k}`, val])),
   };
 }

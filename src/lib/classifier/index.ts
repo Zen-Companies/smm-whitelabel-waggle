@@ -7,6 +7,8 @@ import { JevClassifier, loadJevConfig } from "./jev";
 import { LlmClassifier } from "./llm";
 import type { Classifier } from "./types";
 
+export { BUSINESS_PROFILE_MAX, businessContext } from "./business-context";
+export type { BusinessContext } from "./business-context";
 export { FallbackClassifier } from "./fallback";
 export { JevClassifier, loadJevConfig } from "./jev";
 export { OPENROUTER_JEV_MODEL, OpenRouterJevClassifier } from "./jev-openrouter";

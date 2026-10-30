@@ -25,7 +25,8 @@ export function parseVariant(
   side: "a" | "b",
 ): { variant: Variant } | { error: string } {
   const f = (key: string) => str(form, `${side}_${key}`);
-  const mode = f("contextMode") === "custom" ? "custom" : "name";
+  const raw = f("contextMode");
+  const mode = raw === "custom" || raw === "name" ? raw : "profile";
   const parsed = variantSchema.safeParse({
     classifier: f("classifier"),
     questionsVersion: f("questionsVersion"),

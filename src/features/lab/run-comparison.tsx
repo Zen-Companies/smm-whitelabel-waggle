@@ -14,7 +14,9 @@ function setupText(run: VariantRun, classifierLabels: Record<string, string>) {
   const context =
     v.context.mode === "custom"
       ? `Description: “${v.context.text.slice(0, 80)}${v.context.text.length > 80 ? "…" : ""}”`
-      : "Business name only";
+      : v.context.mode === "name"
+        ? "Business name only"
+        : "Saved profile (name if none)";
   return [
     classifierLabels[v.classifier] ?? v.classifier,
     `questions ${v.questionsVersion} · LLM prompt ${v.classifyPromptVersion}`,

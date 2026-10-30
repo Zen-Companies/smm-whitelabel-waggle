@@ -13,6 +13,8 @@ import type { ServiceClient } from "@/lib/supabase/service";
 export interface TenantSnapshot {
   id: string;
   name: string;
+  /** The owner's description (T25); empty when there is none. */
+  businessProfile: string;
   subscriptionStatus: "trialing" | "active" | "past_due" | "canceled";
   confidenceThreshold: number;
   /** The business's connected account; "active" when it has none yet (onboarding). */

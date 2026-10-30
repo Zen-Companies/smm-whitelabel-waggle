@@ -7,6 +7,12 @@ import { runLab, saveLabCase, type LabCaseState, type LabRun, type LabRunState }
 import { RunComparison } from "./run-comparison";
 import type { Variant } from "./variants";
 
+const CONTEXT_LABELS = {
+  profile: "Saved profile",
+  name: "Name only",
+  custom: "A description",
+} as const;
+
 export interface LabOptions {
   classifiers: { value: string; label: string }[];
   questionsVersions: string[];
@@ -30,9 +36,7 @@ function VariantFields({
   last: Record<string, string>;
 }) {
   const val = (key: string, fallback: string) => last[`${side}_${key}`] ?? fallback;
-  const [mode, setMode] = useState<"name" | "custom">(
-    val("contextMode", defaults.context.mode) === "custom" ? "custom" : "name",
-  );
+  const [mode, setMode] = useState(val("contextMode", defaults.context.mode));
   const id = (k: string) => `${side}-${k}`;
   const select = (
     key: string,
@@ -105,7 +109,7 @@ function VariantFields({
           What the classifier knows about the business
         </legend>
         <span className="segmented self-start" role="radiogroup">
-          {(["name", "custom"] as const).map((m) => (
+          {(["profile", "name", "custom"] as const).map((m) => (
             <label key={m} data-active={mode === m || undefined}>
               <input
                 type="radio"
@@ -115,7 +119,7 @@ function VariantFields({
                 onChange={() => setMode(m)}
                 className="sr-only"
               />
-              {m === "name" ? "Business name" : "A description"}
+              {CONTEXT_LABELS[m]}
             </label>
           ))}
         </span>

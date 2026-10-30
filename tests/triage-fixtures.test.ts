@@ -32,3 +32,21 @@ describe("triage labeled set", () => {
     expect(set.business.name).toBe("Harbour Bean Café");
   });
 });
+
+// Niche sets (T25): the same five categories for other kinds of business.
+describe.each(["digital-products", "salon"])("triage set %s", (name) => {
+  const niche = loadLabeledSet(`tests/fixtures/triage-sets/${name}`);
+
+  it("has a business with a profile", () => {
+    expect(niche.business.profile.length).toBeGreaterThan(40);
+  });
+
+  it("covers every category with English and Taglish", () => {
+    for (const category of ["faq", "lead", "complaint", "spam", "unclear"]) {
+      expect(niche.messages.filter((m) => m.expected === category).length).toBeGreaterThanOrEqual(
+        4,
+      );
+    }
+    expect(new Set(niche.messages.map((m) => m.lang))).toEqual(new Set(["en", "taglish"]));
+  });
+});

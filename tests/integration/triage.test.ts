@@ -21,7 +21,9 @@ let accountId: string;
 type JevMode = "ok" | "down" | "slow" | "invalid";
 let jevMode: JevMode = "ok";
 let jevScores = { complaint: 0.02, lead: 0.1, faq: 0.96, spam: 0.01 };
+let lastJevState: { business?: string } | undefined;
 const jevFetch: typeof fetch = async (_url, init) => {
+  lastJevState = JSON.parse(String(init?.body)).state;
   if (jevMode === "down") return new Response("upstream error", { status: 503 });
   if (jevMode === "slow") {
     await new Promise((resolve, reject) => {
@@ -127,6 +129,35 @@ afterAll(async () => {
 });
 
 describe("classify step", () => {
+  it("sends the owner's business profile and records which context was used (T25)", async () => {
+    const statusAudit = async (id: string) =>
+      (
+        await db
+          .from("audit_log")
+          .select("details")
+          .eq("item_id", id)
+          .eq("action", "status_changed")
+          .single()
+      ).data?.details as Record<string, unknown>;
+
+    const before = await seed("Do you deliver?");
+    await run();
+    expect(lastJevState?.business).toBe("Triage Cafe");
+    expect(await statusAudit(before)).toMatchObject({ businessContext: "name" });
+
+    await db
+      .from("tenants")
+      .update({ business_profile: "Sells custom cakes, ordered by DM." })
+      .eq("id", tenantId);
+    const after = await seed("Do you deliver?");
+    await run();
+    expect(lastJevState?.business).toBe("Triage Cafe. Sells custom cakes, ordered by DM.");
+    const details = await statusAudit(after);
+    expect(details).toMatchObject({ businessContext: "profile" });
+    expect(typeof details.profileUpdatedAt).toBe("string");
+    await db.from("tenants").update({ business_profile: "" }).eq("id", tenantId);
+  });
+
   it("Jev answers: category, confidence, scores and classifier_used are stored", async () => {
     const id = await seed("What time do you open on Sunday?");
     await run();

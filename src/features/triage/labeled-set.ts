@@ -5,7 +5,9 @@ import { CATEGORIES } from "@/lib/classifier/types";
 import type { LabeledMessage } from "./report";
 
 // Loads tests/fixtures/triage/*.json: one file per category (expected = file name) plus
-// ambiguous.json (expected per message), and business.json (the shop the messages are for).
+// ambiguous.json (expected per message), and business.json (the shop the messages are for, with the
+// profile its owner would write: T25). Niche sets in tests/fixtures/triage-sets/<name>/ keep every
+// message in one file with `expected` per message.
 
 const message = z.object({
   id: z.string().min(1),
@@ -16,7 +18,7 @@ const message = z.object({
   ambiguous: z.boolean().optional(),
   note: z.string().optional(),
 });
-const business = z.object({ name: z.string(), context: z.string() });
+const business = z.object({ name: z.string().min(1), profile: z.string() });
 
 export interface LabeledSet {
   business: z.infer<typeof business>;
