@@ -3,6 +3,7 @@
 import {
   BookOpen,
   FlaskConical,
+  FlaskRound,
   Inbox,
   Megaphone,
   Receipt,
@@ -18,6 +19,7 @@ const ITEMS = [
   { href: "/posts", label: "Posts", icon: Megaphone },
   { href: "/leads", label: "Leads", icon: UserRound },
   { href: "/knowledge-base", label: "Business info", icon: BookOpen },
+  { href: "/lab", label: "Lab", icon: FlaskConical },
   { href: "/settings", label: "Settings", icon: Settings },
 ] as const;
 
@@ -28,7 +30,7 @@ export function SidebarNav({ showAdmin, inboxCount }: { showAdmin: boolean; inbo
   const items = showAdmin
     ? [
         ...ITEMS,
-        { href: "/admin/lab", label: "Admin lab", icon: FlaskConical } as const,
+        { href: "/admin/lab", label: "Admin lab", icon: FlaskRound } as const,
         { href: "/admin/costs", label: "Costs", icon: Receipt } as const,
       ]
     : ITEMS;

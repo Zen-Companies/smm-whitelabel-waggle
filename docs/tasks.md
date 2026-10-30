@@ -153,9 +153,10 @@ Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items
       _Done when:_ an owner without the role gets a 404 on admin pages and sees no admin entries; granting the role shows them; unit tests cover the check.
       _Note:_ `isOperator()` reads `app_metadata.role` only (never `user_metadata`, which users can edit). Supabase merges `app_metadata` updates, so `--remove` sets the role to null. Checked: grant and remove on the local test login (it ends with no role).
 
-- [ ] **T35. Owner Lab (`/lab`)**
+- [x] **T35. Owner Lab (`/lab`)**
       The owner's own page, in plain words: "Try a message", "Ready to reply on its own?" per kind of message with "See the ones you edited", and "What your receptionist will never do". Settings → Replies keeps only the switches (modes, Pause all replies) and links to it. Sidebar: "Lab" for owners; the admin page is listed as "Admin lab".
       _Done when:_ an owner sees Lab in the sidebar and the page works; Settings → Replies no longer holds the practice box or readiness.
+      _Note:_ checked in the browser as the test owner (no admin role): sidebar shows Lab and no admin entries, `/admin/lab` is a 404, `/lab` shows the practice box, readiness (picked up the live-test draft) and the promises; Settings → Replies has the switches and a "Try it in Lab" link.
 
 Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
 
