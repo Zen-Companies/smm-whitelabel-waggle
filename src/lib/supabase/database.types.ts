@@ -867,6 +867,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          ai_monthly_cap_usd: number | null
           business_profile: string
           business_profile_updated_at: string | null
           confidence_threshold: number
@@ -880,6 +881,7 @@ export type Database = {
           zernio_profile_id: string | null
         }
         Insert: {
+          ai_monthly_cap_usd?: number | null
           business_profile?: string
           business_profile_updated_at?: string | null
           confidence_threshold?: number
@@ -893,6 +895,7 @@ export type Database = {
           zernio_profile_id?: string | null
         }
         Update: {
+          ai_monthly_cap_usd?: number | null
           business_profile?: string
           business_profile_updated_at?: string | null
           confidence_threshold?: number
@@ -942,6 +945,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_spend_since: {
+        Args: { p_since: string; p_tenant_id?: string }
+        Returns: {
+          spent_usd: number
+          tenant_id: string
+        }[]
+      }
       claim_items: {
         Args: { p_limit: number; p_per_tenant?: number; p_statuses?: string[] }
         Returns: {

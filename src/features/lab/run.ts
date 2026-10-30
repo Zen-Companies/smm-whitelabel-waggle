@@ -20,6 +20,7 @@ import {
   type LlmClient,
   type UsageRecorder,
 } from "@/lib/llm";
+import { loadTenantAiSpend } from "@/lib/llm/spend";
 import type { ServiceClient } from "@/lib/supabase/service";
 import {
   collectUsage,
@@ -35,7 +36,7 @@ export async function loadTenantSnapshot(
   db: ServiceClient,
   tenantId: string,
 ): Promise<TenantSnapshot> {
-  const [{ data: tenant, error }, { data: modes }, { data: accounts }] = await Promise.all([
+  const [{ data: tenant, error }, { data: modes }, { data: accounts }, spend] = await Promise.all([
     db
       .from("tenants")
       .select(
@@ -45,6 +46,7 @@ export async function loadTenantSnapshot(
       .single(),
     db.from("autonomy_settings").select("category, mode").eq("tenant_id", tenantId),
     db.from("social_accounts").select("status").eq("tenant_id", tenantId),
+    loadTenantAiSpend(db, tenantId, new Date()),
   ]);
   if (error) throw new Error(`lab: tenant lookup failed: ${error.message}`);
   const statuses = (accounts ?? []).map((a) => a.status);
@@ -55,6 +57,7 @@ export async function loadTenantSnapshot(
     subscriptionStatus: tenant.subscription_status as TenantSnapshot["subscriptionStatus"],
     confidenceThreshold: Number(tenant.confidence_threshold),
     repliesPaused: tenant.replies_paused,
+    aiCapReached: spend.level === "reached",
     accountStatus:
       statuses.length === 0 || statuses.includes("active")
         ? "active"

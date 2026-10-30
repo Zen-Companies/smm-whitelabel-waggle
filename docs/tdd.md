@@ -493,6 +493,8 @@ As built (T9, `features/drafting`):
 
 **Thread history and relevance floor (T30, T31).** For a DM, the draft step loads up to 4 earlier messages of the conversation (the customer's and the replies that went out, oldest first, 300 characters each) into an `<earlier>` block; the system prompt's rule 8 says they are context only. The business info is searched with the latest message plus the customer's previous one. Retrieval drops topics below `KB_MIN_SIMILARITY` (default 0.25 for the free nvidia embedding model; scores are model-specific). `draft_created` records `historyMessages` and `kbSimilarities`.
 
+**Monthly AI spend cap (T32).** `public.ai_spend_since(since, tenant?)` (service role) sums `ai_usage.cost_usd` without lab calls; `lib/llm/spend.ts` compares this calendar month's (UTC) spend with `tenants.ai_monthly_cap_usd ?? AI_MONTHLY_CAP_USD` (default 20): `ok`, `warn` from 80%, `reached`. The draft step checks it only when `triage()` says draft; at the cap `triage({ aiCapReached: true })` escalates with `ai_cap_reached`, so no draft and no AI call, while classification still runs. `policy()` ignores the cap (a reply already paid for goes on). Practice and recent messages use the same flag; operator Lab runs don't.
+
 ## 11. Policy check (`features/approvals/policy.ts`, pure function)
 
 Input: item, classification, draft, tenant, account, autonomy mode, now. Output: `'send' | 'approve' | 'escalate' | 'ignore'` + reason.

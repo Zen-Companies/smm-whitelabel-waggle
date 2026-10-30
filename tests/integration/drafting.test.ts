@@ -6,6 +6,7 @@ import { processDueItems } from "@/features/inbox/processor";
 import { embedPendingEntries, EMBEDDING_DIMENSIONS } from "@/features/knowledge-base/embeddings";
 import { createDeadline } from "@/lib/jobs";
 import { createLlmClient } from "@/lib/llm/client";
+import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { chatCompletion, embeddingResponse, fakeOpenRouter } from "@/lib/llm/test-utils";
 import { createDbUsageRecorder } from "@/lib/llm/usage";
 import { anonClient, claimFor, serviceClient, uniqueEmail } from "./helpers";
@@ -364,5 +365,67 @@ describe("draft step", () => {
     expect(chatBodies.length).toBe(before);
     expect(await draftsOf(id)).toHaveLength(1);
     expect(await statusOf(id)).toBe("awaiting_approval");
+  });
+});
+
+describe("monthly AI spend cap (T32)", () => {
+  afterAll(async () => {
+    await db.from("tenants").update({ ai_monthly_cap_usd: null }).eq("id", tenantId);
+    await db.from("ai_usage").delete().eq("tenant_id", tenantId).eq("model", "cap-test");
+  });
+
+  const usage = (costUsd: number, source: "live" | "practice" | "lab", createdAt?: string) => ({
+    tenant_id: tenantId,
+    purpose: "draft",
+    provider: "openrouter",
+    model: "cap-test",
+    input_tokens: 0,
+    output_tokens: 0,
+    cost_usd: costUsd,
+    source,
+    // Every row names it: a multi-row insert sets a missing column to null.
+    created_at: createdAt ?? new Date().toISOString(),
+  });
+
+  it("counts live and practice calls this month, not lab calls or last month", async () => {
+    const { error } = await db
+      .from("ai_usage")
+      .insert([
+        usage(3, "live"),
+        usage(2, "practice"),
+        usage(100, "lab"),
+        usage(50, "live", "2020-01-15T00:00:00Z"),
+      ]);
+    expect(error).toBeNull();
+    const spend = await loadTenantAiSpend(db, tenantId, new Date());
+    expect(spend.spentUsd).toBeGreaterThanOrEqual(5);
+    expect(spend.spentUsd).toBeLessThan(50);
+  });
+
+  it("at the cap: still sorted, but no draft and no AI call; it goes to the owner", async () => {
+    await db.from("tenants").update({ ai_monthly_cap_usd: 5 }).eq("id", tenantId);
+    const before = chatBodies.length;
+    const id = await classifiedItem("What time do you open on Saturday?");
+
+    await run();
+
+    expect(chatBodies.length).toBe(before);
+    expect(await draftsOf(id)).toEqual([]);
+    expect(await statusOf(id)).toBe("escalated");
+    const { data: audit } = await db
+      .from("audit_log")
+      .select("details")
+      .eq("item_id", id)
+      .eq("action", "status_changed")
+      .eq("details->>to", "escalated")
+      .single();
+    expect(audit?.details).toMatchObject({ policyReason: "ai_cap_reached", drafted: false });
+  });
+
+  it("under the cap, drafting goes on as usual", async () => {
+    await db.from("tenants").update({ ai_monthly_cap_usd: 1000 }).eq("id", tenantId);
+    const id = await classifiedItem("What time do you open on Saturday?");
+    await run();
+    expect(await draftsOf(id)).toHaveLength(1);
   });
 });

@@ -44,6 +44,7 @@ export function escalationReason(reason: string | null, status: string): string 
     low_confidence: "The receptionist wasn't sure what it's about.",
     needs_human: "Your knowledge base doesn't cover the question.",
     mode_off: "AI replies are off for this kind of message.",
+    ai_cap_reached: "This month's AI allowance is used up, so no reply was suggested.",
     dm_window_closed: "Instagram's 24-hour DM reply window closed before the reply went out.",
     dm_window_closing: "Instagram's 24-hour DM reply window closes within the hour.",
     account_inactive: "The account was disconnected before the reply went out.",

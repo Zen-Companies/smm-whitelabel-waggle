@@ -19,6 +19,8 @@ export interface TenantSnapshot {
   confidenceThreshold: number;
   /** "Pause all replies" (T27): auto mode then waits for the owner. */
   repliesPaused: boolean;
+  /** This month's AI allowance is used up (T32): messages are sorted, nothing is drafted. */
+  aiCapReached: boolean;
   /** The business's connected account; "active" when it has none yet (onboarding). */
   accountStatus: "active" | "disconnected" | "error";
   /** Autonomy mode per category; a missing one means off, as in production. */
@@ -115,7 +117,7 @@ export async function previewMessage(
     account: { status: tenant.accountStatus },
     autonomyMode: tenant.modes[category] ?? "off",
   };
-  result.triage = triage(policyBase);
+  result.triage = triage({ ...policyBase, aiCapReached: tenant.aiCapReached });
   result.reachedStep = "triage";
   if (result.triage.decision !== "draft" || input.stopAfter === "triage") return result;
   if (!deps.llm) {

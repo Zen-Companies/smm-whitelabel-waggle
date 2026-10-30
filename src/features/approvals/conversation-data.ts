@@ -50,6 +50,7 @@ const HANDED: Record<string, string> = {
   low_confidence: "not sure what they want",
   needs_human: "not in your business info",
   mode_off: "replies are off for this kind",
+  ai_cap_reached: "this month's AI allowance is used",
   dm_window_closed: "reply window closed",
   dm_window_closing: "reply window closing",
   account_inactive: "account disconnected",

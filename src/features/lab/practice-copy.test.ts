@@ -53,6 +53,20 @@ describe("practiceCard", () => {
     });
   });
 
+  it("over this month's AI allowance: sorted, passed on without a reply (T32)", () => {
+    const card = practiceCard(
+      result({
+        triage: { decision: "escalate", reason: "ai_cap_reached" },
+        facts: null,
+        draft: null,
+        policy: null,
+        reachedStep: "triage",
+      }),
+    );
+    expect(card).toMatchObject({ looksLike: "a question", reply: null, tone: "owner" });
+    expect(card.next).toContain("this month's AI allowance");
+  });
+
   it("complaints always come to the owner", () => {
     const card = practiceCard(
       result({

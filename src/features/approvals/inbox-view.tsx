@@ -7,8 +7,11 @@ import { clockTime, platformName, shortTime } from "@/components/app/time";
 import { buttonVariants } from "@/components/ui/button";
 import { MarkItemRead } from "@/features/alerts";
 import { getCurrentTenant } from "@/features/tenants";
+import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
+import { allowanceNotice } from "./allowance-notice";
 import { ApprovalCard, RecentSends } from "./approval-card";
 import { loadConversation } from "./conversation-data";
 import { ContextPanel, ConversationPane } from "./conversation-pane";
@@ -112,7 +115,7 @@ export async function InboxView({
 
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
-  const [tabEntries, counts, { count: accounts }, { data: settings }] = await Promise.all([
+  const [tabEntries, counts, { count: accounts }, { data: settings }, spend] = await Promise.all([
     loadInboxTab(supabase, tenant.id, tab),
     countInboxTabs(supabase, tenant.id),
     supabase
@@ -120,7 +123,10 @@ export async function InboxView({
       .select("*", { count: "exact", head: true })
       .eq("tenant_id", tenant.id),
     supabase.from("tenants").select("replies_paused").eq("id", tenant.id).single(),
+    // T32: this month's AI allowance (service role: spend is summed across ai_usage).
+    loadTenantAiSpend(getServiceClient(), tenant.id, new Date()),
   ]);
+  const allowance = allowanceNotice(spend);
   const entries = autoOnly
     ? tabEntries.filter((e) => e.draft && !e.draft.decidedByOwner)
     : tabEntries;
@@ -232,6 +238,14 @@ export async function InboxView({
             Settings → Replies
           </Link>
           .
+        </p>
+      )}
+      {allowance && (
+        <p
+          role="status"
+          className="border-amber-border bg-amber-soft text-amber-ink rounded-xl border px-4 py-3 text-sm"
+        >
+          {allowance}
         </p>
       )}
       <RecentSends />

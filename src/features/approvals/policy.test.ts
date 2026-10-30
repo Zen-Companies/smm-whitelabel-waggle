@@ -213,3 +213,19 @@ describe("triage (steps 1-4, before drafting)", () => {
     expect(triage({ ...base, account: { status: "error" } }).decision).toBe("pause");
   });
 });
+
+describe("monthly AI spend cap (T32)", () => {
+  it("still sorts messages but drafts nothing: they come to the owner", () => {
+    expect(triage({ ...base, aiCapReached: true })).toEqual({
+      decision: "escalate",
+      reason: "ai_cap_reached",
+    });
+    expect(
+      triage({ ...base, aiCapReached: true, classification: { category: "spam", confidence: 1 } }),
+    ).toEqual({ decision: "ignore", reason: "spam" });
+    expect(triage({ ...base, aiCapReached: false })).toEqual({ decision: "draft" });
+  });
+  it("a reply already drafted isn't held back by the cap", () => {
+    expect(policy(base).decision).toBe("approve");
+  });
+});

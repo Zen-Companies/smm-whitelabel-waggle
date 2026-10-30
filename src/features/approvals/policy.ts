@@ -42,7 +42,8 @@ export type PolicyReason =
   | "approval_required"
   | "auto_send"
   | "owner_approved"
-  | "replies_paused";
+  | "replies_paused"
+  | "ai_cap_reached";
 
 export type PolicyDecision =
   | { decision: "pause"; reason: "tenant_inactive" | "account_inactive" }
@@ -55,16 +56,21 @@ export type PolicyDecision =
         | "unclear"
         | "needs_human"
         | "low_confidence"
-        | "dm_window_closed";
+        | "dm_window_closed"
+        | "ai_cap_reached";
     }
   | { decision: "approve"; reason: "approval_required" | "replies_paused" }
   | { decision: "send"; reason: "auto_send" | "owner_approved" };
 
 const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
 
-/** Steps 1-4 without the draft: whether an item is worth drafting at all. */
+/**
+ * Steps 1-4 without the draft: whether an item is worth drafting at all. `aiCapReached`: the
+ * business has used this month's AI allowance (T32), so nothing more is drafted. policy() never
+ * passes it: a reply already drafted was paid for and goes on as usual.
+ */
 export function triage(
-  input: Omit<PolicyInput, "draft" | "lastCustomerMessageAt" | "now">,
+  input: Omit<PolicyInput, "draft" | "lastCustomerMessageAt" | "now"> & { aiCapReached?: boolean },
 ): Extract<PolicyDecision, { decision: "pause" | "ignore" | "escalate" }> | { decision: "draft" } {
   // 1. Not paying or account down: wait (handled before drafting, §11).
   if (!PAYING.includes(input.tenant.subscriptionStatus)) {
@@ -82,11 +88,13 @@ export function triage(
   if (confidence < input.tenant.confidenceThreshold) {
     return { decision: "escalate", reason: "low_confidence" };
   }
+  // The month's AI allowance is used up: it comes to the owner without a suggested reply.
+  if (input.aiCapReached) return { decision: "escalate", reason: "ai_cap_reached" };
   return { decision: "draft" };
 }
 
 export function policy(input: PolicyInput): PolicyDecision {
-  const pre = triage(input);
+  const pre = triage({ ...input, aiCapReached: false });
   if (pre.decision !== "draft") return pre;
 
   // 3. The draft says the knowledge base doesn't cover it (or there is no draft).

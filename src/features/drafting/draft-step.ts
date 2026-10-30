@@ -2,6 +2,7 @@ import { loadPolicyInput, triage } from "@/features/approvals";
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import type { LlmClient } from "@/lib/llm/client";
+import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { generateDraft } from "./generate";
 import { loadThreadHistory } from "./history";
 import { DRAFT_PROMPT_VERSION } from "./prompts";
@@ -22,9 +23,14 @@ export function createDraftStep(deps: { llm: LlmClient; now?: () => Date }): Ste
     const { db } = ctx;
     const now = deps.now?.() ?? new Date();
 
-    // Spam, complaints, unclear, mode off, low confidence or unpaid: no draft.
+    // Spam, complaints, unclear, mode off, low confidence, unpaid or over this month's AI
+    // allowance (T32): no draft. The cap is checked only for messages that would be drafted.
     const { input } = await loadPolicyInput(db, item.id, now);
-    const pre = triage(input);
+    let pre = triage(input);
+    if (pre.decision === "draft") {
+      const spend = await loadTenantAiSpend(db, item.tenantId, now);
+      pre = triage({ ...input, aiCapReached: spend.level === "reached" });
+    }
     if (pre.decision !== "draft") {
       return {
         event: PRE_DRAFT_EVENTS[pre.decision],

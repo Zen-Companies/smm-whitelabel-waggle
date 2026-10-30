@@ -22,6 +22,7 @@ const HELD: Record<string, string> = {
   low_confidence: "The receptionist wasn't sure what this is about.",
   needs_human: "Your business info doesn't cover this question.",
   mode_off: "Replies are off for this kind of message.",
+  ai_cap_reached: "You've used this month's AI allowance, so no reply was suggested.",
   dm_window_closing: "The 24-hour reply window closes within the hour.",
 };
 

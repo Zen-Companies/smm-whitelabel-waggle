@@ -1,5 +1,7 @@
+import { defaultAiCap, loadAiSpend } from "@/lib/llm/spend";
 import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
+import { CapForm } from "./cap-form";
 import { loadCostView } from "./costs";
 import { requireOperator } from "./operator";
 
@@ -18,7 +20,13 @@ const date = (iso: string) =>
 /** Operator page: AI cost per business and per message, plus Zernio's spend per business. */
 export async function CostView() {
   await requireOperator();
-  const view = await loadCostView({ db: getServiceClient(), social: getSocialProvider });
+  const db = getServiceClient();
+  const [view, spend] = await Promise.all([
+    loadCostView({ db, social: getSocialProvider }),
+    loadAiSpend(db, new Date()),
+  ]);
+  const defaultCap = defaultAiCap();
+  const LEVEL = { ok: "", warn: "Over 80%", reached: "Cap reached: not drafting" } as const;
 
   return (
     <div className="flex flex-col gap-8">
@@ -83,6 +91,52 @@ export async function CostView() {
             tied to a business (credits, verification): {usd(view.zernio.unattributedUsd, 2)}.
           </p>
         )}
+      </section>
+
+      <section className="flex flex-col gap-3" aria-labelledby="allowance">
+        <h2 id="allowance" className="section-title">
+          Monthly AI cap
+        </h2>
+        <p className="meta">
+          Live and practice calls this calendar month (UTC); lab calls don&apos;t count. At the cap,
+          messages are still sorted but no reply is drafted; they go to Needs you. Blank uses the
+          default (${defaultCap}, AI_MONTHLY_CAP_USD).
+        </p>
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="meta text-left">
+              <tr className="border-b">
+                <th className="p-3 font-medium">Business</th>
+                <th className="p-3 text-right font-medium">This month</th>
+                <th className="p-3 font-medium">Status</th>
+                <th className="p-3 text-right font-medium">Cap (USD)</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums">
+              {view.tenants.map((t) => {
+                const s = spend.get(t.tenantId);
+                if (!s) return null;
+                return (
+                  <tr key={t.tenantId} className="border-b last:border-0">
+                    <td className="p-3">{t.name}</td>
+                    <td className="p-3 text-right">
+                      {usd(s.spentUsd)} of {usd(s.capUsd, 2)}
+                    </td>
+                    <td className="p-3">{LEVEL[s.level]}</td>
+                    <td className="p-3">
+                      <CapForm
+                        tenantId={t.tenantId}
+                        name={t.name}
+                        cap={s.customCap ? s.capUsd : null}
+                        defaultCap={defaultCap}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <section className="flex flex-col gap-3" aria-labelledby="by-message">

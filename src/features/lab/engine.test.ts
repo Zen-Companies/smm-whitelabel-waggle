@@ -18,6 +18,7 @@ const tenant: TenantSnapshot = {
   subscriptionStatus: "active",
   confidenceThreshold: 0.85,
   repliesPaused: false,
+  aiCapReached: false,
   accountStatus: "active",
   modes: { faq: "approve", lead: "approve" },
 };

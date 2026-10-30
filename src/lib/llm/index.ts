@@ -12,6 +12,15 @@ export type { LlmConfig } from "./config";
 export { resolveModels } from "./provider";
 export { createDbUsageRecorder, openRouterCostUsd, withUsageSource } from "./usage";
 export type { AiPurpose, AiUsageRecord, AiUsageSource, UsageRecorder } from "./usage";
+export {
+  AI_CAP_WARN_RATIO,
+  aiSpendStatus,
+  defaultAiCap,
+  loadAiSpend,
+  loadTenantAiSpend,
+  monthStart,
+} from "./spend";
+export type { AiSpend, AiSpendLevel } from "./spend";
 
 let client: LlmClient | undefined;
 

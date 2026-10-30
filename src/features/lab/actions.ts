@@ -41,7 +41,8 @@ export async function runLab(_prev: LabRunState, formData: FormData): Promise<La
   const db = getServiceClient();
   let tenant;
   try {
-    tenant = await loadTenantSnapshot(db, request.tenantId);
+    // Lab calls are the operator's cost (T32): the business's AI allowance doesn't stop them.
+    tenant = { ...(await loadTenantSnapshot(db, request.tenantId)), aiCapReached: false };
   } catch {
     return { error: "That business wasn't found." };
   }
@@ -131,7 +132,7 @@ export async function runBatchChunk(input: z.infer<typeof batchSchema>): Promise
   if (!set) return { error: "That set isn't available here." };
   let tenant;
   try {
-    tenant = await loadTenantSnapshot(db, set.tenantId ?? tenantId);
+    tenant = { ...(await loadTenantSnapshot(db, set.tenantId ?? tenantId)), aiCapReached: false };
   } catch {
     return { error: "That business wasn't found." };
   }

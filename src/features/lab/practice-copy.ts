@@ -130,6 +130,12 @@ export function practiceCard(result: PreviewResult): PracticeCard {
             next: `Replies for ${topic} are off, so I'd pass it to you.`,
             tone: "owner",
           };
+        case "ai_cap_reached":
+          return {
+            ...base,
+            next: "You've used this month's AI allowance, so I'd pass it to you without a suggested reply.",
+            tone: "owner",
+          };
         default:
           return {
             ...base,
