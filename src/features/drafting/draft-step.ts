@@ -3,6 +3,7 @@ import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import type { LlmClient } from "@/lib/llm/client";
 import { generateDraft } from "./generate";
+import { loadThreadHistory } from "./history";
 import { DRAFT_PROMPT_VERSION } from "./prompts";
 
 const PRE_DRAFT_EVENTS: Record<"pause" | "ignore" | "escalate", StatusEvent> = {
@@ -54,6 +55,8 @@ export function createDraftStep(deps: { llm: LlmClient; now?: () => Date }): Ste
       tenants: { name: string };
     };
 
+    // T30: earlier messages of a DM thread, so a short follow-up keeps its meaning.
+    const history = await loadThreadHistory(db, item.id);
     const { result, facts, model, issues, needsHuman, needsHumanReason } = await generateDraft(
       { db, llm: deps.llm },
       {
@@ -63,6 +66,7 @@ export function createDraftStep(deps: { llm: LlmClient; now?: () => Date }): Ste
         kind,
         category,
         text,
+        history,
         signal: ctx.callSignal,
       },
     );
@@ -92,6 +96,9 @@ export function createDraftStep(deps: { llm: LlmClient; now?: () => Date }): Ste
         model,
         promptVersion: DRAFT_PROMPT_VERSION,
         kbEntryIds: facts.map((f) => f.id),
+        // T31: scores of the topics used, to retune the relevance floor on real messages.
+        kbSimilarities: facts.map((f) => Math.round(f.similarity * 1000) / 1000),
+        historyMessages: history.length,
         needsHuman,
         groundingIssues: issues,
       },

@@ -9,7 +9,17 @@ import {
   toDraftResult,
   type DraftPromptVersion,
   type DraftResult,
+  type ThreadMessage,
 } from "./prompts";
+
+/**
+ * What the business info is searched with (T30): the latest message, plus the customer's previous
+ * message when there is one, so "how about Sunday?" still finds Opening hours.
+ */
+export function retrievalQuery(text: string, history: ThreadMessage[] = []): string {
+  const previous = history.filter((m) => m.from === "customer").slice(-1);
+  return [...previous.map((m) => m.text), text].join("\n").trim();
+}
 
 export interface GeneratedDraft {
   result: DraftResult;
@@ -36,13 +46,15 @@ export async function generateDraft(
     signal?: () => AbortSignal;
     /** Another prompt version (the Lab); production uses the current one. */
     promptVersion?: DraftPromptVersion;
+    /** Earlier messages of the DM thread, oldest first (T30). */
+    history?: ThreadMessage[];
   },
 ): Promise<GeneratedDraft> {
   const prompts = DRAFT_PROMPTS[input.promptVersion ?? DRAFT_PROMPT_VERSION];
   const facts = await retrieveKbEntries(deps, {
     tenantId: input.tenantId,
     itemId: input.itemId,
-    query: input.text,
+    query: retrievalQuery(input.text, input.history),
     signal: input.signal?.(),
   });
   const { object, model } = await deps.llm.generateObject({
@@ -56,6 +68,7 @@ export async function generateDraft(
       category: input.category,
       text: input.text,
       facts,
+      history: input.history,
     }),
     signal: input.signal?.(),
   });

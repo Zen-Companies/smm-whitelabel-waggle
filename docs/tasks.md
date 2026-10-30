@@ -171,8 +171,10 @@ Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
 
 - [x] **T29. Prompt safety and version records:** escape or strip the `<message>` delimiters in customer text (draft prompt and LLM classifier); record `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` with each classification.
       _Note:_ `asMessageData()` (`lib/llm/prompt-data.ts`) replaces any `<message>` / `</message>` tag the customer typed (any case or spacing) with `[tag removed]`; the prompt wording is unchanged, so no version bump. The classify step's status_changed row records `promptVersion` (Jev's question version when Jev answered, the LLM prompt version when the fallback did).
-- [ ] **T30. Thread history:** the last few messages of a DM thread go into the draft prompt and the retrieval query (bounded: more customer text reaches the AI providers).
-- [ ] **T31. Relevance floor:** a minimum similarity in `match_kb_entries`, tuned with T28, not by feel.
+- [x] **T30. Thread history:** the last few messages of a DM thread go into the draft prompt and the retrieval query (bounded: more customer text reaches the AI providers).
+      _Note:_ draft prompt 2026-10-30.1: up to 4 earlier messages (customer messages and sent replies, 300 characters each) in an `<earlier>` block before the latest message, with rule 8 (context only, facts still only from Business info); tags neutralised like `<message>`. Retrieval searches the latest message plus the customer's previous one. Comments have no thread. The 2026-10-29.1 prompt stays in the Lab. `draft_created` records `historyMessages`.
+- [x] **T31. Relevance floor:** a minimum similarity in `match_kb_entries`, tuned with T28, not by feel.
+      _Note:_ applied in `retrieveKbEntries` (no migration): `RETRIEVAL_MIN_SIMILARITY` 0.25, `KB_MIN_SIMILARITY` overrides it. Tuned on the live test's Lab tries (right topic 0.48 to 0.52, unrelated 0.07 to 0.13 with the free nvidia embedding model); only 4 tries, so `draft_created` now records `kbSimilarities` to retune on real messages. Retune when `EMBEDDING_MODEL` changes. If nothing clears the floor, the prompt gets no facts and the draft goes to the owner.
 - [ ] **T32. Monthly AI spend cap per business** from `ai_usage` (live and practice; lab excluded).
 - [ ] **T33. First agent: business-info gap helper:** groups "Questions your info didn't answer" and drafts new topics for the owner to approve. Needs a tool-calling method in `src/lib/llm` that records `ai_usage` per step and caps steps.
 

@@ -491,6 +491,8 @@ As built (T9, `features/drafting`):
 
 - **Tests:** `tests/integration/kb.test.ts` runs the real client → OpenRouter HTTP → pgvector path, with OpenRouter faked by a deterministic bag-of-words embedding (plumbing, ordering, tenant scoping, stale writes; not model quality).
 
+**Thread history and relevance floor (T30, T31).** For a DM, the draft step loads up to 4 earlier messages of the conversation (the customer's and the replies that went out, oldest first, 300 characters each) into an `<earlier>` block; the system prompt's rule 8 says they are context only. The business info is searched with the latest message plus the customer's previous one. Retrieval drops topics below `KB_MIN_SIMILARITY` (default 0.25 for the free nvidia embedding model; scores are model-specific). `draft_created` records `historyMessages` and `kbSimilarities`.
+
 ## 11. Policy check (`features/approvals/policy.ts`, pure function)
 
 Input: item, classification, draft, tenant, account, autonomy mode, now. Output: `'send' | 'approve' | 'escalate' | 'ignore'` + reason.

@@ -156,6 +156,70 @@ afterAll(async () => {
   for (const id of userIds) await db.auth.admin.deleteUser(id);
 });
 
+describe("thread history (T30)", () => {
+  it("a short follow-up gets the earlier messages as context and still finds its topic", async () => {
+    const { data: c } = await db
+      .from("conversations")
+      .insert({
+        tenant_id: tenantId,
+        social_account_id: accountId,
+        zernio_conversation_id: `conv_${randomUUID()}`,
+        platform: "instagram",
+        last_customer_message_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    const dm = async (text: string, status: string, agoMin: number) => {
+      const id = randomUUID();
+      const { error } = await db.from("inbound_items").insert({
+        id,
+        tenant_id: tenantId,
+        social_account_id: accountId,
+        kind: "dm",
+        zernio_message_id: `m_${id}`,
+        conversation_id: c!.id,
+        text,
+        received_at: new Date(Date.now() - agoMin * 60_000).toISOString(),
+        status,
+        category: "faq",
+        confidence: 0.95,
+      });
+      if (error) throw error;
+      return id;
+    };
+    const first = await dm("What are your opening hours on Saturday?", "sent", 10);
+    await db.from("drafts").insert({
+      tenant_id: tenantId,
+      item_id: first,
+      body: "Saturdays 8am to 10pm!",
+      status: "sent",
+      sent_at: new Date(Date.now() - 9 * 60_000).toISOString(),
+    });
+    const followUp = await dm("how about sunday?", "classified", 0);
+    nextDraft = { reply: "Sundays too, 8am to 10pm!", needsHuman: false, reason: null, lead: null };
+
+    await run();
+
+    const user = textOf(chatBodies.at(-1)!.messages.find((m) => m.role === "user")?.content);
+    expect(user).toContain(
+      "<earlier>\nCustomer: What are your opening hours on Saturday?\nYou: Saturdays 8am to 10pm!\n</earlier>",
+    );
+    expect(user).toContain("<message>\nhow about sunday?\n</message>");
+    const [draft] = await draftsOf(followUp);
+    expect(draft.kb_entry_ids[0]).toBe(kb.hours);
+    const { data: audit } = await db
+      .from("audit_log")
+      .select("details")
+      .eq("item_id", followUp)
+      .eq("action", "draft_created")
+      .single();
+    expect(audit?.details).toMatchObject({ historyMessages: 2 });
+    expect((audit?.details as { kbSimilarities: number[] }).kbSimilarities[0]).toBeGreaterThan(
+      0.25,
+    );
+  });
+});
+
 describe("draft step", () => {
   it("a covered question gets a KB-grounded draft and waits for approval", async () => {
     nextDraft = {
