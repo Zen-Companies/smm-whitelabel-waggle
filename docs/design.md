@@ -1,6 +1,6 @@
 # Design system: Friendly Local (refined)
 
-Status: v2 · Brand name TBD (use `[Brand]` everywhere a name would go) · Sources: design canvas "AI Receptionist Brand Directions", Friendly Local boards (tokens, components); canvas "AI Receptionist: screen design v2" (layout and screens, §8).
+Status: v2 · Brand name: BizBell (temporary working name) · Sources: design canvas "AI Receptionist Brand Directions", Friendly Local boards (tokens, components); canvas "AI Receptionist: screen design v2" (layout and screens, §8).
 
 Warm and a little playful, never cheap. Personality lives in the display type, the words, spot illustrations and a few signature moments. Everything else is calm, neutral and precise.
 
@@ -134,7 +134,7 @@ Rules for every page (screen design v2):
 5. **Owners see outcomes, not machinery** (§1.5).
 6. **No dead-end links.** If something needs more room, the page gives it room instead of linking away. `/inbox/items/<id>` (from emails and notifications) redirects into the inbox with the item selected.
 
-- App shell: white sidebar (224px) with `[Brand]` wordmark (Bricolage 24/800) + violet dot logo placeholder and the bell; main area on `--gray-25`.
+- App shell: white sidebar (224px) with `BizBell` wordmark (Bricolage 24/800) + violet dot logo placeholder and the bell; main area on `--gray-25`.
 - Responsive: the sidebar stacks on phone widths; three-pane pages become list → detail (a "← All messages" link back), and the context panel moves under the detail below `xl`.
 
 Screens:

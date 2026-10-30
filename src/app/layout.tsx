@@ -16,7 +16,7 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: { default: "[Brand]", template: "%s · [Brand]" },
+  title: { default: "BizBell", template: "%s · BizBell" },
   description: "Your friendly receptionist for Instagram and Facebook.",
 };
 
