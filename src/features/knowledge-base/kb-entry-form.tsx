@@ -14,10 +14,15 @@ import { KB_CONTENT_MAX, KB_TITLE_MAX } from "./limits";
 export function KbEntryForm({
   entry,
   prefillTitle,
+  prefillContent,
+  suggestionId,
   changed,
 }: {
   entry?: { id: string; title: string; content: string; searchable: boolean };
   prefillTitle?: string;
+  /** A suggested topic's wording, with [...] blanks for the owner's facts (T33). */
+  prefillContent?: string;
+  suggestionId?: string;
   /** "Oct 28", when the topic was last changed. */
   changed?: string;
 }) {
@@ -38,6 +43,7 @@ export function KbEntryForm({
         {entry ? entry.title : "New topic"}
       </h2>
       {entry && <input type="hidden" name="id" value={entry.id} />}
+      {suggestionId && <input type="hidden" name="suggestionId" value={suggestionId} />}
       <div className="flex flex-col gap-1.5">
         <label htmlFor={`title-${key}`} className="text-sm font-medium">
           Topic
@@ -59,7 +65,7 @@ export function KbEntryForm({
         <textarea
           id={`content-${key}`}
           name="content"
-          defaultValue={entry?.content}
+          defaultValue={entry?.content ?? prefillContent}
           placeholder="e.g. Mon to Fri 7am to 9pm, weekends 8am to 10pm."
           maxLength={KB_CONTENT_MAX}
           rows={6}
@@ -68,6 +74,11 @@ export function KbEntryForm({
           aria-invalid={state.error ? true : undefined}
           className="field"
         />
+        {suggestionId && !state.error && (
+          <p className="meta">
+            Replace each [...] with your own details. Nothing is used until you add it.
+          </p>
+        )}
         {state.error && (
           <p role="alert" className="text-danger text-sm">
             {state.error}

@@ -4,23 +4,29 @@ import { buttonVariants } from "@/components/ui/button";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "cn";
+import { dismissSuggestion } from "./gap-actions";
+import { GAP_HELPER_MIN_QUESTIONS } from "./gap-helper";
+import { loadGaps, loadPendingSuggestions } from "./gaps";
 import { KbEntryForm } from "./kb-entry-form";
 import { KB_TITLE_MAX } from "./limits";
+import { SuggestButton } from "./suggest-button";
 import { matchTopics, usageByEntry, usageText } from "./usage";
 
 // Business info (design v2): topics with search and how often each was used | the one topic being
-// edited | questions customers asked that the info didn't answer, with "Add an answer".
+// edited | questions customers asked that the info didn't answer, with "Add an answer" and the gap
+// helper's suggested topics (T33).
 
 const weekAgo = () => new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
 
 /** "today" instead of a clock time. */
 const dayOnly = (label: string) => (/\d:\d/.test(label) ? "today" : label);
 
-function href(p: { topic?: string; q?: string; from?: string }) {
+function href(p: { topic?: string; q?: string; from?: string; suggestion?: string }) {
   const s = new URLSearchParams();
   if (p.q) s.set("q", p.q);
   if (p.topic) s.set("topic", p.topic);
   if (p.from) s.set("from", p.from);
+  if (p.suggestion) s.set("suggestion", p.suggestion);
   const out = s.toString();
   return out ? `/knowledge-base?${out}` : "/knowledge-base";
 }
@@ -35,11 +41,12 @@ export async function KbList({
   const q = str("q") ?? "";
   const topicParam = str("topic");
   const from = str("from");
+  const suggestionParam = str("suggestion");
 
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
   const since = weekAgo();
-  const [{ data: entryRows }, { data: drafts }, { data: gapRows }] = await Promise.all([
+  const [{ data: entryRows }, { data: drafts }, gaps, suggestions] = await Promise.all([
     supabase
       .from("kb_entries")
       .select("id, title, content, embedding, updated_at")
@@ -51,27 +58,19 @@ export async function KbList({
       .eq("tenant_id", tenant.id)
       .gte("created_at", since),
     // Questions the info couldn't answer that are still waiting for the owner.
-    supabase
-      .from("drafts")
-      .select("item_id, created_at, inbound_items!inner (text, author_name, status)")
-      .eq("tenant_id", tenant.id)
-      .eq("needs_human", true)
-      .eq("inbound_items.status", "escalated")
-      .order("created_at", { ascending: false })
-      .limit(5),
+    loadGaps(supabase, tenant.id, 5),
+    loadPendingSuggestions(supabase, tenant.id),
   ]);
   const entries = entryRows ?? [];
   const usage = usageByEntry(drafts ?? []);
-  const gaps = (gapRows ?? []) as unknown as {
-    item_id: string;
-    created_at: string;
-    inbound_items: { text: string; author_name: string | null; status: string };
-  }[];
   const shown = matchTopics(entries, q);
   const isNew = topicParam === "new" || entries.length === 0;
   const selected = isNew ? undefined : (entries.find((e) => e.id === topicParam) ?? shown[0]);
-  const gap = from ? gaps.find((g) => g.item_id === from) : undefined;
-  const prefill = gap?.inbound_items.text.slice(0, KB_TITLE_MAX);
+  const gap = from ? gaps.find((g) => g.itemId === from) : undefined;
+  const suggestion = suggestionParam
+    ? suggestions.find((s) => s.id === suggestionParam)
+    : undefined;
+  const prefill = suggestion?.title ?? gap?.text.slice(0, KB_TITLE_MAX);
 
   return (
     <>
@@ -144,7 +143,12 @@ export async function KbList({
             changed={dayOnly(shortTime(selected.updated_at))}
           />
         ) : (
-          <KbEntryForm key={`new-${from ?? ""}`} prefillTitle={prefill} />
+          <KbEntryForm
+            key={`new-${from ?? ""}-${suggestion?.id ?? ""}`}
+            prefillTitle={prefill}
+            prefillContent={suggestion?.content}
+            suggestionId={suggestion?.id}
+          />
         )}
 
         <aside
@@ -164,13 +168,13 @@ export async function KbList({
               <p className="meta">Add an answer once and the receptionist can reply next time.</p>
               <ul className="flex flex-col divide-y">
                 {gaps.map((g) => (
-                  <li key={g.item_id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
-                    <span className="text-sm">&ldquo;{g.inbound_items.text}&rdquo;</span>
+                  <li key={g.itemId} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
+                    <span className="text-sm">&ldquo;{g.text}&rdquo;</span>
                     <span className="meta">
-                      {g.inbound_items.author_name ?? "A customer"} · {shortTime(g.created_at)}
+                      {g.authorName ?? "A customer"} · {shortTime(g.createdAt)}
                     </span>
                     <Link
-                      href={href({ topic: "new", from: g.item_id })}
+                      href={href({ topic: "new", from: g.itemId })}
                       className="text-violet-strong -ml-3 flex min-h-11 items-center self-start px-3 text-sm font-medium"
                     >
                       Add an answer
@@ -178,7 +182,48 @@ export async function KbList({
                   </li>
                 ))}
               </ul>
+              {gaps.length >= GAP_HELPER_MIN_QUESTIONS && <SuggestButton />}
             </>
+          )}
+          {suggestions.length > 0 && (
+            <section aria-labelledby="suggested" className="flex flex-col gap-2 border-t pt-3">
+              <h3 id="suggested" className="font-semibold">
+                Suggested topics
+              </h3>
+              <p className="meta">
+                Grouped from these questions. You fill in the details; nothing is used until you add
+                it.
+              </p>
+              <ul className="flex flex-col divide-y">
+                {suggestions.map((s) => (
+                  <li key={s.id} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
+                    <span className="text-sm font-medium">{s.title}</span>
+                    <span className="meta">
+                      {s.questions === 1
+                        ? "Answers 1 question"
+                        : `Answers ${s.questions} questions`}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={href({ topic: "new", suggestion: s.id })}
+                        className="text-violet-strong -ml-3 flex min-h-11 items-center px-3 text-sm font-medium"
+                      >
+                        Add this topic
+                      </Link>
+                      <form action={dismissSuggestion}>
+                        <input type="hidden" name="id" value={s.id} />
+                        <button
+                          type="submit"
+                          className="hover:text-ink flex min-h-11 items-center px-3 text-sm text-gray-700"
+                        >
+                          Not needed
+                        </button>
+                      </form>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </aside>
       </div>

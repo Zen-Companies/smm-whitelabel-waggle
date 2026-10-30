@@ -44,6 +44,40 @@ export function chatCompletion(
   });
 }
 
+/** A step where the model calls tools (OpenAI chat format, as OpenRouter returns it). */
+export function toolCallCompletion(
+  calls: { name: string; args: Record<string, unknown> }[],
+  opts: { cost?: number } = {},
+) {
+  return json({
+    id: "gen-tools",
+    object: "chat.completion",
+    created: 1_761_652_800,
+    model: "openai/gpt-5",
+    choices: [
+      {
+        index: 0,
+        message: {
+          role: "assistant",
+          content: null,
+          tool_calls: calls.map((c, i) => ({
+            id: `call_${i}`,
+            type: "function",
+            function: { name: c.name, arguments: JSON.stringify(c.args) },
+          })),
+        },
+        finish_reason: "tool_calls",
+      },
+    ],
+    usage: {
+      prompt_tokens: 100,
+      completion_tokens: 10,
+      total_tokens: 110,
+      ...(opts.cost === undefined ? {} : { cost: opts.cost }),
+    },
+  });
+}
+
 export function embeddingResponse(
   embedding: number[],
   opts: { cost?: number; tokens?: number } = {},

@@ -512,6 +512,57 @@ export type Database = {
           },
         ]
       }
+      kb_suggestions: {
+        Row: {
+          content: string
+          created_at: string
+          decided_at: string | null
+          id: string
+          item_ids: string[]
+          kb_entry_id: string | null
+          status: string
+          tenant_id: string
+          title: string
+        }
+        Insert: {
+          content?: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          item_ids?: string[]
+          kb_entry_id?: string | null
+          status?: string
+          tenant_id: string
+          title: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          decided_at?: string | null
+          id?: string
+          item_ids?: string[]
+          kb_entry_id?: string | null
+          status?: string
+          tenant_id?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kb_suggestions_kb_entry_id_fkey"
+            columns: ["kb_entry_id"]
+            isOneToOne: false
+            referencedRelation: "kb_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kb_suggestions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lab_cases: {
         Row: {
           created_at: string

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { createLlmClient } from "./client";
+import { tool } from "ai";
+import { AGENT_MAX_STEPS, createLlmClient } from "./client";
 import { loadLlmConfig } from "./config";
 import {
   chatCompletion,
@@ -8,6 +9,7 @@ import {
   errorResponse,
   fakeOpenRouter,
   memoryUsage,
+  toolCallCompletion,
 } from "./test-utils";
 
 const schema = z.object({ answer: z.string() });
@@ -172,5 +174,65 @@ describe("loadLlmConfig", () => {
         LLM_PROVIDER: "anthropic",
       }),
     ).toThrow(/LLM_PROVIDER/);
+  });
+});
+
+describe("createLlmClient.runTools (T33)", () => {
+  const tools = {
+    list_topics: tool({
+      description: "Topics",
+      inputSchema: z.object({}),
+      execute: async () => [{ title: "Opening hours" }],
+    }),
+  };
+
+  it("runs the tools, returns the final answer and records one ai_usage row per step", async () => {
+    let calls = 0;
+    const bodies: Record<string, unknown>[] = [];
+    const { models } = fakeOpenRouter((_url, body) => {
+      bodies.push(body);
+      calls += 1;
+      return calls === 1
+        ? toolCallCompletion([{ name: "list_topics", args: {} }], { cost: 0.001 })
+        : chatCompletion({ answer: "Parking" }, { model: "openai/gpt-5", cost: 0.002 });
+    });
+    const usage = memoryUsage();
+    const result = await createLlmClient({ models, usage }).runTools({
+      tenantId: "tenant-1",
+      purpose: "agent",
+      schema,
+      system: "Suggest topics.",
+      prompt: "Go.",
+      tools,
+      maxSteps: 4,
+    });
+
+    expect(result).toMatchObject({ object: { answer: "Parking" }, steps: 2 });
+    expect(usage.records.map((r) => [r.purpose, r.costUsd])).toEqual([
+      ["agent", 0.001],
+      ["agent", 0.002],
+    ]);
+    // The tool's result went back to the model in the second call.
+    expect(JSON.stringify(bodies[1])).toContain("Opening hours");
+  });
+
+  it("stops at the step cap: a run still calling tools fails, and its calls are recorded", async () => {
+    const { fetchMock, models } = fakeOpenRouter(() =>
+      toolCallCompletion([{ name: "list_topics", args: {} }]),
+    );
+    const usage = memoryUsage();
+    await expect(
+      createLlmClient({ models, usage }).runTools({
+        tenantId: "tenant-1",
+        purpose: "agent",
+        schema,
+        system: "s",
+        prompt: "p",
+        tools,
+        maxSteps: 50,
+      }),
+    ).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(AGENT_MAX_STEPS);
+    expect(usage.records).toHaveLength(AGENT_MAX_STEPS);
   });
 });

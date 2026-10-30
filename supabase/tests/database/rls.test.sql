@@ -2,7 +2,7 @@
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(57);
+select plan(61);
 
 -- Fixtures, as postgres (bypasses RLS) ---------------------------------------------------------
 
@@ -53,6 +53,10 @@ insert into public.audit_log (tenant_id, item_id, action, actor) values
 insert into public.ai_usage (tenant_id, item_id, purpose, provider, model) values
   ('a1000000-0000-4000-8000-000000000001', 'a4000000-0000-4000-8000-000000000001', 'classify', 'jev', 'jev-test'),
   ('b1000000-0000-4000-8000-000000000001', 'b4000000-0000-4000-8000-000000000001', 'classify', 'jev', 'jev-test');
+
+insert into public.kb_suggestions (tenant_id, title) values
+  ('a1000000-0000-4000-8000-000000000001', 'Parking A'),
+  ('b1000000-0000-4000-8000-000000000001', 'Parking B');
 
 insert into public.webhook_events (id, source, event_type, payload)
 values ('evt_1', 'zernio', 'message.received', '{}');
@@ -115,6 +119,7 @@ select results_eq($$ select count(*)::int from public.ai_usage $$, array[1], 'ai
 select throws_ok($$ select * from public.webhook_events $$, '42501', null, 'webhook_events: no client access');
 select throws_ok($$ select * from public.lab_cases $$, '42501', null, 'lab_cases: no client access');
 select throws_ok($$ select * from public.lab_runs $$, '42501', null, 'lab_runs: no client access');
+select results_eq($$ select title from public.kb_suggestions $$, $$ values ('Parking A') $$, 'kb_suggestions: only A');
 
 -- Writes on B's rows: updates and deletes match nothing, inserts are refused.
 
@@ -167,6 +172,10 @@ select throws_ok($$ insert into public.tenant_members (tenant_id, user_id) value
 select throws_ok($$ insert into public.tenants (name) values ('new') $$, '42501', null, 'cannot create tenants');
 select throws_ok($$ update public.tenants set subscription_status = 'active' $$, '42501', null, 'cannot change own billing status');
 select throws_ok($$ update public.kb_entries set embedding = null $$, '42501', null, 'cannot write embeddings');
+select throws_ok($$ update public.tenants set ai_monthly_cap_usd = 1000 $$, '42501', null, 'cannot raise own AI cap');
+select throws_ok($$ insert into public.kb_suggestions (tenant_id, title) values ('a1000000-0000-4000-8000-000000000001', 'x') $$,
+  '42501', null, 'cannot insert kb_suggestions');
+select throws_ok($$ update public.kb_suggestions set status = 'accepted' $$, '42501', null, 'cannot update kb_suggestions');
 select throws_ok($$ update public.posts set status = 'published' $$, '42501', null, 'cannot change post status');
 
 -- Allowed writes in A's own tenant.

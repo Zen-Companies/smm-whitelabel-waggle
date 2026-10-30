@@ -495,6 +495,8 @@ As built (T9, `features/drafting`):
 
 **Monthly AI spend cap (T32).** `public.ai_spend_since(since, tenant?)` (service role) sums `ai_usage.cost_usd` without lab calls; `lib/llm/spend.ts` compares this calendar month's (UTC) spend with `tenants.ai_monthly_cap_usd ?? AI_MONTHLY_CAP_USD` (default 20): `ok`, `warn` from 80%, `reached`. The draft step checks it only when `triage()` says draft; at the cap `triage({ aiCapReached: true })` escalates with `ai_cap_reached`, so no draft and no AI call, while classification still runs. `policy()` ignores the cap (a reply already paid for goes on). Practice and recent messages use the same flag; operator Lab runs don't.
 
+**Gap helper, the first agent (T33).** `LlmClient.runTools({ tools, schema, maxSteps })` wraps `generateText` with tools, `Output.object` for the final answer and `stopWhen: stepCountIs(min(maxSteps, 6))`; `onStepEnd` records each model call (`purpose: agent`). The helper reads up to 20 unanswered questions (items `escalated` with a `needs_human` draft, minus those a pending suggestion covers) through tools; customer text passes through `asMessageData` and is described as data. Output is cleaned in code (`cleanSuggestions`): known question ids only, new unique titles, at most 5, and no facts (digits, currency or missing `[...]` → `[...]`). Suggestions are stored in `kb_suggestions` (pending → accepted with `kb_entry_id`, or dismissed); `kb_suggestions_requested` audits counts, steps and model.
+
 ## 11. Policy check (`features/approvals/policy.ts`, pure function)
 
 Input: item, classification, draft, tenant, account, autonomy mode, now. Output: `'send' | 'approve' | 'escalate' | 'ignore'` + reason.

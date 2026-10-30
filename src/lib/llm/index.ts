@@ -5,8 +5,8 @@ import { loadLlmConfig } from "./config";
 import { resolveModels } from "./provider";
 import { createDbUsageRecorder } from "./usage";
 
-export { createLlmClient } from "./client";
-export type { GenerateObjectInput, LlmCallContext, LlmClient } from "./client";
+export { AGENT_MAX_STEPS, createLlmClient } from "./client";
+export type { GenerateObjectInput, LlmCallContext, LlmClient, RunToolsInput } from "./client";
 export { loadLlmConfig } from "./config";
 export type { LlmConfig } from "./config";
 export { resolveModels } from "./provider";
