@@ -21,7 +21,7 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 export const MODE_LABELS: Record<AutonomyMode, string> = {
   off: "Off",
   approve: "Ask me first",
-  auto: "Auto-send",
+  auto: "Auto-reply",
 };
 
 export const MODE_DESCRIPTIONS: Record<AutonomyMode, string> = {

@@ -15,17 +15,17 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 **Click:** sign in as owner@example.com. You land on **Inbox**.
 
-**Say:** "This is Harbour Bean Café, a small café in Cubao. Every comment and DM from their Instagram and Facebook lands in one inbox, and the receptionist has already written a reply from the café's own business info."
+**Say:** "This is Harbour Bean Café, a small café in Cubao. Every comment and DM from their Instagram and Facebook lands in one inbox, and Waggle has already written a reply from the café's own business info."
 
 ## 2. The inbox (0:30)
 
-**Click:** nothing yet. Point at the **To approve** tab, the list on the left and the open card on the right.
+**Click:** nothing yet. Point at the café's name and the honey **Today** card at the top (answered, for you, ignored), then the **For you** chip, the cards on the left (the ones with a honey border need the owner) and the open card on the right.
 
 **Say:** "The customer who has waited longest is at the top. Each message shows who sent it, where, and what kind of message it is. On the right: the customer's message, the suggested reply, and the facts it used: here, 'Payments'. It never makes up prices or promises. The keyboard hints are for owners who handle a lot of messages: A to approve, E to edit, J for the next one."
 
 ## 3. Approve a reply (1:00)
 
-**Click:** on Paolo Cruz's "Tumatanggap kayo ng GCash?", press **A** (or click **Approve and send**). The card turns into "Sent to Paolo Cruz · Undo".
+**Click:** on Paolo Cruz's "Tumatanggap kayo ng GCash?", press **A** (or click **Approve and send**). The card turns into "Answered Paolo Cruz · Undo", with a small honey trail next to the check.
 
 **Click:** **Undo**. The card comes back. Press **A** again and let it go.
 
@@ -39,15 +39,15 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 ## 5. A lead (2:00)
 
-**Click:** select Carlo Mendoza's DM (the coral **Lead** label). Then open **Leads** in the sidebar.
+**Click:** select Carlo Mendoza's DM (the honey **HOT LEAD** label). Then open **Leads** in the sidebar.
 
-**Say:** "Carlo wants a table for 8 on Saturday. That's a lead: a booking, an order or a quote request. The receptionist saves his name, number and request, and the owner gets an email. Every lead links back to the conversation."
+**Say:** "Carlo wants a table for 8 on Saturday. That's a lead: a booking, an order or a quote request. Waggle saves his name, number and request, and the owner gets an email. Every lead links back to the conversation."
 
 ## 6. Messages that need the owner (2:30)
 
-**Click:** **Inbox** → **Needs you**. Show three of them:
+**Click:** **Inbox** → stay on **For you** (messages handed to the owner sit with the replies to approve). Show three of them:
 
-- **jen.dc** (amber **Complaint**): "Complaints always come to you. The receptionist never answers them on its own."
+- **jen.dc** (the **COMPLAINT** label): "Complaints always come to you. Waggle never answers them on its own."
 - **Liza Tan**: "This one shows what happens when something can't be sent: Instagram's 24-hour reply window closed before the reply went out. It says why and how to fix it: copy the reply, answer on Instagram, mark it as handled."
 - **aisha.k** ("Is your kitchen halal certified?"): "The business info doesn't cover this, so it asks the owner instead of guessing."
 
@@ -55,13 +55,13 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 **Click:** the **bell** at the top of the sidebar.
 
-**Say:** "Everything that needs you is here too: the new lead, the messages waiting for you, and updates like 'replies sent automatically' and posts that went live. The violet number only counts things that need you. Opening an item clears its dot."
+**Say:** "Everything that needs you is here too: the new lead, the messages waiting for you, and updates like 'replies sent automatically' and posts that went live. The honey number only counts things that need you. Opening an item clears its dot."
 
 **Click:** close the panel.
 
 ## 8. The trail behind a reply (3:45)
 
-**Click:** **Inbox** → **Sent** → kenji.o's oat milk question. Point at **Activity** on the right.
+**Click:** **Inbox** → **Answered** → kenji.o's oat milk question. Point at **Activity** on the right.
 
 **Say:** "Every reply can be traced, in plain words: when it came in, what kind of message it was, which of your business info the reply was written from, who approved it, when it was sent." (What the AI cost per message is on the operator's Costs page, not in the owner's view.)
 
@@ -69,13 +69,13 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 **Click:** **Posts**. Type a short post (for example "Fresh croissants out of the oven!"), keep **Now**, click **Post now**.
 
-**Say:** "The same app publishes posts, on a calendar: you see at a glance which days have a post. A post scheduled for tomorrow sits on its day, and the amber line says one couldn't go out while posting was paused, with a button to pick a new time. Click any empty day to plan a post for it."
+**Say:** "The same app publishes posts, on a calendar: you see at a glance which days have a post. A post scheduled for tomorrow sits on its day, and the honey line says one couldn't go out while posting was paused, with a button to pick a new time. Click any empty day to plan a post for it."
 
 ## 10. Settings and business info (4:40)
 
 **Click:** **Settings** → the **Replies** section. Then **Business info**.
 
-**Say:** "The owner decides how much the receptionist does: for questions and leads, Off, Ask me first, or Auto-send. Complaints and unclear messages always come to the owner. And this is the business info: hours, prices, policies. It's the only thing the receptionist is allowed to use in a reply."
+**Say:** "The owner decides how much Waggle does: for questions and leads, Off, Ask me first, or Auto-reply. Complaints and unclear messages always come to the owner. And this is the business info: hours, prices, policies. It's the only thing Waggle is allowed to use in a reply."
 
 ## Close (5:00)
 

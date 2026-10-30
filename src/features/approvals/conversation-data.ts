@@ -125,10 +125,10 @@ export function activityLines(
 }
 
 /** Pure: which inbox tab shows an item, so old /inbox/items/<id> links land on the right one. */
-export function tabForStatus(status: string): "waiting" | "needs" | "sent" {
-  if (status === "escalated" || status === "failed") return "needs";
-  if (status === "sent" || status === "sending" || status === "handled") return "sent";
-  return "waiting";
+export function tabForStatus(status: string): "for_you" | "answered" | "ignored" {
+  if (status === "sent" || status === "sending") return "answered";
+  if (status === "ignored" || status === "handled" || status === "rejected") return "ignored";
+  return "for_you";
 }
 
 export async function loadConversation(

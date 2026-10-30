@@ -107,7 +107,7 @@ function ComposeFields({
         <div className="flex items-center gap-3">
           <label
             htmlFor="post-image"
-            className="flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed border-gray-200 text-center text-xs text-gray-600 hover:bg-gray-50 has-[:focus-visible]:outline-2"
+            className="border-line-strong text-pollen hover:bg-hive-high flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed text-center text-xs has-[:focus-visible]:outline-2"
           >
             {photo ? "Change photo" : "Add photo"}
             <input
@@ -127,7 +127,7 @@ function ComposeFields({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Post to</legend>
         {accounts.length === 0 && (
-          <p className="text-muted-foreground text-sm">Connect an account in Settings first.</p>
+          <p className="text-pollen text-sm">Connect an account in Settings first.</p>
         )}
         {accounts.map((a) => (
           <label key={a.id} className="flex min-h-11 items-center gap-3 text-sm">

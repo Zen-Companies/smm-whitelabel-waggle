@@ -10,9 +10,9 @@ export default function LabPage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="page-title">Lab</h1>
-          <p className="text-gray-700">Check Waggle before it replies on its own.</p>
+          <p className="text-wax-muted">Check Waggle before it replies on its own.</p>
         </div>
-        <span className="flex min-h-9 items-center rounded-full bg-gray-50 px-3.5 text-sm text-gray-700">
+        <span className="bg-hive-high text-wax-muted flex min-h-9 items-center rounded-full px-3.5 text-sm">
           Practice only: nothing is posted
         </span>
       </header>

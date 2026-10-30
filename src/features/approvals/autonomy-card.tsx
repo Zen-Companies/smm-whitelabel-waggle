@@ -28,7 +28,7 @@ export async function AutonomyCard() {
         <h2 id="autonomy-heading" className="section-title">
           Replies
         </h2>
-        <p className="text-gray-700">
+        <p className="text-wax-muted">
           What Waggle does with each kind of message. Changes apply to the next message.
         </p>
       </div>
@@ -48,21 +48,21 @@ export async function AutonomyCard() {
             <div key={category} className="contents">
               <dt className="flex flex-col">
                 <span className="font-semibold">{CATEGORY_LABELS[category]}</span>
-                <span className="text-sm text-gray-700">{CATEGORY_HINTS[category]}</span>
+                <span className="text-wax-muted text-sm">{CATEGORY_HINTS[category]}</span>
               </dt>
-              <dd className="text-sm font-medium text-gray-700">{FIXED_BEHAVIOUR[category]}</dd>
+              <dd className="text-wax-muted text-sm font-medium">{FIXED_BEHAVIOUR[category]}</dd>
             </div>
           ))}
         </dl>
       </div>
       <Link
         href="/lab"
-        className="card flex items-center gap-3 p-5 transition-colors duration-150 hover:bg-gray-50"
+        className="card hover:bg-hive-high flex items-center gap-3 p-5 transition-colors duration-150"
       >
         <FlaskConical strokeWidth={1.75} className="size-5 shrink-0" aria-hidden />
         <span className="flex flex-col">
           <span className="font-semibold">Not sure yet? Try it in Lab</span>
-          <span className="text-sm text-gray-700">
+          <span className="text-wax-muted text-sm">
             Try a message and see whether Waggle is ready to reply on its own.
           </span>
         </span>

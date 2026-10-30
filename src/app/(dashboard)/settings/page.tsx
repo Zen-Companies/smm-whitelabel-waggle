@@ -30,9 +30,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
             aria-current={s.key === section ? "page" : undefined}
             className={cn(
               "flex min-h-11 items-center justify-between rounded-md px-3 text-sm font-medium",
-              s.key === section
-                ? "bg-lavender text-violet-strong"
-                : "text-gray-700 hover:bg-gray-50",
+              s.key === section ? "bg-hive-high text-honey" : "text-wax-muted hover:bg-hive-high",
             )}
           >
             {s.label}

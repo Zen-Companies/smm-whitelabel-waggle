@@ -16,7 +16,7 @@ function StatusPill({ r }: { r: CategoryReadiness }) {
     return (
       <span className="bg-success-soft text-success inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-xs font-semibold">
         <Check className="size-3.5" strokeWidth={2} aria-hidden />
-        Auto-send is on
+        Auto-reply is on
       </span>
     );
   }
@@ -26,8 +26,8 @@ function StatusPill({ r }: { r: CategoryReadiness }) {
       Ready
     </span>
   ) : (
-    <span className="bg-amber-soft text-amber-text inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-xs font-semibold">
-      <span className="bg-amber size-1.5 rounded-full" aria-hidden />
+    <span className="bg-banner text-honey-light inline-flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 text-xs font-semibold">
+      <span className="bg-honey size-1.5 rounded-full" aria-hidden />
       Not yet
     </span>
   );
@@ -40,10 +40,10 @@ function Progress({ r }: { r: CategoryReadiness }) {
       <div
         role="img"
         aria-label={`${r.progress.done} of ${r.progress.of}`}
-        className="h-2 overflow-hidden rounded-full bg-gray-100"
+        className="bg-hive-high h-2 overflow-hidden rounded-full"
       >
         <div
-          className={r.ready ? "bg-success h-2 rounded-full" : "bg-amber h-2 rounded-full"}
+          className={r.ready ? "bg-success h-2 rounded-full" : "bg-honey h-2 rounded-full"}
           style={{ width: `${pct}%` }}
         />
       </div>
@@ -88,7 +88,7 @@ function CategoryCard({ category, r }: { category: ConfigurableCategory; r: Cate
                   href={
                     c.topicId ? `/knowledge-base?topic=${c.topicId}` : "/knowledge-base?topic=new"
                   }
-                  className="text-violet-strong text-sm font-medium whitespace-nowrap"
+                  className="text-honey text-sm font-medium whitespace-nowrap"
                 >
                   {c.topicId ? "Fix in Business info" : "Add an answer"}
                 </Link>
@@ -100,7 +100,7 @@ function CategoryCard({ category, r }: { category: ConfigurableCategory; r: Cate
 
       {r.edits.length > 0 && (
         <details>
-          <summary className="text-violet-strong flex min-h-11 cursor-pointer items-center text-sm font-medium">
+          <summary className="text-honey flex min-h-11 cursor-pointer items-center text-sm font-medium">
             See the {r.edits.length === 1 ? "one" : r.edits.length} you edited
           </summary>
           <ul className="flex flex-col gap-3">
@@ -108,8 +108,8 @@ function CategoryCard({ category, r }: { category: ConfigurableCategory; r: Cate
               <li key={e.id} className="grid grid-cols-2 gap-2 text-sm">
                 <span className="meta">Suggested</span>
                 <span className="meta">What you sent</span>
-                <p className="rounded-md bg-gray-50 p-2.5 whitespace-pre-wrap">{e.suggested}</p>
-                <p className="bg-lavender rounded-md p-2.5 whitespace-pre-wrap">{e.sent}</p>
+                <p className="bg-hive-high rounded-md p-2.5 whitespace-pre-wrap">{e.suggested}</p>
+                <p className="bg-hive-high rounded-md p-2.5 whitespace-pre-wrap">{e.sent}</p>
               </li>
             ))}
           </ul>
@@ -132,14 +132,14 @@ export async function ReadinessCard() {
         <h2 id="readiness-heading" className="section-title">
           Ready to reply on its own?
         </h2>
-        <p className="text-sm text-gray-700">
+        <p className="text-wax-muted text-sm">
           From the replies you checked with Ask me first in the last 14 days.
         </p>
       </div>
       {nothingYet ? (
         <article className="card flex flex-col gap-3 p-5">
           <h3 className="font-semibold">Nothing to judge yet</h3>
-          <p className="text-sm text-gray-700">
+          <p className="text-wax-muted text-sm">
             Keep Ask me first on. After you&apos;ve checked about 10 replies for a kind of message,
             this tells you whether it&apos;s ready to reply on its own, and what to fix if it
             isn&apos;t.
@@ -155,7 +155,7 @@ export async function ReadinessCard() {
           <ShieldCheck strokeWidth={1.75} className="size-5" aria-hidden />
           What Waggle will never do
         </h3>
-        <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-gray-700">
+        <ul className="text-wax-muted flex list-disc flex-col gap-1 pl-5 text-sm">
           {PROMISES.map((p) => (
             <li key={p.text}>{p.text}</li>
           ))}

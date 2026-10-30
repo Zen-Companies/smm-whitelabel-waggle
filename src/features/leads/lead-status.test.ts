@@ -6,7 +6,7 @@ describe("lead status", () => {
     expect(leadReplied("sent")).toBe(true);
     expect(leadReplied("handled")).toBe(true);
     expect(leadStatusText("awaiting_approval")).toBe("Reply waiting for you");
-    expect(leadStatusText("escalated")).toBe("Needs you");
+    expect(leadStatusText("escalated")).toBe("For you");
     expect(leadStatusText("drafted")).toBe("Reply being written");
   });
 });

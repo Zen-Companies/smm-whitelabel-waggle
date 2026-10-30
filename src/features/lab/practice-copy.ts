@@ -77,7 +77,7 @@ export function practiceCard(result: PreviewResult): PracticeCard {
         reply: result.draft?.reply ?? null,
         basedOn,
         leadDetails,
-        next: `I'd send this on my own: your setting for ${topic} is Auto-send.`,
+        next: `I'd send this on my own: your setting for ${topic} is Auto-reply.`,
         tone: "reply",
       };
     case "approve":

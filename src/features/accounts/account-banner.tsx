@@ -28,7 +28,7 @@ export async function AccountBanner() {
   if (down) {
     const name = `${down.platform === "facebook" ? "Facebook" : "Instagram"}${down.username ? ` @${down.username}` : ""}`;
     return (
-      <div role="status" className="banner-amber">
+      <div role="status" className="banner">
         <p className="flex-1">
           <strong className="font-semibold">{name} is disconnected.</strong> New messages wait until
           you reconnect it.
@@ -44,7 +44,7 @@ export async function AccountBanner() {
   }
   if (pause) {
     return (
-      <div role="status" className="banner-amber">
+      <div role="status" className="banner">
         <p className="flex-1">
           <strong className="font-semibold">Replies and posts are paused on our side.</strong> They
           go out on their own as soon as it&apos;s fixed. You don&apos;t need to do anything.

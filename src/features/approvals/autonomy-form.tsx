@@ -13,7 +13,7 @@ import type { AutonomyMode } from "./policy";
 
 /**
  * One category's reply mode as a segmented control (docs/design.md §3: Off / Ask me first /
- * Auto-send). Saves on change; the result shows in place, never as a toast.
+ * Auto-reply). Saves on change; the result shows in place, never as a toast.
  */
 export function AutonomyForm({
   category,
@@ -40,7 +40,7 @@ export function AutonomyForm({
         <legend className="sr-only">{label}</legend>
         <span className="flex flex-col" aria-hidden>
           <span className="font-semibold">{label}</span>
-          <span className="text-sm text-gray-700">
+          <span className="text-wax-muted text-sm">
             {hint} {MODE_DESCRIPTIONS[value]}
           </span>
         </span>
@@ -69,7 +69,7 @@ export function AutonomyForm({
           {pending ? (
             "Saving…"
           ) : (
-            <span role="status" className="inline-flex items-center gap-1 text-gray-700">
+            <span role="status" className="text-wax-muted inline-flex items-center gap-1">
               <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
               Saved
             </span>

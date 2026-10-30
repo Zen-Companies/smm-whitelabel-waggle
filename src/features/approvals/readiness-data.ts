@@ -12,7 +12,7 @@ import {
 } from "./readiness";
 
 export interface CategoryReadiness extends Readiness {
-  /** The category's current setting, so "Turn on Auto-send" shows only when it isn't on. */
+  /** The category's current setting, so "Turn on Auto-reply" shows only when it isn't on. */
   mode: AutonomyMode;
   progress: { done: number; of: number };
   /** Where the owner changed replies, by Business info topic (T36 item 2). */

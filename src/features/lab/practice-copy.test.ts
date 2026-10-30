@@ -34,7 +34,7 @@ describe("practiceCard", () => {
 
   it("auto-send says so", () => {
     expect(practiceCard(result({ policy: { decision: "send", reason: "auto_send" } })).next).toBe(
-      "I'd send this on my own: your setting for questions is Auto-send.",
+      "I'd send this on my own: your setting for questions is Auto-reply.",
     );
   });
 

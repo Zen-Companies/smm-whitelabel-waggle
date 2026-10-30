@@ -18,7 +18,7 @@ export async function AppSidebar({ bell }: { bell?: React.ReactNode }) {
     .eq("status", "awaiting_approval");
 
   return (
-    <aside className="bg-surface flex flex-col gap-4 border-b p-4 md:sticky md:top-0 md:h-dvh md:w-56 md:shrink-0 md:border-r md:border-b-0 md:p-5">
+    <aside className="bg-hive-raised flex flex-col gap-4 border-b p-4 md:sticky md:top-0 md:h-dvh md:w-56 md:shrink-0 md:border-r md:border-b-0 md:p-5">
       <div className="flex items-center justify-between gap-2">
         <Brand />
         {bell}

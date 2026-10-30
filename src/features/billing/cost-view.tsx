@@ -99,7 +99,7 @@ export async function CostView() {
         </h2>
         <p className="meta">
           Live and practice calls this calendar month (UTC); lab calls don&apos;t count. At the cap,
-          messages are still sorted but no reply is drafted; they go to Needs you. Blank uses the
+          messages are still sorted but no reply is drafted; they go to For you. Blank uses the
           default (${defaultCap}, AI_MONTHLY_CAP_USD).
         </p>
         <div className="card overflow-x-auto">

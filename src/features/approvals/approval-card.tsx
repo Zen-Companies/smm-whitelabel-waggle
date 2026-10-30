@@ -4,6 +4,7 @@ import { CircleCheck, Clock3, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { clockTime } from "@/components/app/time";
+import { WaggleTrail } from "@/components/app/waggle-trail";
 import { Button } from "@/components/ui/button";
 import { decideDraft, undoApprovalAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
@@ -57,7 +58,7 @@ function windowLeft(closesAt: string | null) {
   return hours < 1 ? "Under 1 h left to reply" : `${Math.floor(hours)} h left to reply`;
 }
 
-/** "Sent to [name] · 2:14 PM · Undo" for 8 seconds, then the item leaves the queue (§4). */
+/** "Answered [name] · 2:14 PM · Undo" for 8 seconds, then it moves to Answered (§5). */
 function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
   const router = useRouter();
   const [state, undo, undoing] = useActionState<DecisionFormState, FormData>(
@@ -87,12 +88,14 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
   }, [at, entry.itemId, router]);
 
   return (
-    <div className="card animate-settle flex flex-wrap items-center gap-3 px-5 py-3" role="status">
+    <div className="card flex flex-wrap items-center gap-3 px-5 py-3" role="status">
       <span className="bg-success-soft text-success inline-flex size-8 items-center justify-center rounded-full">
         <CircleCheck strokeWidth={1.75} className="size-5" aria-hidden />
       </span>
+      <WaggleTrail />
       <p className="flex-1">
-        Sent to {entry.authorName ?? "the customer"} · <span className="meta">{clockTime(at)}</span>
+        Answered {entry.authorName ?? "the customer"} ·{" "}
+        <span className="meta">{clockTime(at)}</span>
       </p>
       {!expired && (
         <form action={undo}>
@@ -101,7 +104,7 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
           <button
             type="submit"
             disabled={undoing}
-            className="hover:text-ink min-h-11 px-2 text-sm font-medium text-gray-700 underline underline-offset-4"
+            className="hover:text-wax text-wax-muted min-h-11 px-2 text-sm font-medium underline underline-offset-4"
           >
             {undoing ? "Undoing…" : "Undo"}
           </button>
@@ -190,7 +193,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
         setIntent(fd.get("intent") === "reject" ? "reject" : "approve");
         return action(fd);
       }}
-      className="m-4 mt-0 flex flex-col gap-3 rounded-xl border border-gray-200 p-4 md:m-5 md:mt-0"
+      className="border-line-strong m-4 mt-0 flex flex-col gap-3 rounded-xl border p-4 md:m-5 md:mt-0"
     >
       <input type="hidden" name="itemId" value={entry.itemId} />
       <input type="hidden" name="draftId" value={draft.id} />

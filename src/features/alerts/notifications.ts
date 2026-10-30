@@ -146,8 +146,8 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
         ...base,
         tone: "success",
         title: n === 1 ? "1 reply sent automatically" : `${n} replies sent automatically`,
-        meta: "From your business info, on auto-send",
-        href: "/inbox?tab=sent",
+        meta: "From your business info, on auto-reply",
+        href: "/inbox?tab=answered",
         action: null,
       };
     }

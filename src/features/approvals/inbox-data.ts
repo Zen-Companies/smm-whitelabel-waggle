@@ -39,15 +39,29 @@ export interface InboxData {
 
 const ESCALATED = ["escalated", "failed"] as const;
 
-export type InboxTab = "waiting" | "needs" | "sent";
+/** Statuses where the owner has to act: a reply to approve, or a message handed to them. */
+export const NEEDS_OWNER = ["awaiting_approval", ...ESCALATED] as const;
+
+export type InboxTab = "for_you" | "answered" | "ignored";
 export const INBOX_TABS: { key: InboxTab; label: string; statuses: string[] }[] = [
-  { key: "waiting", label: "To approve", statuses: ["awaiting_approval"] },
-  { key: "needs", label: "Needs you", statuses: [...ESCALATED] },
-  // Spam (ignored) stays hidden (design.md §3).
-  { key: "sent", label: "Sent", statuses: ["sending", "sent"] },
+  { key: "for_you", label: "For you", statuses: [...NEEDS_OWNER] },
+  { key: "answered", label: "Answered", statuses: ["sending", "sent"] },
+  // Spam, plus messages the owner marked as handled or chose not to answer.
+  { key: "ignored", label: "Ignored", statuses: ["ignored", "handled", "rejected"] },
 ];
 
-/** One tab of the two-pane inbox: waiting oldest first (longest-waiting customer on top). */
+/** Pure: a ?tab= value, including the old To approve / Needs you / Sent links (emails, bookmarks). */
+export function normalizeTab(param: string | undefined): InboxTab {
+  if (param === "waiting" || param === "needs") return "for_you";
+  if (param === "sent") return "answered";
+  return INBOX_TABS.some((t) => t.key === param) ? (param as InboxTab) : "for_you";
+}
+
+export function needsOwner(status: string): boolean {
+  return (NEEDS_OWNER as readonly string[]).includes(status);
+}
+
+/** One tab of the two-pane inbox. For you is oldest first: the longest-waiting customer on top. */
 export async function loadInboxTab(
   supabase: SupabaseClient<Database>,
   tenantId: string,
@@ -55,7 +69,102 @@ export async function loadInboxTab(
 ): Promise<(InboxEntry & { status: string })[]> {
   const statuses = INBOX_TABS.find((t) => t.key === tab)!.statuses;
   const entries = await loadEntries(supabase, tenantId, { statuses });
-  return tab === "waiting" ? entries.filter((e) => e.draft).reverse() : entries;
+  if (tab !== "for_you") return entries;
+  // A reply waiting for approval always has its draft; one without it isn't ready to show yet.
+  return entries.filter((e) => e.status !== "awaiting_approval" || e.draft).reverse();
+}
+
+export interface TodaySummary {
+  answered: number;
+  forYou: number;
+  ignored: number;
+}
+
+/** Pure: midnight UTC of `now`'s day ("today" until businesses have a time zone). */
+export function startOfTodayUtc(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * The Today card (design.md §4): replies sent today, what's waiting for the owner now, and spam
+ * hidden today.
+ */
+export async function loadTodaySummary(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  now = new Date(),
+): Promise<TodaySummary> {
+  const since = startOfTodayUtc(now).toISOString();
+  const [answered, forYou, ignored] = await Promise.all([
+    supabase
+      .from("drafts")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("status", "sent")
+      .gte("sent_at", since),
+    supabase
+      .from("inbound_items")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .in("status", [...NEEDS_OWNER]),
+    supabase
+      .from("inbound_items")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("status", "ignored")
+      .gte("received_at", since),
+  ]);
+  return {
+    answered: answered.count ?? 0,
+    forYou: forYou.count ?? 0,
+    ignored: ignored.count ?? 0,
+  };
+}
+
+/** Pure: how long the customer waited for the reply, short ("6s", "4m", "2h", "3d"). */
+export function responseTime(receivedAt: string, sentAt: string): string {
+  const s = Math.max(0, Math.round((Date.parse(sentAt) - Date.parse(receivedAt)) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)}m`;
+  if (s < 86_400) return `${Math.round(s / 3600)}h`;
+  return `${Math.round(s / 86_400)}d`;
+}
+
+export interface NextPost {
+  id: string;
+  title: string;
+  platforms: number;
+  scheduledFor: string;
+}
+
+/** The Next post card: the business's next scheduled post, if any. */
+export async function loadNextPost(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  now = new Date(),
+): Promise<NextPost | null> {
+  const { data } = await supabase
+    .from("posts")
+    .select("id, content, target_account_ids, scheduled_for")
+    .eq("tenant_id", tenantId)
+    .eq("status", "scheduled")
+    .gte("scheduled_for", now.toISOString())
+    .order("scheduled_for")
+    .limit(1)
+    .maybeSingle();
+  if (!data?.scheduled_for) return null;
+  return {
+    id: data.id,
+    title: postTitle(data.content),
+    platforms: data.target_account_ids.length,
+    scheduledFor: data.scheduled_for,
+  };
+}
+
+/** Pure: a post's first line, short enough for a card title. */
+export function postTitle(content: string): string {
+  const first = content.trim().split(/\r?\n/)[0] ?? "";
+  return first.length > 60 ? `${first.slice(0, 57).trimEnd()}…` : first || "Untitled post";
 }
 
 /** Counts per tab, for the segmented control. */

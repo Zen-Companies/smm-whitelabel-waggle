@@ -46,8 +46,8 @@ export function SidebarNav({ showAdmin, inboxCount }: { showAdmin: boolean; inbo
             className={cn(
               "flex min-h-11 shrink-0 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors duration-150",
               active
-                ? "bg-lavender text-violet-strong"
-                : "hover:text-ink text-gray-700 hover:bg-gray-50",
+                ? "bg-hive-high text-honey"
+                : "hover:text-wax text-wax-muted hover:bg-hive-high",
             )}
           >
             <Icon strokeWidth={1.75} className="size-[18px]" aria-hidden />

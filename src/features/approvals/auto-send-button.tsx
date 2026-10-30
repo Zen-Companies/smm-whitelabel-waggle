@@ -7,7 +7,7 @@ import { updateAutonomyMode, type AutonomyFormState } from "./actions";
 import type { ConfigurableCategory } from "./autonomy";
 
 /**
- * "Turn on Auto-send" from the Lab (T36 item 1), with a one-time confirm in place (no dialog, no
+ * "Turn on Auto-reply" from the Lab (T36 item 1), with a one-time confirm in place (no dialog, no
  * toast: design.md §4). Uses the same action as the Settings switch, so it's audited the same way.
  */
 export function AutoSendButton({
@@ -28,7 +28,7 @@ export function AutoSendButton({
     return (
       <p role="status" className="inline-flex items-center gap-1 text-sm font-medium">
         <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
-        Auto-send is on for {label}. Switch back any time in Settings.
+        Auto-reply is on for {label}. Switch back any time in Settings.
       </p>
     );
   }
@@ -36,7 +36,7 @@ export function AutoSendButton({
     return (
       <div className="flex flex-col gap-1.5">
         <Button variant="primary" className="self-start" onClick={() => setConfirming(true)}>
-          Turn on Auto-send for {label}
+          Turn on Auto-reply for {label}
         </Button>
         <span className="meta">
           Asks you once to confirm. Switch back any time in Settings. Complaints still always come
@@ -46,7 +46,7 @@ export function AutoSendButton({
     );
   }
   return (
-    <form action={action} className="bg-lavender flex flex-col gap-3 rounded-xl p-4">
+    <form action={action} className="bg-hive-high flex flex-col gap-3 rounded-xl p-4">
       <input type="hidden" name="category" value={category} />
       <input type="hidden" name="mode" value="auto" />
       <p className="m-0 text-sm">
@@ -55,7 +55,7 @@ export function AutoSendButton({
       </p>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" variant="primary" disabled={pending} data-busy={pending || undefined}>
-          {pending ? "Turning on…" : "Yes, turn on Auto-send"}
+          {pending ? "Turning on…" : "Yes, turn on Auto-reply"}
         </Button>
         <Button type="button" variant="quiet" onClick={() => setConfirming(false)}>
           Not yet

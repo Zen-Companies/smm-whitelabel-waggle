@@ -127,7 +127,7 @@ describe("gap helper (T33)", () => {
       .from("ai_usage")
       .select("purpose, source, cost_usd")
       .eq("tenant_id", tenantId)
-      .order("created_at");
+      .order("cost_usd"); // both rows can share a timestamp
     expect(usage).toEqual([
       { purpose: "agent", source: "live", cost_usd: 0.001 },
       { purpose: "agent", source: "live", cost_usd: 0.002 },

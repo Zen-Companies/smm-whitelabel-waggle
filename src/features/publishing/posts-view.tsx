@@ -46,15 +46,15 @@ function Chip({ post, href, selected }: { post: PostRow; href: string; selected:
       className={cn(
         "relative z-10 flex items-center gap-1 overflow-hidden rounded-lg px-1.5 py-0.5 text-xs whitespace-nowrap",
         attention
-          ? "border-amber-border bg-amber-soft text-amber-text border"
+          ? "border-banner-border bg-banner text-honey-light border"
           : published
-            ? "bg-gray-50 text-gray-700"
-            : "text-ink border border-gray-200 bg-white",
-        selected && "outline-violet outline-2",
+            ? "bg-hive-high text-wax-muted"
+            : "text-wax border-line-strong bg-hive-raised border",
+        selected && "outline-honey outline-2",
       )}
     >
       <Icon
-        className={cn("size-3.5 shrink-0", published && "text-success", attention && "text-amber")}
+        className={cn("size-3.5 shrink-0", published && "text-success", attention && "text-honey")}
         strokeWidth={1.75}
         aria-hidden
       />
@@ -113,7 +113,7 @@ export async function PostsView({
             <Link
               href={url({ view, month: shiftMonth(month, -1) })}
               aria-label="Previous month"
-              className="flex size-11 items-center justify-center rounded-md border border-gray-200 bg-white"
+              className="border-line-strong bg-hive-raised flex size-11 items-center justify-center rounded-md border"
             >
               <ChevronLeft className="size-5" strokeWidth={1.75} aria-hidden />
             </Link>
@@ -121,13 +121,13 @@ export async function PostsView({
             <Link
               href={url({ view, month: shiftMonth(month, 1) })}
               aria-label="Next month"
-              className="flex size-11 items-center justify-center rounded-md border border-gray-200 bg-white"
+              className="border-line-strong bg-hive-raised flex size-11 items-center justify-center rounded-md border"
             >
               <ChevronRight className="size-5" strokeWidth={1.75} aria-hidden />
             </Link>
             <Link
               href={url({ view, month: thisMonth })}
-              className="hover:text-ink flex min-h-11 items-center px-3.5 text-sm font-medium text-gray-700"
+              className="hover:text-wax text-wax-muted flex min-h-11 items-center px-3.5 text-sm font-medium"
             >
               Today
             </Link>
@@ -148,9 +148,9 @@ export async function PostsView({
           {first && (
             <div
               role="status"
-              className="border-amber-border bg-amber-soft text-amber-text flex flex-wrap items-center gap-3 rounded-md border px-4 py-3 text-sm"
+              className="border-banner-border bg-banner text-honey-light flex flex-wrap items-center gap-3 rounded-md border px-4 py-3 text-sm"
             >
-              <CircleAlert className="text-amber size-5 shrink-0" strokeWidth={1.75} aria-hidden />
+              <CircleAlert className="text-honey size-5 shrink-0" strokeWidth={1.75} aria-hidden />
               <span className="flex-1">
                 <strong className="font-semibold">
                   {attention.length === 1
@@ -162,7 +162,7 @@ export async function PostsView({
               </span>
               <Link
                 href={url({ view, month: parseMonth(postDay(first).slice(0, 7)), post: first.id })}
-                className="text-ink flex min-h-11 items-center rounded-md border border-gray-200 bg-white px-4 font-medium"
+                className="text-wax border-line-strong bg-hive-raised flex min-h-11 items-center rounded-md border px-4 font-medium"
               >
                 Pick a new time
               </Link>
@@ -176,7 +176,7 @@ export async function PostsView({
               <div role="grid" aria-label={monthName} className="card overflow-hidden">
                 <div
                   role="row"
-                  className="grid grid-cols-7 border-b text-[13px] font-medium text-gray-600"
+                  className="text-pollen grid grid-cols-7 border-b text-[13px] font-medium"
                 >
                   {weekdays.map((w) => (
                     <span key={w} role="columnheader" className="px-2.5 py-2">
@@ -209,19 +209,19 @@ export async function PostsView({
                           className={cn(
                             "relative flex min-h-[92px] min-w-0 flex-col gap-1 border-r px-1.5 py-1.5 text-[13px] last:border-r-0 sm:px-2",
                             planned
-                              ? "bg-lavender text-violet-strong"
+                              ? "bg-hive-high text-honey"
                               : inMonth
-                                ? "text-gray-600"
-                                : "text-gray-400",
+                                ? "text-pollen"
+                                : "text-pollen",
                           )}
                         >
                           <Link
                             href={url({ view, month, day: d })}
                             aria-label={`Plan a post for ${label}`}
-                            className="self-start after:absolute after:inset-0 after:-z-0 hover:after:bg-gray-50/60"
+                            className="hover:after:bg-hive-high self-start after:absolute after:inset-0 after:-z-0"
                           >
                             {d === today ? (
-                              <span className="bg-violet relative inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-1 font-semibold text-white">
+                              <span className="bg-honey text-hive relative inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full px-1 font-semibold">
                                 {n}
                               </span>
                             ) : (
@@ -244,12 +244,12 @@ export async function PostsView({
                             />
                           ))}
                           {list.length > 3 && (
-                            <span className="relative text-xs text-gray-600">
+                            <span className="text-pollen relative text-xs">
                               +{list.length - 3} more
                             </span>
                           )}
                           {planned && (
-                            <span className="border-violet-busy text-violet-strong relative overflow-hidden rounded-lg border border-dashed px-1.5 py-0.5 text-xs whitespace-nowrap">
+                            <span className="border-honey/60 text-honey relative overflow-hidden rounded-lg border border-dashed px-1.5 py-0.5 text-xs whitespace-nowrap">
                               New post
                             </span>
                           )}
@@ -269,7 +269,7 @@ export async function PostsView({
                   Scheduled
                 </span>
                 <span className="inline-flex items-center gap-1.5">
-                  <CircleAlert className="text-amber size-4" strokeWidth={1.75} aria-hidden />
+                  <CircleAlert className="text-honey size-4" strokeWidth={1.75} aria-hidden />
                   Needs a new time
                 </span>
                 <span>Click a day to plan a post for it.</span>
@@ -285,7 +285,7 @@ export async function PostsView({
                 <h2 className="meta">This post</h2>
                 <Link
                   href={url({ view, month })}
-                  className="text-sm text-gray-700 underline underline-offset-4"
+                  className="text-wax-muted text-sm underline underline-offset-4"
                 >
                   Close
                 </Link>

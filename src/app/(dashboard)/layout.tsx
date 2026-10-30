@@ -8,7 +8,7 @@ import { AppSidebar } from "@/features/tenants";
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
-      <Suspense fallback={<div className="bg-surface border-b md:h-dvh md:w-56 md:border-r" />}>
+      <Suspense fallback={<div className="bg-hive-raised border-b md:h-dvh md:w-56 md:border-r" />}>
         <AppSidebar bell={<Bell />} />
       </Suspense>
       <div className="flex min-w-0 flex-1 flex-col">

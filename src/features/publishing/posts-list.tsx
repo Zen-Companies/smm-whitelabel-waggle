@@ -67,8 +67,8 @@ function Status({ post }: { post: PostRow }) {
       </span>
     );
   return (
-    <span className="text-amber-text inline-flex items-center gap-1.5 text-sm">
-      <CircleAlert className="text-amber" strokeWidth={1.75} aria-hidden />
+    <span className="text-honey-light inline-flex items-center gap-1.5 text-sm">
+      <CircleAlert className="text-honey" strokeWidth={1.75} aria-hidden />
       {s === "partial" ? "Posted to some accounts only" : "Not posted"}
     </span>
   );

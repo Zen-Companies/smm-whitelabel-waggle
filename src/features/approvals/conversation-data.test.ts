@@ -64,10 +64,11 @@ describe("activityLines", () => {
 
 describe("tabForStatus", () => {
   it("sends links to the tab that lists the item", () => {
-    expect(tabForStatus("awaiting_approval")).toBe("waiting");
-    expect(tabForStatus("escalated")).toBe("needs");
-    expect(tabForStatus("failed")).toBe("needs");
-    expect(tabForStatus("sent")).toBe("sent");
-    expect(tabForStatus("handled")).toBe("sent");
+    expect(tabForStatus("awaiting_approval")).toBe("for_you");
+    expect(tabForStatus("escalated")).toBe("for_you");
+    expect(tabForStatus("failed")).toBe("for_you");
+    expect(tabForStatus("sent")).toBe("answered");
+    expect(tabForStatus("handled")).toBe("ignored");
+    expect(tabForStatus("ignored")).toBe("ignored");
   });
 });

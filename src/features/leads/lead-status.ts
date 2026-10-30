@@ -6,7 +6,7 @@ export function leadReplied(itemStatus: string): boolean {
 export function leadStatusText(itemStatus: string): string {
   if (leadReplied(itemStatus)) return "Replied";
   if (itemStatus === "awaiting_approval") return "Reply waiting for you";
-  if (itemStatus === "escalated" || itemStatus === "failed") return "Needs you";
+  if (itemStatus === "escalated" || itemStatus === "failed") return "For you";
   return "Reply being written";
 }
 

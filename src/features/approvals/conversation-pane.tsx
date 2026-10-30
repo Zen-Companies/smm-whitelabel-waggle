@@ -52,13 +52,13 @@ export function ConversationPane({
                 <p
                   className={
                     mine
-                      ? "rounded-2xl rounded-br-sm border bg-white px-3.5 py-2.5 whitespace-pre-wrap"
-                      : "rounded-2xl rounded-bl-sm bg-gray-50 px-3.5 py-2.5 whitespace-pre-wrap"
+                      ? "bg-hive-raised rounded-2xl rounded-br-sm border px-3.5 py-2.5 whitespace-pre-wrap"
+                      : "bg-hive-high rounded-2xl rounded-bl-sm px-3.5 py-2.5 whitespace-pre-wrap"
                   }
                 >
                   {m.text || "(no text)"}
                 </p>
-                <span className="text-xs text-gray-600">
+                <span className="text-pollen text-xs">
                   <time dateTime={m.at}>{clockTime(m.at)}</time>
                   {mine && (m.by === "you" ? " · Sent by you" : " · Auto")}
                 </span>
@@ -91,7 +91,7 @@ export function ContextPanel({ context }: { context: ConversationContext }) {
             <span className="meta">{platformName(customer.platform)}</span>
           </span>
         </div>
-        <p className="text-sm text-gray-700">
+        <p className="text-wax-muted text-sm">
           {customer.messages === 1 ? "1 message" : `${customer.messages} messages`} · first message{" "}
           {ago(customer.firstSeenAt)}
         </p>
@@ -100,18 +100,18 @@ export function ContextPanel({ context }: { context: ConversationContext }) {
         <section className="card flex flex-col gap-3 p-4">
           <div className="flex items-center justify-between">
             <h2 className="meta">Lead</h2>
-            <span className="chip-lead">Saved</span>
+            <span className="status-lead">Saved</span>
           </div>
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
             {lead.request && (
               <>
-                <dt className="text-gray-600">Wants</dt>
+                <dt className="text-pollen">Wants</dt>
                 <dd>{lead.request}</dd>
               </>
             )}
             {lead.contact && (
               <>
-                <dt className="text-gray-600">Contact</dt>
+                <dt className="text-pollen">Contact</dt>
                 <dd>{lead.contact}</dd>
               </>
             )}
