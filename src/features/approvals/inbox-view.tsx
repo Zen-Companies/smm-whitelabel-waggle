@@ -26,22 +26,25 @@ import { InboxLive } from "./inbox-live";
 // Inbox (design v2): list | conversation with the reply composer at the bottom | context panel
 // (customer, lead, activity). One header row: title + tabs. On phone widths it's list → detail.
 
-const href = (tab: InboxTab, item?: string) => `/inbox?tab=${tab}${item ? `&item=${item}` : ""}`;
+const href = (tab: InboxTab, item?: string, autoOnly = false) =>
+  `/inbox?tab=${tab}${autoOnly ? "&by=auto" : ""}${item ? `&item=${item}` : ""}`;
 
 function Row({
   entry,
   tab,
   selected,
+  autoOnly,
 }: {
   entry: InboxEntry & { status: string };
   tab: InboxTab;
   selected: boolean;
+  autoOnly: boolean;
 }) {
   const waiting = entry.status === "awaiting_approval";
   return (
     <li>
       <Link
-        href={href(tab, entry.itemId)}
+        href={href(tab, entry.itemId, autoOnly)}
         aria-current={selected ? "true" : undefined}
         className={cn(
           "flex gap-3 rounded-md px-3 py-3 transition-colors duration-150",
@@ -79,7 +82,9 @@ function SentFooter({ entry }: { entry: InboxEntry & { status: string } }) {
           <CircleCheck className="text-success" strokeWidth={1.75} aria-hidden />
           {entry.status === "handled"
             ? "Marked as handled"
-            : `Sent${entry.draft?.sentAt ? ` · ${clockTime(entry.draft.sentAt)}` : ""}`}
+            : `${entry.draft && !entry.draft.decidedByOwner ? "Sent on its own" : "Sent"}${
+                entry.draft?.sentAt ? ` · ${clockTime(entry.draft.sentAt)}` : ""
+              }`}
         </>
       ) : (
         <>
@@ -102,17 +107,23 @@ export async function InboxView({
     ? (tabParam as InboxTab)
     : "waiting";
   const itemParam = typeof params.item === "string" ? params.item : undefined;
+  // Sent tab: all, or only the replies that went out on their own (T27).
+  const autoOnly = tab === "sent" && params.by === "auto";
 
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
-  const [entries, counts, { count: accounts }] = await Promise.all([
+  const [tabEntries, counts, { count: accounts }, { data: settings }] = await Promise.all([
     loadInboxTab(supabase, tenant.id, tab),
     countInboxTabs(supabase, tenant.id),
     supabase
       .from("social_accounts")
       .select("*", { count: "exact", head: true })
       .eq("tenant_id", tenant.id),
+    supabase.from("tenants").select("replies_paused").eq("id", tenant.id).single(),
   ]);
+  const entries = autoOnly
+    ? tabEntries.filter((e) => e.draft && !e.draft.decidedByOwner)
+    : tabEntries;
 
   const selected = entries.find((e) => e.itemId === itemParam) ?? entries[0];
   const index = selected ? entries.indexOf(selected) : -1;
@@ -133,6 +144,26 @@ export async function InboxView({
           </Link>
         ))}
       </nav>
+      {tab === "sent" && (
+        <nav aria-label="Sent filter" className="flex gap-4 text-sm">
+          {[
+            { label: "All sent", href: href("sent"), active: !autoOnly },
+            { label: "Sent on its own", href: href("sent", undefined, true), active: autoOnly },
+          ].map((f) => (
+            <Link
+              key={f.label}
+              href={f.href}
+              aria-current={f.active ? "page" : undefined}
+              className={cn(
+                "flex min-h-11 items-center",
+                f.active ? "text-violet-strong font-semibold" : "hover:text-ink text-gray-700",
+              )}
+            >
+              {f.label}
+            </Link>
+          ))}
+        </nav>
+      )}
     </header>
   );
 
@@ -164,7 +195,11 @@ export async function InboxView({
       </IllustratedEmpty>
     ) : (
       <p className="meta px-3 py-6">
-        {tab === "needs" ? "Nothing needs you right now." : "Replies you've sent show up here."}
+        {tab === "needs"
+          ? "Nothing needs you right now."
+          : autoOnly
+            ? "Nothing has gone out on its own yet."
+            : "Replies you've sent show up here."}
       </p>
     );
 
@@ -187,6 +222,18 @@ export async function InboxView({
     <div className="flex flex-col gap-5">
       <InboxLive tenantId={tenant.id} />
       {header}
+      {settings?.replies_paused && (
+        <p
+          role="status"
+          className="border-amber-border bg-amber-soft text-amber-ink rounded-xl border px-4 py-3 text-sm"
+        >
+          Replies are paused. Nothing is sent until you turn them back on in{" "}
+          <Link href="/settings?section=replies" className="font-semibold underline">
+            Settings → Replies
+          </Link>
+          .
+        </p>
+      )}
       <RecentSends />
       {entries.length === 0 ? (
         empty
@@ -197,13 +244,22 @@ export async function InboxView({
             aria-label="Messages"
           >
             {entries.map((e) => (
-              <Row key={e.itemId} entry={e} tab={tab} selected={e.itemId === selected?.itemId} />
+              <Row
+                key={e.itemId}
+                entry={e}
+                tab={tab}
+                autoOnly={autoOnly}
+                selected={e.itemId === selected?.itemId}
+              />
             ))}
           </ul>
           {selected && (
             <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
               {itemParam && (
-                <Link href={href(tab)} className="text-sm text-gray-700 lg:hidden">
+                <Link
+                  href={href(tab, undefined, autoOnly)}
+                  className="text-sm text-gray-700 lg:hidden"
+                >
                   ← All messages
                 </Link>
               )}

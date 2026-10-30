@@ -17,6 +17,8 @@ export interface TenantSnapshot {
   businessProfile: string;
   subscriptionStatus: "trialing" | "active" | "past_due" | "canceled";
   confidenceThreshold: number;
+  /** "Pause all replies" (T27): auto mode then waits for the owner. */
+  repliesPaused: boolean;
   /** The business's connected account; "active" when it has none yet (onboarding). */
   accountStatus: "active" | "disconnected" | "error";
   /** Autonomy mode per category; a missing one means off, as in production. */
@@ -108,6 +110,7 @@ export async function previewMessage(
     tenant: {
       subscriptionStatus: tenant.subscriptionStatus,
       confidenceThreshold: tenant.confidenceThreshold,
+      repliesPaused: tenant.repliesPaused,
     },
     account: { status: tenant.accountStatus },
     autonomyMode: tenant.modes[category] ?? "off",

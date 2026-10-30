@@ -871,6 +871,7 @@ export type Database = {
           health_checked_at: string | null
           id: string
           name: string
+          replies_paused: boolean
           stripe_customer_id: string | null
           subscription_status: string
           zernio_profile_id: string | null
@@ -883,6 +884,7 @@ export type Database = {
           health_checked_at?: string | null
           id?: string
           name: string
+          replies_paused?: boolean
           stripe_customer_id?: string | null
           subscription_status?: string
           zernio_profile_id?: string | null
@@ -895,6 +897,7 @@ export type Database = {
           health_checked_at?: string | null
           id?: string
           name?: string
+          replies_paused?: boolean
           stripe_customer_id?: string | null
           subscription_status?: string
           zernio_profile_id?: string | null

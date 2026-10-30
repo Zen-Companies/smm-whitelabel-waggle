@@ -25,6 +25,8 @@ import {
 
 /** Retry delay when Zernio says the same idempotency key is still in flight (409). */
 const IN_FLIGHT_RETRY_SECONDS = 30;
+/** How often a reply held by "Pause all replies" checks again (no attempt counted). */
+export const REPLIES_PAUSED_RETRY_SECONDS = 120;
 /** 429 without a reset header. */
 const RATE_LIMIT_FALLBACK_SECONDS = 60;
 /** A reconciled DM must be no older than the first attempt (minus clock skew). */
@@ -56,7 +58,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     .select(
       "tenant_id, kind, category, confidence, zernio_comment_id, zernio_post_id, " +
         "social_accounts!inner (zernio_account_id, status), " +
-        "tenants!inner (subscription_status, confidence_threshold), " +
+        "tenants!inner (subscription_status, confidence_threshold, replies_paused), " +
         "conversations (zernio_conversation_id, last_customer_message_at)",
     )
     .eq("id", itemId)
@@ -70,7 +72,11 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     zernio_comment_id: string | null;
     zernio_post_id: string | null;
     social_accounts: { zernio_account_id: string; status: PolicyInput["account"]["status"] };
-    tenants: { subscription_status: SubscriptionStatus; confidence_threshold: number };
+    tenants: {
+      subscription_status: SubscriptionStatus;
+      confidence_threshold: number;
+      replies_paused: boolean;
+    };
     conversations: {
       zernio_conversation_id: string;
       last_customer_message_at: string | null;
@@ -131,6 +137,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
       tenant: {
         subscriptionStatus: row.tenants.subscription_status,
         confidenceThreshold: Number(row.tenants.confidence_threshold),
+        repliesPaused: row.tenants.replies_paused,
       },
       account: { status: row.social_accounts.status },
       autonomyMode: (setting?.mode as AutonomyMode | undefined) ?? "off",
@@ -209,7 +216,8 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
     });
     if (decision.decision !== "send") {
       if (decision.decision === "approve") {
-        // Auto-approved, then the owner switched the category to approve: their call now.
+        // Auto-approved, then the owner switched the category to approve or paused all replies:
+        // their call now.
         await db
           .from("drafts")
           .update({ status: "pending", decided_at: null, send_attempted_at: null })
@@ -225,6 +233,10 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
         details: { draftId: draft.id, decision: decision.decision, policyReason: decision.reason },
       };
     }
+
+    // T27: the owner paused all replies. Hold the approved reply without counting an attempt;
+    // it goes out on the first run after they turn replies back on.
+    if (c.input.tenant.repliesPaused) throw new RetryLaterError(REPLIES_PAUSED_RETRY_SECONDS);
 
     // T19: Zernio paused for billing (every call 402s). Wait without counting an attempt and
     // without escalating; the job route probes and clears the pause.

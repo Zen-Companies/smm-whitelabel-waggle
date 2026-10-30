@@ -28,7 +28,7 @@ export async function loadPolicyInput(
     .from("inbound_items")
     .select(
       "id, tenant_id, kind, category, confidence, conversation_id, " +
-        "social_accounts!inner (status), tenants!inner (subscription_status, confidence_threshold)",
+        "social_accounts!inner (status), tenants!inner (subscription_status, confidence_threshold, replies_paused)",
     )
     .eq("id", itemId)
     .single();
@@ -40,7 +40,11 @@ export async function loadPolicyInput(
     confidence: number | null;
     conversation_id: string | null;
     social_accounts: { status: PolicyInput["account"]["status"] };
-    tenants: { subscription_status: SubscriptionStatus; confidence_threshold: number };
+    tenants: {
+      subscription_status: SubscriptionStatus;
+      confidence_threshold: number;
+      replies_paused: boolean;
+    };
   };
   if (!row.category || row.confidence === null) throw new Error("policy: item is not classified");
 
@@ -78,6 +82,7 @@ export async function loadPolicyInput(
       tenant: {
         subscriptionStatus: row.tenants.subscription_status,
         confidenceThreshold: Number(row.tenants.confidence_threshold),
+        repliesPaused: row.tenants.replies_paused,
       },
       account: row.social_accounts,
       // A missing row means the default for a new category: the safest mode.

@@ -75,7 +75,10 @@ export function practiceCard(result: PreviewResult): PracticeCard {
         ...base,
         reply: result.draft?.reply ?? null,
         usedInfo,
-        next: `I'd ask you first: your setting for ${topic} is Ask me first.`,
+        next:
+          reason === "replies_paused"
+            ? "I'd ask you first: you've paused all replies."
+            : `I'd ask you first: your setting for ${topic} is Ask me first.`,
         tone: "reply",
       };
     case "ignore":

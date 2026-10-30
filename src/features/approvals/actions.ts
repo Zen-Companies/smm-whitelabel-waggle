@@ -147,3 +147,32 @@ export async function markHandledAction(
   revalidatePath("/inbox", "layout");
   return result.ok ? {} : { error: DECISION_ERRORS[result.error] };
 }
+
+export type PauseFormState = { error?: string };
+
+/**
+ * "Pause all replies" (T27): nothing goes out until the owner turns replies back on. Doesn't
+ * change any item's status: policy() and the send step read the switch.
+ */
+export async function setRepliesPaused(
+  _prev: PauseFormState,
+  formData: FormData,
+): Promise<PauseFormState> {
+  const paused = formData.get("paused") === "true";
+  const tenant = await getCurrentTenant();
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase
+    .from("tenants")
+    .update({ replies_paused: paused })
+    .eq("id", tenant.id)
+    .select("id");
+  if (error || !data?.length) return { error: "Couldn't change that. Please try again." };
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: paused ? "replies_paused" : "replies_resumed",
+    actor: tenant.userId,
+  });
+  revalidatePath("/settings");
+  revalidatePath("/inbox");
+  return {};
+}

@@ -175,6 +175,32 @@ describe("policy (TDD §11, in order)", () => {
   });
 });
 
+describe("replies paused by the owner (T27)", () => {
+  const paused = {
+    subscriptionStatus: "active" as const,
+    confidenceThreshold: 0.85,
+    repliesPaused: true,
+  };
+  it("auto mode waits for the owner instead of sending", () => {
+    expect(run({ tenant: paused, autonomyMode: "auto" })).toEqual({
+      decision: "approve",
+      reason: "replies_paused",
+    });
+  });
+  it("approve mode is unchanged: it already waits", () => {
+    expect(run({ tenant: paused })).toEqual({ decision: "approve", reason: "approval_required" });
+  });
+  it("an owner-approved reply still decides send (the send step holds it until resumed)", () => {
+    expect(run({ tenant: paused, draft: { needsHuman: false, approvedByOwner: true } })).toEqual({
+      decision: "send",
+      reason: "owner_approved",
+    });
+  });
+  it("escalations are unchanged", () => {
+    expect(run({ tenant: paused, draft: { needsHuman: true } }).decision).toBe("escalate");
+  });
+});
+
 describe("triage (steps 1-4, before drafting)", () => {
   it("drafts faq/lead that pass", () => {
     expect(triage(base)).toEqual({ decision: "draft" });

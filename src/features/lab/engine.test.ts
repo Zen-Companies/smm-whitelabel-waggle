@@ -17,6 +17,7 @@ const tenant: TenantSnapshot = {
   businessProfile: "",
   subscriptionStatus: "active",
   confidenceThreshold: 0.85,
+  repliesPaused: false,
   accountStatus: "active",
   modes: { faq: "approve", lead: "approve" },
 };

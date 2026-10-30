@@ -23,6 +23,8 @@ export interface InboxEntry {
     facts: string[];
     status: string;
     sentAt: string | null;
+    /** False when the reply went out on its own (auto mode): nobody approved it. */
+    decidedByOwner: boolean;
   } | null;
   /** DMs: when Meta's 24-hour reply window closes (null if unknown). */
   dmWindowClosesAt: string | null;
@@ -148,7 +150,7 @@ export async function loadEntries(
   const { data: drafts } = await supabase
     .from("drafts")
     .select(
-      "id, item_id, body, edited_body, needs_human, needs_human_reason, kb_entry_ids, status, sent_at",
+      "id, item_id, body, edited_body, needs_human, needs_human_reason, kb_entry_ids, status, sent_at, decided_by",
     )
     .in(
       "item_id",
@@ -189,6 +191,7 @@ export async function loadEntries(
             facts: d.kb_entry_ids.flatMap((id) => titles.get(id) ?? []),
             status: d.status,
             sentAt: d.sent_at,
+            decidedByOwner: d.decided_by !== null,
           }
         : null,
       dmWindowClosesAt:

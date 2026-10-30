@@ -370,6 +370,54 @@ describe("send step", () => {
   });
 });
 
+describe("Pause all replies (T27)", () => {
+  it("an approved reply is held without an attempt, then sent once replies are back on", async () => {
+    social = new ScriptedSocial();
+    const { itemId, key } = await approvedItem({ kind: "comment" });
+    await db.from("tenants").update({ replies_paused: true }).eq("id", tenantId);
+    try {
+      await run();
+      const held = await state(itemId);
+      expect(held.item).toMatchObject({ status: "sending", attempts: 0 });
+      expect(sendsFor(key)).toEqual([]);
+    } finally {
+      await db.from("tenants").update({ replies_paused: false }).eq("id", tenantId);
+    }
+
+    await dueNow(itemId);
+    await run();
+    expect((await state(itemId)).item.status).toBe("sent");
+    expect(sendsFor(key)).toHaveLength(1);
+  });
+
+  it("an auto-approved reply goes back to the owner instead", async () => {
+    social = new ScriptedSocial();
+    const { itemId, draftId, key } = await approvedItem({ kind: "comment" });
+    await db.from("drafts").update({ decided_by: null }).eq("id", draftId);
+    await db
+      .from("autonomy_settings")
+      .update({ mode: "auto" })
+      .eq("tenant_id", tenantId)
+      .eq("category", "faq");
+    await db.from("tenants").update({ replies_paused: true }).eq("id", tenantId);
+    try {
+      await run();
+    } finally {
+      await db.from("tenants").update({ replies_paused: false }).eq("id", tenantId);
+      await db
+        .from("autonomy_settings")
+        .update({ mode: "approve" })
+        .eq("tenant_id", tenantId)
+        .eq("category", "faq");
+    }
+
+    const { item, draft } = await state(itemId);
+    expect(item.status).toBe("awaiting_approval");
+    expect(draft.status).toBe("pending");
+    expect(sendsFor(key)).toEqual([]);
+  });
+});
+
 describe("Zernio 402 PAYMENT_REQUIRED (T19)", () => {
   const paid = () =>
     new SocialProviderError("Zernio sendDm failed (402)", {

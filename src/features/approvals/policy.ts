@@ -16,7 +16,12 @@ export interface PolicyInput {
    * approved it in the inbox (checked again at send time, T12).
    */
   draft: { needsHuman: boolean; approvedByOwner?: boolean } | null;
-  tenant: { subscriptionStatus: SubscriptionStatus; confidenceThreshold: number };
+  tenant: {
+    subscriptionStatus: SubscriptionStatus;
+    confidenceThreshold: number;
+    /** The owner pressed "Pause all replies" (T27): nothing goes out on its own. */
+    repliesPaused?: boolean;
+  };
   account: { status: "active" | "disconnected" | "error" };
   autonomyMode: AutonomyMode;
   /** DMs: the customer's last message, which opens the 24-hour window. */
@@ -36,7 +41,8 @@ export type PolicyReason =
   | "dm_window_closed"
   | "approval_required"
   | "auto_send"
-  | "owner_approved";
+  | "owner_approved"
+  | "replies_paused";
 
 export type PolicyDecision =
   | { decision: "pause"; reason: "tenant_inactive" | "account_inactive" }
@@ -51,7 +57,7 @@ export type PolicyDecision =
         | "low_confidence"
         | "dm_window_closed";
     }
-  | { decision: "approve"; reason: "approval_required" }
+  | { decision: "approve"; reason: "approval_required" | "replies_paused" }
   | { decision: "send"; reason: "auto_send" | "owner_approved" };
 
 const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
@@ -95,8 +101,13 @@ export function policy(input: PolicyInput): PolicyDecision {
     }
   }
 
-  // 6-7. In approve mode, the owner's approval is what allows the send.
-  if (input.autonomyMode === "auto") return { decision: "send", reason: "auto_send" };
+  // 6-7. In approve mode, the owner's approval is what allows the send. While the owner has paused
+  // replies, auto mode waits for them too (an approved reply is held by the send step).
+  if (input.autonomyMode === "auto") {
+    return input.tenant.repliesPaused
+      ? { decision: "approve", reason: "replies_paused" }
+      : { decision: "send", reason: "auto_send" };
+  }
   return input.draft.approvedByOwner
     ? { decision: "send", reason: "owner_approved" }
     : { decision: "approve", reason: "approval_required" };
