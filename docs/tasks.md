@@ -118,9 +118,10 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
 
 Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items` or call `SocialProvider` except where a task says so. Real AI calls only from the pages themselves (an operator or owner pressing Run); tests use mocks (rule 14).
 
-- [ ] **T23. Dry-run engine**
-      `features/lab`: run one message (text, kind, optional earlier messages) for a tenant through classify → triage → retrieve → draft → grounding → `policy()` without writing `inbound_items`, `drafts`, `leads` or audit rows, and without `SocialProvider`. Takes a variant (classifier, question version, business context, draft prompt version, model) so two setups can run side by side. Keep old prompt versions in code as named variants. `ai_usage` gets a `source` column (`live` default, `lab`, `practice`) so lab and practice calls are recorded but kept apart.
+- [x] **T23. Dry-run engine**
+      `features/lab`: run one message (text, kind) for a tenant through classify → triage → retrieve → draft → grounding → `policy()` without writing `inbound_items`, `drafts`, `leads` or audit rows, and without `SocialProvider`. Takes a variant (classifier, question version, business context, draft prompt version, model) so two setups can run side by side. Keep old prompt versions in code as named variants. `ai_usage` gets a `source` column (`live` default, `lab`, `practice`) so lab and practice calls are recorded but kept apart.
       _Done when:_ unit tests with a mocked classifier and LLM show every step's output for both variants, no writes outside `ai_usage`, and no `SocialProvider` call.
+      _Note:_ earlier messages of a thread come with T30 (drafting doesn't use them yet). `cost_by_tenant` now leaves out `lab` calls. Version registries: `JEV_QUESTION_SETS`, `LLM_CLASSIFY_PROMPTS`, `DRAFT_PROMPTS`.
 
 - [ ] **T24. Admin Lab: try a message (classification first)**
       `/admin/lab` (operator only, same gate as `/admin/costs`): business picker or blank profile, message + kind, variants A and B, Run. Each side shows category, confidence, per-question scores, triage decision, cost, tokens, time; differences highlighted. "Save as test case" with the right category adds the message to a labeled set (new table, tenant-scoped, RLS). Saved runs listed under History.

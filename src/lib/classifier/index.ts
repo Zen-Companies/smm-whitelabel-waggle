@@ -11,8 +11,10 @@ export { FallbackClassifier } from "./fallback";
 export { JevClassifier, loadJevConfig } from "./jev";
 export { OPENROUTER_JEV_MODEL, OpenRouterJevClassifier } from "./jev-openrouter";
 export type { JevConfig } from "./jev";
-export { JEV_QUESTIONS, JEV_QUESTIONS_VERSION } from "./jev-questions";
-export { LlmClassifier, LLM_CLASSIFY_PROMPT_VERSION } from "./llm";
+export { JEV_QUESTION_SETS, JEV_QUESTIONS, JEV_QUESTIONS_VERSION } from "./jev-questions";
+export type { JevQuestions, JevQuestionsVersion } from "./jev-questions";
+export { LlmClassifier, LLM_CLASSIFY_PROMPT_VERSION, LLM_CLASSIFY_PROMPTS } from "./llm";
+export type { LlmClassifyPromptVersion } from "./llm";
 export {
   countWords,
   MIN_CONFIDENCE,

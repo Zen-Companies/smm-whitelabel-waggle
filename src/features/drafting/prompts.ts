@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // Drafting prompt (docs/tdd.md §10). Bump the version on any wording change; drafts record the
 // model, and ai_usage records cost, so versions can be compared.
-export const DRAFT_PROMPT_VERSION = "2026-10-29.1";
+export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-10-29.1";
 
 export interface KbFact {
   id: string;
@@ -84,3 +84,10 @@ export function toDraftResult(output: DraftOutput): DraftResult {
     lead: lead && (lead.name || lead.contact || lead.request) ? lead : undefined,
   };
 }
+
+/** Draft prompt versions by name. Keep old ones here: the Lab (docs/tdd.md §19) compares them. */
+export const DRAFT_PROMPTS = {
+  "2026-10-29.1": { system: draftSystemPrompt, user: draftUserPrompt },
+} as const;
+
+export type DraftPromptVersion = keyof typeof DRAFT_PROMPTS;

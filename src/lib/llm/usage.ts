@@ -4,6 +4,9 @@ import type { ServiceClient } from "@/lib/supabase/service";
 
 export type AiPurpose = "classify" | "draft" | "embed";
 
+/** live: the inbox pipeline. lab: operator experiments. practice: an owner trying a message. */
+export type AiUsageSource = "live" | "lab" | "practice";
+
 export interface AiUsageRecord {
   tenantId: string;
   itemId?: string | null;
@@ -13,6 +16,8 @@ export interface AiUsageRecord {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  /** Defaults to live. */
+  source?: AiUsageSource;
 }
 
 export interface UsageRecorder {
@@ -43,6 +48,7 @@ export function createDbUsageRecorder(db: ServiceClient): UsageRecorder {
         input_tokens: usage.inputTokens,
         output_tokens: usage.outputTokens,
         cost_usd: usage.costUsd,
+        source: usage.source ?? "live",
       });
       if (error) {
         Sentry.captureException(new Error(`ai_usage insert failed: ${error.message}`), {
@@ -51,4 +57,9 @@ export function createDbUsageRecorder(db: ServiceClient): UsageRecorder {
       }
     },
   };
+}
+
+/** Tags every record with `source` (docs/tdd.md §19): lab and practice calls stay apart from live. */
+export function withUsageSource(inner: UsageRecorder, source: AiUsageSource): UsageRecorder {
+  return { record: (usage) => inner.record({ ...usage, source }) };
 }

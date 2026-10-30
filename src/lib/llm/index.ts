@@ -10,8 +10,8 @@ export type { GenerateObjectInput, LlmCallContext, LlmClient } from "./client";
 export { loadLlmConfig } from "./config";
 export type { LlmConfig } from "./config";
 export { resolveModels } from "./provider";
-export { createDbUsageRecorder, openRouterCostUsd } from "./usage";
-export type { AiPurpose, AiUsageRecord, UsageRecorder } from "./usage";
+export { createDbUsageRecorder, openRouterCostUsd, withUsageSource } from "./usage";
+export type { AiPurpose, AiUsageRecord, AiUsageSource, UsageRecorder } from "./usage";
 
 let client: LlmClient | undefined;
 

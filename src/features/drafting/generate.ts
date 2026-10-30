@@ -3,10 +3,11 @@ import type { LlmClient } from "@/lib/llm/client";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { groundingIssues, type GroundingIssue } from "./grounding";
 import {
+  DRAFT_PROMPT_VERSION,
+  DRAFT_PROMPTS,
   draftOutputSchema,
-  draftSystemPrompt,
-  draftUserPrompt,
   toDraftResult,
+  type DraftPromptVersion,
   type DraftResult,
 } from "./prompts";
 
@@ -33,8 +34,11 @@ export async function generateDraft(
     category: string;
     text: string;
     signal?: () => AbortSignal;
+    /** Another prompt version (the Lab); production uses the current one. */
+    promptVersion?: DraftPromptVersion;
   },
 ): Promise<GeneratedDraft> {
+  const prompts = DRAFT_PROMPTS[input.promptVersion ?? DRAFT_PROMPT_VERSION];
   const facts = await retrieveKbEntries(deps, {
     tenantId: input.tenantId,
     itemId: input.itemId,
@@ -46,8 +50,8 @@ export async function generateDraft(
     tenantId: input.tenantId,
     itemId: input.itemId,
     schema: draftOutputSchema,
-    system: draftSystemPrompt(input.businessName),
-    prompt: draftUserPrompt({
+    system: prompts.system(input.businessName),
+    prompt: prompts.user({
       kind: input.kind,
       category: input.category,
       text: input.text,

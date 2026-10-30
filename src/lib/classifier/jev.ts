@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseEnv } from "@/lib/env";
 import type { UsageRecorder } from "@/lib/llm/usage";
-import { JEV_QUESTIONS } from "./jev-questions";
+import { JEV_QUESTIONS, type JevQuestions } from "./jev-questions";
 import { countWords, pickCategory, PRECEDENCE, type AskedCategory } from "./pick-category";
 import {
   ClassifierError,
@@ -63,6 +63,8 @@ export class JevClassifier implements Classifier {
   constructor(
     private readonly config: Omit<JevConfig, "timeoutMs">,
     private readonly deps: { usage: UsageRecorder; fetch?: typeof fetch },
+    /** Another question version (the Lab); production uses the current one. */
+    private readonly questions: JevQuestions = JEV_QUESTIONS,
   ) {}
 
   async classify(input: ClassifyInput, options: ClassifyOptions = {}): Promise<Classification> {
@@ -78,7 +80,7 @@ export class JevClassifier implements Classifier {
         customer_message: input.text,
       },
       questions: Object.fromEntries(
-        PRECEDENCE.map((c) => [c, { type: "noul", instructions: JEV_QUESTIONS[c] }]),
+        PRECEDENCE.map((c) => [c, { type: "noul", instructions: this.questions[c] }]),
       ),
     };
 

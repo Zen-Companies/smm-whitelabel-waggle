@@ -1,6 +1,6 @@
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { openRouterCostUsd, type UsageRecorder } from "@/lib/llm/usage";
-import { JEV_QUESTIONS } from "./jev-questions";
+import { JEV_QUESTIONS, type JevQuestions } from "./jev-questions";
 import { countWords, pickCategory, PRECEDENCE, type AskedCategory } from "./pick-category";
 import {
   ClassifierError,
@@ -27,6 +27,7 @@ export class OpenRouterJevClassifier implements Classifier {
   constructor(
     private readonly config: { apiKey: string; model?: string },
     private readonly deps: { usage: UsageRecorder; fetch?: typeof fetch },
+    private readonly questions: JevQuestions = JEV_QUESTIONS,
   ) {
     this.model = createOpenRouter({ apiKey: config.apiKey, fetch: deps.fetch }).evaluationModel(
       config.model ?? OPENROUTER_JEV_MODEL,
@@ -43,7 +44,7 @@ export class OpenRouterJevClassifier implements Classifier {
           customer_message: input.text,
         },
         questions: Object.fromEntries(
-          PRECEDENCE.map((c) => [c, { type: "boolean" as const, instructions: JEV_QUESTIONS[c] }]),
+          PRECEDENCE.map((c) => [c, { type: "boolean" as const, instructions: this.questions[c] }]),
         ),
         abortSignal: options.signal,
       });

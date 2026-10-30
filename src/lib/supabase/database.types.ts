@@ -45,6 +45,7 @@ export type Database = {
           output_tokens: number
           provider: string
           purpose: string
+          source: string
           tenant_id: string
         }
         Insert: {
@@ -57,6 +58,7 @@ export type Database = {
           output_tokens?: number
           provider: string
           purpose: string
+          source?: string
           tenant_id: string
         }
         Update: {
@@ -69,6 +71,7 @@ export type Database = {
           output_tokens?: number
           provider?: string
           purpose?: string
+          source?: string
           tenant_id?: string
         }
         Relationships: [

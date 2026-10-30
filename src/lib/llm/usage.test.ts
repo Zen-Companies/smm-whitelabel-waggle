@@ -1,7 +1,12 @@
 import * as Sentry from "@sentry/nextjs";
 import { describe, expect, it, vi } from "vitest";
 import type { ServiceClient } from "@/lib/supabase/service";
-import { createDbUsageRecorder, openRouterCostUsd, type AiUsageRecord } from "./usage";
+import {
+  createDbUsageRecorder,
+  openRouterCostUsd,
+  withUsageSource,
+  type AiUsageRecord,
+} from "./usage";
 
 vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
 
@@ -34,7 +39,14 @@ describe("createDbUsageRecorder", () => {
       input_tokens: 500,
       output_tokens: 80,
       cost_usd: 0.0021,
+      source: "live",
     });
+  });
+
+  it("tags lab and practice calls with their source", async () => {
+    const { db, insert } = fakeDb();
+    await withUsageSource(createDbUsageRecorder(db), "practice").record(usage);
+    expect(insert).toHaveBeenCalledWith(expect.objectContaining({ source: "practice" }));
   });
 
   it("reports a failed insert to Sentry by ids instead of failing the AI step", async () => {
