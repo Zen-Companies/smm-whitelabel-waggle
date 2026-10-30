@@ -86,10 +86,10 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
   const openHref = openOnPlatformHref(entry);
 
   return (
-    <div id={`item-${entry.itemId}`} className="m-4 mt-0 flex flex-col gap-3 md:m-5 md:mt-0">
+    <div id={`item-${entry.itemId}`} className="flex flex-col gap-3">
       {reply && (
         <div className="border-line-strong flex flex-col gap-2 rounded-xl border p-4">
-          <p className="text-wax-muted text-sm font-medium">
+          <p className="text-ink-2 text-sm font-medium">
             {failed ? "The reply that couldn't go out" : "Suggested reply"}
           </p>
           <p className="whitespace-pre-wrap">{reply}</p>
@@ -104,7 +104,7 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
           </p>
         </div>
       ) : (
-        <p className="bg-hive-high text-wax-muted rounded-xl px-4 py-3">
+        <p className="bg-subtle text-ink-2 rounded-xl px-4 py-3">
           {heldText(reason, entry)} {guess ? `${guess} ` : ""}
           {unsure
             ? `Reply on ${platform} and mark it as handled, or hide it if it's spam.`
@@ -139,7 +139,7 @@ export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string 
             href={openHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-wax-muted hover:bg-hive-high flex min-h-11 items-center rounded-md px-3 text-sm font-medium"
+            className="text-ink-2 hover:bg-subtle flex min-h-11 items-center rounded-md px-3 text-sm font-medium"
           >
             Open in {platform}
           </a>

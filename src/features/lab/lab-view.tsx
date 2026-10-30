@@ -95,7 +95,7 @@ async function History({ runId }: { runId?: string }) {
               return (
                 <tr
                   key={r.id}
-                  className={cn("border-b last:border-0", r.id === selected?.id && "bg-hive-high")}
+                  className={cn("border-b last:border-0", r.id === selected?.id && "bg-subtle")}
                 >
                   <td className="meta p-3 whitespace-nowrap">{shortTime(r.created_at)}</td>
                   <td className="p-3">{r.tenants?.name}</td>
@@ -108,7 +108,7 @@ async function History({ runId }: { runId?: string }) {
                     </Link>
                   </td>
                   <td className="p-3">{a}</td>
-                  <td className={cn("p-3", a !== b && "text-honey font-medium")}>{b}</td>
+                  <td className={cn("p-3", a !== b && "text-honey-text font-medium")}>{b}</td>
                 </tr>
               );
             })}

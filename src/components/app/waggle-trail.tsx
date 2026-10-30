@@ -12,7 +12,7 @@ export function WaggleTrail({ className }: { className?: string }) {
         stroke="currentColor"
         strokeWidth="18"
         strokeLinejoin="round"
-        className="text-honey animate-trail"
+        className="text-honey bee-trace"
       />
     </svg>
   );

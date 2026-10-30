@@ -1,8 +1,8 @@
-import { CircleCheck, Clock3 } from "lucide-react";
+import { BookOpen, Check, CircleAlert, CircleCheck, Clock3, UserPlus } from "lucide-react";
 import Link from "next/link";
-import { CategoryLabel } from "@/components/app/category-label";
+import { Avatar } from "@/components/app/avatar";
 import { IllustratedEmpty } from "@/components/app/illustrated-empty";
-import { clockTime, platformName, shortTime } from "@/components/app/time";
+import { clockTime, shortTime } from "@/components/app/time";
 import { buttonVariants } from "@/components/ui/button";
 import { MarkItemRead } from "@/features/alerts";
 import { getCurrentTenant } from "@/features/tenants";
@@ -24,39 +24,30 @@ import {
   loadTodaySummary,
   needsOwner,
   normalizeTab,
-  responseTime,
   type InboxEntry,
   type InboxTab,
   type NextPost,
   type TodaySummary,
 } from "./inbox-data";
 import { InboxLive } from "./inbox-live";
+import { rowNote, type RowTone } from "./row-note";
 
-// Inbox (design.md §4, §9): mobile first like the phone mockup (business name, Today card, filter
-// chips, item cards, Next post card); on desktop list | conversation with the reply composer |
-// context panel. On phone widths it's list → detail.
+// Inbox (design.md v3 Paper): a headline ("4 things need you"), then list | conversation with the
+// reply composer | side panel on desktop; list → conversation on phones. Rows follow the ten rules:
+// no boxes or stripes, a honey dot when the owner must act, three lines per row.
 
 const href = (tab: InboxTab, item?: string, autoOnly = false) =>
   `/inbox?tab=${tab}${autoOnly ? "&by=auto" : ""}${item ? `&item=${item}` : ""}`;
 
-/** Status at the right of a card header: ANSWERED · 6s, IGNORED, or the category. */
-function RowStatus({ entry }: { entry: InboxEntry & { status: string } }) {
-  if (entry.status === "sent" || entry.status === "sending") {
-    return (
-      <span className="status-plain">
-        {entry.draft?.sentAt
-          ? `Answered · ${responseTime(entry.receivedAt, entry.draft.sentAt)}`
-          : "Sending"}
-      </span>
-    );
-  }
-  if (entry.status === "ignored") return <span className="status-plain">Ignored</span>;
-  if (entry.status === "handled") return <span className="status-plain">Handled</span>;
-  if (entry.status === "rejected") return <span className="status-plain">Not answered</span>;
-  return <CategoryLabel category={entry.category} />;
-}
+const NOTE_ICON: Record<RowTone, React.ReactNode> = {
+  lead: <UserPlus className="text-honey-text size-3.5" strokeWidth={2} aria-hidden />,
+  complaint: <CircleAlert className="text-danger size-3.5" strokeWidth={2} aria-hidden />,
+  info: <BookOpen className="size-3.5" strokeWidth={2} aria-hidden />,
+  done: <Check className="text-success size-3.5" strokeWidth={2.2} aria-hidden />,
+  none: null,
+};
 
-/** One item card (design.md §4); a honey border when it needs the owner. */
+/** One list row (design.md §1 rules 2 and 4): who · what they said · what happens next. */
 function Row({
   entry,
   tab,
@@ -69,77 +60,87 @@ function Row({
   autoOnly: boolean;
 }) {
   const needs = needsOwner(entry.status);
-  const reply =
-    entry.draft && !entry.draft.needsHuman ? (entry.draft.editedBody ?? entry.draft.body) : null;
+  const note = rowNote(entry);
   return (
-    <li>
+    <li className="border-line border-t first:border-t-0">
       <Link
         href={href(tab, entry.itemId, autoOnly)}
         aria-current={selected ? "true" : undefined}
         className={cn(
-          "card flex flex-col gap-2 p-4 transition-colors duration-150",
-          needs && "card-needs",
-          selected ? "bg-hive-high" : "hover:bg-hive-high",
+          "-mx-3 flex gap-3 rounded-md px-3 py-3.5 transition-colors duration-150",
+          selected ? "bg-subtle" : "hover:bg-subtle/60",
         )}
       >
-        <span className="flex items-center gap-3">
-          <span className="label min-w-0 truncate">
-            {platformName(entry.platform)} · {entry.authorName ?? "A customer"}
+        <Avatar size={36} platform={entry.platform} />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex items-center gap-1.5">
+            {needs && (
+              <span className="bg-honey size-1.5 shrink-0 rounded-full" aria-label="Needs you" />
+            )}
+            <span className={cn("truncate", needs ? "font-semibold" : "text-ink-2")}>
+              {entry.authorName ?? "A customer"}
+            </span>
+            <time
+              className="text-ink-3 ml-auto shrink-0 text-[13px] tabular-nums"
+              dateTime={entry.receivedAt}
+            >
+              {shortTime(entry.receivedAt)}
+            </time>
           </span>
-          <span className="ml-auto shrink-0">
-            <RowStatus entry={entry} />
+          <span className={cn("truncate", needs ? "text-ink-2" : "text-ink-3")}>
+            {entry.text || "(no text)"}
+          </span>
+          <span className="text-ink-3 flex items-center gap-1.5 text-[13px]">
+            {NOTE_ICON[note.tone]}
+            {note.label && (
+              <span
+                className={cn(
+                  "font-medium",
+                  note.tone === "lead" ? "text-honey-text" : "text-danger",
+                )}
+              >
+                {note.label}
+              </span>
+            )}
+            {note.label ? `· ${note.text}` : note.text}
           </span>
         </span>
-        <span className="text-wax-muted line-clamp-2">
-          &ldquo;{entry.text || "(no text)"}&rdquo;
-        </span>
-        {reply && <span className="text-wax line-clamp-2">{reply}</span>}
-        <time className="meta" dateTime={entry.receivedAt}>
-          {entry.kind === "dm" ? "DM" : "Comment"} · {shortTime(entry.receivedAt)}
-        </time>
       </Link>
     </li>
   );
 }
 
-/** The Today summary card (design.md §4): honey, three big numbers. */
-function TodayCard({ today }: { today: TodaySummary }) {
-  const numbers: [string, number][] = [
-    ["answered", today.answered],
-    ["for you", today.forYou],
-    ["ignored", today.ignored],
-  ];
+/** The headline (design.md §4): what needs the owner, and one gray line about today. */
+function InboxHeadline({ today }: { today: TodaySummary }) {
+  const n = today.forYou;
   return (
-    <section aria-labelledby="today" className="today-card flex flex-col gap-3 p-5">
-      <h2 id="today" className="text-[13px] font-bold tracking-[0.12em] uppercase">
-        Today
-      </h2>
-      <dl className="grid grid-cols-3 gap-3">
-        {numbers.map(([label, n]) => (
-          <div key={label} className="flex flex-col-reverse">
-            <dt className="text-[15px] font-medium">{label}</dt>
-            <dd className="text-3xl leading-none font-bold tabular-nums">{n}</dd>
-          </div>
-        ))}
-      </dl>
-    </section>
+    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+      <h1 className="page-title">
+        {n === 0 ? "Nothing needs you" : n === 1 ? "1 thing needs you" : `${n} things need you`}
+      </h1>
+      <p className="text-ink-3">
+        Today Waggle answered {today.answered} and ignored {today.ignored}.
+      </p>
+    </div>
   );
 }
 
-/** The Next post card at the bottom of the inbox (design.md §4). */
-function NextPostCard({ post }: { post: NextPost }) {
+/** Next post, at the foot of the list (design.md §4): plain text, no card. */
+function NextPostNote({ post }: { post: NextPost }) {
   const when = new Date(post.scheduledFor).toLocaleString(undefined, {
     weekday: "short",
     hour: "numeric",
     minute: "2-digit",
   });
   return (
-    <Link href="/posts" className="card hover:bg-hive-high flex flex-col gap-1 p-4">
+    <Link
+      href="/posts"
+      className="border-line mt-2 flex flex-col gap-0.5 border-t pt-4 text-[13px] hover:underline"
+    >
       <span className="label">Next post</span>
-      <span className="font-semibold">{post.title}</span>
-      <span className="meta">
-        {post.platforms === 1 ? "1 account" : `${post.platforms} accounts`} ·{" "}
-        <span className="text-honey font-semibold">{when}</span>
+      <span className="text-ink text-sm">{post.title}</span>
+      <span className="text-ink-2">
+        {when} · {post.platforms === 1 ? "1 account" : `${post.platforms} accounts`}
       </span>
     </Link>
   );
@@ -153,11 +154,11 @@ function SentFooter({ entry }: { entry: InboxEntry & { status: string } }) {
     rejected: "You chose not to reply",
   };
   return (
-    <p className="bg-hive-high m-4 mt-0 inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm md:m-5 md:mt-0">
+    <p className="bg-subtle inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm">
       {entry.status !== "sending" ? (
         <>
           <CircleCheck
-            className={entry.status === "sent" ? "text-success" : "text-pollen"}
+            className={entry.status === "sent" ? "text-success" : "text-ink-3"}
             strokeWidth={1.75}
             aria-hidden
           />
@@ -215,23 +216,19 @@ export async function InboxView({
   const held = selected && (selected.status === "escalated" || selected.status === "failed");
   const reason = held ? await heldReason(supabase, selected.itemId, selected.status) : null;
 
-  const header = (
-    <header className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <p className="label">{tenant.name}</p>
-        <h1 className="page-title">Inbox</h1>
-      </div>
-      <TodayCard today={today} />
-      <nav aria-label="Inbox filters" className="chips max-w-full">
+  // Tabs sit on top of the list (design.md §4): text with an ink underline, counts in gray.
+  const tabs = (
+    <div className="flex flex-col">
+      <nav aria-label="Inbox filters" className="tabs">
         {INBOX_TABS.map((t) => (
           <Link key={t.key} href={href(t.key)} data-active={t.key === tab || undefined}>
             {t.label}
-            <span className="tabular-nums opacity-70">{counts[t.key]}</span>
+            <span>{counts[t.key]}</span>
           </Link>
         ))}
       </nav>
       {tab === "answered" && (
-        <nav aria-label="Answered filter" className="flex gap-4 text-sm">
+        <nav aria-label="Answered filter" className="flex gap-4 pt-2 text-[13px]">
           {[
             { label: "All answered", href: href("answered"), active: !autoOnly },
             {
@@ -245,8 +242,8 @@ export async function InboxView({
               href={f.href}
               aria-current={f.active ? "page" : undefined}
               className={cn(
-                "flex min-h-11 items-center",
-                f.active ? "text-honey font-semibold" : "hover:text-wax text-wax-muted",
+                "flex min-h-9 items-center",
+                f.active ? "text-ink font-semibold" : "hover:text-ink text-ink-2",
               )}
             >
               {f.label}
@@ -254,17 +251,17 @@ export async function InboxView({
           ))}
         </nav>
       )}
-    </header>
+    </div>
   );
 
   // First run: nothing connected yet.
   if (!accounts) {
     return (
       <div className="flex flex-col gap-6">
-        <h1 className="page-title">Inbox</h1>
+        <h1 className="page-title">Connect your Instagram</h1>
         <IllustratedEmpty
           illustration="connect-accounts"
-          title="Connect your Instagram"
+          title="Waggle is ready when you are"
           action={
             <Link href="/settings" className={buttonVariants({ variant: "primary" })}>
               Connect an account
@@ -281,10 +278,10 @@ export async function InboxView({
   const empty =
     tab === "for_you" ? (
       <IllustratedEmpty illustration="inbox-clear" title="All caught up">
-        Nothing needs you. We&apos;ll email you when a customer does.
+        Nothing needs you. Go run the shop; we&apos;ll email you when a customer does.
       </IllustratedEmpty>
     ) : (
-      <p className="meta px-3 py-6">
+      <p className="meta py-6">
         {tab === "ignored"
           ? "Spam and messages that need no reply show up here."
           : autoOnly
@@ -311,7 +308,7 @@ export async function InboxView({
   return (
     <div className="flex flex-col gap-5">
       <InboxLive tenantId={tenant.id} />
-      {header}
+      <InboxHeadline today={today} />
       {settings?.replies_paused && (
         <p role="status" className="banner">
           Replies are paused. Nothing is sent until you turn them back on in{" "}
@@ -327,60 +324,57 @@ export async function InboxView({
         </p>
       )}
       <RecentSends />
-      {entries.length === 0 ? (
-        empty
-      ) : (
-        <div className="grid items-start gap-5 lg:grid-cols-[minmax(240px,320px)_minmax(0,1fr)] xl:grid-cols-[minmax(240px,320px)_minmax(0,1fr)_minmax(240px,300px)]">
-          <ul
-            className={cn("flex flex-col gap-3", itemParam && "hidden lg:flex")}
-            aria-label="Messages"
-          >
-            {entries.map((e) => (
-              <Row
-                key={e.itemId}
-                entry={e}
-                tab={tab}
-                autoOnly={autoOnly}
-                selected={e.itemId === selected?.itemId}
-              />
-            ))}
-          </ul>
-          {selected && (
-            <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
-              {itemParam && (
-                <Link
-                  href={href(tab, undefined, autoOnly)}
-                  className="text-wax-muted text-sm lg:hidden"
-                >
-                  ← All messages
-                </Link>
-              )}
-              <MarkItemRead itemId={selected.itemId} />
-              <ConversationPane
-                entry={selected}
-                thread={
-                  conversation?.thread ?? [
-                    {
-                      key: selected.itemId,
-                      from: "customer",
-                      text: selected.text,
-                      at: selected.receivedAt,
-                      itemId: selected.itemId,
-                    },
-                  ]
-                }
-                footer={footer}
-              />
-            </div>
+      <div className="grid items-start gap-8 lg:grid-cols-[minmax(280px,360px)_minmax(0,600px)] xl:grid-cols-[minmax(280px,360px)_minmax(0,600px)_220px]">
+        <div className={cn("flex min-w-0 flex-col", itemParam && "hidden lg:flex")}>
+          {tabs}
+          {entries.length === 0 ? (
+            empty
+          ) : (
+            <ul className="flex flex-col pt-1" aria-label="Messages">
+              {entries.map((e) => (
+                <Row
+                  key={e.itemId}
+                  entry={e}
+                  tab={tab}
+                  autoOnly={autoOnly}
+                  selected={e.itemId === selected?.itemId}
+                />
+              ))}
+            </ul>
           )}
-          {selected && conversation && (
-            <div className={cn("lg:col-start-2 xl:col-start-3", !itemParam && "hidden lg:block")}>
-              <ContextPanel context={conversation.context} />
-            </div>
-          )}
+          {nextPost && <NextPostNote post={nextPost} />}
         </div>
-      )}
-      {nextPost && <NextPostCard post={nextPost} />}
+        {selected && (
+          <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
+            {itemParam && (
+              <Link href={href(tab, undefined, autoOnly)} className="text-ink-2 text-sm lg:hidden">
+                ← All messages
+              </Link>
+            )}
+            <MarkItemRead itemId={selected.itemId} />
+            <ConversationPane
+              entry={selected}
+              thread={
+                conversation?.thread ?? [
+                  {
+                    key: selected.itemId,
+                    from: "customer",
+                    text: selected.text,
+                    at: selected.receivedAt,
+                    itemId: selected.itemId,
+                  },
+                ]
+              }
+              footer={footer}
+            />
+          </div>
+        )}
+        {selected && conversation && (
+          <div className={cn("lg:col-start-2 xl:col-start-3", !itemParam && "hidden lg:block")}>
+            <ContextPanel context={conversation.context} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

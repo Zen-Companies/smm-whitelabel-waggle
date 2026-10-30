@@ -18,7 +18,7 @@ export async function NotificationSettings() {
       <ul className="card flex flex-col divide-y">
         <li className="flex flex-col px-5 py-4">
           <span className="font-medium">Email</span>
-          <span className="text-wax-muted text-sm">
+          <span className="text-ink-2 text-sm">
             {emailOn
               ? `Leads, messages that need you and account problems go to ${user.email}.`
               : `Leads, messages that need you and account problems will go to ${user.email} once email is set up for this app.`}
@@ -26,7 +26,7 @@ export async function NotificationSettings() {
         </li>
         <li className="flex flex-col px-5 py-4">
           <span className="font-medium">In the app</span>
-          <span className="text-wax-muted text-sm">
+          <span className="text-ink-2 text-sm">
             The bell shows the same alerts, plus replies sent automatically and post updates.
           </span>
         </li>

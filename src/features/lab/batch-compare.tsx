@@ -156,7 +156,7 @@ export function BatchCompare({
           <span className="font-medium">
             {count} messages × 2 setups = {estimate.calls} classifier calls (classification only).
           </span>
-          <span className="text-wax-muted">
+          <span className="text-ink-2">
             OpenRouter requests: {estimate.openRouterCalls}
             {estimate.openRouterIfJevDown > estimate.openRouterCalls
               ? `, up to ${estimate.openRouterIfJevDown} if Jev is down (production falls back to the LLM)`
@@ -164,7 +164,7 @@ export function BatchCompare({
             . Free without credits: about 50 a day. Jev on jevos is free.
           </span>
           {needsConfirm && (
-            <label className="text-honey-light flex min-h-11 items-center gap-2 font-medium">
+            <label className="text-honey-text flex min-h-11 items-center gap-2 font-medium">
               <input
                 type="checkbox"
                 checked={confirmed}

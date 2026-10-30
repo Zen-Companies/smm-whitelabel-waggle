@@ -1,46 +1,40 @@
-import Image from "next/image";
+import { Bee, type BeeScene } from "@/components/app/bee";
 import { cn } from "cn";
 
 export type Illustration = "inbox-clear" | "connect-accounts" | "new-lead" | "reconnect";
 
-// Every panel is hive-raised (design.md §7); the old tint names are kept for callers.
-const TINT = {
-  lavender: "bg-hive-raised",
-  coral: "bg-hive-raised",
-  gray: "bg-hive-raised",
-} as const;
+// Each empty state shows one of the bee's moments (docs/design.md §6).
+const SCENE: Record<Illustration, BeeScene> = {
+  "inbox-clear": "caught-up",
+  "new-lead": "caught-up",
+  "connect-accounts": "loading",
+  reconnect: "resting",
+};
 
 /**
- * A bee spot illustration on a hive-raised panel (22px) with an Outfit 700 headline and one
- * friendly line (docs/design.md §7). Only for empty states, first runs, first wins and gentle
- * problems; never in lists, forms or complaint screens.
+ * Empty states, first runs and gentle problems (docs/design.md §6): the bee, a short headline and
+ * one friendly line, on the page itself (no box, rule 1). `tint` is kept for callers; Paper has
+ * one look.
  */
 export function IllustratedEmpty({
   illustration,
   title,
   children,
-  tint = "lavender",
   action,
   className,
 }: {
   illustration: Illustration;
   title: string;
   children?: React.ReactNode;
-  tint?: keyof typeof TINT;
+  tint?: string;
   action?: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div
-      className={cn(
-        "border-line flex flex-col items-center gap-3 rounded-2xl border px-6 py-10 text-center",
-        TINT[tint],
-        className,
-      )}
-    >
-      <Image src={`/illustrations/${illustration}.svg`} alt="" width={224} height={160} priority />
+    <div className={cn("flex flex-col items-center gap-3 px-6 py-12 text-center", className)}>
+      <Bee scene={SCENE[illustration]} />
       <h2 className="display-title">{title}</h2>
-      {children && <p className="text-wax-muted max-w-md">{children}</p>}
+      {children && <p className="text-ink-2 max-w-md">{children}</p>}
       {action}
     </div>
   );

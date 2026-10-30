@@ -1,8 +1,9 @@
 "use client";
 
-import { CircleCheck, Clock3, LoaderCircle } from "lucide-react";
+import { CircleCheck, Clock3 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { BeeSending } from "@/components/app/bee";
 import { clockTime } from "@/components/app/time";
 import { WaggleTrail } from "@/components/app/waggle-trail";
 import { Button } from "@/components/ui/button";
@@ -104,7 +105,7 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
           <button
             type="submit"
             disabled={undoing}
-            className="hover:text-wax text-wax-muted min-h-11 px-2 text-sm font-medium underline underline-offset-4"
+            className="hover:text-ink text-ink-2 min-h-11 px-2 text-sm font-medium underline underline-offset-4"
           >
             {undoing ? "Undoing…" : "Undo"}
           </button>
@@ -193,20 +194,15 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
         setIntent(fd.get("intent") === "reject" ? "reject" : "approve");
         return action(fd);
       }}
-      className="border-line-strong m-4 mt-0 flex flex-col gap-3 rounded-xl border p-4 md:m-5 md:mt-0"
+      className="border-line-strong flex flex-col gap-3 rounded-xl border p-4"
     >
       <input type="hidden" name="itemId" value={entry.itemId} />
       <input type="hidden" name="draftId" value={draft.id} />
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <label htmlFor={`reply-${entry.itemId}`} className="text-sm font-semibold">
-          Suggested reply
-        </label>
-        <span className="meta">
-          {draft.facts.length
-            ? `Based on your business info: ${draft.facts.join(", ")}`
-            : "Written without business info"}
-        </span>
-      </div>
+      <label htmlFor={`reply-${entry.itemId}`} className="meta">
+        {draft.facts.length
+          ? `Waggle's reply, from ${draft.facts.join(", ")}`
+          : "Waggle's reply, written without business info"}
+      </label>
       {editing ? (
         <textarea
           ref={textRef}
@@ -223,7 +219,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
         />
       ) : (
         <>
-          <p id={`reply-${entry.itemId}`} className="whitespace-pre-wrap">
+          <p id={`reply-${entry.itemId}`} className="text-[15px] whitespace-pre-wrap">
             {text}
           </p>
           <input type="hidden" name="body" value={text} />
@@ -246,7 +242,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
         >
           {sending ? (
             <>
-              <LoaderCircle className="animate-spin" strokeWidth={1.75} aria-hidden />
+              <BeeSending />
               Sending
             </>
           ) : (

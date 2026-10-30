@@ -2,29 +2,29 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Design system: docs/design.md (Waggle, dark-first). Components use these tokens, never raw hex. */
+/* Design system: docs/design.md (Waggle Paper, v3). Components use these tokens, never raw hex. */
 
 @theme inline {
   /* Palette (design.md §3) */
-  --color-hive: var(--hive);
-  --color-hive-raised: var(--hive-raised);
-  --color-hive-high: var(--hive-high);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
-  --color-wax: var(--wax);
-  --color-wax-muted: var(--wax-muted);
-  --color-pollen: var(--pollen);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-ink-4: var(--ink-4);
   --color-honey: var(--honey);
-  --color-honey-light: var(--honey-light);
-  --color-honey-deep: var(--honey-deep);
-  --color-alert: var(--alert);
+  --color-honey-hover: var(--honey-hover);
+  --color-honey-text: var(--honey-text);
+  --color-honey-tint: var(--honey-tint);
+  --color-honey-border: var(--honey-border);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-danger-border: var(--danger-border);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
-  --color-banner: var(--banner-bg);
-  --color-banner-border: var(--banner-border);
 
   /* shadcn names, mapped onto the palette */
   --color-background: var(--background);
@@ -46,66 +46,65 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Type: Outfit for everything (design.md §3) */
-  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  /* Type: Inter for everything (design.md §3) */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-display);
 
-  /* Radius: 12 buttons/inputs · 14 icon buttons · 18 cards/list items · 22 summary card, panels */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 14px;
-  --radius-xl: 18px;
-  --radius-2xl: 22px;
-  --radius-3xl: 28px;
+  /* Radius: 8 controls · 12 panels; nothing rounder except avatars and dots */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-2xl: 12px;
+  --radius-3xl: 12px;
 
-  /* Depth: borders do the work on dark; shadows only on overlays */
-  --shadow-overlay: 0 16px 40px rgba(0, 0, 0, 0.45);
+  /* Depth: borders do the work; one shadow, only on overlays */
+  --shadow-overlay: 0 12px 32px rgba(24, 24, 27, 0.12);
 }
 
-/* Dark app theme, the default ("the hive"). */
 :root {
-  color-scheme: dark;
-  --hive: #17140f;
-  --hive-raised: #221d15;
-  --hive-high: #2a2318;
-  --line: #2e2719;
-  --line-strong: #3a3122;
-  --wax: #fff6e6;
-  --wax-muted: #d9ccb0;
-  --pollen: #b9a988;
-  --honey: #f6b21b;
-  --honey-light: #ffd266;
-  --honey-deep: #c98500;
-  --alert: #ff9b85;
-  --danger: #ff7a66;
-  --danger-soft: #2c1915;
-  --danger-border: #5c2b22;
-  --success: #8fd19e;
-  --success-soft: #1c2a1f;
-  --banner-bg: #33270f;
-  --banner-border: #6b4e1a;
-  --focus-ring: rgba(246, 178, 27, 0.25);
+  color-scheme: light;
+  --page: #ffffff;
+  --surface: #ffffff;
+  --subtle: #f5f5f4;
+  --line: #e7e5e4;
+  --line-strong: #d6d3d1;
+  --ink: #18181b;
+  --ink-2: #52525b;
+  --ink-3: #71717a;
+  --ink-4: #a1a1aa;
+  --honey: #f5b014;
+  --honey-hover: #e5a50f;
+  --honey-text: #92600a;
+  --honey-tint: #fff7e0;
+  --honey-border: #f5d98c;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --danger-border: #fecdca;
+  --success: #15803d;
+  --success-soft: #f0fdf4;
+  --focus-ring: rgba(24, 24, 27, 0.08);
 
-  --background: var(--hive);
-  --foreground: var(--wax);
-  --card: var(--hive-raised);
-  --card-foreground: var(--wax);
-  --popover: var(--hive-raised);
-  --popover-foreground: var(--wax);
+  --background: var(--page);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
   --primary: var(--honey);
-  --primary-foreground: var(--hive);
-  --secondary: transparent;
-  --secondary-foreground: var(--wax);
-  --muted: var(--hive-high);
-  --muted-foreground: var(--pollen);
-  --accent: var(--hive-high);
-  --accent-foreground: var(--wax);
+  --primary-foreground: var(--ink);
+  --secondary: var(--surface);
+  --secondary-foreground: var(--ink);
+  --muted: var(--subtle);
+  --muted-foreground: var(--ink-3);
+  --accent: var(--subtle);
+  --accent-foreground: var(--ink);
   --destructive: var(--danger);
   --border: var(--line);
   --input: var(--line-strong);
-  --ring: var(--honey);
-  --radius: 12px;
+  --ring: var(--ink);
+  --radius: 8px;
 }
 
 @layer base {
@@ -117,11 +116,11 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-size: 16px;
-    line-height: 1.45;
+    font-size: 14px;
+    line-height: 1.5;
   }
   :focus-visible {
-    outline: 2px solid var(--honey);
+    outline: 2px solid var(--ink);
     outline-offset: 2px;
   }
   @media (prefers-reduced-motion: reduce) {
@@ -129,6 +128,7 @@
     *::before,
     *::after {
       animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
     }
   }
@@ -137,218 +137,209 @@
 @layer components {
   /* Type roles (design.md §3) */
   .page-title {
-    font-size: 30px;
-    line-height: 1.15;
-    font-weight: 700;
+    font-size: 24px;
+    line-height: 1.25;
+    font-weight: 600;
     letter-spacing: -0.02em;
-    color: var(--wax);
+    color: var(--ink);
   }
   .display-title {
-    font-size: 26px;
-    line-height: 1.2;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--wax);
+    font-size: 20px;
+    line-height: 1.3;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--ink);
   }
   .section-title {
-    font-size: 18px;
+    font-size: 16px;
     line-height: 1.4;
     font-weight: 600;
-    color: var(--wax);
+    color: var(--ink);
   }
   .meta {
     font-size: 13px;
     line-height: 1.4;
-    font-weight: 500;
+    font-weight: 400;
     font-variant-numeric: tabular-nums;
-    color: var(--pollen);
+    color: var(--ink-3);
   }
-  /* Uppercase label: INSTAGRAM · @marco.eats */
+  /* Small label above a block (Customer, Activity, Next post) */
   .label {
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.3;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--pollen);
+    font-weight: 500;
+    color: var(--ink-4);
   }
 
-  /* Wordmark (design.md §2): lowercase, Outfit 700, tight tracking. */
+  /* Wordmark (design.md §2): lowercase, Inter 700, tight tracking. */
   .wordmark {
     font-weight: 700;
     letter-spacing: -0.035em;
     line-height: 1;
-    color: var(--wax);
+    color: var(--ink);
   }
 
-  /* Surfaces: cards and list items (18px), panels (22px) and overlays */
+  /* Panels: the few real objects that get a box (rule 1) */
   .card {
-    background: var(--hive-raised);
-    border: 1px solid var(--line-strong);
-    border-radius: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
   }
   .card-lifted {
-    background: var(--hive-raised);
-    border: 1px solid var(--line-strong);
-    border-radius: 22px;
-  }
-  /* An item that needs the owner (design.md §4): a 1px honey border. */
-  .card-needs {
-    border-color: var(--honey);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
   }
   .overlay {
-    background: var(--hive-raised);
-    border: 1px solid var(--line-strong);
-    border-radius: 22px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
     box-shadow: var(--shadow-overlay);
   }
 
-  /* Today summary card: honey, hive text, 22px radius */
-  .today-card {
-    background: var(--honey);
-    color: var(--hive);
-    border-radius: 22px;
-  }
-
-  /* Inputs: 44px, 12px radius; focus = honey border + 3px ring */
+  /* Inputs: 8px radius; focus = ink border + soft ring */
   .field {
     width: 100%;
-    min-height: 44px;
-    border-radius: 12px;
+    min-height: 40px;
+    border-radius: 8px;
     border: 1px solid var(--line-strong);
-    background: var(--hive-raised);
-    padding: 0 14px;
-    font-size: 16px;
-    color: var(--wax);
+    background: var(--surface);
+    padding: 0 12px;
+    font-size: 14px;
+    color: var(--ink);
     transition:
       border-color 150ms ease-out,
       box-shadow 150ms ease-out;
   }
   textarea.field {
-    padding: 12px 14px;
+    padding: 10px 12px;
     line-height: 1.5;
   }
   .field::placeholder {
-    color: var(--pollen);
+    color: var(--ink-4);
   }
   .field:focus,
   .field:focus-visible {
     outline: none;
-    border-color: var(--honey);
+    border-color: var(--ink);
     box-shadow: 0 0 0 3px var(--focus-ring);
   }
   .field[aria-invalid="true"] {
     border-color: var(--danger);
   }
 
-  /* Segmented control: hive-raised track; active segment hive-high with a line-strong border */
+  /* Segmented control: subtle track; active segment white with a border */
   .segmented {
     display: inline-flex;
-    gap: 4px;
-    padding: 4px;
-    border-radius: 12px;
-    background: var(--hive-raised);
-    border: 1px solid var(--line);
+    gap: 2px;
+    padding: 3px;
+    border-radius: 8px;
+    background: var(--subtle);
   }
   .segmented > label,
   .segmented > button,
   .segmented > a {
     display: inline-flex;
     align-items: center;
-    min-height: 36px;
-    padding: 0 14px;
-    border-radius: 9px;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 6px;
     border: 1px solid transparent;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 500;
-    color: var(--wax-muted);
+    color: var(--ink-2);
     cursor: pointer;
     transition: background 150ms ease-out;
   }
   .segmented > [data-active] {
-    background: var(--hive-high);
+    background: var(--surface);
     border-color: var(--line-strong);
-    color: var(--wax);
+    color: var(--ink);
   }
   .segmented > label:has(input:focus-visible) {
-    outline: 2px solid var(--honey);
+    outline: 2px solid var(--ink);
     outline-offset: 1px;
   }
 
-  /* Filter chips (inbox tabs): pills, 44px. Active = wax bg + hive text. */
-  .chips {
+  /* Tabs: text with a 2px ink underline when active (design.md §4) */
+  .tabs {
     display: flex;
-    gap: 8px;
+    gap: 20px;
     overflow-x: auto;
+    border-bottom: 1px solid var(--line);
   }
-  .chips > a,
-  .chips > button {
+  .tabs > a,
+  .tabs > button {
     display: inline-flex;
     flex-shrink: 0;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-height: 44px;
-    padding: 0 18px;
-    border-radius: 9999px;
-    border: 1px solid var(--line-strong);
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--wax-muted);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink-2);
+    box-shadow: inset 0 -2px 0 transparent;
     transition:
-      background 150ms ease-out,
-      color 150ms ease-out;
+      color 150ms ease-out,
+      box-shadow 150ms ease-out;
   }
-  .chips > [data-active] {
-    background: var(--wax);
-    border-color: var(--wax);
-    color: var(--hive);
+  .tabs > a > span,
+  .tabs > button > span {
+    color: var(--ink-4);
+    font-variant-numeric: tabular-nums;
+  }
+  .tabs > [data-active] {
+    color: var(--ink);
+    font-weight: 600;
+    box-shadow: inset 0 -2px 0 var(--ink);
+  }
+  .tabs > [data-active] > span {
+    color: var(--ink-3);
+    font-weight: 500;
   }
 
-  /* Account-wide problems: one banner, honey icon (design.md §5) */
+  /* Account-wide banner (design.md §4) */
   .banner {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 12px;
-    padding: 12px 16px;
-    border-radius: 14px;
-    border: 1px solid var(--banner-border);
-    background: var(--banner-bg);
-    color: var(--wax);
-    font-size: 15px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--honey-border);
+    background: var(--honey-tint);
+    color: var(--ink);
+    font-size: 14px;
   }
   .banner > svg {
-    color: var(--honey);
+    color: var(--honey-text);
   }
   /* Inline error box under the thing that failed */
   .danger-box {
-    padding: 12px 14px;
-    border-radius: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
     border: 1px solid var(--danger-border);
     background: var(--danger-soft);
     color: var(--danger);
-    font-size: 15px;
+    font-size: 14px;
   }
 
-  /* Status text in a card header (design.md §4): HOT LEAD, COMPLAINT, QUESTION */
+  /* Category words (design.md §4): no chips */
   .status-lead,
   .status-complaint,
   .status-plain {
     font-size: 13px;
     line-height: 1.3;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+    font-weight: 500;
   }
   .status-lead {
-    color: var(--honey-light);
+    color: var(--honey-text);
   }
   .status-complaint {
-    color: var(--alert);
+    color: var(--danger);
   }
   .status-plain {
-    font-weight: 600;
-    color: var(--pollen);
+    color: var(--ink-3);
   }
 
   /* Keyboard hint */
@@ -356,26 +347,50 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 8px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 5px;
     border: 1px solid var(--line-strong);
-    background: var(--hive-high);
-    font-size: 12px;
+    background: var(--surface);
+    font-size: 11px;
     font-weight: 600;
-    color: var(--wax-muted);
+    color: var(--ink-3);
   }
 
-  /* Skeleton block (loading: shaped like the content, no spinners on lists) */
+  /* Skeleton block (lists: shaped like the content, never spinners) */
   .skeleton {
-    border-radius: 8px;
-    background: var(--hive-high);
+    border-radius: 6px;
+    background: var(--subtle);
   }
 }
 
-/* The signature moment (design.md §3): a honey trail traces a figure-8 once next to the check. */
-@keyframes waggle-trail {
+/* Bee motion (design.md §6). Stops with reduced motion (base layer). */
+@keyframes bee-along {
+  to {
+    offset-distance: 100%;
+  }
+}
+@keyframes bee-flutter {
+  to {
+    transform: scaleY(0.55);
+  }
+}
+@keyframes bee-bob {
+  to {
+    transform: translateY(-5px);
+  }
+}
+@keyframes bee-draw {
+  0% {
+    stroke-dashoffset: 100;
+  }
+  60%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes bee-trace {
   from {
     stroke-dashoffset: 100;
   }
@@ -383,7 +398,51 @@
     stroke-dashoffset: 0;
   }
 }
-.animate-trail {
+@keyframes bee-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-14deg);
+  }
+  40% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  80% {
+    transform: rotate(3deg);
+  }
+}
+.bee-fly {
+  position: absolute;
+  top: 0;
+  left: 0;
+  offset-rotate: auto;
+  animation: bee-along 4s linear infinite;
+}
+.bee-wing {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: bee-flutter 0.12s ease-in-out infinite alternate;
+}
+.bee-bob {
+  animation: bee-bob 1.8s ease-in-out infinite alternate;
+}
+.bee-rest {
+  animation: bee-bob 3.2s ease-in-out infinite alternate;
+}
+.bee-draw {
   stroke-dasharray: 100;
-  animation: waggle-trail 700ms ease-out both;
+  animation: bee-draw 4s linear infinite;
+}
+.bee-trace {
+  stroke-dasharray: 100;
+  animation: bee-trace 700ms ease-out both;
+}
+.bee-wiggle {
+  transform-origin: 50% 10%;
+  animation: bee-wiggle 600ms ease-in-out 1;
 }

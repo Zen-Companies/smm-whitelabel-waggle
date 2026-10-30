@@ -77,7 +77,7 @@ export async function KbList({
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex flex-1 flex-col gap-1">
           <h1 className="page-title">Business info</h1>
-          <p className="text-wax-muted">
+          <p className="text-ink-2">
             The only facts Waggle uses in replies. If it isn&apos;t here, it asks you.
           </p>
         </div>
@@ -111,7 +111,7 @@ export async function KbList({
                       aria-current={e.id === selected?.id ? "true" : undefined}
                       className={cn(
                         "flex flex-col rounded-md px-3 py-2.5 transition-colors duration-150",
-                        e.id === selected?.id ? "bg-hive-high" : "hover:bg-hive-high",
+                        e.id === selected?.id ? "bg-subtle" : "hover:bg-subtle",
                       )}
                     >
                       <span className={e.id === selected?.id ? "font-semibold" : "font-medium"}>
@@ -175,7 +175,7 @@ export async function KbList({
                     </span>
                     <Link
                       href={href({ topic: "new", from: g.itemId })}
-                      className="text-honey -ml-3 flex min-h-11 items-center self-start px-3 text-sm font-medium"
+                      className="text-honey-text -ml-3 flex min-h-11 items-center self-start px-3 text-sm font-medium"
                     >
                       Add an answer
                     </Link>
@@ -206,7 +206,7 @@ export async function KbList({
                     <div className="flex items-center gap-1">
                       <Link
                         href={href({ topic: "new", suggestion: s.id })}
-                        className="text-honey -ml-3 flex min-h-11 items-center px-3 text-sm font-medium"
+                        className="text-honey-text -ml-3 flex min-h-11 items-center px-3 text-sm font-medium"
                       >
                         Add this topic
                       </Link>
@@ -214,7 +214,7 @@ export async function KbList({
                         <input type="hidden" name="id" value={s.id} />
                         <button
                           type="submit"
-                          className="hover:text-wax text-wax-muted flex min-h-11 items-center px-3 text-sm"
+                          className="hover:text-ink text-ink-2 flex min-h-11 items-center px-3 text-sm"
                         >
                           Not needed
                         </button>

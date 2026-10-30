@@ -46,7 +46,7 @@ export function AutoSendButton({
     );
   }
   return (
-    <form action={action} className="bg-hive-high flex flex-col gap-3 rounded-xl p-4">
+    <form action={action} className="bg-subtle flex flex-col gap-3 rounded-xl p-4">
       <input type="hidden" name="category" value={category} />
       <input type="hidden" name="mode" value="auto" />
       <p className="m-0 text-sm">

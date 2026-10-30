@@ -88,7 +88,7 @@ function Cell({ run, field }: { run: VariantRun; field: string }) {
         <div className="flex flex-col gap-1">
           <p className="text-sm whitespace-pre-wrap">{r.draft.reply}</p>
           {r.draft.needsHuman && (
-            <span className="text-honey-light text-sm">
+            <span className="text-honey-text text-sm">
               Needs the owner{r.draft.reason ? `: ${r.draft.reason}` : ""}
             </span>
           )}
@@ -158,11 +158,11 @@ export function RunComparison({
             return (
               <tr
                 key={row.field}
-                className={cn("border-b align-top last:border-0", differs && "bg-hive-high")}
+                className={cn("border-b align-top last:border-0", differs && "bg-subtle")}
               >
                 <th scope="row" className="meta p-3 font-medium">
                   {row.label}
-                  {differs && <span className="text-honey block">Differs</span>}
+                  {differs && <span className="text-honey-text block">Differs</span>}
                 </th>
                 <td className="p-3">
                   <Cell run={a} field={row.field} />

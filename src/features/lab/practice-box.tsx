@@ -42,7 +42,7 @@ function Feedback({ tried }: { tried: PracticeTry }) {
       <input type="hidden" name="text" value={tried.text} />
       {!open ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-wax-muted text-sm">Did it get this right?</span>
+          <span className="text-ink-2 text-sm">Did it get this right?</span>
           {tried.card.category && (
             <Button type="submit" name="category" value={tried.card.category} disabled={pending}>
               Right
@@ -92,7 +92,7 @@ function Outcome({ card }: { card: PracticeCard }) {
       {card.reply && (
         <div className="flex max-w-[85%] flex-col items-end gap-1 self-end">
           <span className="meta">What I&apos;d reply</span>
-          <p className="border-line-strong bg-hive-raised rounded-[16px_16px_4px_16px] border px-3.5 py-2.5 whitespace-pre-wrap">
+          <p className="border-line-strong bg-surface rounded-[16px_16px_4px_16px] border px-3.5 py-2.5 whitespace-pre-wrap">
             {card.reply}
           </p>
           {card.basedOn && <span className="meta">Based on: {card.basedOn}</span>}
@@ -101,14 +101,14 @@ function Outcome({ card }: { card: PracticeCard }) {
       <p
         className={cn(
           "flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-3.5 py-2.5 text-sm font-medium",
-          card.tone === "owner" ? "bg-banner text-honey-light" : "bg-hive-high",
+          card.tone === "owner" ? "bg-honey-tint text-honey-text" : "bg-subtle",
           card.tone === "error" && "text-danger",
         )}
       >
         {card.tone === "reply" && <Clock3 className="size-4" strokeWidth={1.75} aria-hidden />}
         {card.next}
         {card.offerAddAnswer && (
-          <Link href="/knowledge-base?topic=new" className="text-honey">
+          <Link href="/knowledge-base?topic=new" className="text-honey-text">
             Add an answer
           </Link>
         )}
@@ -129,7 +129,7 @@ function ResultCard({ tried }: { tried: PracticeTry }) {
     >
       <div className="flex max-w-[75%] flex-col gap-1">
         <span className="meta">{tried.kind === "dm" ? "A DM" : "A comment"}</span>
-        <p className="bg-hive-high rounded-[16px_16px_16px_4px] px-3.5 py-2.5">{tried.text}</p>
+        <p className="bg-subtle rounded-[16px_16px_16px_4px] px-3.5 py-2.5">{tried.text}</p>
       </div>
       <Outcome card={tried.card} />
       {tried.card.tone !== "error" && <Feedback key={tried.id} tried={tried} />}
@@ -163,7 +163,7 @@ function RecentTries({
             <span
               className={cn(
                 "text-sm",
-                t.card.tone === "owner" ? "text-honey-light font-medium" : "text-wax-muted",
+                t.card.tone === "owner" ? "text-honey-text font-medium" : "text-ink-2",
               )}
             >
               {t.card.offerAddAnswer ? "Your info doesn't answer it" : t.card.next.split(":")[0]}
@@ -171,7 +171,7 @@ function RecentTries({
             {t.card.offerAddAnswer ? (
               <Link
                 href="/knowledge-base?topic=new"
-                className="text-honey flex min-h-11 items-center text-sm font-medium"
+                className="text-honey-text flex min-h-11 items-center text-sm font-medium"
               >
                 Add an answer
               </Link>
@@ -198,7 +198,7 @@ function RecentMessages({ triesLeft }: { triesLeft: number }) {
     <div className="flex flex-col gap-4">
       <form
         action={action}
-        className="bg-hive-high flex flex-wrap items-center gap-3 rounded-xl px-4 py-3.5"
+        className="bg-subtle flex flex-wrap items-center gap-3 rounded-xl px-4 py-3.5"
       >
         <span className="flex-[1_1_280px] text-sm">
           What would Waggle say today to the last messages you got? Uses one try per message.
@@ -238,7 +238,7 @@ function RecentMessages({ triesLeft }: { triesLeft: number }) {
                       {r.kind === "dm" ? "DM" : "Comment"} · {shortTime(r.receivedAt)}
                     </span>
                   </span>
-                  <p className="bg-hive-high rounded-[16px_16px_16px_4px] px-3.5 py-2.5 text-sm">
+                  <p className="bg-subtle rounded-[16px_16px_16px_4px] px-3.5 py-2.5 text-sm">
                     {r.text}
                   </p>
                 </div>
@@ -345,7 +345,7 @@ export function PracticeBox({
                     key={s}
                     type="button"
                     onClick={() => setText(s)}
-                    className="border-line-strong text-wax-muted hover:bg-hive-high min-h-9 rounded-full border px-3.5 text-sm"
+                    className="border-line-strong text-ink-2 hover:bg-subtle min-h-9 rounded-full border px-3.5 text-sm"
                   >
                     {s}
                   </button>

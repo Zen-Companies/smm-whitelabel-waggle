@@ -40,7 +40,7 @@ export function AutonomyForm({
         <legend className="sr-only">{label}</legend>
         <span className="flex flex-col" aria-hidden>
           <span className="font-semibold">{label}</span>
-          <span className="text-wax-muted text-sm">
+          <span className="text-ink-2 text-sm">
             {hint} {MODE_DESCRIPTIONS[value]}
           </span>
         </span>
@@ -69,7 +69,7 @@ export function AutonomyForm({
           {pending ? (
             "Saving…"
           ) : (
-            <span role="status" className="text-wax-muted inline-flex items-center gap-1">
+            <span role="status" className="text-ink-2 inline-flex items-center gap-1">
               <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
               Saved
             </span>

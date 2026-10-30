@@ -23,10 +23,10 @@ const TABS: { key: Tab; label: string }[] = [
 
 /** 36px type circles (design.md §6). */
 const TONE: Record<NotificationTone, string> = {
-  lead: "bg-banner text-honey",
-  attention: "bg-danger-soft text-alert",
+  lead: "bg-honey-tint text-honey-text",
+  attention: "bg-danger-soft text-danger",
   success: "bg-success-soft text-success",
-  post: "bg-hive-high text-wax",
+  post: "bg-subtle text-ink",
 };
 function TypeIcon({ n }: { n: NotificationView }) {
   const Icon =
@@ -55,7 +55,7 @@ function TypeIcon({ n }: { n: NotificationView }) {
 const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
 
 /**
- * The bell (44px icon button) with a honey count of unread items that need the owner, and the
+ * The bell (40px icon button) with a honey dot for unread items that need the owner, and the
  * notification panel (overlay, 22px radius, ~420px): All / For you / Updates, grouped
  * Today / Earlier (docs/design.md §6).
  */
@@ -69,6 +69,13 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
   const [, startTransition] = useTransition();
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  // The bell wiggles once when something new needs the owner (design.md §6).
+  const seen = useRef(initialUnread);
+  const [wiggle, setWiggle] = useState(0);
+  useEffect(() => {
+    if (unread > seen.current) setWiggle((w) => w + 1);
+    seen.current = unread;
+  }, [unread]);
 
   const reload = useCallback(() => {
     startTransition(async () => {
@@ -132,13 +139,13 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
           setOpen((v) => !v);
           if (!open) reload();
         }}
-        className="bg-hive-raised border-line-strong hover:bg-hive-high relative inline-flex size-11 items-center justify-center rounded-lg border transition-colors duration-150"
+        className="hover:bg-subtle relative inline-flex size-10 items-center justify-center rounded-md transition-colors duration-150"
       >
-        <Bell strokeWidth={1.75} className="size-5" aria-hidden />
+        <span key={wiggle} className={wiggle ? "bee-wiggle inline-flex" : "inline-flex"}>
+          <Bell strokeWidth={1.5} className="text-ink-2 size-[18px]" aria-hidden />
+        </span>
         {unread > 0 && (
-          <span className="bg-honey text-hive absolute -top-1.5 -right-1.5 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
-            {unread > 9 ? "9+" : unread}
-          </span>
+          <span className="bg-honey absolute top-2 right-2.5 size-1.5 rounded-full" aria-hidden />
         )}
       </button>
 
@@ -147,14 +154,14 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
           ref={panelRef}
           role="dialog"
           aria-label="Notifications"
-          className="overlay fixed inset-x-3 top-16 z-50 flex max-h-[min(640px,calc(100dvh-5rem))] flex-col md:absolute md:inset-x-auto md:top-0 md:left-14 md:w-[420px]"
+          className="overlay fixed inset-x-3 top-16 z-50 flex max-h-[min(640px,calc(100dvh-5rem))] flex-col md:absolute md:inset-x-auto md:top-12 md:right-0 md:w-[420px]"
         >
           <div className="flex items-center justify-between gap-2 px-5 pt-5">
-            <h2 className="text-[22px] font-bold">Notifications</h2>
+            <h2 className="section-title">Notifications</h2>
             <span className="flex items-center gap-1">
               <button
                 type="button"
-                className="hover:text-wax text-wax-muted min-h-11 px-2 text-sm font-medium underline underline-offset-4"
+                className="hover:text-ink text-ink-2 min-h-11 px-2 text-sm font-medium underline underline-offset-4"
                 onClick={() =>
                   startTransition(async () => {
                     await markAllNotificationsRead();
@@ -168,7 +175,7 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
               <button
                 type="button"
                 aria-label="Close"
-                className="text-wax-muted hover:bg-hive-high inline-flex size-11 items-center justify-center rounded-md"
+                className="text-ink-2 hover:bg-subtle inline-flex size-11 items-center justify-center rounded-md"
                 onClick={() => setOpen(false)}
               >
                 <X strokeWidth={1.75} className="size-5" aria-hidden />
@@ -224,7 +231,7 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
                               );
                             }
                           }}
-                          className="hover:bg-hive-high flex items-start gap-3 rounded-md px-2 py-3"
+                          className="hover:bg-subtle flex items-start gap-3 rounded-md px-2 py-3"
                         >
                           <TypeIcon n={n} />
                           <span className="flex min-w-0 flex-1 flex-col">
@@ -238,7 +245,7 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
                               {shortTime(n.at)}
                             </span>
                             {n.action && (
-                              <span className="text-honey mt-1 text-sm font-medium">
+                              <span className="text-honey-text mt-1 text-sm font-medium">
                                 {n.action}
                               </span>
                             )}

@@ -50,7 +50,7 @@ export async function AccountsCard({
       {banner && (
         <p
           role={banner.tone === "error" ? "alert" : "status"}
-          className={banner.tone === "error" ? "danger-box" : "text-wax-muted text-sm"}
+          className={banner.tone === "error" ? "danger-box" : "text-ink-2 text-sm"}
         >
           {banner.text}
         </p>
@@ -85,13 +85,17 @@ export async function AccountsCard({
                     {account.username ? ` @${account.username}` : ""}
                   </span>
                   {account.status === "active" ? (
-                    <span className="text-wax-muted inline-flex items-center gap-1.5 text-sm">
+                    <span className="text-ink-2 inline-flex items-center gap-1.5 text-sm">
                       <CircleCheck className="text-success size-4" strokeWidth={1.75} aria-hidden />
                       Connected
                     </span>
                   ) : (
-                    <span className="text-honey-light inline-flex items-center gap-1.5 text-sm">
-                      <CircleAlert className="text-honey size-4" strokeWidth={1.75} aria-hidden />
+                    <span className="text-honey-text inline-flex items-center gap-1.5 text-sm">
+                      <CircleAlert
+                        className="text-honey-text size-4"
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
                       Disconnected
                     </span>
                   )}

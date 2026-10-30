@@ -17,7 +17,7 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
     <div className="card w-full max-w-md p-6 md:p-8">
       <div className="mb-6 flex flex-col gap-2">
         <h1 className="display-title">{isSignup ? "Set up Waggle" : "Welcome back"}</h1>
-        <p className="text-wax-muted">
+        <p className="text-ink-2">
           {isSignup
             ? "It answers your Instagram and Facebook messages from your business info, and checks with you first."
             : "Sign in to see what's waiting for you."}
@@ -58,25 +58,25 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
           )}
         </div>
         {state.message && (
-          <p role="status" className="text-wax-muted text-sm">
+          <p role="status" className="text-ink-2 text-sm">
             {state.message}
           </p>
         )}
         <Button type="submit" variant="primary" disabled={pending} className="w-full">
           {pending ? "Please wait…" : isSignup ? "Create account" : "Sign in"}
         </Button>
-        <p className="text-wax-muted text-center text-sm">
+        <p className="text-ink-2 text-center text-sm">
           {isSignup ? (
             <>
               Already have an account?{" "}
-              <Link href="/login" className="text-wax font-medium underline underline-offset-4">
+              <Link href="/login" className="text-ink font-medium underline underline-offset-4">
                 Sign in
               </Link>
             </>
           ) : (
             <>
               New here?{" "}
-              <Link href="/signup" className="text-wax font-medium underline underline-offset-4">
+              <Link href="/signup" className="text-ink font-medium underline underline-offset-4">
                 Create an account
               </Link>
             </>

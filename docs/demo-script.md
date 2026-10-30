@@ -19,13 +19,13 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 ## 2. The inbox (0:30)
 
-**Click:** nothing yet. Point at the café's name and the honey **Today** card at the top (answered, for you, ignored), then the **For you** chip, the cards on the left (the ones with a honey border need the owner) and the open card on the right.
+**Click:** nothing yet. Point at the headline ("4 things need you" and the gray line about today), the **For you** tab, the list on the left (a honey dot means it needs the owner) and the conversation on the right.
 
 **Say:** "The customer who has waited longest is at the top. Each message shows who sent it, where, and what kind of message it is. On the right: the customer's message, the suggested reply, and the facts it used: here, 'Payments'. It never makes up prices or promises. The keyboard hints are for owners who handle a lot of messages: A to approve, E to edit, J for the next one."
 
 ## 3. Approve a reply (1:00)
 
-**Click:** on Paolo Cruz's "Tumatanggap kayo ng GCash?", press **A** (or click **Approve and send**). The card turns into "Answered Paolo Cruz · Undo", with a small honey trail next to the check.
+**Click:** on Paolo Cruz's "Tumatanggap kayo ng GCash?", press **A** (or click **Approve and send**). The card turns into "Answered Paolo Cruz · Undo", with the honey figure-8 trail tracing once next to the check.
 
 **Click:** **Undo**. The card comes back. Press **A** again and let it go.
 
@@ -39,7 +39,7 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 ## 5. A lead (2:00)
 
-**Click:** select Carlo Mendoza's DM (the honey **HOT LEAD** label). Then open **Leads** in the sidebar.
+**Click:** select Carlo Mendoza's DM ("Lead · reply ready" under the message). Then open **Leads** in the top bar.
 
 **Say:** "Carlo wants a table for 8 on Saturday. That's a lead: a booking, an order or a quote request. Waggle saves his name, number and request, and the owner gets an email. Every lead links back to the conversation."
 
@@ -47,15 +47,15 @@ A walkthrough of the local MVP with the seeded demo business, Harbour Bean Café
 
 **Click:** **Inbox** → stay on **For you** (messages handed to the owner sit with the replies to approve). Show three of them:
 
-- **jen.dc** (the **COMPLAINT** label): "Complaints always come to you. Waggle never answers them on its own."
+- **jen.dc** ("Complaint · for you to answer"): "Complaints always come to you. Waggle never answers them on its own."
 - **Liza Tan**: "This one shows what happens when something can't be sent: Instagram's 24-hour reply window closed before the reply went out. It says why and how to fix it: copy the reply, answer on Instagram, mark it as handled."
 - **aisha.k** ("Is your kitchen halal certified?"): "The business info doesn't cover this, so it asks the owner instead of guessing."
 
 ## 7. Notifications (3:15)
 
-**Click:** the **bell** at the top of the sidebar.
+**Click:** the **bell** in the top bar.
 
-**Say:** "Everything that needs you is here too: the new lead, the messages waiting for you, and updates like 'replies sent automatically' and posts that went live. The honey number only counts things that need you. Opening an item clears its dot."
+**Say:** "Everything that needs you is here too: the new lead, the messages waiting for you, and updates like 'replies sent automatically' and posts that went live. The honey dot only lights up for things that need you. Opening an item clears its dot."
 
 **Click:** close the panel.
 

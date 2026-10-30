@@ -2,39 +2,37 @@ import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "cn";
 
-// Buttons (docs/design.md §4). Minimum height 44px everywhere. Honey means "this matters".
+// Buttons (docs/design.md §4). Honey only for the primary action.
 const buttonVariants = cva(
-  "group/button inline-flex min-h-11 shrink-0 items-center justify-center gap-2 text-[15px] font-medium whitespace-nowrap transition-colors duration-150 ease-out outline-none select-none focus-visible:ring-3 focus-visible:ring-honey/25 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex min-h-10 shrink-0 items-center justify-center gap-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 ease-out outline-none select-none focus-visible:ring-3 focus-visible:ring-ink/10 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        /** Honey, hive text: the primary action. */
+        /** Honey, ink text: the one primary action. */
         primary:
-          "rounded-md bg-honey px-5 font-semibold text-hive hover:bg-honey-light disabled:opacity-60 data-[busy]:bg-honey/60 data-[busy]:opacity-100",
-        /** Transparent, 1px line-strong border, wax text. */
+          "rounded-md bg-honey px-4 font-semibold text-ink hover:bg-honey-hover disabled:opacity-60 data-[busy]:bg-honey/70 data-[busy]:opacity-100",
+        /** White, 1px line-strong border, ink text. */
         secondary:
-          "rounded-md border border-line-strong px-4 text-wax hover:bg-hive-high disabled:opacity-50",
-        /** Text only, wax-muted. */
-        quiet:
-          "rounded-md px-3 text-wax-muted hover:bg-hive-high hover:text-wax disabled:opacity-50",
-        /** Lead actions: honey-tinted. */
-        lead: "rounded-md border border-banner-border bg-banner px-4 text-honey-light hover:bg-hive-high disabled:opacity-50",
+          "rounded-md border border-line-strong bg-surface px-3.5 text-ink hover:bg-subtle disabled:opacity-50",
+        /** Text only. */
+        quiet: "rounded-md px-3 text-ink-2 hover:bg-subtle hover:text-ink disabled:opacity-50",
+        /** Lead actions: a quiet honey tint. */
+        lead: "rounded-md border border-honey-border bg-honey-tint px-3.5 text-ink hover:bg-subtle disabled:opacity-50",
         /** Text only, danger color. */
         destructive: "rounded-md px-3 text-danger hover:bg-danger-soft disabled:opacity-50",
         // Older names, kept so existing screens map onto the system.
         default:
-          "rounded-md bg-honey px-5 font-semibold text-hive hover:bg-honey-light disabled:opacity-60",
+          "rounded-md bg-honey px-4 font-semibold text-ink hover:bg-honey-hover disabled:opacity-60",
         outline:
-          "rounded-md border border-line-strong px-4 text-wax hover:bg-hive-high disabled:opacity-50",
-        ghost:
-          "rounded-md px-3 text-wax-muted hover:bg-hive-high hover:text-wax disabled:opacity-50",
-        link: "px-1 text-wax-muted underline underline-offset-4 hover:text-honey-light",
+          "rounded-md border border-line-strong bg-surface px-3.5 text-ink hover:bg-subtle disabled:opacity-50",
+        ghost: "rounded-md px-3 text-ink-2 hover:bg-subtle hover:text-ink disabled:opacity-50",
+        link: "px-1 text-ink-2 underline underline-offset-4 hover:text-ink",
       },
       size: {
         default: "",
         sm: "",
         lg: "",
-        icon: "size-11 rounded-lg border border-line-strong bg-hive-raised px-0",
+        icon: "size-10 rounded-md px-0",
       },
     },
     defaultVariants: {

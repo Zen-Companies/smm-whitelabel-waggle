@@ -66,7 +66,7 @@ function LeadDetail({ lead }: { lead: Lead }) {
           <span className="truncate font-semibold">{leadName(lead)}</span>
           <span className="meta">{source(lead)}</span>
         </span>
-        <span className="status-lead">Hot lead</span>
+        <span className="status-lead">Lead</span>
       </div>
       <section className="flex flex-col gap-2">
         <h2 className="meta">Contact</h2>
@@ -89,7 +89,7 @@ function LeadDetail({ lead }: { lead: Lead }) {
       {lead.inbound_items && (
         <section className="flex flex-col gap-1.5">
           <h2 className="meta">Latest message</h2>
-          <p className="bg-hive-high rounded-xl px-3.5 py-2.5 whitespace-pre-wrap">
+          <p className="bg-subtle rounded-xl px-3.5 py-2.5 whitespace-pre-wrap">
             {lead.inbound_items.text || "(no text)"}
           </p>
           <span className="meta">
@@ -174,7 +174,7 @@ export async function LeadsList({
           <div className={cn("card overflow-x-auto", leadParam && "hidden lg:block")}>
             <table className="w-full border-collapse text-sm">
               <thead>
-                <tr className="text-pollen border-b text-left text-[13px]">
+                <tr className="text-ink-3 border-b text-left text-[13px]">
                   <th className="px-4 py-3 font-medium">Name</th>
                   <th className="px-4 py-3 font-medium">Wants</th>
                   <th className="hidden px-4 py-3 font-medium md:table-cell">Contact</th>
@@ -189,7 +189,7 @@ export async function LeadsList({
                     key={l.id}
                     className={cn(
                       "relative border-b transition-colors duration-150 last:border-b-0",
-                      l.id === selected?.id ? "bg-hive-high" : "hover:bg-hive-high",
+                      l.id === selected?.id ? "bg-subtle" : "hover:bg-subtle",
                     )}
                   >
                     <td className="px-4 py-3.5 font-semibold">
@@ -202,14 +202,14 @@ export async function LeadsList({
                       </Link>
                     </td>
                     <td className="px-4 py-3.5">{l.request ?? "No request captured"}</td>
-                    <td className="text-wax-muted hidden px-4 py-3.5 md:table-cell">
+                    <td className="text-ink-2 hidden px-4 py-3.5 md:table-cell">
                       {l.contact ?? "Not given"}
                     </td>
-                    <td className="text-pollen hidden px-4 py-3.5 xl:table-cell">{source(l)}</td>
+                    <td className="text-ink-3 hidden px-4 py-3.5 xl:table-cell">{source(l)}</td>
                     <td className="hidden px-4 py-3.5 sm:table-cell">
                       <Status status={l.inbound_items?.status ?? ""} />
                     </td>
-                    <td className="text-pollen px-4 py-3.5 text-right whitespace-nowrap">
+                    <td className="text-ink-3 px-4 py-3.5 text-right whitespace-nowrap">
                       <time dateTime={l.created_at}>{shortTime(l.created_at)}</time>
                     </td>
                   </tr>
@@ -220,7 +220,7 @@ export async function LeadsList({
           {selected && (
             <div className={cn("flex flex-col gap-3", !leadParam && "hidden lg:flex")}>
               {leadParam && (
-                <Link href={href(filter)} className="text-wax-muted text-sm lg:hidden">
+                <Link href={href(filter)} className="text-ink-2 text-sm lg:hidden">
                   ← All leads
                 </Link>
               )}

@@ -20,7 +20,7 @@ export function ProfileForm({ profile, max }: { profile: string; max: number }) 
         <label htmlFor="business-profile" className="font-semibold">
           How Waggle understands your business
         </label>
-        <p className="text-wax-muted text-sm">
+        <p className="text-ink-2 text-sm">
           A few sentences: what you sell, how customers buy or book, and words they use. It helps
           Waggle tell a question from someone ready to buy.
         </p>

@@ -34,12 +34,12 @@ function SetupChecklist({ steps }: { steps: SetupStep[] }) {
                 <Check className="size-4" strokeWidth={2} aria-hidden />
               </span>
             ) : (
-              <span className="border-line-strong text-wax-muted flex size-7 flex-none items-center justify-center rounded-full border text-[13px] font-semibold">
+              <span className="border-line-strong text-ink-2 flex size-7 flex-none items-center justify-center rounded-full border text-[13px] font-semibold">
                 {i + 1}
               </span>
             )}
             <span className="flex min-w-0 flex-1 flex-col">
-              <span className={s.done ? "text-pollen font-semibold line-through" : "font-semibold"}>
+              <span className={s.done ? "text-ink-3 font-semibold line-through" : "font-semibold"}>
                 {s.title}
               </span>
               <span className="meta">{s.detail}</span>
@@ -47,7 +47,7 @@ function SetupChecklist({ steps }: { steps: SetupStep[] }) {
             {s.action && (
               <Link
                 href={s.action.href}
-                className="text-honey text-sm font-medium whitespace-nowrap"
+                className="text-honey-text text-sm font-medium whitespace-nowrap"
               >
                 {s.action.label}
               </Link>

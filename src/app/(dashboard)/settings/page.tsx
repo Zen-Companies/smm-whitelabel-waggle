@@ -30,7 +30,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
             aria-current={s.key === section ? "page" : undefined}
             className={cn(
               "flex min-h-11 items-center justify-between rounded-md px-3 text-sm font-medium",
-              s.key === section ? "bg-hive-high text-honey" : "text-wax-muted hover:bg-hive-high",
+              s.key === section ? "bg-subtle text-honey-text" : "text-ink-2 hover:bg-subtle",
             )}
           >
             {s.label}
@@ -50,7 +50,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
 
 export default function SettingsPage(props: PageProps<"/settings">) {
   return (
-    <main className="flex w-full max-w-[1440px] flex-col gap-5 px-4 py-6 md:px-8">
+    <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8">
       <h1 className="page-title">Settings</h1>
       <Suspense fallback={<div className="skeleton h-96 rounded-xl" />}>
         <Body {...props} />

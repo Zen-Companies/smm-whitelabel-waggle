@@ -11,12 +11,12 @@ export function PauseForm({ paused }: { paused: boolean }) {
   return (
     <form
       action={action}
-      className={`card flex flex-wrap items-center justify-between gap-3 p-5 ${paused ? "border-banner-border bg-banner" : ""}`}
+      className={`card flex flex-wrap items-center justify-between gap-3 p-5 ${paused ? "border-honey-border bg-honey-tint" : ""}`}
     >
       <input type="hidden" name="paused" value={paused ? "false" : "true"} />
       <div className="flex flex-col">
         <span className="font-semibold">{paused ? "Replies are paused" : "Replies are on"}</span>
-        <span className="text-wax-muted text-sm">
+        <span className="text-ink-2 text-sm">
           {paused
             ? "Nothing is sent until you turn them back on. Replies you approve wait here."
             : "Pause everything at once if something looks wrong. Drafts still come to you."}

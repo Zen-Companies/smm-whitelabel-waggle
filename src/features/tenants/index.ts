@@ -13,4 +13,4 @@ export {
   setupOwnerTenant,
 } from "./setup";
 export type { TenantDeps } from "./setup";
-export { AppSidebar } from "./app-sidebar";
+export { AppHeader } from "./app-header";
