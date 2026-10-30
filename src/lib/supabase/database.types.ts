@@ -509,6 +509,88 @@ export type Database = {
           },
         ]
       }
+      lab_cases: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expected_category: string
+          id: string
+          kind: string
+          origin: string
+          set_name: string
+          tenant_id: string
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expected_category: string
+          id?: string
+          kind: string
+          origin?: string
+          set_name: string
+          tenant_id: string
+          text: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expected_category?: string
+          id?: string
+          kind?: string
+          origin?: string
+          set_name?: string
+          tenant_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lab_cases_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lab_runs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          kind: string
+          results: Json
+          tenant_id: string
+          text: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind: string
+          results: Json
+          tenant_id: string
+          text: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          kind?: string
+          results?: Json
+          tenant_id?: string
+          text?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lab_runs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           contact: string | null

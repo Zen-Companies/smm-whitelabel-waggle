@@ -123,9 +123,10 @@ Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items
       _Done when:_ unit tests with a mocked classifier and LLM show every step's output for both variants, no writes outside `ai_usage`, and no `SocialProvider` call.
       _Note:_ earlier messages of a thread come with T30 (drafting doesn't use them yet). `cost_by_tenant` now leaves out `lab` calls. Version registries: `JEV_QUESTION_SETS`, `LLM_CLASSIFY_PROMPTS`, `DRAFT_PROMPTS`.
 
-- [ ] **T24. Admin Lab: try a message (classification first)**
+- [x] **T24. Admin Lab: try a message (classification first)**
       `/admin/lab` (operator only, same gate as `/admin/costs`): business picker or blank profile, message + kind, variants A and B, Run. Each side shows category, confidence, per-question scores, triage decision, cost, tokens, time; differences highlighted. "Save as test case" with the right category adds the message to a labeled set (new table, tenant-scoped, RLS). Saved runs listed under History.
       _Done when:_ a run shows both variants side by side, a saved case appears in its set, and non-operators get a 404.
+      _Note:_ tables `lab_cases` (also for owner corrections, `origin`) and `lab_runs`; RLS on, no client grants (pgTAP). "Also draft" is off by default so a run costs one call per side. Checked in the browser with both sides on "Jev only" while jevos was down (errors shown, 0 AI calls); a run with real calls is still to do.
 
 - [ ] **T25. Business profile for classification**
       `tenants.business_profile` (text, length cap, owner-editable in Settings → Business, versioned in each classification's audit details). Pass it to both classifiers instead of the business name; remove "local business" from the LLM classifier prompt (bump `LLM_CLASSIFY_PROMPT_VERSION`). `pnpm triage:report` reads the same field so tests match production. Add a labeled digital-product set (and one more niche). Measure "name only" against "profile" in the Lab before switching.

@@ -2,7 +2,7 @@
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(55);
+select plan(57);
 
 -- Fixtures, as postgres (bypasses RLS) ---------------------------------------------------------
 
@@ -113,6 +113,8 @@ select results_eq($$ select name from public.leads $$, $$ values ('Lead A') $$, 
 select results_eq($$ select count(*)::int from public.audit_log $$, array[1], 'audit_log: only A');
 select results_eq($$ select count(*)::int from public.ai_usage $$, array[1], 'ai_usage: only A');
 select throws_ok($$ select * from public.webhook_events $$, '42501', null, 'webhook_events: no client access');
+select throws_ok($$ select * from public.lab_cases $$, '42501', null, 'lab_cases: no client access');
+select throws_ok($$ select * from public.lab_runs $$, '42501', null, 'lab_runs: no client access');
 
 -- Writes on B's rows: updates and deletes match nothing, inserts are refused.
 

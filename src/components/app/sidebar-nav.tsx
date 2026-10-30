@@ -1,6 +1,6 @@
 "use client";
 
-import { BookOpen, Inbox, Megaphone, Receipt, Settings, UserRound } from "lucide-react";
+import { BookOpen, FlaskConical, Inbox, Megaphone, Receipt, Settings, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
@@ -17,7 +17,11 @@ const ITEMS = [
 export function SidebarNav({ showCosts, inboxCount }: { showCosts: boolean; inboxCount: number }) {
   const pathname = usePathname();
   const items = showCosts
-    ? [...ITEMS, { href: "/admin/costs", label: "Costs", icon: Receipt } as const]
+    ? [
+        ...ITEMS,
+        { href: "/admin/lab", label: "Lab", icon: FlaskConical } as const,
+        { href: "/admin/costs", label: "Costs", icon: Receipt } as const,
+      ]
     : ITEMS;
   return (
     <nav aria-label="Main" className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">

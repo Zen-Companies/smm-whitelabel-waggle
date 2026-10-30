@@ -18,3 +18,7 @@ export {
   variantSchema,
 } from "./variants";
 export type { ClassifierChoice, Variant } from "./variants";
+export { runLab, saveLabCase } from "./actions";
+export type { LabCaseState, LabRun, LabRunState } from "./actions";
+export { differences, outcomeOf, outcomeText } from "./compare";
+export { LabView } from "./lab-view";
