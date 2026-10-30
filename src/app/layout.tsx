@@ -16,8 +16,8 @@ const bricolage = Bricolage_Grotesque({
 });
 
 export const metadata: Metadata = {
-  title: { default: "BizBell", template: "%s · BizBell" },
-  description: "Your friendly receptionist for Instagram and Facebook.",
+  title: { default: "Waggle", template: "%s · Waggle" },
+  description: "AI that runs your socials.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

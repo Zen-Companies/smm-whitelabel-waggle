@@ -34,6 +34,7 @@
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
   --color-danger-border: var(--danger-border);
+  --color-honey: var(--honey);
 
   /* shadcn names, mapped onto the palette */
   --color-background: var(--background);
@@ -101,6 +102,7 @@
   --danger: #a3261a;
   --danger-soft: #fff7f6;
   --danger-border: #f3c9c3;
+  --honey: #c98500;
 
   --background: var(--gray-25);
   --foreground: var(--ink);
@@ -324,6 +326,14 @@
     color: var(--gray-600);
     font-size: 12px;
     font-weight: 500;
+  }
+
+  /* Wordmark (design.md §2): lowercase, Outfit 700, tight tracking. */
+  .wordmark {
+    font-family: var(--font-display);
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    line-height: 1;
   }
 
   /* Keyboard hint */

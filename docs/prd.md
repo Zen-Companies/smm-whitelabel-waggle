@@ -1,4 +1,4 @@
-# PRD: AI Receptionist MVP (Pass 1)
+# PRD: Waggle, the AI receptionist MVP (Pass 1)
 
 Status: Draft v1 · Owner: Feb · Last updated: 2026-10-28
 

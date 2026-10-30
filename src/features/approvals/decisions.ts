@@ -205,7 +205,7 @@ export async function undoApproval(
 /** The owner dealt with an escalated or failed item themselves: it leaves "Needs you". */
 export async function markHandled(
   db: ServiceClient,
-  /** asSpam: "It's spam: hide it" on a message the receptionist wasn't sure about. */
+  /** asSpam: "It's spam: hide it" on a message Waggle wasn't sure about. */
   input: { tenantId: string; userId: string; itemId: string; asSpam?: boolean },
 ): Promise<DecisionResult> {
   const { data: item } = await db

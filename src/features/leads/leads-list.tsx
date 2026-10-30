@@ -10,7 +10,7 @@ import { cn } from "cn";
 import { CopyButton } from "./copy-button";
 import { leadReplied, leadStatusText, phoneHref } from "./lead-status";
 
-// Leads the receptionist captured (PRD F12), design v2: a table, because leads are compared,
+// Leads Waggle captured (PRD F12), design v2: a table, because leads are compared,
 // and the selected lead on the right with contact actions. Coral = a lead (docs/design.md §1).
 
 type Filter = "all" | "open";

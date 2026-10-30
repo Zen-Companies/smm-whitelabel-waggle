@@ -45,7 +45,7 @@ export async function AccountsCard({
         <h2 id="accounts-heading" className="section-title">
           Accounts
         </h2>
-        <p className="meta">The Instagram and Facebook accounts the receptionist answers for.</p>
+        <p className="meta">The Instagram and Facebook accounts Waggle answers for.</p>
       </div>
       {banner && (
         <p

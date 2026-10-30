@@ -76,7 +76,7 @@ const profileSchema = z
   .trim()
   .max(BUSINESS_PROFILE_MAX, "Keep it under 1,000 characters.");
 
-/** Settings → Business: the description the receptionist sorts messages with (T25). */
+/** Settings → Business: the description Waggle sorts messages with (T25). */
 export async function updateBusinessProfile(
   _prev: ProfileFormState,
   formData: FormData,

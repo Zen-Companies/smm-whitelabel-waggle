@@ -1,6 +1,6 @@
-# BizBell (AI Receptionist MVP)
+# Waggle
 
-Local businesses publish posts, and an AI receptionist handles Instagram and Facebook comments and DMs: it sorts each message, drafts a reply from the business's own info, and the owner approves it. "BizBell" is a temporary working name.
+AI that runs your socials. Local businesses publish posts, and Waggle handles their Instagram and Facebook comments and DMs: it sorts each message, drafts a reply from the business's own info, and the owner approves it.
 
 - What we're building: `docs/prd.md` · how it's built: `docs/tdd.md` · tasks: `docs/tasks.md` · design: `docs/design.md` · rules: `CLAUDE.md`
 - Demo walkthrough: `docs/demo-script.md`

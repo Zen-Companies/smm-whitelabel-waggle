@@ -32,7 +32,7 @@ function Feedback({ tried }: { tried: PracticeTry }) {
     return (
       <p role="status" className="inline-flex items-center gap-1 text-sm">
         <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
-        Saved. It&apos;s used to check your receptionist as it changes.
+        Saved. It&apos;s used to check Waggle as it changes.
       </p>
     );
   }
@@ -201,7 +201,7 @@ function RecentMessages({ triesLeft }: { triesLeft: number }) {
         className="flex flex-wrap items-center gap-3 rounded-xl bg-gray-50 px-4 py-3.5"
       >
         <span className="flex-[1_1_280px] text-sm">
-          What would your receptionist say today to the last messages you got? Uses one try per
+          What would Waggle say today to the last messages you got? Uses one try per
           message.
         </span>
         <Button

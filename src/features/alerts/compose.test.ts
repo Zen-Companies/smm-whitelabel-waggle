@@ -96,7 +96,7 @@ describe("composeAlert", () => {
   });
 
   it("unknown reasons fall back by status", () => {
-    expect(escalationReason(null, "escalated")).toBe("The receptionist handed it to you.");
+    expect(escalationReason(null, "escalated")).toBe("Waggle handed it to you.");
     expect(escalationReason("weird", "failed")).toBe("Something went wrong handling it.");
   });
 });

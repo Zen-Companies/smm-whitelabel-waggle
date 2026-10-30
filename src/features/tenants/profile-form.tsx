@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { updateBusinessProfile, type ProfileFormState } from "./actions";
 
 /**
- * "How your receptionist understands your business" (T25): a few plain sentences the classifier
+ * "How Waggle understands your business" (T25): a few plain sentences the classifier
  * reads with every message. Feedback in place (design.md §4).
  */
 export function ProfileForm({ profile, max }: { profile: string; max: number }) {
@@ -18,11 +18,11 @@ export function ProfileForm({ profile, max }: { profile: string; max: number }) 
     <form action={action} className="card flex flex-col gap-3 p-5">
       <div className="flex flex-col gap-1">
         <label htmlFor="business-profile" className="font-semibold">
-          How your receptionist understands your business
+          How Waggle understands your business
         </label>
         <p className="text-sm text-gray-700">
           A few sentences: what you sell, how customers buy or book, and words they use. It helps
-          the receptionist tell a question from someone ready to buy.
+          Waggle tell a question from someone ready to buy.
         </p>
       </div>
       <textarea

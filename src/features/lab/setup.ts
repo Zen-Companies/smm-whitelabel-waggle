@@ -1,4 +1,4 @@
-// "Get your receptionist ready" (T36 item 7): the first-day checklist on /lab, from facts about
+// "Get Waggle ready" (T36 item 7): the first-day checklist on /lab, from facts about
 // the business. Shown until every step is done.
 
 export const BASIC_TOPICS = 3;
@@ -28,7 +28,7 @@ export function setupSteps(f: SetupFacts): SetupStep[] {
     {
       key: "connect",
       title: "Connect Instagram or Facebook",
-      detail: f.accountsConnected ? "Connected" : "So messages reach your receptionist",
+      detail: f.accountsConnected ? "Connected" : "So messages reach Waggle",
       done: f.accountsConnected > 0,
       action: f.accountsConnected ? null : { label: "Connect", href: "/settings?section=accounts" },
     },

@@ -42,6 +42,6 @@ export const CATEGORY_HINTS: Record<Category, string> = {
   faq: "Hours, prices, menu, parking.",
   lead: "Bookings, orders and quote requests. Details are saved to Leads and emailed to you either way.",
   complaint: "Always handed to you, never answered automatically.",
-  unclear: "When the receptionist can't tell what someone wants.",
+  unclear: "When Waggle can't tell what someone wants.",
   spam: "Sales pitches and scams are hidden from your inbox.",
 };

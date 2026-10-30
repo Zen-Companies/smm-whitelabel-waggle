@@ -40,8 +40,8 @@ const where = (platform: string, kind: "comment" | "dm") =>
 export function escalationReason(reason: string | null, status: string): string {
   const reasons: Record<string, string> = {
     complaint: "It looks like a complaint.",
-    unclear: "The receptionist couldn't tell what it's about.",
-    low_confidence: "The receptionist wasn't sure what it's about.",
+    unclear: "Waggle couldn't tell what it's about.",
+    low_confidence: "Waggle wasn't sure what it's about.",
     needs_human: "Your knowledge base doesn't cover the question.",
     mode_off: "AI replies are off for this kind of message.",
     ai_cap_reached: "This month's AI allowance is used up, so no reply was suggested.",
@@ -50,14 +50,14 @@ export function escalationReason(reason: string | null, status: string): string 
     account_inactive: "The account was disconnected before the reply went out.",
     tenant_inactive: "Your subscription isn't active, so the reply wasn't sent.",
     send_rejected: "Instagram/Facebook refused the reply.",
-    retries_exhausted: "The receptionist couldn't process or send it after 3 tries.",
+    retries_exhausted: "Waggle couldn't process or send it after 3 tries.",
     delivery_failed: "The reply was sent but not delivered.",
     no_approved_draft: "There was no approved reply to send.",
   };
   if (reason && reasons[reason]) return reasons[reason];
   return status === "failed"
     ? "Something went wrong handling it."
-    : "The receptionist handed it to you.";
+    : "Waggle handed it to you.";
 }
 
 const escapeHtml = (s: string) =>
@@ -88,7 +88,7 @@ export function composeAlert(
       return render(
         `${businessName}: a ${where(content.platform, content.itemKind)} from ${who} ${verb}`,
         [
-          `${who} sent a ${where(content.platform, content.itemKind)} that the receptionist handed to you.`,
+          `${who} sent a ${where(content.platform, content.itemKind)} that Waggle handed to you.`,
           escalationReason(content.reason, content.status),
         ],
         { href: itemUrl(appUrl, content.itemId), label: "Open the message" },
@@ -112,7 +112,7 @@ export function composeAlert(
       return render(
         `${businessName}: ${account} disconnected`,
         [
-          `${account} is no longer connected, so the receptionist can't see or answer its messages.`,
+          `${account} is no longer connected, so Waggle can't see or answer its messages.`,
           "Messages that arrive meanwhile wait until you reconnect.",
         ],
         { href: `${appUrl}/settings`, label: "Reconnect" },

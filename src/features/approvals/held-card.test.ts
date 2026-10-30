@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { lookedLike, openOnPlatformHref } from "./held-card";
 
 describe("lookedLike", () => {
-  it("names the best guess only for messages the receptionist wasn't sure about", () => {
+  it("names the best guess only for messages Waggle wasn't sure about", () => {
     expect(lookedLike("low_confidence", { category: "faq" })).toBe(
       "It looked most like a question.",
     );

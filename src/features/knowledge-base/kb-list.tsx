@@ -78,7 +78,7 @@ export async function KbList({
         <div className="flex flex-1 flex-col gap-1">
           <h1 className="page-title">Business info</h1>
           <p className="text-gray-700">
-            The only facts the receptionist uses in replies. If it isn&apos;t here, it asks you.
+            The only facts Waggle uses in replies. If it isn&apos;t here, it asks you.
           </p>
         </div>
         <Link href={href({ topic: "new", q })} className={buttonVariants({ variant: "primary" })}>
@@ -165,7 +165,7 @@ export async function KbList({
             </p>
           ) : (
             <>
-              <p className="meta">Add an answer once and the receptionist can reply next time.</p>
+              <p className="meta">Add an answer once and Waggle can reply next time.</p>
               <ul className="flex flex-col divide-y">
                 {gaps.map((g) => (
                   <li key={g.itemId} className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">

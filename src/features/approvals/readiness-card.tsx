@@ -119,7 +119,7 @@ function CategoryCard({ category, r }: { category: ConfigurableCategory; r: Cate
   );
 }
 
-/** Owner Lab: readiness per kind of message, and what the receptionist will never do. */
+/** Owner Lab: readiness per kind of message, and what Waggle will never do. */
 export async function ReadinessCard() {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
@@ -153,7 +153,7 @@ export async function ReadinessCard() {
       <div className="card flex flex-col gap-2.5 p-5">
         <h3 className="flex items-center gap-2 font-semibold">
           <ShieldCheck strokeWidth={1.75} className="size-5" aria-hidden />
-          What your receptionist will never do
+          What Waggle will never do
         </h3>
         <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-gray-700">
           {PROMISES.map((p) => (

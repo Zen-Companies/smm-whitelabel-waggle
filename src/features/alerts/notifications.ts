@@ -89,8 +89,8 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
           : item?.category === "complaint"
             ? "It looks like a complaint."
             : item?.category === "unclear"
-              ? "The receptionist couldn't tell what it's about."
-              : "The receptionist handed it to you.",
+              ? "Waggle couldn't tell what it's about."
+              : "Waggle handed it to you.",
         href: itemHref,
         action: "Review",
       };

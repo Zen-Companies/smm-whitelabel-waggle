@@ -1,4 +1,4 @@
-// "What your receptionist will never do" (T27). Each line is enforced in code; keep them in step.
+// "What Waggle will never do" (T27). Each line is enforced in code; keep them in step.
 export const PROMISES: { text: string; enforcedBy: string }[] = [
   {
     text: "Make up prices, dates or promises. It only uses your Business info.",

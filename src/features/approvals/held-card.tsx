@@ -18,15 +18,15 @@ const COULD_NOT_SEND: Record<string, string> = {
 /** Why it came to the owner, calm and short (design.md §7). */
 const HELD: Record<string, string> = {
   complaint: "This looks like a complaint. It's best answered by you.",
-  unclear: "The receptionist couldn't tell what this is about.",
-  low_confidence: "The receptionist wasn't sure what this is about.",
+  unclear: "Waggle couldn't tell what this is about.",
+  low_confidence: "Waggle wasn't sure what this is about.",
   needs_human: "Your business info doesn't cover this question.",
   mode_off: "Replies are off for this kind of message.",
   ai_cap_reached: "You've used this month's AI allowance, so no reply was suggested.",
   dm_window_closing: "The 24-hour reply window closes within the hour.",
 };
 
-/** Reasons where the receptionist wasn't sure what the message is: offer to hide it as spam. */
+/** Reasons where Waggle wasn't sure what the message is: offer to hide it as spam. */
 const UNSURE = new Set(["unclear", "low_confidence"]);
 
 const LOOKED_LIKE: Record<string, string> = {
@@ -63,7 +63,7 @@ export function heldText(reason: string | null, entry: InboxEntry): string {
   }
   if (entry.category === "complaint") return HELD.complaint;
   if (entry.category === "unclear") return HELD.unclear;
-  return "The receptionist handed this one to you.";
+  return "Waggle handed this one to you.";
 }
 
 /**

@@ -29,7 +29,7 @@ export async function AutonomyCard() {
           Replies
         </h2>
         <p className="text-gray-700">
-          What the receptionist does with each kind of message. Changes apply to the next message.
+          What Waggle does with each kind of message. Changes apply to the next message.
         </p>
       </div>
       <PauseForm paused={settings?.replies_paused ?? false} />
@@ -63,7 +63,7 @@ export async function AutonomyCard() {
         <span className="flex flex-col">
           <span className="font-semibold">Not sure yet? Try it in Lab</span>
           <span className="text-sm text-gray-700">
-            Try a message and see whether your receptionist is ready to reply on its own.
+            Try a message and see whether Waggle is ready to reply on its own.
           </span>
         </span>
       </Link>

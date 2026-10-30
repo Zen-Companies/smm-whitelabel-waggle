@@ -160,7 +160,7 @@ export function triesLeftText(left: number): string {
 
 /** What "Right / Not quite" does, said plainly (T36 item 6). */
 export const FEEDBACK_NOTE =
-  "Your answers are saved to check your receptionist as it changes. They don't change its replies on their own.";
+  "Your answers are saved to check Waggle as it changes. They don't change its replies on their own.";
 
 /** "Your recent messages" (T36 item 3): what happened to a real message back then, in plain words. */
 export function thenText(

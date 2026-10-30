@@ -16,7 +16,7 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
   return (
     <div className="card w-full max-w-md p-6 md:p-8">
       <div className="mb-6 flex flex-col gap-2">
-        <h1 className="display-title">{isSignup ? "Set up your receptionist" : "Welcome back"}</h1>
+        <h1 className="display-title">{isSignup ? "Set up Waggle" : "Welcome back"}</h1>
         <p className="text-gray-700">
           {isSignup
             ? "It answers your Instagram and Facebook messages from your business info, and checks with you first."

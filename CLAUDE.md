@@ -2,7 +2,7 @@
 
 ## Project
 
-AI Receptionist MVP: a multi-tenant app where local businesses publish posts and an AI receptionist handles Instagram/Facebook comments and DMs. Zernio is the social layer, Jev (TypeSafe AI) sorts messages, an LLM drafts replies from the business's knowledge base, and the owner approves.
+**Waggle** ("AI that runs your socials"), the AI receptionist MVP: a multi-tenant app where local businesses publish posts and Waggle handles Instagram/Facebook comments and DMs. Zernio is the social layer, Jev (TypeSafe AI) sorts messages, an LLM drafts replies from the business's knowledge base, and the owner approves.
 
 Read before working:
 

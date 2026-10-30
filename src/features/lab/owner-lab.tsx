@@ -17,7 +17,7 @@ function SetupChecklist({ steps }: { steps: SetupStep[] }) {
     <section aria-labelledby="setup-heading" className="card flex flex-col gap-2 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h2 id="setup-heading" className="section-title">
-          Get your receptionist ready
+          Get Waggle ready
         </h2>
         <span className="meta">
           {done} of {steps.length} done
