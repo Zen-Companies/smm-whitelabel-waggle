@@ -5,11 +5,13 @@ import { DRAFT_PROMPTS } from "@/features/drafting";
 import { CATEGORIES, JEV_QUESTION_SETS, LLM_CLASSIFY_PROMPTS } from "@/lib/classifier";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
+import { BatchCompare } from "./batch-compare";
 import { outcomeOf, outcomeText } from "./compare";
 import { LAB_TEXT_MAX } from "./form";
 import { LabForm, type LabOptions } from "./lab-form";
 import { RunComparison } from "./run-comparison";
 import type { VariantRun } from "./run";
+import { listSets } from "./sets";
 import { CLASSIFIER_CHOICES, CLASSIFIER_LABELS, CONTEXT_MAX, currentVariant } from "./variants";
 
 // The operator's Lab (docs/tdd.md §19, T24): one message through two setups side by side, and
@@ -17,6 +19,7 @@ import { CLASSIFIER_CHOICES, CLASSIFIER_LABELS, CONTEXT_MAX, currentVariant } fr
 
 const TABS = [
   { key: "try", label: "Try a message" },
+  { key: "batch", label: "Compare on a set" },
   { key: "history", label: "History" },
 ] as const;
 
@@ -123,13 +126,14 @@ export async function LabView({
 }) {
   await requireOperator();
   const params = await searchParams;
-  const tab = params.tab === "history" ? "history" : "try";
+  const tab = TABS.find((t) => t.key === params.tab)?.key ?? "try";
   const runId = typeof params.run === "string" ? params.run : undefined;
 
-  const { data: tenants } = await getServiceClient()
-    .from("tenants")
-    .select("id, name")
-    .order("name");
+  const db = getServiceClient();
+  const [{ data: tenants }, sets] = await Promise.all([
+    db.from("tenants").select("id, name").order("name"),
+    tab === "batch" ? listSets(db) : Promise.resolve([]),
+  ]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -145,16 +149,23 @@ export async function LabView({
           </Link>
         ))}
       </nav>
-      {tab === "try" ? (
+      {tab === "try" && (
         <LabForm
           tenants={tenants ?? []}
           options={options}
           defaults={currentVariant()}
           classifierLabels={CLASSIFIER_LABELS}
         />
-      ) : (
-        <History runId={runId} />
       )}
+      {tab === "batch" && (
+        <BatchCompare
+          tenants={tenants ?? []}
+          sets={sets}
+          options={options}
+          defaults={currentVariant()}
+        />
+      )}
+      {tab === "history" && <History runId={runId} />}
     </div>
   );
 }

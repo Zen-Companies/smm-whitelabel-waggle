@@ -23,7 +23,7 @@ export interface LabOptions {
   textMax: number;
 }
 
-function VariantFields({
+export function VariantFields({
   side,
   options,
   defaults,

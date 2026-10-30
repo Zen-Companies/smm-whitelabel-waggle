@@ -9,12 +9,16 @@
  * Needs OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL and EMBEDDING_MODEL (in
  * .env.local) and local Supabase. It embeds the tenant's entries that have no embedding yet
  * (stored, like the job route would), then drafts in memory: no drafts, leads or ai_usage rows.
+ *
+ * Each draft is run through the free draft checks (features/drafting/checks.ts, T28): grounding,
+ * needsHuman against the sample's "covered" / "NOT covered" note, length, emoji, language and no
+ * contact details in comments. A summary line ends the run.
  */
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { generateDraft } from "@/features/drafting";
+import { checkDraft, generateDraft, parseExpect } from "@/features/drafting";
 import { embedPendingEntries } from "@/features/knowledge-base";
 import { createLlmClient } from "@/lib/llm/client";
 import { loadLlmConfig } from "@/lib/llm/config";
@@ -92,6 +96,8 @@ async function main() {
       ]
     : sampleSchema.parse(JSON.parse(readFileSync(args.samples!, "utf8")));
   const only = args.only?.split(",");
+  let checked = 0;
+  const failures: string[] = [];
 
   for (const s of only ? samples.filter((x) => only.includes(x.id)) : samples) {
     const started = performance.now();
@@ -117,8 +123,21 @@ async function main() {
       `needsHuman: ${draft.needsHuman}${draft.needsHumanReason ? ` (${draft.needsHumanReason})` : ""}`,
     );
     if (draft.result.lead) console.log(`lead:     ${JSON.stringify(draft.result.lead)}`);
+    const checks = checkDraft({
+      reply: draft.result.reply,
+      needsHuman: draft.needsHuman,
+      groundingIssues: draft.issues,
+      kind: s.kind,
+      customerText: s.text,
+      expect: parseExpect("expect" in s ? s.expect : undefined),
+    });
+    checked += checks.length;
+    for (const c of checks.filter((c) => !c.ok)) failures.push(`${s.id}: ${c.check}: ${c.detail}`);
+    console.log(`checks:   ${checks.map((c) => `${c.ok ? "✓" : "✗"} ${c.check}`).join("  ")}`);
     console.log("");
   }
+  console.log(`Draft checks: ${checked - failures.length}/${checked} passed`);
+  for (const f of failures) console.log(`  ✗ ${f}`);
   const cost = records.reduce((sum, r) => sum + r.costUsd, 0);
   console.log(`AI calls: ${records.length}, cost $${cost.toFixed(5)}`);
 }

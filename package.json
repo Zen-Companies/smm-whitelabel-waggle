@@ -17,6 +17,7 @@
     "test:integration": "vitest run --config vitest.integration.config.mts",
     "triage:report": "tsx --tsconfig tsconfig.scripts.json scripts/triage-report.ts",
     "draft:preview": "tsx --tsconfig tsconfig.scripts.json scripts/draft-preview.ts",
+    "draft:check": "tsx --tsconfig tsconfig.scripts.json scripts/draft-check.ts",
     "local:owner": "tsx --tsconfig tsconfig.scripts.json scripts/local-owner.ts",
     "demo:seed": "tsx --tsconfig tsconfig.scripts.json scripts/demo-seed.ts"
   },

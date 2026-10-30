@@ -1,11 +1,15 @@
 "use server";
 
+import { z } from "zod";
 import { isOperatorEmail } from "@/features/billing";
 import type { Json } from "@/lib/supabase/database.types";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
+import { BATCH_CHUNK, type BatchRow } from "./batch";
 import { parseCaseForm, parseRunForm } from "./form";
 import { loadTenantSnapshot, runVariant, type VariantRun } from "./run";
+import { loadSet } from "./sets";
+import { variantSchema } from "./variants";
 
 // Lab actions (T24). Operator only, checked here too: a Server Action is reachable without the
 // page. Real AI calls happen because the operator pressed Run; they are recorded as `lab`.
@@ -99,4 +103,71 @@ export async function saveLabCase(_prev: LabCaseState, formData: FormData): Prom
   });
   if (error) return { error: "Couldn't save the case. Try again." };
   return { saved: { setName: input.setName } };
+}
+
+const batchSchema = z.object({
+  tenantId: z.uuid(),
+  setKey: z.string().min(1).max(200),
+  start: z.number().int().min(0),
+  a: variantSchema,
+  b: variantSchema,
+});
+
+export type BatchChunkState = { rows?: BatchRow[]; total?: number; done?: boolean; error?: string };
+
+/**
+ * Batch compare (T28): classifies the next few messages of a labeled set with both setups
+ * (classification only). The page calls it chunk by chunk, so a run can be stopped.
+ */
+export async function runBatchChunk(input: z.infer<typeof batchSchema>): Promise<BatchChunkState> {
+  const user = await operator();
+  if (!user) return { error: "Not available." };
+  const parsed = batchSchema.safeParse(input);
+  if (!parsed.success) return { error: "Check both setups." };
+  const { tenantId, setKey, start, a, b } = parsed.data;
+
+  const db = getServiceClient();
+  const set = await loadSet(db, setKey);
+  if (!set) return { error: "That set isn't available here." };
+  let tenant;
+  try {
+    tenant = await loadTenantSnapshot(db, set.tenantId ?? tenantId);
+  } catch {
+    return { error: "That business wasn't found." };
+  }
+  // Fixture sets are written for their own business: classify with its name and profile.
+  if (set.business) {
+    tenant = { ...tenant, name: set.business.name, businessProfile: set.business.profile };
+  }
+
+  const chunk = set.messages.slice(start, start + BATCH_CHUNK);
+  const rows = await Promise.all(
+    chunk.map(async (m): Promise<BatchRow> => {
+      const common = {
+        tenant,
+        text: m.text,
+        kind: m.kind,
+        source: "lab",
+        stopAfter: "triage",
+      } as const;
+      const [ra, rb] = await Promise.all([
+        runVariant(db, { ...common, variant: a }),
+        runVariant(db, { ...common, variant: b }),
+      ]);
+      return {
+        id: m.id,
+        text: m.text,
+        expected: m.expected,
+        a: ra.result.classification?.category ?? null,
+        b: rb.result.classification?.category ?? null,
+        ...(ra.result.error ? { aError: ra.result.error.message } : {}),
+        ...(rb.result.error ? { bError: rb.result.error.message } : {}),
+      };
+    }),
+  );
+  return {
+    rows,
+    total: set.messages.length,
+    done: start + BATCH_CHUNK >= set.messages.length,
+  };
 }

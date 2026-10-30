@@ -1,3 +1,5 @@
+export { checkDraft, countSentences, MAX_SENTENCES, parseExpect } from "./checks";
+export type { DraftCheckName, DraftCheckResult, DraftToCheck } from "./checks";
 export { createDraftStep } from "./draft-step";
 export { generateDraft } from "./generate";
 export type { GeneratedDraft } from "./generate";
