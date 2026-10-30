@@ -139,7 +139,9 @@ describe("knowledge base embeddings + retrieval", () => {
     ["Can I bring my dog?", "pets"],
     ["Is there free wifi?", "wifi"],
   ])("%s → %s", async (question, expected) => {
-    const matches = await retrieveKbEntries(deps, { tenantId, query: question });
+    // Ranking only: the fake bag-of-words embeddings score low, so the relevance floor (T31,
+    // unit-tested in retrieval.test.ts) is turned off here.
+    const matches = await retrieveKbEntries(deps, { tenantId, query: question, minSimilarity: 0 });
     expect(matches[0].id).toBe(ids[expected]);
     expect(matches[0].similarity).toBeGreaterThan(matches[1]?.similarity ?? -1);
   });
@@ -148,6 +150,7 @@ describe("knowledge base embeddings + retrieval", () => {
     const matches = await retrieveKbEntries(deps, {
       tenantId,
       query: "opening hours coffee parking dog wifi catering vegan",
+      minSimilarity: 0,
     });
     expect(matches).toHaveLength(5);
     const sims = matches.map((m) => m.similarity);
@@ -184,11 +187,19 @@ describe("knowledge base embeddings + retrieval", () => {
       .eq("id", ids.hours);
     expect(await embeddingOf(ids.hours)).toBeNull();
     // Not searchable while pending.
-    const pending = await retrieveKbEntries(deps, { tenantId, query: "open Friday 9pm" });
+    const pending = await retrieveKbEntries(deps, {
+      tenantId,
+      query: "open Friday 9pm",
+      minSimilarity: 0,
+    });
     expect(pending.map((m) => m.id)).not.toContain(ids.hours);
 
     await embedPendingEntries(deps, { tenantId });
-    const matches = await retrieveKbEntries(deps, { tenantId, query: "open Friday 9pm" });
+    const matches = await retrieveKbEntries(deps, {
+      tenantId,
+      query: "open Friday 9pm",
+      minSimilarity: 0,
+    });
     expect(matches[0].id).toBe(ids.hours);
   });
 

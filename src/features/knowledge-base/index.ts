@@ -10,5 +10,10 @@ export {
 export type { KbDeps } from "./embeddings";
 export { KbList } from "./kb-list";
 export { KB_CONTENT_MAX, KB_TITLE_MAX } from "./limits";
-export { RETRIEVAL_LIMIT, retrieveKbEntries } from "./retrieval";
+export {
+  minSimilarity,
+  RETRIEVAL_LIMIT,
+  RETRIEVAL_MIN_SIMILARITY,
+  retrieveKbEntries,
+} from "./retrieval";
 export type { KbMatch } from "./retrieval";
