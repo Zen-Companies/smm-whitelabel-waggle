@@ -600,3 +600,21 @@ Setup notes (T2): `@zernio/node` 0.2.1369 (pinned: it publishes daily), `ai` 7.0
   - **Lost profile id lookup** (`GET /v1/profiles?externalId=…`): we rely on the 409 adoption instead, which is equivalent.
   - **Costs not attributed to a profile** (credits, 10DLC, Verify) appear as `unattributed` in usage; T17 should show them separately rather than split them.
 - DM window escalation (T13): §7.2 says to escalate waiting DMs an hour before the window closes, which takes the draft out of the approval inbox. An alternative is an urgent email that leaves the draft approvable until the window actually closes (the send step already escalates at 24 h).
+
+## 19. Lab, practice and readiness (planned, Phase 5)
+
+Goal: measure a change before it ships (operators), and let owners see exactly what would be sent before they let it reply on its own. Tasks T23 to T28.
+
+**Kinds of comparison.** Side by side on one message (Lab tab 1, owner practice box), and batch over labeled sets (Lab tab 2), which decides whether a change is better. No live traffic split: volumes are too small to learn from and variant B could reply wrongly to a real customer. Shadow mode (B runs next to A on real messages, logged only, never sent) is a later option.
+
+**Dry-run engine (`features/lab`, T23).** `previewMessage({ tenantId, text, kind, history?, variant })` runs classify → triage → retrieve → draft → grounding → `policy()` and returns every step's output. It writes nothing but `ai_usage` and never calls `SocialProvider`; it does not use `status.ts` (no item exists). A variant names code-held versions: classifier (`jevos`, `jev-cloud`, `llm`), question version, business context (`name`, `profile`, custom text), draft prompt version, model id. Prompt versions stay in code as named variants, so a winner ships as an ordinary code change with a new version. The only free text is the business context, because testing it is the point.
+
+**`ai_usage.source`** (`live` default, `lab`, `practice`). Lab calls are operator cost and never count toward a business's spend or its cap (T32); practice calls do.
+
+**Admin Lab (`/admin/lab`, T24, T28).** Operator only (same gate as `/admin/costs`). Shows scores, retrieved facts with similarity, policy reasons, cost, tokens and time. "Save as test case" stores the message and its correct category in a tenant-scoped labeled set (RLS); these sets join `tests/fixtures/triage` in the report. Batch runs show the call count and cost first and warn above the free daily limit.
+
+**Business profile (T25).** One owner-editable text on `tenants` (3 to 6 sentences: what they sell, how people buy, their terms). Categories and Jev questions stay the same for every tenant; only the context changes, so accuracy stays measurable. It replaces the bare name in Jev's `state.business` and the LLM classifier prompt. Treated as data (length cap, recorded with each classification). Today production sends only `tenants.name` while `tests/fixtures/triage/business.json` gives the report a full description, so measured accuracy and production differ; T25 closes that. Whether Jev uses extra `state` fields or examples is unverified; the profile goes into the existing `business` field.
+
+**Owner practice box (T26).** The T23 engine with the tenant's current setup only, in plain words: what the message looks like, the reply, "Used your info: …", what happens next, or why it would come to the owner. No scores or model names. "Right / Not quite" saves a correction (later: the business's own examples and test set). Daily try limit per business. Never touches the inbox.
+
+**Readiness (T27).** "Ask me first" is the rehearsal: per category, the last 14 days of drafts sent as written, edited or rejected (`drafts.status`, `edited_body`, `decided_by`) give a plain "Ready to reply on its own" or "Not ready yet". Advice first; thresholds in one constant (start: at least 10 sent, at most 1 in 10 edited), checked against pilot data. A "What your receptionist will never do" list, each line backed by `policy()`, the draft prompt rules or the grounding check.

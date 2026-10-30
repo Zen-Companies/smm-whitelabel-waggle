@@ -114,6 +114,42 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Run `pnpm triage:report --only jev-openrouter` (paid, about $0.004 for the labeled set) with the current questions (`JEV_QUESTIONS_VERSION` 2026-10-29.1) and compare with local jevos; decide the production Jev endpoint and thresholds.
       _Done when:_ per-category accuracy on jev-1.13 is recorded in TDD §9.6 and the endpoint is chosen.
 
+## Phase 5: Measure, then earn the owner's trust
+
+Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items` or call `SocialProvider` except where a task says so. Real AI calls only from the pages themselves (an operator or owner pressing Run); tests use mocks (rule 14).
+
+- [ ] **T23. Dry-run engine**
+      `features/lab`: run one message (text, kind, optional earlier messages) for a tenant through classify → triage → retrieve → draft → grounding → `policy()` without writing `inbound_items`, `drafts`, `leads` or audit rows, and without `SocialProvider`. Takes a variant (classifier, question version, business context, draft prompt version, model) so two setups can run side by side. Keep old prompt versions in code as named variants. `ai_usage` gets a `source` column (`live` default, `lab`, `practice`) so lab and practice calls are recorded but kept apart.
+      _Done when:_ unit tests with a mocked classifier and LLM show every step's output for both variants, no writes outside `ai_usage`, and no `SocialProvider` call.
+
+- [ ] **T24. Admin Lab: try a message (classification first)**
+      `/admin/lab` (operator only, same gate as `/admin/costs`): business picker or blank profile, message + kind, variants A and B, Run. Each side shows category, confidence, per-question scores, triage decision, cost, tokens, time; differences highlighted. "Save as test case" with the right category adds the message to a labeled set (new table, tenant-scoped, RLS). Saved runs listed under History.
+      _Done when:_ a run shows both variants side by side, a saved case appears in its set, and non-operators get a 404.
+
+- [ ] **T25. Business profile for classification**
+      `tenants.business_profile` (text, length cap, owner-editable in Settings → Business, versioned in each classification's audit details). Pass it to both classifiers instead of the business name; remove "local business" from the LLM classifier prompt (bump `LLM_CLASSIFY_PROMPT_VERSION`). `pnpm triage:report` reads the same field so tests match production. Add a labeled digital-product set (and one more niche). Measure "name only" against "profile" in the Lab before switching.
+      _Done when:_ both classifiers receive the profile, the report runs on the new sets, and the Lab comparison is recorded in TDD §9.6.
+
+- [ ] **T26. Owner practice box**
+      "Try a message" in Settings → Replies (and a later onboarding step): the tenant's current setup only, through the T23 engine. One plain card: what it looks like, the reply it would send, "Used your info: …", what happens next ("I'd ask you first"), or why it would pass to the owner with "Add an answer". No scores or model names (design.md principle 5). "Right / Not quite" saves a correction. Daily try limit per business, shown in the box. "Practice only. Nothing is posted."
+      _Done when:_ a covered question shows a reply, an uncovered one offers "Add an answer", a complaint says it always comes to the owner, the limit holds, and nothing is written to the inbox.
+
+- [ ] **T27. Readiness and promises**
+      Settings → Replies, per category: last 14 days of drafts (sent as written, edited, rejected) and a plain "Ready to reply on its own" / "Not ready yet" line with "See the ones you edited" (draft next to what was sent). Advice only at first; thresholds in one constant (start: at least 10 sent, at most 1 in 10 edited). A "What your receptionist will never do" list, each line tied to a rule in code. Sent filter for replies sent on their own, and a "Pause all replies" switch.
+      _Done when:_ the card's counts match the drafts table for a seeded tenant, and pausing stops sends for that tenant.
+
+- [ ] **T28. Lab batch compare and draft checks**
+      Lab tab 2: pick labeled sets and variants A and B; show the call count and cost before running (warn above the free daily limit); results per category for A and B and a list of messages whose result changed. Draft checks that cost nothing: grounding passes, `needsHuman` when the facts don't cover the question, length and language rules. Also a CLI form for CI-style runs. LLM-as-judge later (paid or local).
+      _Done when:_ a batch run on the labeled sets shows both variants' accuracy and the changed messages, and the draft checks run on the drafting samples.
+
+Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
+
+- [ ] **T29. Prompt safety and version records:** escape or strip the `<message>` delimiters in customer text (draft prompt and LLM classifier); record `JEV_QUESTIONS_VERSION` / `LLM_CLASSIFY_PROMPT_VERSION` with each classification.
+- [ ] **T30. Thread history:** the last few messages of a DM thread go into the draft prompt and the retrieval query (bounded: more customer text reaches the AI providers).
+- [ ] **T31. Relevance floor:** a minimum similarity in `match_kb_entries`, tuned with T28, not by feel.
+- [ ] **T32. Monthly AI spend cap per business** from `ai_usage` (live and practice; lab excluded).
+- [ ] **T33. First agent: business-info gap helper:** groups "Questions your info didn't answer" and drafts new topics for the owner to approve. Needs a tool-calling method in `src/lib/llm` that records `ai_usage` per step and caps steps.
+
 ## Later
 
 - [ ] **T21. Customer offboarding**
