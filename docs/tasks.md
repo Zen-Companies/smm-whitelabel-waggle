@@ -63,6 +63,7 @@ Work top to bottom, one task at a time. Each task ends with its "Done when" pass
       Comment reply and DM send via `SocialProvider`; idempotency key; 24-hour check; 500 reconcile; 429 handling.
       _Done when:_ an approved reply posts exactly once on the test account; an expired DM window escalates.
       _Note:_ verified against the mock provider (integration tests); the live post on the test account is the next live session.
+      _Status:_ verified live on 2026-10-30 (Test Page, `beachater_test_page`, local app via ngrok, Auto-send on): a DM question ("Are you open on Saturday?") was sorted by jevos (faq, 0.93), drafted from Business info and sent on its own once, 51 s after arrival (owner confirmed it appeared once on Instagram). A scam DM was hidden as spam (LLM fallback) and, when jevos sorted it as a question at 0.65, escalated as low confidence; a link-only comment went to Needs you as unclear. Still to verify live: a comment reply, the owner-approved flow with Undo, a DM older than 24 h, a post with an image. jevos on this laptop needs `JEV_TIMEOUT_MS=15000` locally (3.3 to 9.5 s per call).
 
 - [x] **T13. Escalation, alerts and leads**
       Resend emails (escalation, lead, disconnect, waiting-draft nudge); leads list page.
