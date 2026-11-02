@@ -446,3 +446,39 @@
   transform-origin: 50% 10%;
   animation: bee-wiggle 600ms ease-in-out 1;
 }
+/* The landing page's flight path (features/landing/flight-path.tsx): the hero keeps its own loop
+   until the first scroll, then the one bee follows the scroll along the page-long trail. The
+   hand-off is a 150ms fade (rule 8). */
+.flight-bee {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  offset-rotate: auto;
+  transition: opacity 150ms ease-out;
+}
+[data-flight-state="scrolled"] .flight-bee {
+  opacity: 1;
+}
+[data-flight-state="scrolled"] [data-flight="dance"] .bee-smil,
+[data-flight-state="scrolled"] [data-flight="dance"] .bee-draw {
+  opacity: 0;
+}
+[data-flight="dance"] .bee-smil,
+[data-flight="dance"] .bee-draw {
+  transition: opacity 150ms ease-out;
+}
+
+/* The landing page's dance (BeeDance): SVG motion can't be paused by the base rule above, so
+   reduced motion swaps the flying bee for a still one. */
+.bee-still {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bee-smil {
+    display: none;
+  }
+  .bee-still {
+    display: initial;
+  }
+}

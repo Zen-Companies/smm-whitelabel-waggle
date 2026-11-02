@@ -25,16 +25,21 @@ If a screen breaks one, it starts to look generic.
 
 ## 2. Logo
 
-Files in `public/brand/` (the mark is unchanged from v2):
+Status: the mark changed on 2026-11-03 ("Logo options" on the canvas, option B). The old figure-8 trail with a bee read as an infinity loop next to a lowercase wordmark, too close to Metricool. The figure-8 is still Waggle's signature, but in motion (§6), not in the logo.
+
+**The mark is the waggle itself:** a honey wave that starts high, dips twice and rises into the bee, an ink dot at its head. It reads as a W. Honey stroke 5 on a 48 box, round caps; the dot is ink on light, white on dark.
+
+Files in `public/brand/`:
 
 | File | Use |
 |---|---|
 | `waggle-mark-light.svg` | Mark on light (default) |
-| `waggle-mark-dark.svg` | Mark on dark (marketing) |
-| `waggle-mark-small.svg` | Trail only, under 48px |
-| `waggle-app-icon.svg` | App icon / favicon |
+| `waggle-mark-dark.svg` | Mark on dark (marketing): white dot |
+| `waggle-mark-small.svg` | Under 24px: thicker stroke, bigger dot |
+| `waggle-app-icon.svg` | App icon / favicon: the mark on an ink rounded square (also `src/app/icon.svg`) |
 
-- Wordmark: `waggle` in **Inter 700**, lowercase, letter-spacing -0.035em, then a **honey full stop**. Built as text: `waggle<span class="text-honey">.</span>`. In the top bar: wordmark alone, 19px.
+- In the app the mark is `Mark` in `components/app/brand.tsx`, drawn inline so it takes the tokens.
+- Wordmark: `waggle` in **Inter 700**, lowercase, letter-spacing -0.035em, **no full stop** (the honey lives in the mark now). Lockup = `Brand`: 22px mark, 8px gap, 19px wordmark; the same in the top bar, on the landing page and on the auth pages.
 - Never recolor, stretch or add effects to the mark.
 
 ## 3. Tokens
@@ -108,6 +113,7 @@ One bee everywhere: black outline, honey body with two stripes, white wing, dott
 | **404** | loses the figure-8 and wanders, ending at a "?" | "This page flew off." · Back to your inbox |
 | **Something went wrong** | rests on a closed honeycomb cell, wings still, breathing slowly | "We couldn't load this. Your messages are safe." · Try again |
 | **All caught up** (empty inbox, no leads, fresh account) | hovers beside a flower, wings fluttering, a slow bob | "Nothing needs you. Go run the shop." |
+| **The dance** (landing page only) | flies a wide figure-8 under the headline, past pills of what it found: a lead, an answered question, a post that went out, hidden spam, a complaint. From the first scroll the same bee follows the reader down a dotted trail in the gutter between the columns (the honey draws behind it) and lands beside the pricing button. It only moves when the reader scrolls; never under text; not on phones | — |
 | **Small moments** | a mini loop in the Send button; the trail traces once by the check; a short wiggle on the bell when something new needs you | — |
 
 - Humor only on the 404. Errors, complaints and money stay calm and plain.
@@ -125,5 +131,5 @@ One bee everywhere: black outline, honey body with two stripes, white wing, dott
 
 - App shell: the top bar, then content centered up to ~1240px with 32px gutters (16 on phones).
 - Inbox: list (~360px) | conversation (max ~600px) | side panel (~220px) on desktop; list → conversation on phones.
-- Screens: Inbox, conversation page, Posts, Leads, Business info, Lab, Settings, login/signup, notification panel, admin costs, 404 and error pages.
+- Screens: Landing page (`/`, signed out), Inbox, conversation page, Posts, Leads, Business info, Lab, Settings, login/signup, notification panel, admin costs, 404 and error pages.
 - Favicon and app metadata from `waggle-app-icon.svg`; page titles "… · Waggle".

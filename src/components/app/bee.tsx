@@ -11,9 +11,12 @@ const FIGURE_8 =
   "M120,60 C138,30 204,24 204,60 C204,96 138,90 120,60 C102,30 36,24 36,60 C36,96 102,90 120,60Z";
 /** A lost, wandering flight for the 404. */
 const WANDER = "M30,96 C70,20 100,120 130,60 S200,14 214,80 S160,124 120,102 S50,50 30,96Z";
+/** The wide dance on the landing page, in a 1120×300 box. */
+const DANCE =
+  "M560,150 C640,40 960,20 960,150 C960,280 640,260 560,150 C480,40 160,20 160,150 C160,280 480,260 560,150Z";
 
 /** The bee itself, 24×16, facing right. `flutter` animates the wing. */
-function BeeBody({ flutter = true }: { flutter?: boolean }) {
+export function BeeBody({ flutter = true }: { flutter?: boolean }) {
   return (
     <>
       <g className={flutter ? "bee-wing" : undefined}>
@@ -172,6 +175,45 @@ export function BeeCaughtUp({ className }: { className?: string }) {
             <BeeBody />
           </g>
         </g>
+      </g>
+    </svg>
+  );
+}
+
+/**
+ * The landing page's dance: the bee flies a wide figure-8 (9 s) while the trail draws in honey.
+ * Drawn inside the SVG (SMIL motion) so it scales with its container; the pills that sit on the
+ * trail are laid over it by the caller. Reduced motion hides the flight and shows a still bee.
+ */
+export function BeeDance({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 1120 300" className={cn("block h-auto w-full", className)} aria-hidden>
+      <path
+        d={DANCE}
+        fill="none"
+        stroke="var(--line)"
+        strokeWidth="2"
+        strokeDasharray="2 7"
+        strokeLinecap="round"
+      />
+      <path
+        d={DANCE}
+        pathLength={100}
+        fill="none"
+        stroke={HONEY}
+        strokeWidth="2"
+        strokeLinecap="round"
+        className="bee-draw"
+        style={{ animationDuration: "9s" }}
+      />
+      <g className="bee-smil">
+        <g transform="translate(-15 -10) scale(1.25)">
+          <BeeBody />
+        </g>
+        <animateMotion dur="9s" repeatCount="indefinite" rotate="auto" path={DANCE} />
+      </g>
+      <g className="bee-still" transform="translate(545 140) scale(1.25)">
+        <BeeBody flutter={false} />
       </g>
     </svg>
   );
