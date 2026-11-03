@@ -98,6 +98,12 @@ export async function POST(request: Request): Promise<Response> {
       backfill,
     });
   } catch (error) {
+    // Visible in the Vercel logs even without Sentry. Our own error text only, never customer
+    // message text (CLAUDE.md rule 10).
+    console.error(
+      "jobs/process failed:",
+      error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 500) : "unknown error",
+    );
     Sentry.captureException(error);
     return Response.json({ error: "processing failed" }, { status: 500 });
   }
