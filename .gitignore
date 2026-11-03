@@ -48,5 +48,9 @@ supabase/.temp
 # sentry
 .env.sentry-build-plugin
 
-# Design hand-off archive (contents live in docs/design.md and public/illustrations)
+# Design hand-off archive (contents live in docs/design.md)
 design_files.zip
+
+# Local hand-off and tooling output (not part of the app)
+waggle-design-kit.zip
+.archify/
