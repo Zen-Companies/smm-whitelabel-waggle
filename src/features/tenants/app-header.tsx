@@ -1,19 +1,31 @@
 import { LogOut } from "lucide-react";
 import Link from "next/link";
-import { BeeStatus } from "@/components/app/bee";
 import { Brand } from "@/components/app/brand";
 import { TopNav } from "@/components/app/top-nav";
 import { isOperator } from "@/features/billing";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { signOut } from "./actions";
+import { BrandMenu } from "./brand-menu";
+import { listBrands } from "./brands";
 import { getCurrentTenant } from "./current-tenant";
 
 /**
- * The top bar (docs/design.md §4): wordmark, nav, then the flying bee with the business name, the
- * bell and sign out. On phones the nav drops to its own scrolling row.
+ * The top bar (docs/design.md §4): wordmark, nav, then the brand menu (T47), the bell and sign
+ * out. On phones the nav drops to its own scrolling row. `needsYouStatuses` is the inbox's For
+ * you list, for each brand's count in the menu.
  */
-export async function AppHeader({ bell }: { bell?: React.ReactNode }) {
-  const [tenant, user] = await Promise.all([getCurrentTenant(), getCurrentUser()]);
+export async function AppHeader({
+  bell,
+  needsYouStatuses,
+}: {
+  bell?: React.ReactNode;
+  needsYouStatuses: readonly string[];
+}) {
+  const [tenant, user, brands] = await Promise.all([
+    getCurrentTenant(),
+    getCurrentUser(),
+    listBrands(needsYouStatuses),
+  ]);
   const supabase = await createServerSupabase();
   const { count } = await supabase
     .from("inbound_items")
@@ -31,12 +43,7 @@ export async function AppHeader({ bell }: { bell?: React.ReactNode }) {
           <TopNav showAdmin={isOperator(user)} inboxCount={count ?? 0} />
         </div>
         <div className="ml-auto flex min-h-14 items-center gap-2">
-          <span className="text-ink-2 hidden items-center gap-2 text-sm lg:inline-flex">
-            <BeeStatus />
-            <span className="max-w-48 truncate" title={tenant.name}>
-              {tenant.name}
-            </span>
-          </span>
+          <BrandMenu brands={brands} currentId={tenant.id} />
           {bell}
           <form action={signOut}>
             <button

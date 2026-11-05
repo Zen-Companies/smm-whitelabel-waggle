@@ -15,7 +15,18 @@ async function ToInbox({ params }: { params: Promise<{ id: string }> }): Promise
     .eq("id", id)
     .eq("tenant_id", tenant.id)
     .maybeSingle();
-  redirect(data ? `/inbox?tab=${tabForStatus(data.status)}&item=${id}` : "/inbox");
+  if (data) redirect(`/inbox?tab=${tabForStatus(data.status)}&item=${id}`);
+  // T47: the item may belong to another of the user's brands (RLS shows only theirs).
+  const { data: other } = await supabase
+    .from("inbound_items")
+    .select("tenant_id")
+    .eq("id", id)
+    .maybeSingle();
+  redirect(
+    other
+      ? `/brands/switch?to=${other.tenant_id}&next=${encodeURIComponent(`/inbox/items/${id}`)}`
+      : "/inbox",
+  );
 }
 
 export default function InboxItemPage({ params }: PageProps<"/inbox/items/[id]">) {

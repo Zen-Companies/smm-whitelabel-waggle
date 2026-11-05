@@ -1,5 +1,6 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -7,6 +8,7 @@ import { writeAudit } from "@/lib/audit";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
+import { BRAND_COOKIE } from "./brand-pick";
 import { getCurrentTenant } from "./current-tenant";
 import { setupTenantForUser } from "./server";
 
@@ -66,6 +68,8 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
 export async function signOut(): Promise<void> {
   const supabase = await createServerSupabase();
   await supabase.auth.signOut();
+  // The open brand belongs to this login; the next one starts on its own first brand.
+  (await cookies()).delete(BRAND_COOKIE);
   redirect("/login");
 }
 

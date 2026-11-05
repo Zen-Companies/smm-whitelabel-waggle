@@ -1,8 +1,8 @@
--- create_owner_tenant: one tenant per owner, even when called again (docs/tasks.md T3).
+-- create_owner_tenant: the owner's first tenant, created once (T3); create_brand adds more (T47).
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(16);
 
 insert into auth.users (id, email) values
   ('d0000000-0000-4000-8000-000000000001', 'signup@test.local');
@@ -30,21 +30,38 @@ select results_eq(
   $$ values ('tenant_created'::text, 'd0000000-0000-4000-8000-000000000001'::text) $$,
   'one tenant_created audit row');
 
-select throws_ok(
-  $$ with other as (insert into public.tenants (name) values ('Other Cafe') returning id)
-     insert into public.tenant_members (tenant_id, user_id, role)
-     select id, 'd0000000-0000-4000-8000-000000000001', 'owner' from other $$,
-  '23505', null, 'the same user cannot own a second tenant');
+-- Brands (T47): the same owner can add more tenants, one per name.
+create temp table brand_call as
+  select * from public.create_brand('d0000000-0000-4000-8000-000000000001', '  Bloom Florist ');
+select is((select created from brand_call), true, 'create_brand adds a second tenant');
+select results_eq(
+  $$ select name from public.tenants where id = (select tenant_id from brand_call) $$,
+  array['Bloom Florist'::text], 'brand name is trimmed');
+select results_eq(
+  $$ select tenant_id, created from public.create_brand('d0000000-0000-4000-8000-000000000001', 'bloom florist') $$,
+  $$ select tenant_id, false from brand_call $$, 'the same name again returns that brand');
+select results_eq(
+  $$ select count(*)::int from public.autonomy_settings where tenant_id = (select tenant_id from brand_call) $$,
+  array[5], 'the new brand gets default autonomy settings');
+select results_eq(
+  $$ select tenant_id from public.create_owner_tenant('d0000000-0000-4000-8000-000000000001', 'x') $$,
+  $$ select tenant_id from first_call $$, 'login still lands on the first brand');
 
 set local role authenticated;
 select throws_ok(
   $$ select * from public.create_owner_tenant('d0000000-0000-4000-8000-000000000001', 'x') $$,
   '42501', null, 'authenticated users cannot call it');
+select throws_ok(
+  $$ select * from public.create_brand('d0000000-0000-4000-8000-000000000001', 'x') $$,
+  '42501', null, 'authenticated users cannot call create_brand');
 reset role;
 set local role anon;
 select throws_ok(
   $$ select * from public.create_owner_tenant('d0000000-0000-4000-8000-000000000001', 'x') $$,
   '42501', null, 'anon cannot call it');
+select throws_ok(
+  $$ select * from public.create_brand('d0000000-0000-4000-8000-000000000001', 'x') $$,
+  '42501', null, 'anon cannot call create_brand');
 reset role;
 
 select * from finish();

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/app/avatar";
 import { IllustratedEmpty } from "@/components/app/illustrated-empty";
 import { clockTime, shortTime } from "@/components/app/time";
-import { buttonVariants } from "@/components/ui/button";
+import { BrandSetup } from "@/features/accounts";
 import { MarkItemRead } from "@/features/alerts";
 import { getCurrentTenant } from "@/features/tenants";
 import { loadTenantAiSpend } from "@/lib/llm/spend";
@@ -323,26 +323,8 @@ export async function InboxView({
     </div>
   );
 
-  // First run: nothing connected yet.
-  if (!accounts) {
-    return (
-      <div className="flex flex-col gap-6">
-        <h1 className="page-title">Connect your Instagram</h1>
-        <IllustratedEmpty
-          illustration="connect-accounts"
-          title="Waggle is ready when you are"
-          action={
-            <Link href="/settings" className={buttonVariants({ variant: "primary" })}>
-              Connect an account
-            </Link>
-          }
-        >
-          Once your shop&apos;s account is connected, comments and messages show up here with a
-          reply ready for you to check.
-        </IllustratedEmpty>
-      </div>
-    );
-  }
+  // First run of a brand: nothing connected yet (T47 "Set up <brand>").
+  if (!accounts) return <BrandSetup brandName={tenant.name} />;
 
   const empty =
     tab === "for_you" ? (

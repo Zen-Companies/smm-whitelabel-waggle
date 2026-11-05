@@ -1060,6 +1060,13 @@ export type Database = {
           zernio_profile_id: string
         }[]
       }
+      create_brand: {
+        Args: { p_name: string; p_user_id: string }
+        Returns: {
+          created: boolean
+          tenant_id: string
+        }[]
+      }
       create_owner_tenant: {
         Args: { p_name: string; p_user_id: string }
         Returns: {

@@ -11,7 +11,14 @@ export {
 export type { DecisionResult } from "./decisions";
 export { InboxSkeleton } from "./inbox-skeleton";
 export { InboxView } from "./inbox-view";
-export { countInboxTabs, heldReason, loadEntries, loadInbox, loadInboxTab } from "./inbox-data";
+export {
+  countInboxTabs,
+  heldReason,
+  loadEntries,
+  loadInbox,
+  loadInboxTab,
+  NEEDS_OWNER,
+} from "./inbox-data";
 export { tabForStatus } from "./conversation-data";
 export type { InboxData, InboxEntry, InboxTab } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";

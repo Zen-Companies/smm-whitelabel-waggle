@@ -90,6 +90,7 @@ Rules: features expose a public API via `index.ts` and never import another feat
 - Profile **names** are also unique per team and a duplicate name returns a 409 with `existingProfileId` too, but that profile may belong to another tenant: the adapter only adopts the existing profile for `profile_external_id_conflict`. T3 must make names unique (e.g. business name + short tenant id).
 - Never pass a tenant an account ID that isn't in their profile (`POST /v1/posts` accepts any account in our team).
 - Every tenant table has `tenant_id` and RLS.
+- **Brands (T47, 2026-11-06):** a login can own several tenants; in the app a tenant is called a *brand*. Each keeps its own Zernio profile, accounts, Business info, inbox, rules and bill (one Stripe customer per tenant); there is no combined inbox. The open brand is the `waggle_brand` cookie (httpOnly), checked against the user's tenants on every request by `getCurrentTenant()` (falls back to the oldest). RLS lets the login read **all** its brands, so every dashboard query must also filter on the open brand's `tenant_id`: RLS alone no longer keeps brands apart (covered by `tests/integration/brands.test.ts`). `create_brand(user, name)` (service role) adds one, one per name (case-insensitive); `create_owner_tenant` still returns the oldest. Alert links to another brand's item go through `/brands/switch?to=…&next=…`.
 
 ## 5. Data model
 
@@ -543,6 +544,7 @@ As built (T10, `features/approvals`):
 - Stripe Checkout for the subscription; webhook `/api/webhooks/stripe` verifies the signature and handles `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` → update `tenants.subscription_status`.
 - Stripe events also go through `webhook_events` for dedupe.
 - Gate: job processing skips tenants not `active`/`trialing` (items → `paused`).
+- One bill per brand (T47): billing stays per tenant, so an owner with three brands has three subscriptions.
 
 ## 13. Security
 

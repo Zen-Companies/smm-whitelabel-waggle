@@ -209,6 +209,11 @@ Picked 2026-11-05 from the Zernio docs (docs.zernio.com, `zernio-docs` MCP) and 
       _Done when:_ a new review on the test Page appears in the inbox within the polling interval, a reply approved in Waggle shows on Facebook once, and the new kind passes the RLS tests (`pnpm test:db`).
       _Status (2026-11-05):_ built to the approved design v3 artboard (TDD §7.6). VERIFY resolved from the docs: no Facebook review webhooks, so the job polls every 5 minutes per Page. Migration `20261105140000_reviews`. Unit tests: adapter (list mapping, reply path and key), poller filters, policy (approve even in auto, spam ignored), row notes. Integration test `tests/integration/reviews.test.ts` (stored once, waits in auto mode, posted once, not re-imported) passes, and `pnpm test:db` passes (96 tests) (2026-11-06). **Open:** a real review on a test Page; then check the box.
 
+- [ ] **T47. Brands: one login, several businesses**
+      Like Metricool's brands: a brand switcher in the top bar, each brand with its own connected accounts, Business info, inbox, rules and bill. Decided 2026-11-06: one bill per brand, no combined inbox for now.
+      _Done when:_ an owner can add a brand, switch between brands from any page, a new brand starts on "Set up <brand>", and one brand's items never show in another's pages (integration test with one login owning two brands).
+      _Status (2026-11-06):_ built to the approved design v3 "Brands" artboards. Migration `20261106120000_brands` (drops the one-tenant-per-owner index, adds `create_brand`). Brand cookie + `getCurrentTenant()` (TDD §4), brand menu with per-brand "needs you" counts and a honey dot when another brand waits, `/brands/new`, the setup screen replaces the inbox's first run, alert links switch brand. Query audit: every RLS-client query already filtered on the tenant except `getCurrentTenant` itself. Tests: unit `brand-pick.test.ts`, pgTAP `owner_tenant.test.sql`, integration `brands.test.ts`. Checked locally in the browser (switch, setup screen, duplicate name). **Open:** add a real brand on production (creates a Zernio profile) and connect its account; then check the box.
+
 ## Next (held, after Phase 6)
 
 From the same review, agreed 2026-11-05 to hold until Phase 6 is done:
