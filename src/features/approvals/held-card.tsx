@@ -1,8 +1,9 @@
 "use client";
 
+import { CircleAlert } from "lucide-react";
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { markHandledAction, type DecisionFormState } from "./actions";
+import { markHandledAction, replyPubliclyAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
 
 /** Reasons that mean a reply was ready but couldn't go out (danger box, §4 "Couldn't send"). */
@@ -14,6 +15,40 @@ const COULD_NOT_SEND: Record<string, string> = {
   tenant_inactive: "Your subscription isn't active, so the reply wasn't sent.",
   retries_exhausted: "It couldn't be sent after 3 tries.",
 };
+
+/** T41: a comment's DM couldn't go out; the same reply can go under the comment instead. */
+const DM_UNAVAILABLE: Record<string, string> = {
+  private_reply_used: "This comment already got its one DM. Reply publicly instead.",
+  private_reply_expired:
+    "It's been more than 7 days, so it can't be answered in DM. Reply publicly instead.",
+};
+
+/** "Reply publicly" (design v3 "Reply in DM"): the draft goes back to waiting for approval. */
+function ReplyPubliclyCard({ entry, text }: { entry: InboxEntry; text: string }) {
+  const [state, action, pending] = useActionState<DecisionFormState, FormData>(
+    replyPubliclyAction,
+    {},
+  );
+  return (
+    <form
+      id={`item-${entry.itemId}`}
+      action={action}
+      className="border-line flex flex-wrap items-center gap-2.5 rounded-xl border px-4 py-3.5"
+    >
+      <CircleAlert className="text-danger size-4 shrink-0" strokeWidth={2} aria-hidden />
+      <span role="status">{text}</span>
+      <input type="hidden" name="itemId" value={entry.itemId} />
+      <Button type="submit" variant="secondary" className="ml-auto" disabled={pending}>
+        {pending ? "Moving…" : "Reply publicly"}
+      </Button>
+      {state.error && (
+        <p role="alert" className="text-danger w-full text-sm">
+          {state.error}
+        </p>
+      )}
+    </form>
+  );
+}
 
 /** Why it came to the owner, calm and short (design.md §7). */
 const HELD: Record<string, string> = {
@@ -72,6 +107,13 @@ export function heldText(reason: string | null, entry: InboxEntry): string {
  * "Mark as handled" (primary) and "Copy reply".
  */
 export function HeldCard({ entry, reason }: { entry: InboxEntry; reason: string | null }) {
+  if (reason && DM_UNAVAILABLE[reason]) {
+    return <ReplyPubliclyCard entry={entry} text={DM_UNAVAILABLE[reason]} />;
+  }
+  return <HeldCardBody entry={entry} reason={reason} />;
+}
+
+function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | null }) {
   const [state, action, pending] = useActionState<DecisionFormState, FormData>(
     markHandledAction,
     {},

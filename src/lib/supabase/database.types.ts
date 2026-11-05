@@ -313,6 +313,7 @@ export type Database = {
           model: string | null
           needs_human: boolean
           needs_human_reason: string | null
+          reply_via: string
           nudged_at: string | null
           send_attempted_at: string | null
           sent_at: string | null
@@ -333,6 +334,7 @@ export type Database = {
           model?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
+          reply_via?: string
           nudged_at?: string | null
           send_attempted_at?: string | null
           sent_at?: string | null
@@ -353,6 +355,7 @@ export type Database = {
           model?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
+          reply_via?: string
           nudged_at?: string | null
           send_attempted_at?: string | null
           sent_at?: string | null

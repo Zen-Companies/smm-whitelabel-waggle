@@ -146,6 +146,45 @@ function NextPostNote({ post }: { post: NextPost }) {
   );
 }
 
+/** T41: a comment answered in DM (design v3 "Reply in DM"): sent, or checking after a retry. */
+function DmReplyFooter({ entry }: { entry: InboxEntry & { status: string } }) {
+  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  if (entry.status === "sending" && entry.attempts > 0) {
+    return (
+      <p
+        role="status"
+        className="border-line flex items-center gap-2.5 rounded-xl border px-4 py-3.5"
+      >
+        <Clock3 className="text-honey-text size-4 shrink-0" strokeWidth={2} aria-hidden />
+        Checking with {platform} whether it went through. Waggle won&apos;t send it again until it
+        knows.
+      </p>
+    );
+  }
+  if (entry.status !== "sent") return <SentFooter entry={entry} />;
+  return (
+    <p
+      role="status"
+      className="border-line flex flex-wrap items-center gap-2.5 rounded-xl border px-4 py-3.5"
+    >
+      <CircleCheck className="text-success size-4 shrink-0" strokeWidth={2} aria-hidden />
+      Sent to {entry.authorName ?? "them"} in DM. Their answer will show up here as a message.
+      <a
+        href={
+          entry.platform === "facebook"
+            ? "https://www.facebook.com/messages/"
+            : "https://www.instagram.com/direct/inbox/"
+        }
+        target="_blank"
+        rel="noopener noreferrer"
+        className="ml-auto font-medium whitespace-nowrap"
+      >
+        Open the DM
+      </a>
+    </p>
+  );
+}
+
 /** The footer of an answered or ignored item: what happened, in one line. */
 function SentFooter({ entry }: { entry: InboxEntry & { status: string } }) {
   const done: Record<string, string> = {
@@ -309,6 +348,8 @@ export async function InboxView({
       (selected.category === "spam" &&
         (selected.status === "ignored" || selected.status === "handled"))) ? (
     <SpamCommentFooter key={selected.itemId} entry={selected} />
+  ) : selected.kind === "comment" && selected.draft?.replyVia === "dm" ? (
+    <DmReplyFooter entry={selected} />
   ) : (
     <SentFooter entry={selected} />
   );

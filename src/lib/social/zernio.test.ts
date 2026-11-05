@@ -210,6 +210,56 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("sendPrivateReply posts the message to the comment's private-reply path (T41)", async () => {
+    respond = () =>
+      json({ status: "sent", messageId: "m_9", commentId: "c_1", platform: "instagram" });
+
+    await expect(
+      provider.sendPrivateReply({
+        accountId: "acc_1",
+        postId: "p_1",
+        commentId: "c_1",
+        message: "Hi Maria! 3 dozen is ₱540.",
+      }),
+    ).resolves.toEqual({ providerMessageId: "m_9" });
+
+    const [req] = captured;
+    expect(req.method).toBe("POST");
+    expect(req.url.pathname).toBe("/api/v1/inbox/comments/p_1/c_1/private-reply");
+    expect(req.body).toEqual({ accountId: "acc_1", message: "Hi Maria! 3 dozen is ₱540." });
+  });
+
+  it("a spent private reply is a 400 flagged privateReplyConsumed (never retried)", async () => {
+    respond = () =>
+      json(
+        {
+          error: "This comment already received a private reply",
+          code: "PLATFORM_API_ERROR",
+          details: { privateReplyConsumed: true },
+        },
+        400,
+      );
+
+    const error = await provider
+      .sendPrivateReply({ accountId: "acc_1", postId: "p_1", commentId: "c_1", message: "Hi" })
+      .catch((e: unknown) => e);
+    expect((error as SocialProviderError).details).toMatchObject({
+      status: 400,
+      ambiguous: false,
+      privateReplyConsumed: true,
+    });
+  });
+
+  it("a 502 with an unknown private reply outcome is ambiguous: reconcile before anything else", async () => {
+    respond = () => json({ error: "Meta error", details: { privateReplyOutcome: "unknown" } }, 502);
+
+    const error = await provider
+      .sendPrivateReply({ accountId: "acc_1", postId: "p_1", commentId: "c_1", message: "Hi" })
+      .catch((e: unknown) => e);
+    expect((error as SocialProviderError).details).toMatchObject({ status: 502, ambiguous: true });
+    expect((error as SocialProviderError).details.privateReplyConsumed).toBeUndefined();
+  });
+
   it("sendDm posts to the conversation with Idempotency-Key", async () => {
     respond = () => json({ success: true, data: { messageId: "m_1", conversationId: "conv_1" } });
 

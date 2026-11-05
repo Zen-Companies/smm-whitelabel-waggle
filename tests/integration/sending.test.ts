@@ -42,6 +42,13 @@ class ScriptedSocial extends MockSocialProvider {
   override sendDm(input: Parameters<MockSocialProvider["sendDm"]>[0]) {
     return this.scripted("dm", input, () => super.sendDm(input));
   }
+  override sendPrivateReply(input: Parameters<MockSocialProvider["sendPrivateReply"]>[0]) {
+    return this.scripted(
+      "private_reply",
+      { idempotencyKey: `private:${input.commentId}`, message: input.message },
+      () => super.sendPrivateReply(input),
+    );
+  }
 }
 
 const err = (status: number | undefined, extra: Partial<SocialProviderError["details"]> = {}) =>
@@ -72,6 +79,9 @@ async function approvedItem(opts: {
   lastCustomerMessageAgoMs?: number;
   edit?: string;
   category?: "faq" | "lead";
+  /** T41: answer a comment in the commenter's DMs. */
+  replyVia?: "public" | "dm";
+  receivedAgoMs?: number;
 }) {
   const itemId = randomUUID();
   let conversationId: string | null = null;
@@ -100,7 +110,7 @@ async function approvedItem(opts: {
       ? { zernio_comment_id: `c_${itemId}`, zernio_post_id: "1789000" }
       : { zernio_message_id: `m_${itemId}`, conversation_id: conversationId }),
     text: "Open on Sunday?",
-    received_at: new Date().toISOString(),
+    received_at: new Date(Date.now() - (opts.receivedAgoMs ?? 0)).toISOString(),
     status: "awaiting_approval",
     category: opts.category ?? "faq",
     confidence: 0.95,
@@ -117,6 +127,7 @@ async function approvedItem(opts: {
     itemId,
     draftId: draft!.id,
     editedBody: opts.edit ?? "Sundays 8am to 10pm.",
+    replyVia: opts.replyVia,
   });
   expect(result).toEqual({ ok: true });
   // As if the 8-second undo window had passed (approveDraft holds the reply until then).
@@ -564,5 +575,85 @@ describe("message.failed webhook", () => {
   it("an unknown message id is skipped", async () => {
     const res = await deliverFailed("wamid.unknown");
     expect(await res.json()).toEqual({ outcome: "skipped", reason: "unknown_message" });
+  });
+});
+
+describe("a comment answered in DM (T41)", () => {
+  const dmCalls = (itemId: string) => sendsFor(`private:c_${itemId}`);
+
+  it("goes out once as a private reply and is recorded with replyVia dm", async () => {
+    const { itemId } = await approvedItem({ kind: "comment", category: "lead", replyVia: "dm" });
+    await run();
+    const { item, draft, audit } = await state(itemId);
+    expect(item.status).toBe("sent");
+    expect(draft.status).toBe("sent");
+    expect(dmCalls(itemId)).toHaveLength(1);
+    expect(audit.find((r) => r.action === "reply_sent")?.details).toMatchObject({
+      replyVia: "dm",
+      reconciled: false,
+    });
+  });
+
+  it("after an unknown outcome (502), the retry is answered 'consumed': it counts as sent, once", async () => {
+    const { itemId } = await approvedItem({ kind: "comment", category: "lead", replyVia: "dm" });
+    social.script.push({ error: err(502), delivered: true });
+    await run();
+    expect((await state(itemId)).item.status).toBe("sending");
+    await dueNow(itemId);
+    await run();
+    const { item, draft } = await state(itemId);
+    expect(item.status).toBe("sent");
+    expect(draft.zernio_reply_id).toBe("private_reply_consumed");
+    // Two calls, but Meta's one-per-comment limit delivered it only once.
+    expect(
+      social.sends.filter((x) => x.kind === "private_reply" && x.targetId === `c_${itemId}`),
+    ).toHaveLength(1);
+  });
+
+  it("a comment whose DM is already spent comes to the owner, then Reply publicly re-queues it", async () => {
+    const { itemId } = await approvedItem({ kind: "comment", category: "lead", replyVia: "dm" });
+    await social.sendPrivateReply({
+      accountId: zernioAccountId,
+      postId: "1789000",
+      commentId: `c_${itemId}`,
+      message: "someone got there first",
+    });
+    await run();
+    const first = await state(itemId);
+    expect(first.item.status).toBe("escalated");
+    expect(first.draft.status).toBe("failed");
+    expect(
+      first.audit.find(
+        (r) => r.action === "status_changed" && (r.details as { to?: string }).to === "escalated",
+      )?.details,
+    ).toMatchObject({ sendReason: "private_reply_used" });
+
+    const { replyPublicly } = await import("@/features/approvals/decisions");
+    expect(await replyPublicly(db, { tenantId, userId, itemId })).toEqual({ ok: true });
+    const after = await db
+      .from("drafts")
+      .select("status, reply_via")
+      .eq("item_id", itemId)
+      .single();
+    expect(after.data).toEqual({ status: "pending", reply_via: "public" });
+    expect((await state(itemId)).item.status).toBe("awaiting_approval");
+  });
+
+  it("more than 7 days after the comment, it isn't sent in DM", async () => {
+    const { itemId } = await approvedItem({
+      kind: "comment",
+      category: "lead",
+      replyVia: "dm",
+      receivedAgoMs: 8 * 24 * 60 * 60 * 1000,
+    });
+    await run();
+    expect((await state(itemId)).item.status).toBe("escalated");
+    expect(dmCalls(itemId)).toHaveLength(0);
+  });
+
+  it("approving with replyVia on a DM item is ignored: DMs answer in their own thread", async () => {
+    const { itemId } = await approvedItem({ kind: "dm", replyVia: "dm" });
+    const { data } = await db.from("drafts").select("reply_via").eq("item_id", itemId).single();
+    expect(data?.reply_via).toBe("public");
   });
 });

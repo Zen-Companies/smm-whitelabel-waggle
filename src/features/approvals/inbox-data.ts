@@ -25,7 +25,11 @@ export interface InboxEntry {
     sentAt: string | null;
     /** False when the reply went out on its own (auto mode): nobody approved it. */
     decidedByOwner: boolean;
+    /** T41: a comment's reply goes under the comment ("public") or in the commenter's DMs. */
+    replyVia: "public" | "dm";
   } | null;
+  /** Failed send attempts so far (a retry is checking whether the last one went through). */
+  attempts: number;
   /** DMs: when Meta's 24-hour reply window closes (null if unknown). */
   dmWindowClosesAt: string | null;
   /** Comments: the post on Instagram/Facebook, for "Open in Instagram" (null if not known). */
@@ -251,7 +255,7 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, " +
+      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, " +
         "social_accounts (platform), conversations (last_customer_message_at)",
     )
     .eq("tenant_id", tenantId);
@@ -265,6 +269,7 @@ export async function loadEntries(
     id: string;
     kind: "comment" | "dm";
     status: string;
+    attempts: number;
     author_name: string | null;
     text: string;
     received_at: string;
@@ -281,7 +286,7 @@ export async function loadEntries(
   const { data: drafts } = await supabase
     .from("drafts")
     .select(
-      "id, item_id, body, edited_body, needs_human, needs_human_reason, kb_entry_ids, status, sent_at, decided_by",
+      "id, item_id, body, edited_body, needs_human, needs_human_reason, kb_entry_ids, status, sent_at, decided_by, reply_via",
     )
     .in(
       "item_id",
@@ -323,8 +328,10 @@ export async function loadEntries(
             status: d.status,
             sentAt: d.sent_at,
             decidedByOwner: d.decided_by !== null,
+            replyVia: r.kind === "comment" && d.reply_via === "dm" ? "dm" : "public",
           }
         : null,
+      attempts: r.attempts,
       permalink: r.permalink,
       hiddenOnPlatformAt: r.hidden_on_platform_at,
       dmWindowClosesAt:

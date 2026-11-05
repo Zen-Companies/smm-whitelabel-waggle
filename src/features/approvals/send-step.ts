@@ -10,6 +10,7 @@ import {
 import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { privateReplyClosesAt, type ReplyVia } from "./private-reply";
 import {
   policy,
   type AutonomyMode,
@@ -35,6 +36,7 @@ const RECONCILE_SKEW_MS = 5 * 60 * 1000;
 interface SendContext {
   tenantId: string;
   kind: "comment" | "dm";
+  receivedAt: string;
   zernioCommentId: string | null;
   zernioPostId: string | null;
   account: { zernioAccountId: string; status: PolicyInput["account"]["status"] };
@@ -49,6 +51,8 @@ interface SendContext {
     idempotencyKey: string;
     sendAttemptedAt: string | null;
     zernioReplyId: string | null;
+    /** T41: a comment answered in the commenter's DMs. */
+    replyVia: ReplyVia;
   } | null;
 }
 
@@ -56,7 +60,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
   const { data, error } = await db
     .from("inbound_items")
     .select(
-      "tenant_id, kind, category, confidence, zernio_comment_id, zernio_post_id, " +
+      "tenant_id, kind, received_at, category, confidence, zernio_comment_id, zernio_post_id, " +
         "social_accounts!inner (zernio_account_id, status), " +
         "tenants!inner (subscription_status, confidence_threshold, replies_paused), " +
         "conversations (zernio_conversation_id, last_customer_message_at)",
@@ -67,6 +71,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
   const row = data as unknown as {
     tenant_id: string;
     kind: "comment" | "dm";
+    received_at: string;
     category: Category | null;
     confidence: number | null;
     zernio_comment_id: string | null;
@@ -95,7 +100,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
       .from("drafts")
       .select(
         "id, body, edited_body, status, needs_human, decided_by, idempotency_key, " +
-          "send_attempted_at, zernio_reply_id",
+          "send_attempted_at, zernio_reply_id, reply_via",
       )
       .eq("item_id", itemId)
       .in("status", ["approved", "sent"])
@@ -113,12 +118,14 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     idempotency_key: string;
     send_attempted_at: string | null;
     zernio_reply_id: string | null;
+    reply_via: string;
   } | null;
 
   const last = row.conversations?.last_customer_message_at ?? null;
   return {
     tenantId: row.tenant_id,
     kind: row.kind,
+    receivedAt: row.received_at,
     zernioCommentId: row.zernio_comment_id,
     zernioPostId: row.zernio_post_id,
     account: {
@@ -153,6 +160,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
           idempotencyKey: d.idempotency_key,
           sendAttemptedAt: d.send_attempted_at,
           zernioReplyId: d.zernio_reply_id,
+          replyVia: row.kind === "comment" && d.reply_via === "dm" ? "dm" : "public",
         }
       : null,
   };
@@ -248,6 +256,27 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
     };
 
     const social = opts.social();
+    /** A definite refusal (bad request, permissions, deleted comment): retrying won't help. */
+    const rejected = async (status?: number, code?: string): Promise<StepResult> => {
+      await db
+        .from("drafts")
+        .update({ status: "failed", send_attempted_at: null })
+        .eq("id", draft.id);
+      await writeAudit(db, {
+        tenantId: c.tenantId,
+        itemId: item.id,
+        action: "send_failed",
+        actor: "system",
+        details: { draftId: draft.id, status: status ?? null, code: code ?? null },
+      });
+      Sentry.captureMessage("reply send rejected", {
+        extra: { itemId: item.id, draftId: draft.id, status, code },
+      });
+      return {
+        event: "escalate",
+        details: { draftId: draft.id, sendReason: "send_rejected", status: status ?? null },
+      };
+    };
     const markSent = async (providerId: string, reconciled: boolean): Promise<StepResult> => {
       const { error } = await db
         .from("drafts")
@@ -264,10 +293,77 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
         itemId: item.id,
         action: "reply_sent",
         actor: "system",
-        details: { draftId: draft.id, kind: c.kind, providerId, reconciled },
+        details: {
+          draftId: draft.id,
+          kind: c.kind,
+          replyVia: draft.replyVia,
+          providerId,
+          reconciled,
+        },
       });
       return { event: "sent", details: { draftId: draft.id, providerId, reconciled } };
     };
+
+    // T41: a comment answered in DM. Meta allows one private reply per comment, within 7 days.
+    if (draft.replyVia === "dm") {
+      const unavailable = async (
+        sendReason: "private_reply_used" | "private_reply_expired",
+      ): Promise<StepResult> => {
+        await db
+          .from("drafts")
+          .update({ status: "failed", send_attempted_at: null })
+          .eq("id", draft.id);
+        await writeAudit(db, {
+          tenantId: c.tenantId,
+          itemId: item.id,
+          action: "send_failed",
+          actor: "system",
+          details: { draftId: draft.id, replyVia: "dm", reason: sendReason },
+        });
+        return { event: "escalate", details: { draftId: draft.id, sendReason } };
+      };
+      const retry = !!draft.sendAttemptedAt;
+      if (!retry && now >= privateReplyClosesAt(c.receivedAt)) {
+        return unavailable("private_reply_expired");
+      }
+      if (!retry) {
+        const { error } = await db
+          .from("drafts")
+          .update({ send_attempted_at: now.toISOString() })
+          .eq("id", draft.id);
+        if (error) throw new Error(`send: marking the attempt failed: ${error.message}`);
+      }
+      // Rule 7: a private reply takes no idempotency key, and its DM thread isn't known until it
+      // exists. Meta's one-per-comment limit is the guard instead: after an unknown outcome,
+      // sending again either delivers it once or answers "consumed", which means the earlier
+      // attempt went through.
+      try {
+        const { providerMessageId } = await social.sendPrivateReply({
+          accountId: c.account.zernioAccountId,
+          postId: c.zernioPostId!,
+          commentId: c.zernioCommentId!,
+          message: draft.message,
+          signal: ctx.callSignal(),
+        });
+        return markSent(providerMessageId, false);
+      } catch (error) {
+        if (!(error instanceof SocialProviderError)) throw error;
+        if (error.details.privateReplyConsumed) {
+          return retry
+            ? markSent("private_reply_consumed", true)
+            : unavailable("private_reply_used");
+        }
+        const { status, code, ambiguous, retryAfterSeconds } = error.details;
+        if (isPlatformPaused(error) || status === 429) {
+          // Not delivered: no attempt counted, nothing to reconcile.
+          await db.from("drafts").update({ send_attempted_at: null }).eq("id", draft.id);
+          await pausedNow(error);
+          throw new RetryLaterError(retryAfterSeconds ?? RATE_LIMIT_FALLBACK_SECONDS);
+        }
+        if (!ambiguous) return rejected(status, code);
+        throw error;
+      }
+    }
 
     // Rule 7: an earlier attempt may have gone through. Look before sending again; if the
     // platform doesn't show it (Zernio: an empty list is inconclusive), the resend reuses the
@@ -335,27 +431,7 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
         // The same key is still in flight: the first request may yet succeed. Keep the mark.
         throw new RetryLaterError(retryAfterSeconds ?? IN_FLIGHT_RETRY_SECONDS);
       }
-      if (!ambiguous) {
-        // A definite refusal (bad request, permissions, deleted comment): retrying won't help.
-        await db
-          .from("drafts")
-          .update({ status: "failed", send_attempted_at: null })
-          .eq("id", draft.id);
-        await writeAudit(db, {
-          tenantId: c.tenantId,
-          itemId: item.id,
-          action: "send_failed",
-          actor: "system",
-          details: { draftId: draft.id, status: status ?? null, code: code ?? null },
-        });
-        Sentry.captureMessage("reply send rejected", {
-          extra: { itemId: item.id, draftId: draft.id, status, code },
-        });
-        return {
-          event: "escalate",
-          details: { draftId: draft.id, sendReason: "send_rejected", status: status ?? null },
-        };
-      }
+      if (!ambiguous) return rejected(status, code);
       // Ambiguous: counted as an attempt and retried; the next attempt reconciles first.
       throw error;
     }

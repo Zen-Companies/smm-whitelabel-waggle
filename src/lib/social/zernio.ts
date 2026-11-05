@@ -106,6 +106,8 @@ const healthSchema = z.object({
   ),
 });
 
+const privateReplySchema = z.object({ messageId: z.string().min(1) });
+
 function parse<T>(schema: z.ZodType<T>, data: unknown, operation: string): T {
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
@@ -148,6 +150,7 @@ function toSocialError(error: unknown, operation: string, headers?: Headers): So
       status: error.statusCode,
       code: error.code,
       ambiguous: error.statusCode >= 500,
+      ...(error.details?.privateReplyConsumed === true ? { privateReplyConsumed: true } : {}),
       // Retry-After first (429, and 409 while the same idempotency key is in flight), then
       // the SDK's X-RateLimit-Reset.
       retryAfterSeconds:
@@ -345,6 +348,27 @@ export class ZernioSocialProvider implements SocialProvider {
           query: { accountId: input.accountId },
         }),
       );
+    });
+  }
+
+  async sendPrivateReply(input: {
+    accountId: string;
+    postId: string;
+    commentId: string;
+    message: string;
+    signal?: AbortSignal;
+  }) {
+    return call("sendPrivateReply", async (withFetch) => {
+      const { data } = await this.zernio.comments.sendPrivateReplyToComment(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId, commentId: input.commentId },
+          body: { accountId: input.accountId, message: input.message },
+        }),
+      );
+      return {
+        providerMessageId: parse(privateReplySchema, data, "sendPrivateReply").messageId,
+      };
     });
   }
 

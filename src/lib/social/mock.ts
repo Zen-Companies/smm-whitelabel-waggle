@@ -13,6 +13,7 @@ import type {
   SocialPlatform,
   SocialProvider,
 } from "./types";
+import { SocialProviderError } from "./types";
 
 // SOCIAL_PROVIDER_MODE=mock (CLAUDE.md rule 14): a stand-in for Zernio for tests and local smoke
 // tests. Nothing leaves the process. Ids are derived from the input, so a retry with the same
@@ -21,7 +22,7 @@ const idFrom = (prefix: string, ...parts: string[]) =>
   `${prefix}_${createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 24)}`;
 
 export interface MockSend {
-  kind: "comment" | "dm";
+  kind: "comment" | "dm" | "private_reply";
   accountId: string;
   targetId: string;
   idempotencyKey: string;
@@ -99,6 +100,34 @@ export class MockSocialProvider implements SocialProvider {
 
   async unhideComment(input: { accountId: string; postId: string; commentId: string }) {
     this.hidden.delete(`${input.accountId}|${input.commentId}`);
+  }
+
+  /** Like Meta: one private reply per comment; a second is refused as consumed. */
+  async sendPrivateReply(input: {
+    accountId: string;
+    postId: string;
+    commentId: string;
+    message: string;
+  }) {
+    const done = this.sends.find(
+      (x) =>
+        x.kind === "private_reply" &&
+        x.accountId === input.accountId &&
+        x.targetId === input.commentId,
+    );
+    if (done) {
+      throw new SocialProviderError("Zernio sendPrivateReply failed (400)", {
+        status: 400,
+        code: "PRIVATE_REPLY_CONSUMED",
+        ambiguous: false,
+        privateReplyConsumed: true,
+      });
+    }
+    const providerMessageId = this.record("private_reply", input.accountId, input.commentId, {
+      ...input,
+      idempotencyKey: `private:${input.commentId}`,
+    });
+    return { providerMessageId };
   }
 
   async sendDm(input: {

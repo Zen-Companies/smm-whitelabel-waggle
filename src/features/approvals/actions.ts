@@ -14,6 +14,7 @@ import {
   hideSpamComment,
   markHandled,
   markNotSpam,
+  replyPublicly,
   unhideComment,
   rejectDraft,
   REPLY_MAX,
@@ -82,6 +83,7 @@ const decisionSchema = z.object({
   itemId: z.uuid(),
   draftId: z.uuid(),
   body: z.string().optional(),
+  replyVia: z.enum(["public", "dm"]).optional(),
 });
 
 const DECISION_ERRORS: Record<Exclude<DecisionResult, { ok: true }>["error"], string> = {
@@ -98,7 +100,7 @@ export async function decideDraft(
 ): Promise<DecisionFormState> {
   const parsed = decisionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
-  const { intent, itemId, draftId, body } = parsed.data;
+  const { intent, itemId, draftId, body, replyVia } = parsed.data;
   const tenant = await getCurrentTenant();
   const db = getServiceClient();
   const input = { tenantId: tenant.id, userId: tenant.userId, itemId, draftId };
@@ -108,7 +110,7 @@ export async function decideDraft(
     revalidatePath("/inbox", "layout");
     return result.ok ? { rejected: true } : { error: DECISION_ERRORS[result.error] };
   }
-  const result = await approveDraft(db, { ...input, editedBody: body ?? null });
+  const result = await approveDraft(db, { ...input, editedBody: body ?? null, replyVia });
   if (!result.ok) return { error: DECISION_ERRORS[result.error] };
   // Sent right after the undo window rather than on the next cron tick.
   after(() => sendApprovedReplyAfterUndoWindow(db, itemId));
@@ -239,6 +241,23 @@ export async function notSpamAction(
   });
   revalidatePath("/inbox", "layout");
   return result.ok ? { outcome: "not_spam" } : { error: DECISION_ERRORS[result.error] };
+}
+
+/** "Reply publicly" (T41): a comment's DM couldn't go out, so it waits for approval again. */
+export async function replyPubliclyAction(
+  _prev: DecisionFormState,
+  formData: FormData,
+): Promise<DecisionFormState> {
+  const parsed = itemOnly.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getCurrentTenant();
+  const result = await replyPublicly(getServiceClient(), {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    itemId: parsed.data.itemId,
+  });
+  revalidatePath("/inbox", "layout");
+  return result.ok ? {} : { error: DECISION_ERRORS[result.error] };
 }
 
 export type AutoHideFormState = { error?: string; saved?: boolean };

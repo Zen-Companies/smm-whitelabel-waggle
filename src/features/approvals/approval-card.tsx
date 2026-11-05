@@ -7,6 +7,7 @@ import { BeeSending } from "@/components/app/bee";
 import { clockTime } from "@/components/app/time";
 import { WaggleTrail } from "@/components/app/waggle-trail";
 import { Button } from "@/components/ui/button";
+import { privateReplyClosesAt, privateReplyLeft } from "./private-reply";
 import { decideDraft, undoApprovalAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
 import { REPLY_MAX } from "./limits";
@@ -134,6 +135,14 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
   const approveRef = useRef<HTMLButtonElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const [intent, setIntent] = useState<"approve" | "reject" | null>(null);
+  // T41: a comment can be answered under it or in the commenter's DMs (Waggle's pick first).
+  const [via, setVia] = useState<"public" | "dm">(draft.replyVia);
+  // The clock is read once, when the card opens (render must stay pure).
+  const [openedAt] = useState(() => new Date());
+  const dmLeft = entry.kind === "comment" ? privateReplyLeft(entry.receivedAt, openedAt) : null;
+  const dmClosed =
+    entry.kind === "comment" &&
+    openedAt.getTime() >= privateReplyClosesAt(entry.receivedAt).getTime();
 
   useEffect(() => {
     if (editing) textRef.current?.focus();
@@ -182,7 +191,9 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
   }, [state.approved]);
 
   if (state.approved) return null;
-  const left = windowLeft(entry.dmWindowClosesAt);
+  const left =
+    entry.kind === "comment" ? (via === "dm" ? dmLeft : null) : windowLeft(entry.dmWindowClosesAt);
+  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
   const sending = pending && intent === "approve";
 
   return (
@@ -198,6 +209,45 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
     >
       <input type="hidden" name="itemId" value={entry.itemId} />
       <input type="hidden" name="draftId" value={draft.id} />
+      {entry.kind === "comment" && (
+        <fieldset className="flex flex-col gap-2">
+          <legend className="meta mb-2">Where should this reply go?</legend>
+          <span
+            className="segmented self-start"
+            role="radiogroup"
+            aria-label="Where should this reply go?"
+          >
+            {(
+              [
+                ["public", "Reply publicly"],
+                ["dm", "Reply in DM"],
+              ] as const
+            ).map(([value, label]) => (
+              <label key={value} data-active={via === value || undefined}>
+                <input
+                  type="radio"
+                  name="replyVia"
+                  value={value}
+                  checked={via === value}
+                  disabled={pending || (value === "dm" && dmClosed)}
+                  onChange={() => setVia(value)}
+                  className="sr-only"
+                />
+                {label}
+              </label>
+            ))}
+          </span>
+          <span className="meta">
+            {via === "dm"
+              ? `${draft.replyVia === "dm" ? "Waggle picked DM because this asks to buy or book. " : ""}${
+                  entry.authorName ?? "They"
+                } gets it as a message from you on ${platform}. You can send one DM per comment.`
+              : dmClosed
+                ? "Everyone who sees the post can read it. It's too late to reply in DM."
+                : "Everyone who sees the post can read it."}
+          </span>
+        </fieldset>
+      )}
       <label htmlFor={`reply-${entry.itemId}`} className="meta">
         {draft.facts.length
           ? `Waggle's reply, from ${draft.facts.join(", ")}`
@@ -245,6 +295,8 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
               <BeeSending />
               Sending
             </>
+          ) : via === "dm" && entry.kind === "comment" ? (
+            "Send in DM"
           ) : (
             "Approve and send"
           )}

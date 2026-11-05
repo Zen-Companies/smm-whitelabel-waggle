@@ -44,7 +44,10 @@ export type StatusEvent =
   | "ignore"
   /** complaint/unclear, mode off, policy failed, DM window closed */
   | "escalate"
-  /** policy: approve first (also at send time, if the mode changed after an auto-approval) */
+  /**
+   * policy: approve first (also at send time, if the mode changed after an auto-approval), or the
+   * owner switched a comment's reply from DM to public (T41)
+   */
   | "await_approval"
   /** policy auto, or the owner approved */
   | "send"
@@ -88,7 +91,8 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
   sent: { delivery_failed: "failed" },
   rejected: {},
   ignored: {},
-  escalated: { handle: "handled" },
+  // T41: "Reply publicly" after a comment's DM couldn't go out: the draft waits for approval again.
+  escalated: { handle: "handled", await_approval: "awaiting_approval" },
   failed: { handle: "handled" },
   handled: {},
 };

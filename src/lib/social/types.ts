@@ -124,6 +124,19 @@ export interface SocialProvider {
   unhideComment(
     input: { accountId: string; postId: string; commentId: string } & CallOptions,
   ): Promise<void>;
+  /**
+   * Answers a comment in the commenter's DMs (`POST /v1/inbox/comments/{postId}/{commentId}/
+   * private-reply`, T41). Meta allows one per comment, within 7 days; a second answers 400 with
+   * `privateReplyConsumed`. No idempotency key: that single use is what stops a double send.
+   */
+  sendPrivateReply(
+    input: {
+      accountId: string;
+      postId: string;
+      commentId: string;
+      message: string;
+    } & CallOptions,
+  ): Promise<{ providerMessageId: string }>;
   sendDm(
     input: {
       accountId: string;
@@ -185,6 +198,8 @@ export class SocialProviderError extends Error {
        */
       ambiguous: boolean;
       retryAfterSeconds?: number;
+      /** Private reply (T41): this comment's one DM is spent, by this call or an earlier one. */
+      privateReplyConsumed?: boolean;
     },
   ) {
     super(message);

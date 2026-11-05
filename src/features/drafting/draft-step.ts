@@ -1,4 +1,4 @@
-import { loadPolicyInput, setCommentHidden, triage } from "@/features/approvals";
+import { defaultReplyVia, loadPolicyInput, setCommentHidden, triage } from "@/features/approvals";
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import type { LlmClient } from "@/lib/llm/client";
@@ -98,6 +98,9 @@ export function createDraftStep(deps: {
       tenants: { name: string };
     };
 
+    // T41: a lead's comment is answered in DM, so the reply is written as a direct message.
+    const replyVia = defaultReplyVia(kind, category);
+
     // T30: earlier messages of a DM thread, so a short follow-up keeps its meaning.
     const history = await loadThreadHistory(db, item.id);
     const { result, facts, model, issues, needsHuman, needsHumanReason } = await generateDraft(
@@ -106,7 +109,7 @@ export function createDraftStep(deps: {
         tenantId: item.tenantId,
         itemId: item.id,
         businessName: tenants.name,
-        kind,
+        kind: replyVia === "dm" ? "dm" : kind,
         category,
         text,
         history,
@@ -124,6 +127,7 @@ export function createDraftStep(deps: {
         kb_entry_ids: facts.map((f) => f.id),
         needs_human: needsHuman,
         needs_human_reason: needsHumanReason,
+        reply_via: replyVia,
       })
       .select("id")
       .single();
@@ -142,6 +146,7 @@ export function createDraftStep(deps: {
         // T31: scores of the topics used, to retune the relevance floor on real messages.
         kbSimilarities: facts.map((f) => Math.round(f.similarity * 1000) / 1000),
         historyMessages: history.length,
+        replyVia,
         needsHuman,
         groundingIssues: issues,
       },

@@ -38,5 +38,12 @@ export type {
 export { createPolicyStep, loadPolicyInput } from "./policy-step";
 export { createSendStep } from "./send-step";
 export { hideErrorOutcome, setCommentHidden } from "./hide-spam";
+export {
+  defaultReplyVia,
+  PRIVATE_REPLY_WINDOW_MS,
+  privateReplyClosesAt,
+  privateReplyLeft,
+} from "./private-reply";
+export type { ReplyVia } from "./private-reply";
 export type { HideOutcome } from "./hide-spam";
 export { DM_WINDOW_WARNING_MS, escalateClosingDmWindows } from "./sweeps";

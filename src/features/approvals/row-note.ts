@@ -17,6 +17,8 @@ export interface RowNote {
 export function rowNote(entry: InboxEntry & { status: string }): RowNote {
   const lead = entry.category === "lead";
   const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  // T41: a comment answered in the commenter's DMs.
+  const viaDm = entry.kind === "comment" && entry.draft?.replyVia === "dm";
   // T40: a comment hidden on its post, whoever hid it.
   if (entry.hiddenOnPlatformAt && (entry.status === "ignored" || entry.status === "handled")) {
     return { tone: "none", text: `Hidden on ${platform}` };
@@ -24,8 +26,8 @@ export function rowNote(entry: InboxEntry & { status: string }): RowNote {
   switch (entry.status) {
     case "awaiting_approval":
       return lead
-        ? { tone: "lead", label: "Lead", text: "reply ready" }
-        : { tone: "none", text: "Reply ready to send" };
+        ? { tone: "lead", label: "Lead", text: viaDm ? "reply ready, in DM" : "reply ready" }
+        : { tone: "none", text: viaDm ? "Reply ready to send in DM" : "Reply ready to send" };
     case "escalated":
       if (entry.category === "spam" && entry.kind === "comment") {
         return { tone: "none", text: "Looks like spam: hide it" };
@@ -48,6 +50,7 @@ export function rowNote(entry: InboxEntry & { status: string }): RowNote {
     case "sent": {
       const sentAt = entry.draft?.sentAt;
       const by = entry.draft && !entry.draft.decidedByOwner ? "Waggle" : "you";
+      if (viaDm) return { tone: "done", text: `Replied in DM by ${by}` };
       return {
         tone: "done",
         text: sentAt

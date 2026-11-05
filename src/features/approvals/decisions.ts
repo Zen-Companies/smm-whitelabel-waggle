@@ -3,6 +3,7 @@ import { writeAudit } from "@/lib/audit";
 import type { SocialProvider } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { setCommentHidden } from "./hide-spam";
+import type { ReplyVia } from "./private-reply";
 import { REPLY_MAX } from "./limits";
 
 // Owner decisions on a waiting draft (PRD F8, docs/tdd.md §7.3). The Server Actions resolve the
@@ -25,7 +26,7 @@ async function loadDecidable(db: ServiceClient, input: DecisionInput) {
   const [{ data: item }, { data: draft }] = await Promise.all([
     db
       .from("inbound_items")
-      .select("id, status")
+      .select("id, status, kind")
       .eq("id", input.itemId)
       .eq("tenant_id", input.tenantId)
       .maybeSingle(),
@@ -47,7 +48,8 @@ async function loadDecidable(db: ServiceClient, input: DecisionInput) {
  */
 export async function approveDraft(
   db: ServiceClient,
-  input: DecisionInput & { editedBody?: string | null },
+  /** replyVia (T41): a comment's reply goes under the comment or in the commenter's DMs. */
+  input: DecisionInput & { editedBody?: string | null; replyVia?: ReplyVia },
 ): Promise<DecisionResult> {
   const { item, draft } = await loadDecidable(db, input);
   if (!item || !draft) return { ok: false, error: "not_found" };
@@ -66,6 +68,7 @@ export async function approveDraft(
       .update({
         status: "approved",
         edited_body: isEdit ? edited : null,
+        ...(item.kind === "comment" && input.replyVia ? { reply_via: input.replyVia } : {}),
         decided_by: input.userId,
         decided_at: new Date().toISOString(),
       })
@@ -88,7 +91,11 @@ export async function approveDraft(
       itemId: item.id,
       action: "draft_approved",
       actor: input.userId,
-      details: { draftId: draft.id, edited: isEdit },
+      details: {
+        draftId: draft.id,
+        edited: isEdit,
+        ...(item.kind === "comment" && input.replyVia ? { replyVia: input.replyVia } : {}),
+      },
     });
   }
 
@@ -309,6 +316,61 @@ export async function markNotSpam(
     action: "marked_not_spam",
     actor: input.userId,
     details: { from: "spam", to: "unclear" },
+  });
+  return { ok: true };
+}
+
+/**
+ * "Reply publicly" (T41): the comment's one DM is spent or its 7 days are over, so the same reply
+ * goes under the comment instead. The draft waits for approval again (status via status.ts).
+ */
+export async function replyPublicly(
+  db: ServiceClient,
+  input: { tenantId: string; userId: string; itemId: string },
+): Promise<DecisionResult> {
+  const { data: item } = await db
+    .from("inbound_items")
+    .select("id, status, kind")
+    .eq("id", input.itemId)
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle();
+  if (!item || item.kind !== "comment") return { ok: false, error: "not_found" };
+  if (item.status !== "escalated") return { ok: false, error: "already_decided" };
+  const { data: draft } = await db
+    .from("drafts")
+    .select("id")
+    .eq("item_id", item.id)
+    .eq("reply_via", "dm")
+    .eq("status", "failed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!draft) return { ok: false, error: "not_found" };
+  const { error } = await db
+    .from("drafts")
+    .update({
+      status: "pending",
+      reply_via: "public",
+      send_attempted_at: null,
+      decided_by: null,
+      decided_at: null,
+    })
+    .eq("id", draft.id)
+    .eq("status", "failed");
+  if (error) throw new Error(`reply publicly: draft update failed: ${error.message}`);
+  const { applied } = await transitionItem(db, {
+    itemId: item.id,
+    from: "escalated",
+    event: "await_approval",
+    details: { draftId: draft.id, replyVia: "public", by: input.userId },
+  });
+  if (!applied) return { ok: false, error: "already_decided" };
+  await writeAudit(db, {
+    tenantId: input.tenantId,
+    itemId: item.id,
+    action: "reply_switched_to_public",
+    actor: input.userId,
+    details: { draftId: draft.id },
   });
   return { ok: true };
 }
