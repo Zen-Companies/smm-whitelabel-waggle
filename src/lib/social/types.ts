@@ -54,6 +54,19 @@ export interface ProviderComment {
   createdAt: string | null;
 }
 
+/** A review (recommendation) on a connected Facebook Page (T42). Ids are Zernio's. */
+export interface ProviderReview {
+  id: string;
+  reviewerName: string | null;
+  /** Facebook: true = recommends, false = doesn't recommend, null = not given. */
+  recommends: boolean | null;
+  text: string;
+  createdAt: string;
+  hasReply: boolean;
+  /** Link to the review on Facebook, when Zernio gives one. */
+  reviewUrl: string | null;
+}
+
 /** Zernio's spend this billing cycle, split by profile (= tenant). T17. */
 export interface ProviderUsage {
   periodStart: string | null;
@@ -137,6 +150,22 @@ export interface SocialProvider {
       message: string;
     } & CallOptions,
   ): Promise<{ providerMessageId: string }>;
+  /**
+   * A Page's reviews, newest first (`GET /v1/inbox/reviews?platform=facebook&accountId=…`, T42).
+   * Facebook sends no review webhooks, so the job polls this. Zernio caches each listing ~60 s.
+   */
+  listReviews(
+    input: { accountId: string; limit?: number } & CallOptions,
+  ): Promise<ProviderReview[]>;
+  /** Public reply under a review (`POST /v1/inbox/reviews/{reviewId}/reply`, Idempotency-Key). */
+  replyToReview(
+    input: {
+      accountId: string;
+      reviewId: string;
+      message: string;
+      idempotencyKey: string;
+    } & CallOptions,
+  ): Promise<{ providerReplyId: string }>;
   sendDm(
     input: {
       accountId: string;

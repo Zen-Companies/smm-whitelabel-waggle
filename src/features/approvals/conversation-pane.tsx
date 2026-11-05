@@ -27,12 +27,24 @@ export function ConversationPane({
       <div className="border-line flex min-h-11 items-center gap-2 border-b">
         <span className="truncate font-semibold">{name}</span>
         <span className="text-ink-3">
-          {platformName(entry.platform)} {entry.kind === "dm" ? "DM" : "comment"}
+          {platformName(entry.platform)}{" "}
+          {entry.kind === "dm" ? "DM" : entry.kind === "review" ? "review" : "comment"}
         </span>
         <span className="ml-auto">
           <CategoryLabel category={entry.category} />
         </span>
       </div>
+      {entry.kind === "review" && entry.reviewRecommends !== null && (
+        <p
+          className={
+            entry.reviewRecommends
+              ? "text-ink-2 pt-4 text-[13px] font-medium"
+              : "text-danger pt-4 text-[13px] font-medium"
+          }
+        >
+          {entry.reviewRecommends ? "Recommends your Page" : "Doesn't recommend your Page"}
+        </p>
+      )}
       <ol className="flex flex-1 flex-col gap-2 py-5" aria-label="Messages">
         {thread.map((m, i) => {
           const day = dayLabel(m.at);

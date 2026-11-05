@@ -82,7 +82,7 @@ export function lookedLike(reason: string | null, entry: Pick<InboxEntry, "categ
 export function openOnPlatformHref(
   entry: Pick<InboxEntry, "kind" | "platform" | "permalink">,
 ): string | null {
-  if (entry.kind === "comment") return entry.permalink;
+  if (entry.kind === "comment" || entry.kind === "review") return entry.permalink;
   return entry.platform === "facebook"
     ? "https://www.facebook.com/messages/"
     : "https://www.instagram.com/direct/inbox/";

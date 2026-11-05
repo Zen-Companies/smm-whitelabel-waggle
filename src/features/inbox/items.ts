@@ -10,6 +10,13 @@ export type NewInboundItem = {
 } & (
   | { kind: "comment"; zernioCommentId: string; zernioPostId: string; permalink?: string | null }
   | { kind: "dm"; zernioMessageId: string; conversationId: string }
+  /** T42: a Facebook Page review, found by polling (no webhook). */
+  | {
+      kind: "review";
+      zernioReviewId: string;
+      recommends: boolean | null;
+      permalink?: string | null;
+    }
 );
 
 /**
@@ -28,6 +35,7 @@ export async function insertInboundItem(
     text: item.text,
     received_at: item.receivedAt,
   };
+  if (item.kind === "review") return insertReview(db, item, common);
   const [row, conflictColumn, zernioId] =
     item.kind === "comment"
       ? [
@@ -74,5 +82,50 @@ export async function insertInboundItem(
     .eq(conflictColumn, zernioId)
     .single();
   if (lookupError) throw new Error(`inbound_items lookup failed: ${lookupError.message}`);
+  return { itemId: existing.id, created: false };
+}
+
+async function insertReview(
+  db: ServiceClient,
+  item: Extract<NewInboundItem, { kind: "review" }>,
+  common: Record<string, string | null>,
+): Promise<{ itemId: string; created: boolean }> {
+  const { data: inserted, error } = await db
+    .from("inbound_items")
+    .upsert(
+      {
+        ...(common as {
+          tenant_id: string;
+          social_account_id: string;
+          kind: string;
+          text: string;
+          received_at: string;
+        }),
+        zernio_review_id: item.zernioReviewId,
+        review_recommends: item.recommends,
+        permalink: item.permalink ?? null,
+      },
+      { onConflict: "social_account_id,zernio_review_id", ignoreDuplicates: true },
+    )
+    .select("id");
+  if (error) throw new Error(`inbound_items review insert failed: ${error.message}`);
+  if (inserted.length > 0) {
+    const itemId = inserted[0].id;
+    await writeAudit(db, {
+      tenantId: item.tenantId,
+      itemId,
+      action: "item_received",
+      actor: "system",
+      details: { kind: "review", socialAccountId: item.socialAccountId },
+    });
+    return { itemId, created: true };
+  }
+  const { data: existing, error: lookupError } = await db
+    .from("inbound_items")
+    .select("id")
+    .eq("social_account_id", item.socialAccountId)
+    .eq("zernio_review_id", item.zernioReviewId)
+    .single();
+  if (lookupError) throw new Error(`inbound_items review lookup failed: ${lookupError.message}`);
   return { itemId: existing.id, created: false };
 }

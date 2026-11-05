@@ -107,6 +107,20 @@ const healthSchema = z.object({
 });
 
 const privateReplySchema = z.object({ messageId: z.string().min(1) });
+const reviewsSchema = z.object({
+  data: z.array(
+    z.object({
+      id: z.string().min(1),
+      reviewer: z.object({ name: z.string().nullish() }).nullish(),
+      recommendationType: z.string().nullish(),
+      text: z.string().nullish(),
+      created: z.string(),
+      hasReply: z.boolean().optional(),
+      reviewUrl: z.string().nullish(),
+    }),
+  ),
+});
+const reviewReplySchema = z.object({ reply: z.object({ id: z.string().min(1) }) });
 
 function parse<T>(schema: z.ZodType<T>, data: unknown, operation: string): T {
   const parsed = schema.safeParse(data);
@@ -369,6 +383,57 @@ export class ZernioSocialProvider implements SocialProvider {
       return {
         providerMessageId: parse(privateReplySchema, data, "sendPrivateReply").messageId,
       };
+    });
+  }
+
+  async listReviews(input: { accountId: string; limit?: number; signal?: AbortSignal }) {
+    return call("listReviews", async (withFetch) => {
+      const { data } = await this.zernio.reviews.listInboxReviews(
+        withFetch({
+          signal: input.signal,
+          query: {
+            platform: "facebook",
+            accountId: input.accountId,
+            sortBy: "date",
+            sortOrder: "desc",
+            limit: input.limit ?? 25,
+          },
+        }),
+      );
+      return parse(reviewsSchema, data, "listReviews").data.map((r) => ({
+        id: r.id,
+        reviewerName: r.reviewer?.name ?? null,
+        recommends:
+          r.recommendationType === "positive"
+            ? true
+            : r.recommendationType === "negative"
+              ? false
+              : null,
+        text: r.text ?? "",
+        createdAt: r.created,
+        hasReply: r.hasReply ?? false,
+        reviewUrl: r.reviewUrl?.startsWith("https://") ? r.reviewUrl : null,
+      }));
+    });
+  }
+
+  async replyToReview(input: {
+    accountId: string;
+    reviewId: string;
+    message: string;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }) {
+    return call("replyToReview", async (withFetch) => {
+      const { data } = await this.zernio.reviews.replyToInboxReview(
+        withFetch({
+          signal: input.signal,
+          path: { reviewId: input.reviewId },
+          body: { accountId: input.accountId, message: input.message },
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      return { providerReplyId: parse(reviewReplySchema, data, "replyToReview").reply.id };
     });
   }
 

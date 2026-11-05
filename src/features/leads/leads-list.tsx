@@ -22,7 +22,7 @@ type Lead = {
   request: string | null;
   item_id: string;
   inbound_items: {
-    kind: "comment" | "dm";
+    kind: "comment" | "dm" | "review";
     status: string;
     text: string;
     author_name: string | null;
@@ -39,7 +39,7 @@ function href(filter: Filter, lead?: string) {
 }
 
 const source = (l: Lead) =>
-  `${platformName(l.inbound_items?.social_accounts?.platform)} ${l.inbound_items?.kind === "dm" ? "DM" : "comment"}`;
+  `${platformName(l.inbound_items?.social_accounts?.platform)} ${l.inbound_items?.kind === "dm" ? "DM" : (l.inbound_items?.kind ?? "comment")}`;
 
 const leadName = (l: Lead) => l.name ?? l.inbound_items?.author_name ?? "No name given";
 

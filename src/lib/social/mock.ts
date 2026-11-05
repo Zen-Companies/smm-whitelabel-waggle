@@ -8,6 +8,7 @@ import type {
   ProviderComment,
   ProviderCommentReply,
   ProviderMessage,
+  ProviderReview,
   ProviderPostStatus,
   ProviderUsage,
   SocialPlatform,
@@ -22,7 +23,7 @@ const idFrom = (prefix: string, ...parts: string[]) =>
   `${prefix}_${createHash("sha256").update(parts.join("|")).digest("hex").slice(0, 24)}`;
 
 export interface MockSend {
-  kind: "comment" | "dm" | "private_reply";
+  kind: "comment" | "dm" | "private_reply" | "review";
   accountId: string;
   targetId: string;
   idempotencyKey: string;
@@ -128,6 +129,27 @@ export class MockSocialProvider implements SocialProvider {
       idempotencyKey: `private:${input.commentId}`,
     });
     return { providerMessageId };
+  }
+
+  /** Reviews a test put on a Page (keyed by Zernio account id), newest first. */
+  readonly reviews = new Map<string, ProviderReview[]>();
+
+  async listReviews(input: { accountId: string }): Promise<ProviderReview[]> {
+    const replied = new Set(this.sends.filter((x) => x.kind === "review").map((x) => x.targetId));
+    return (this.reviews.get(input.accountId) ?? []).map((r) => ({
+      ...r,
+      hasReply: r.hasReply || replied.has(r.id),
+    }));
+  }
+
+  async replyToReview(input: {
+    accountId: string;
+    reviewId: string;
+    message: string;
+    idempotencyKey: string;
+  }) {
+    const providerReplyId = this.record("review", input.accountId, input.reviewId, input);
+    return { providerReplyId };
   }
 
   async sendDm(input: {

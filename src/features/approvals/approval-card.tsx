@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck, Clock3 } from "lucide-react";
+import { CircleCheck, Clock3, Globe } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { BeeSending } from "@/components/app/bee";
@@ -248,6 +248,13 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
           </span>
         </fieldset>
       )}
+      {entry.kind === "review" && (
+        <p className="text-ink-2 flex items-start gap-2 text-[13px]">
+          <Globe className="mt-0.5 size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+          Public reply on your {platform} Page. Anyone who visits the Page will see it, so Waggle
+          never sends these on its own.
+        </p>
+      )}
       <label htmlFor={`reply-${entry.itemId}`} className="meta">
         {draft.facts.length
           ? `Waggle's reply, from ${draft.facts.join(", ")}`
@@ -295,6 +302,8 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
               <BeeSending />
               Sending
             </>
+          ) : entry.kind === "review" ? (
+            "Post reply"
           ) : via === "dm" && entry.kind === "comment" ? (
             "Send in DM"
           ) : (

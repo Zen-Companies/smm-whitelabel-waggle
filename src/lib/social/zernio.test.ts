@@ -260,6 +260,84 @@ describe("ZernioSocialProvider", () => {
     expect((error as SocialProviderError).details.privateReplyConsumed).toBeUndefined();
   });
 
+  it("listReviews reads the Page's Facebook reviews and maps recommendations (T42)", async () => {
+    respond = () =>
+      json({
+        status: "ok",
+        data: [
+          {
+            id: "rev_1",
+            platform: "facebook",
+            reviewer: { id: null, name: "Lara V" },
+            rating: 0,
+            recommendationType: "negative",
+            text: "Waited 40 minutes.",
+            created: "2026-11-05T10:12:00Z",
+            hasReply: false,
+            reviewUrl: "https://www.facebook.com/r/1",
+          },
+          {
+            id: "rev_2",
+            reviewer: { name: "Ben" },
+            recommendationType: "positive",
+            text: "Great!",
+            created: "2026-11-05T09:40:00Z",
+            hasReply: true,
+            reviewUrl: null,
+          },
+        ],
+        pagination: { hasMore: false, nextCursor: null },
+      });
+
+    await expect(provider.listReviews({ accountId: "acc_1" })).resolves.toEqual([
+      {
+        id: "rev_1",
+        reviewerName: "Lara V",
+        recommends: false,
+        text: "Waited 40 minutes.",
+        createdAt: "2026-11-05T10:12:00Z",
+        hasReply: false,
+        reviewUrl: "https://www.facebook.com/r/1",
+      },
+      {
+        id: "rev_2",
+        reviewerName: "Ben",
+        recommends: true,
+        text: "Great!",
+        createdAt: "2026-11-05T09:40:00Z",
+        hasReply: true,
+        reviewUrl: null,
+      },
+    ]);
+    const [req] = captured;
+    expect(req.url.pathname).toBe("/api/v1/inbox/reviews");
+    expect(req.url.searchParams.get("platform")).toBe("facebook");
+    expect(req.url.searchParams.get("accountId")).toBe("acc_1");
+  });
+
+  it("replyToReview posts the reply with accountId and Idempotency-Key (T42)", async () => {
+    respond = () =>
+      json({
+        status: "ok",
+        reply: { id: "reply_9", text: "Sorry", created: "2026-11-05T10:20:00Z" },
+        platform: "facebook",
+      });
+
+    await expect(
+      provider.replyToReview({
+        accountId: "acc_1",
+        reviewId: "rev_1",
+        message: "Sorry, Lara.",
+        idempotencyKey: "draft-key",
+      }),
+    ).resolves.toEqual({ providerReplyId: "reply_9" });
+    const [req] = captured;
+    expect(req.method).toBe("POST");
+    expect(req.url.pathname).toBe("/api/v1/inbox/reviews/rev_1/reply");
+    expect(req.headers.get("Idempotency-Key")).toBe("draft-key");
+    expect(req.body).toEqual({ accountId: "acc_1", message: "Sorry, Lara." });
+  });
+
   it("sendDm posts to the conversation with Idempotency-Key", async () => {
     respond = () => json({ success: true, data: { messageId: "m_1", conversationId: "conv_1" } });
 

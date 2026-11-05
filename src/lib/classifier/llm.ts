@@ -60,7 +60,7 @@ export class LlmClassifier implements Classifier {
   async classify(input: ClassifyInput, options: ClassifyOptions = {}): Promise<Classification> {
     const prompt = [
       input.businessContext ? `Business: ${input.businessContext}` : null,
-      `Channel: ${input.kind === "dm" ? "direct message" : "public comment"}`,
+      `Channel: ${input.kind === "dm" ? "direct message" : input.kind === "review" ? "review of the business on its Facebook Page" : "public comment"}`,
       "Customer message:",
       "<message>",
       asMessageData(input.text),

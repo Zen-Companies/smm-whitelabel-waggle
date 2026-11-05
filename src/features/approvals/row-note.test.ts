@@ -18,6 +18,7 @@ const entry = (
   dmWindowClosesAt: null,
   permalink: null,
   hiddenOnPlatformAt: null,
+  reviewRecommends: null,
   attempts: 0,
   status: "awaiting_approval",
   ...over,
@@ -117,5 +118,18 @@ describe("rowNote: comments answered in DM (T41)", () => {
         }),
       ).text,
     ).toBe("Replied in DM by you");
+  });
+});
+
+describe("rowNote: Facebook reviews (T42)", () => {
+  it("says it's a review and whether they recommend you", () => {
+    expect(
+      rowNote(
+        entry({ kind: "review", reviewRecommends: false, category: "complaint", draft: draft() }),
+      ),
+    ).toEqual({ tone: "complaint", label: "Review", text: "doesn't recommend · reply ready" });
+    expect(rowNote(entry({ kind: "review", reviewRecommends: true, status: "escalated" }))).toEqual(
+      { tone: "none", label: "Review", text: "recommends · for you to answer" },
+    );
   });
 });

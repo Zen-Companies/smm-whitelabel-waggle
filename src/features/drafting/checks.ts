@@ -15,7 +15,7 @@ export interface DraftToCheck {
   reply: string;
   needsHuman: boolean;
   groundingIssues: string[];
-  kind: "comment" | "dm";
+  kind: "comment" | "dm" | "review";
   customerText: string;
   /** From a sample's note: covered → should answer; not_covered → should go to the owner. */
   expect?: "covered" | "not_covered" | null;
@@ -31,7 +31,7 @@ export function parseExpect(note: string | undefined): DraftToCheck["expect"] {
 }
 
 /** Prompt rule 3: comments at most 2 sentences, DMs at most 4. */
-export const MAX_SENTENCES = { comment: 2, dm: 4 } as const;
+export const MAX_SENTENCES = { comment: 2, dm: 4, review: 3 } as const;
 
 const EMOJI = /\p{Extended_Pictographic}/gu;
 const EMAIL = /[\w.+-]+@[\w-]+\.[\w.]+/;
@@ -73,7 +73,7 @@ export function checkDraft(d: DraftToCheck): DraftCheckResult[] {
   results.push({
     check: "length",
     ok: sentences <= MAX_SENTENCES[d.kind],
-    detail: `${sentences} sentences (at most ${MAX_SENTENCES[d.kind]} in a ${d.kind === "dm" ? "DM" : "comment"})`,
+    detail: `${sentences} sentences (at most ${MAX_SENTENCES[d.kind]} in a ${d.kind === "dm" ? "DM" : d.kind}})`,
   });
 
   const emojis = d.reply.match(EMOJI)?.length ?? 0;
@@ -91,7 +91,8 @@ export function checkDraft(d: DraftToCheck): DraftCheckResult[] {
     detail: switched ? "replied in Taglish to an English message" : "same language as the message",
   });
 
-  if (d.kind === "comment") {
+  // Comments and review replies are public: no phone numbers or emails.
+  if (d.kind !== "dm") {
     const contact = EMAIL.test(d.reply) || PHONE.test(d.reply);
     results.push({
       check: "no_contact_in_comment",

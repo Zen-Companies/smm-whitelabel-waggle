@@ -227,6 +227,40 @@ describe("replies paused by the owner (T27)", () => {
   });
 });
 
+describe("Facebook reviews (T42)", () => {
+  const review = { item: { kind: "review" as const } };
+  it.each(["approve", "auto"] as const)(
+    "a review reply always waits for the owner, even in %s mode",
+    (autonomyMode) => {
+      expect(run({ ...review, autonomyMode })).toEqual({
+        decision: "approve",
+        reason: "review_public",
+      });
+    },
+  );
+  it("goes out once the owner approved it", () => {
+    expect(run({ ...review, draft: { needsHuman: false, approvedByOwner: true } })).toEqual({
+      decision: "send",
+      reason: "owner_approved",
+    });
+  });
+  it("a spam review is ignored (reviews can't be hidden)", () => {
+    expect(
+      run({
+        ...review,
+        classification: { category: "spam", confidence: 0.99 },
+        tenant: { ...base.tenant, autoHideSpam: true },
+      }),
+    ).toEqual({ decision: "ignore", reason: "spam" });
+  });
+  it("a negative review is a complaint like any other: the owner's call", () => {
+    expect(run({ ...review, classification: { category: "complaint", confidence: 0.9 } })).toEqual({
+      decision: "escalate",
+      reason: "complaint",
+    });
+  });
+});
+
 describe("triage (steps 1-4, before drafting)", () => {
   it("drafts faq/lead that pass", () => {
     expect(triage(base)).toEqual({ decision: "draft" });

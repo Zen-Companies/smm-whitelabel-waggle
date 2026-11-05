@@ -6,7 +6,7 @@ import { DM_REPLY_WINDOW_MS } from "./policy";
 
 export interface InboxEntry {
   itemId: string;
-  kind: "comment" | "dm";
+  kind: "comment" | "dm" | "review";
   platform: string;
   authorName: string | null;
   text: string;
@@ -36,6 +36,8 @@ export interface InboxEntry {
   permalink: string | null;
   /** Comments: when it was hidden on the post (T40); null while it is visible. */
   hiddenOnPlatformAt: string | null;
+  /** Reviews (T42): true = recommends, false = doesn't, null = not given or not a review. */
+  reviewRecommends: boolean | null;
 }
 
 export interface InboxData {
@@ -255,7 +257,7 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, " +
+      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, " +
         "social_accounts (platform), conversations (last_customer_message_at)",
     )
     .eq("tenant_id", tenantId);
@@ -267,7 +269,7 @@ export async function loadEntries(
   if (error) throw new Error(`inbox load failed: ${error.message}`);
   const rows = (items ?? []) as unknown as {
     id: string;
-    kind: "comment" | "dm";
+    kind: "comment" | "dm" | "review";
     status: string;
     attempts: number;
     author_name: string | null;
@@ -278,6 +280,7 @@ export async function loadEntries(
     classifier_used: string | null;
     permalink: string | null;
     hidden_on_platform_at: string | null;
+    review_recommends: boolean | null;
     social_accounts: { platform: string } | null;
     conversations: { last_customer_message_at: string | null } | null;
   }[];
@@ -334,6 +337,7 @@ export async function loadEntries(
       attempts: r.attempts,
       permalink: r.permalink,
       hiddenOnPlatformAt: r.hidden_on_platform_at,
+      reviewRecommends: r.review_recommends,
       dmWindowClosesAt:
         r.kind === "dm" && last
           ? new Date(new Date(last).getTime() + DM_REPLY_WINDOW_MS).toISOString()

@@ -40,7 +40,7 @@ export async function generateDraft(
     tenantId: string;
     itemId?: string | null;
     businessName: string;
-    kind: "comment" | "dm";
+    kind: "comment" | "dm" | "review";
     category: string;
     text: string;
     signal?: () => AbortSignal;

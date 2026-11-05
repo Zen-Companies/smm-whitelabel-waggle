@@ -23,6 +23,29 @@ export function rowNote(entry: InboxEntry & { status: string }): RowNote {
   if (entry.hiddenOnPlatformAt && (entry.status === "ignored" || entry.status === "handled")) {
     return { tone: "none", text: `Hidden on ${platform}` };
   }
+  // T42: a Facebook review says so, with whether they recommend the business.
+  if (
+    entry.kind === "review" &&
+    (entry.status === "awaiting_approval" || entry.status === "escalated")
+  ) {
+    const rec =
+      entry.reviewRecommends === false
+        ? "doesn't recommend"
+        : entry.reviewRecommends === true
+          ? "recommends"
+          : null;
+    const next =
+      entry.status === "awaiting_approval"
+        ? "reply ready"
+        : entry.draft?.needsHuman
+          ? "not in your business info"
+          : "for you to answer";
+    return {
+      tone: entry.reviewRecommends === false ? "complaint" : "none",
+      label: "Review",
+      text: rec ? `${rec} · ${next}` : next,
+    };
+  }
   switch (entry.status) {
     case "awaiting_approval":
       return lead

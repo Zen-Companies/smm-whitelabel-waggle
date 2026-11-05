@@ -5,7 +5,7 @@ export type AlertContent =
   | {
       kind: "escalation";
       itemId: string;
-      itemKind: "comment" | "dm";
+      itemKind: "comment" | "dm" | "review";
       platform: string;
       authorName: string | null;
       category: string | null;
@@ -16,7 +16,7 @@ export type AlertContent =
       kind: "lead";
       itemId: string;
       platform: string;
-      itemKind: "comment" | "dm";
+      itemKind: "comment" | "dm" | "review";
       authorName: string | null;
       name: string | null;
       contact: string | null;
@@ -33,8 +33,8 @@ export interface ComposedEmail {
 
 const PLATFORM: Record<string, string> = { instagram: "Instagram", facebook: "Facebook" };
 const platformName = (p: string) => PLATFORM[p] ?? p;
-const where = (platform: string, kind: "comment" | "dm") =>
-  `${platformName(platform)} ${kind === "dm" ? "DM" : "comment"}`;
+const where = (platform: string, kind: "comment" | "dm" | "review") =>
+  `${platformName(platform)} ${kind === "dm" ? "DM" : kind}`;
 
 /** Why an item came to the owner, from the policy / send step / runner reason codes. */
 export function escalationReason(reason: string | null, status: string): string {
@@ -55,9 +55,7 @@ export function escalationReason(reason: string | null, status: string): string 
     no_approved_draft: "There was no approved reply to send.",
   };
   if (reason && reasons[reason]) return reasons[reason];
-  return status === "failed"
-    ? "Something went wrong handling it."
-    : "Waggle handed it to you.";
+  return status === "failed" ? "Something went wrong handling it." : "Waggle handed it to you.";
 }
 
 const escapeHtml = (s: string) =>

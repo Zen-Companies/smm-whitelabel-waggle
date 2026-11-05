@@ -35,10 +35,12 @@ const RECONCILE_SKEW_MS = 5 * 60 * 1000;
 
 interface SendContext {
   tenantId: string;
-  kind: "comment" | "dm";
+  kind: "comment" | "dm" | "review";
   receivedAt: string;
   zernioCommentId: string | null;
   zernioPostId: string | null;
+  /** T42: the review a reply goes under. */
+  zernioReviewId: string | null;
   account: { zernioAccountId: string; status: PolicyInput["account"]["status"] };
   conversation: { zernioConversationId: string; lastCustomerMessageAt: string | null } | null;
   input: Omit<PolicyInput, "draft" | "now">;
@@ -61,6 +63,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     .from("inbound_items")
     .select(
       "tenant_id, kind, received_at, category, confidence, zernio_comment_id, zernio_post_id, " +
+        "zernio_review_id, " +
         "social_accounts!inner (zernio_account_id, status), " +
         "tenants!inner (subscription_status, confidence_threshold, replies_paused), " +
         "conversations (zernio_conversation_id, last_customer_message_at)",
@@ -70,12 +73,13 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
   if (error) throw new Error(`send: item lookup failed: ${error.message}`);
   const row = data as unknown as {
     tenant_id: string;
-    kind: "comment" | "dm";
+    kind: "comment" | "dm" | "review";
     received_at: string;
     category: Category | null;
     confidence: number | null;
     zernio_comment_id: string | null;
     zernio_post_id: string | null;
+    zernio_review_id: string | null;
     social_accounts: { zernio_account_id: string; status: PolicyInput["account"]["status"] };
     tenants: {
       subscription_status: SubscriptionStatus;
@@ -128,6 +132,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     receivedAt: row.received_at,
     zernioCommentId: row.zernio_comment_id,
     zernioPostId: row.zernio_post_id,
+    zernioReviewId: row.zernio_review_id,
     account: {
       zernioAccountId: row.social_accounts.zernio_account_id,
       status: row.social_accounts.status,
@@ -177,6 +182,12 @@ async function findDelivered(
   signal: AbortSignal,
 ): Promise<string | null> {
   const wanted = normalize(message);
+  if (c.kind === "review") {
+    // A review has at most one reply from the Page: if it has one now, ours went through.
+    const reviews = await social.listReviews({ accountId: c.account.zernioAccountId, signal });
+    const review = reviews.find((r) => r.id === c.zernioReviewId);
+    return review?.hasReply ? `review_reply:${c.zernioReviewId}` : null;
+  }
   if (c.kind === "comment") {
     const replies = await social.listCommentReplies({
       accountId: c.account.zernioAccountId,
@@ -394,26 +405,36 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
     let providerId: string;
     try {
       providerId =
-        c.kind === "comment"
+        c.kind === "review"
           ? (
-              await social.replyToComment({
+              await social.replyToReview({
                 accountId: c.account.zernioAccountId,
-                postId: c.zernioPostId!,
-                commentId: c.zernioCommentId!,
+                reviewId: c.zernioReviewId!,
                 message: draft.message,
                 idempotencyKey: draft.idempotencyKey,
                 signal: ctx.callSignal(),
               })
             ).providerReplyId
-          : (
-              await social.sendDm({
-                accountId: c.account.zernioAccountId,
-                conversationId: c.conversation!.zernioConversationId,
-                message: draft.message,
-                idempotencyKey: draft.idempotencyKey,
-                signal: ctx.callSignal(),
-              })
-            ).providerMessageId;
+          : c.kind === "comment"
+            ? (
+                await social.replyToComment({
+                  accountId: c.account.zernioAccountId,
+                  postId: c.zernioPostId!,
+                  commentId: c.zernioCommentId!,
+                  message: draft.message,
+                  idempotencyKey: draft.idempotencyKey,
+                  signal: ctx.callSignal(),
+                })
+              ).providerReplyId
+            : (
+                await social.sendDm({
+                  accountId: c.account.zernioAccountId,
+                  conversationId: c.conversation!.zernioConversationId,
+                  message: draft.message,
+                  idempotencyKey: draft.idempotencyKey,
+                  signal: ctx.callSignal(),
+                })
+              ).providerMessageId;
     } catch (error) {
       if (!(error instanceof SocialProviderError)) throw error;
       if (isPlatformPaused(error)) {

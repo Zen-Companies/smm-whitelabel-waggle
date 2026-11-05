@@ -11,7 +11,10 @@ export const PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
  * answered in DM, so prices and order details stay out of public view. Everything else, and every
  * DM, is answered where it was written.
  */
-export function defaultReplyVia(kind: "comment" | "dm", category: string | null): ReplyVia {
+export function defaultReplyVia(
+  kind: "comment" | "dm" | "review",
+  category: string | null,
+): ReplyVia {
   return kind === "comment" && category === "lead" ? "dm" : "public";
 }
 

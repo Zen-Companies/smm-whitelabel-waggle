@@ -73,7 +73,11 @@ function Row({
           selected ? "bg-subtle" : "hover:bg-subtle/60",
         )}
       >
-        <Avatar size={36} platform={entry.platform} />
+        <Avatar
+          size={36}
+          platform={entry.platform}
+          icon={entry.kind === "review" ? "review" : "person"}
+        />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-1.5">
             {needs && (
@@ -181,6 +185,32 @@ function DmReplyFooter({ entry }: { entry: InboxEntry & { status: string } }) {
       >
         Open the DM
       </a>
+    </p>
+  );
+}
+
+/** T42: a review's reply went up on the Page (design v3 "Facebook Page reviews"). */
+function ReviewReplyFooter({ entry }: { entry: InboxEntry & { status: string } }) {
+  if (entry.status !== "sent") return <SentFooter entry={entry} />;
+  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  const who = entry.authorName ? `${entry.authorName}'s` : "the";
+  return (
+    <p
+      role="status"
+      className="border-line flex flex-wrap items-center gap-2.5 rounded-xl border px-4 py-3.5"
+    >
+      <CircleCheck className="text-success size-4 shrink-0" strokeWidth={2} aria-hidden />
+      Your reply is on {platform} under {who} review.
+      {entry.permalink && (
+        <a
+          href={entry.permalink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto font-medium whitespace-nowrap"
+        >
+          See it on {platform}
+        </a>
+      )}
     </p>
   );
 }
@@ -348,6 +378,8 @@ export async function InboxView({
       (selected.category === "spam" &&
         (selected.status === "ignored" || selected.status === "handled"))) ? (
     <SpamCommentFooter key={selected.itemId} entry={selected} />
+  ) : selected.kind === "review" ? (
+    <ReviewReplyFooter entry={selected} />
   ) : selected.kind === "comment" && selected.draft?.replyVia === "dm" ? (
     <DmReplyFooter entry={selected} />
   ) : (

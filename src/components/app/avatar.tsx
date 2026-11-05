@@ -1,4 +1,4 @@
-import { User } from "lucide-react";
+import { User, Star } from "lucide-react";
 import { cn } from "cn";
 
 /** The small platform mark on an avatar (design.md §1 rule 7): words stay out of the row. */
@@ -38,11 +38,14 @@ export function Avatar({
   src,
   size = 36,
   platform,
+  icon = "person",
   className,
 }: {
   src?: string | null;
   size?: number;
   platform?: string | null;
+  /** "review" (T42): a star instead of the person, for a Facebook Page review. */
+  icon?: "person" | "review";
   className?: string;
 }) {
   return (
@@ -56,7 +59,11 @@ export function Avatar({
           style={{ width: size, height: size }}
           className="bg-subtle text-ink-3 inline-flex items-center justify-center rounded-full"
         >
-          <User strokeWidth={1.5} className="size-[50%]" />
+          {icon === "review" ? (
+            <Star strokeWidth={1.5} className="size-[50%]" />
+          ) : (
+            <User strokeWidth={1.5} className="size-[50%]" />
+          )}
         </span>
       )}
       {platform && <PlatformMark platform={platform} />}

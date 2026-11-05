@@ -23,7 +23,7 @@ export interface ClassifyInput {
   tenantId: string;
   itemId?: string | null;
   text: string;
-  kind: "comment" | "dm";
+  kind: "comment" | "dm" | "review";
   /** Name plus the owner's profile when there is one (`businessContext()`). */
   businessContext?: string;
   /** The business name alone, for classifiers that do worse with the profile (Jev, T25). */

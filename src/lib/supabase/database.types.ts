@@ -398,10 +398,12 @@ export type Database = {
           next_run_at: string | null
           permalink: string | null
           received_at: string
+          review_recommends: boolean | null
           social_account_id: string
           status: string
           tenant_id: string
           text: string
+          zernio_review_id: string | null
           zernio_comment_id: string | null
           zernio_message_id: string | null
           zernio_post_id: string | null
@@ -423,10 +425,12 @@ export type Database = {
           next_run_at?: string | null
           permalink?: string | null
           received_at: string
+          review_recommends?: boolean | null
           social_account_id: string
           status?: string
           tenant_id: string
           text: string
+          zernio_review_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null
@@ -448,10 +452,12 @@ export type Database = {
           next_run_at?: string | null
           permalink?: string | null
           received_at?: string
+          review_recommends?: boolean | null
           social_account_id?: string
           status?: string
           tenant_id?: string
           text?: string
+          zernio_review_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null
@@ -855,6 +861,7 @@ export type Database = {
           created_at: string
           id: string
           platform: string
+          reviews_polled_at: string | null
           status: string
           tenant_id: string
           username: string | null
@@ -865,6 +872,7 @@ export type Database = {
           created_at?: string
           id?: string
           platform: string
+          reviews_polled_at?: string | null
           status?: string
           tenant_id: string
           username?: string | null
@@ -875,6 +883,7 @@ export type Database = {
           created_at?: string
           id?: string
           platform?: string
+          reviews_polled_at?: string | null
           status?: string
           tenant_id?: string
           username?: string | null

@@ -161,7 +161,7 @@ export async function CostView() {
                   <td className="p-3">{date(i.receivedAt)}</td>
                   <td className="p-3">{i.tenantName}</td>
                   <td className="p-3">
-                    {i.kind === "dm" ? "DM" : "Comment"}
+                    {i.kind === "dm" ? "DM" : i.kind === "review" ? "Review" : "Comment"}
                     {i.category ? ` · ${i.category}` : ""}
                   </td>
                   <td className="p-3">{i.status.replace("_", " ")}</td>

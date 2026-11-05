@@ -41,7 +41,7 @@ export function draftSystemPromptWithHistory(businessName: string): string {
 }
 
 export function draftUserPrompt(input: {
-  kind: "comment" | "dm";
+  kind: "comment" | "dm" | "review";
   category: string;
   text: string;
   facts: KbFact[];
@@ -50,7 +50,7 @@ export function draftUserPrompt(input: {
     ? input.facts.map((f, i) => `[${i + 1}] ${f.title}: ${f.content}`).join("\n")
     : "(nothing relevant)";
   return [
-    `Channel: ${input.kind === "dm" ? "direct message" : "public comment"}`,
+    `Channel: ${input.kind === "dm" ? "direct message" : input.kind === "review" ? "public reply to a review of the business on its Facebook Page" : "public comment"}`,
     `Category: ${input.category}`,
     "Customer message:",
     "<message>",
@@ -64,7 +64,7 @@ export function draftUserPrompt(input: {
 
 /** 2026-10-30.1: the latest message plus up to THREAD_HISTORY_LIMIT earlier ones (T30). */
 export function draftUserPromptWithHistory(input: {
-  kind: "comment" | "dm";
+  kind: "comment" | "dm" | "review";
   category: string;
   text: string;
   facts: KbFact[];

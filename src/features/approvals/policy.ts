@@ -9,7 +9,7 @@ export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled"
 export const DM_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export interface PolicyInput {
-  item: { kind: "comment" | "dm" };
+  item: { kind: "comment" | "dm" | "review" };
   classification: { category: Category; confidence: number };
   /**
    * null before drafting (triage), or when no draft was written. `approvedByOwner`: the owner
@@ -45,7 +45,8 @@ export type PolicyReason =
   | "auto_send"
   | "owner_approved"
   | "replies_paused"
-  | "ai_cap_reached";
+  | "ai_cap_reached"
+  | "review_public";
 
 export type PolicyDecision =
   | { decision: "pause"; reason: "tenant_inactive" | "account_inactive" }
@@ -64,7 +65,7 @@ export type PolicyDecision =
         | "dm_window_closed"
         | "ai_cap_reached";
     }
-  | { decision: "approve"; reason: "approval_required" | "replies_paused" }
+  | { decision: "approve"; reason: "approval_required" | "replies_paused" | "review_public" }
   | { decision: "send"; reason: "auto_send" | "owner_approved" };
 
 const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
@@ -88,7 +89,8 @@ export function triage(
   // on the post, so it is hidden (auto-hide on) or comes to the owner to hide (T40).
   const { category, confidence } = input.classification;
   if (category === "spam") {
-    if (input.item.kind === "dm") return { decision: "ignore", reason: "spam" };
+    // DMs and reviews can't be hidden: dropped.
+    if (input.item.kind !== "comment") return { decision: "ignore", reason: "spam" };
     // Hidden for the owner only when Waggle is sure (the same threshold as replies).
     return input.tenant.autoHideSpam && confidence >= input.tenant.confidenceThreshold
       ? { decision: "hide", reason: "spam" }
@@ -121,6 +123,13 @@ export function policy(input: PolicyInput): PolicyDecision {
     if (!last || input.now.getTime() - last.getTime() >= DM_REPLY_WINDOW_MS) {
       return { decision: "escalate", reason: "dm_window_closed" };
     }
+  }
+
+  // A review's reply stays public on the Page (T42): never sent on its own, whatever the mode.
+  if (input.item.kind === "review") {
+    return input.draft.approvedByOwner
+      ? { decision: "send", reason: "owner_approved" }
+      : { decision: "approve", reason: "review_public" };
   }
 
   // 6-7. In approve mode, the owner's approval is what allows the send. While the owner has paused

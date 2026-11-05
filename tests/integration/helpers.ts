@@ -52,6 +52,8 @@ export function fakeZernio() {
     hideComment: notImplemented,
     unhideComment: notImplemented,
     sendPrivateReply: notImplemented,
+    listReviews: notImplemented,
+    replyToReview: notImplemented,
     sendDm: notImplemented,
     listConversationMessages: notImplemented,
     listCommentReplies: notImplemented,

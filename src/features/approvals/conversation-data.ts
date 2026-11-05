@@ -23,7 +23,7 @@ export interface ConversationContext {
   customer: {
     name: string;
     platform: string;
-    kind: "comment" | "dm";
+    kind: "comment" | "dm" | "review";
     messages: number;
     firstSeenAt: string;
   };
@@ -145,7 +145,7 @@ export async function loadConversation(
   if (!itemRow) return null;
   const item = itemRow as unknown as {
     id: string;
-    kind: "comment" | "dm";
+    kind: "comment" | "dm" | "review";
     conversation_id: string | null;
     author_name: string | null;
     category: string | null;

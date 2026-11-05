@@ -8,7 +8,7 @@ import {
   handlePlatformPause,
 } from "@/features/alerts";
 import { escalateClosingDmWindows } from "@/features/approvals";
-import { getProductionSteps, processDueItems } from "@/features/inbox";
+import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
 import { embedPendingEntries } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
@@ -76,6 +76,13 @@ export async function POST(request: Request): Promise<Response> {
 
     // T13: DMs about to lose their reply window, drafts waiting > 30 min, then the alert outbox
     // (escalations, leads, disconnects, nudges). Each sweep is cheap; delivery stops when time's up.
+    // T42: Facebook Page reviews (no webhook), every few minutes per Page.
+    const reviews = await pollFacebookReviews({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+
     const dmWindowsEscalated = await escalateClosingDmWindows(db);
     const nudges = await enqueueDraftNudges(db);
     const alerts = await deliverPendingAlerts({
@@ -96,6 +103,7 @@ export async function POST(request: Request): Promise<Response> {
       posts,
       health,
       backfill,
+      reviews,
     });
   } catch (error) {
     // Visible in the Vercel logs even without Sentry. Our own error text only, never customer

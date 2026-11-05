@@ -37,7 +37,7 @@ export async function loadPolicyInput(
   if (error) throw new Error(`policy: item lookup failed: ${error.message}`);
   const row = item as unknown as {
     tenant_id: string;
-    kind: "comment" | "dm";
+    kind: "comment" | "dm" | "review";
     category: Category | null;
     confidence: number | null;
     conversation_id: string | null;

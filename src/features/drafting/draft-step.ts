@@ -93,7 +93,7 @@ export function createDraftStep(deps: {
     if (error) throw new Error(`draft: item lookup failed: ${error.message}`);
     const { text, kind, category, tenants } = row as unknown as {
       text: string;
-      kind: "comment" | "dm";
+      kind: "comment" | "dm" | "review";
       category: string;
       tenants: { name: string };
     };

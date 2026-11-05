@@ -19,7 +19,7 @@ export function createClassifyStep(deps: { classifier: Classifier }): Step {
     if (error) throw new Error(`classify: item lookup failed: ${error.message}`);
     const { text, kind, tenants } = row as unknown as {
       text: string;
-      kind: "comment" | "dm";
+      kind: "comment" | "dm" | "review";
       tenants: {
         name: string;
         business_profile: string;
