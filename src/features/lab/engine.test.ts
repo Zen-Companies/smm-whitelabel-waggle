@@ -85,7 +85,8 @@ describe("previewMessage", () => {
       { db, classifier: classifierReturning({ category: "spam", confidence: 0.9 }), llm },
       { tenant, text: "Buy followers cheap!!", kind: "comment", businessContext: tenant.name },
     );
-    expect(result.triage).toEqual({ decision: "ignore", reason: "spam" });
+    // T40: a spam comment is public on the post, so it comes to the owner to hide.
+    expect(result.triage).toEqual({ decision: "escalate", reason: "spam" });
     expect(result.draft).toBeNull();
     expect(result.reachedStep).toBe("triage");
     expect(fetchMock).not.toHaveBeenCalled();

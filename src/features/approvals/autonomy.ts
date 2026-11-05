@@ -1,7 +1,7 @@
 import type { AutonomyMode, Category } from "./policy";
 
 /**
- * Which categories the owner can set. policy() always ignores spam and always escalates
+ * Which categories the owner can set. policy() never answers spam and always escalates
  * complaints and unclear messages (§11 steps 2-3), so only faq and lead have a real choice.
  */
 export const CONFIGURABLE_CATEGORIES = ["faq", "lead"] as const satisfies Category[];
@@ -43,5 +43,5 @@ export const CATEGORY_HINTS: Record<Category, string> = {
   lead: "Bookings, orders and quote requests. Details are saved to Leads and emailed to you either way.",
   complaint: "Always handed to you, never answered automatically.",
   unclear: "When Waggle can't tell what someone wants.",
-  spam: "Sales pitches and scams are hidden from your inbox.",
+  spam: "Sales pitches and scams. Spam DMs are left alone; spam comments come to you to hide, or are hidden for you below.",
 };

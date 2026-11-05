@@ -1,6 +1,8 @@
 import { transitionItem } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import type { SocialProvider } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { setCommentHidden } from "./hide-spam";
 import { REPLY_MAX } from "./limits";
 
 // Owner decisions on a waiting draft (PRD F8, docs/tdd.md §7.3). The Server Actions resolve the
@@ -231,6 +233,82 @@ export async function markHandled(
     action: input.asSpam ? "item_hidden_as_spam" : "item_handled",
     actor: input.userId,
     details: {},
+  });
+  return { ok: true };
+}
+
+export type HideSpamResult =
+  | { ok: true; outcome: "hidden" | "gone" }
+  | { ok: false; error: "not_found" | "already_decided" | "hide_failed" };
+
+/**
+ * "Hide on Instagram/Facebook" (T40): hide a comment on its post, then it leaves "Needs you" for
+ * Ignored (handled as spam). A comment that is already gone is handled the same way: there is
+ * nothing left to hide. If hiding fails the item stays where it is, for another try.
+ */
+export async function hideSpamComment(
+  deps: { db: ServiceClient; social: SocialProvider },
+  input: { tenantId: string; userId: string; itemId: string },
+): Promise<HideSpamResult> {
+  const outcome = await setCommentHidden(deps, {
+    tenantId: input.tenantId,
+    itemId: input.itemId,
+    actor: input.userId,
+    hidden: true,
+  });
+  if (outcome === null) return { ok: false, error: "not_found" };
+  if (outcome === "failed") return { ok: false, error: "hide_failed" };
+  const handled = await markHandled(deps.db, { ...input, asSpam: true });
+  // Already handled or ignored (hidden from the Ignored tab): the hide itself is what counted.
+  if (!handled.ok && handled.error === "not_found") return { ok: false, error: "not_found" };
+  return { ok: true, outcome: outcome === "done" ? "hidden" : "gone" };
+}
+
+/** "Unhide" (T40): the comment shows on the post again. The item stays in Ignored. */
+export async function unhideComment(
+  deps: { db: ServiceClient; social: SocialProvider },
+  input: { tenantId: string; userId: string; itemId: string },
+): Promise<{ ok: true } | { ok: false; error: "not_found" | "unhide_failed" }> {
+  const outcome = await setCommentHidden(deps, {
+    tenantId: input.tenantId,
+    itemId: input.itemId,
+    actor: input.userId,
+    hidden: false,
+  });
+  if (outcome === null) return { ok: false, error: "not_found" };
+  return outcome === "failed" ? { ok: false, error: "unhide_failed" } : { ok: true };
+}
+
+/**
+ * "It's not spam" (T40): the owner corrects Waggle. The item stays in "Needs you" to be answered
+ * like any other message; its category becomes unclear (status unchanged, rule 5).
+ */
+export async function markNotSpam(
+  db: ServiceClient,
+  input: { tenantId: string; userId: string; itemId: string },
+): Promise<DecisionResult> {
+  const { data: item } = await db
+    .from("inbound_items")
+    .select("id, status, category")
+    .eq("id", input.itemId)
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "not_found" };
+  if (item.status !== "escalated" || item.category !== "spam") {
+    return { ok: false, error: "already_decided" };
+  }
+  const { error } = await db
+    .from("inbound_items")
+    .update({ category: "unclear" })
+    .eq("id", item.id)
+    .eq("category", "spam");
+  if (error) throw new Error(`not spam: update failed: ${error.message}`);
+  await writeAudit(db, {
+    tenantId: input.tenantId,
+    itemId: item.id,
+    action: "marked_not_spam",
+    actor: input.userId,
+    details: { from: "spam", to: "unclear" },
   });
   return { ok: true };
 }

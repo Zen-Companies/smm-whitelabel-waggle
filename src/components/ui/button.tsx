@@ -11,6 +11,8 @@ const buttonVariants = cva(
         /** Honey, ink text: the one primary action. */
         primary:
           "rounded-md bg-honey px-4 font-semibold text-ink hover:bg-honey-hover disabled:opacity-60 data-[busy]:bg-honey/70 data-[busy]:opacity-100",
+        /** Ink, white text: a firm action that isn't a send (Hide on Instagram, T40). */
+        ink: "rounded-md bg-ink px-4 font-semibold text-surface hover:bg-ink-2 disabled:opacity-60",
         /** White, 1px line-strong border, ink text. */
         secondary:
           "rounded-md border border-line-strong bg-surface px-3.5 text-ink hover:bg-subtle disabled:opacity-50",

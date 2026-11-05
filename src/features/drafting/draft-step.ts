@@ -1,7 +1,8 @@
-import { loadPolicyInput, triage } from "@/features/approvals";
+import { loadPolicyInput, setCommentHidden, triage } from "@/features/approvals";
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import type { LlmClient } from "@/lib/llm/client";
+import type { SocialProvider } from "@/lib/social/types";
 import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { generateDraft } from "./generate";
 import { loadThreadHistory } from "./history";
@@ -18,7 +19,12 @@ const PRE_DRAFT_EVENTS: Record<"pause" | "ignore" | "escalate", StatusEvent> = {
  * 1-4), retrieve the top KB facts, draft with the LLM, check the draft against the facts, store
  * it (and the lead), move to `drafted`. Message and reply text never reach logs or audit rows.
  */
-export function createDraftStep(deps: { llm: LlmClient; now?: () => Date }): Step {
+export function createDraftStep(deps: {
+  llm: LlmClient;
+  /** For auto-hiding spam comments (T40). */
+  social?: () => SocialProvider;
+  now?: () => Date;
+}): Step {
   return async (item, ctx) => {
     const { db } = ctx;
     const now = deps.now?.() ?? new Date();
@@ -30,6 +36,37 @@ export function createDraftStep(deps: { llm: LlmClient; now?: () => Date }): Ste
     if (pre.decision === "draft") {
       const spend = await loadTenantAiSpend(db, item.tenantId, now);
       pre = triage({ ...input, aiCapReached: spend.level === "reached" });
+    }
+    // T40: a spam comment with auto-hide on is hidden on the post, then ignored. If hiding
+    // doesn't work, it comes to the owner to hide instead of staying public unnoticed.
+    if (pre.decision === "hide") {
+      const outcome = deps.social
+        ? await setCommentHidden(
+            { db, social: deps.social(), now: () => now },
+            {
+              tenantId: item.tenantId,
+              itemId: item.id,
+              actor: "system",
+              hidden: true,
+              signal: ctx.callSignal(),
+            },
+          )
+        : null;
+      if (outcome === "done" || outcome === "gone") {
+        return {
+          event: "ignore",
+          details: {
+            decision: "hide",
+            policyReason: "spam",
+            drafted: false,
+            hiddenOnPlatform: outcome === "done",
+          },
+        };
+      }
+      return {
+        event: "escalate",
+        details: { decision: "escalate", policyReason: "spam", drafted: false, hideFailed: true },
+      };
     }
     if (pre.decision !== "draft") {
       return {

@@ -8,9 +8,13 @@ import { writeAudit } from "@/lib/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { AUTONOMY_MODES, CONFIGURABLE_CATEGORIES } from "./autonomy";
+import { getSocialProvider } from "@/lib/social";
 import {
   approveDraft,
+  hideSpamComment,
   markHandled,
+  markNotSpam,
+  unhideComment,
   rejectDraft,
   REPLY_MAX,
   undoApproval,
@@ -141,14 +145,126 @@ export async function markHandledAction(
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
   const tenant = await getCurrentTenant();
+  const ids = { tenantId: tenant.id, userId: tenant.userId, itemId: parsed.data.itemId };
+  // "It's spam: hide it" on a comment also hides it on the post (T40). A DM can't be hidden, so
+  // it only leaves the inbox (hideSpamComment answers not_found for anything but a comment).
+  if (parsed.data.asSpam === "1") {
+    const hidden = await hideSpamComment(
+      { db: getServiceClient(), social: getSocialProvider() },
+      ids,
+    );
+    if (hidden.ok || hidden.error !== "not_found") {
+      revalidatePath("/inbox", "layout");
+      if (hidden.ok) return {};
+      return {
+        error:
+          hidden.error === "hide_failed"
+            ? "Couldn't hide it just now. Please try again in a minute."
+            : DECISION_ERRORS[hidden.error],
+      };
+    }
+  }
   const result = await markHandled(getServiceClient(), {
-    tenantId: tenant.id,
-    userId: tenant.userId,
-    itemId: parsed.data.itemId,
+    ...ids,
     asSpam: parsed.data.asSpam === "1",
   });
   revalidatePath("/inbox", "layout");
   return result.ok ? {} : { error: DECISION_ERRORS[result.error] };
+}
+
+export interface SpamFormState {
+  error?: string;
+  /** "gone": the platform says the comment no longer exists. */
+  outcome?: "hidden" | "gone" | "unhidden" | "not_spam";
+}
+
+const itemOnly = z.object({ itemId: z.uuid() });
+
+/** "Hide on Instagram/Facebook" on a spam comment (T40). Feedback in place, never a toast. */
+export async function hideSpamAction(
+  _prev: SpamFormState,
+  formData: FormData,
+): Promise<SpamFormState> {
+  const parsed = itemOnly.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getCurrentTenant();
+  const result = await hideSpamComment(
+    { db: getServiceClient(), social: getSocialProvider() },
+    { tenantId: tenant.id, userId: tenant.userId, itemId: parsed.data.itemId },
+  );
+  revalidatePath("/inbox", "layout");
+  if (result.ok) return { outcome: result.outcome };
+  return {
+    error:
+      result.error === "hide_failed"
+        ? "Couldn't hide it just now. Please try again in a minute."
+        : DECISION_ERRORS[result.error],
+  };
+}
+
+/** "Unhide" (T40): the comment shows on the post again. */
+export async function unhideAction(
+  _prev: SpamFormState,
+  formData: FormData,
+): Promise<SpamFormState> {
+  const parsed = itemOnly.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getCurrentTenant();
+  const result = await unhideComment(
+    { db: getServiceClient(), social: getSocialProvider() },
+    { tenantId: tenant.id, userId: tenant.userId, itemId: parsed.data.itemId },
+  );
+  revalidatePath("/inbox", "layout");
+  if (result.ok) return { outcome: "unhidden" };
+  return {
+    error:
+      result.error === "unhide_failed"
+        ? "Couldn't unhide it just now. Please try again in a minute."
+        : DECISION_ERRORS.not_found,
+  };
+}
+
+/** "It's not spam" (T40): it stays in For you, to answer like any other message. */
+export async function notSpamAction(
+  _prev: SpamFormState,
+  formData: FormData,
+): Promise<SpamFormState> {
+  const parsed = itemOnly.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getCurrentTenant();
+  const result = await markNotSpam(getServiceClient(), {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    itemId: parsed.data.itemId,
+  });
+  revalidatePath("/inbox", "layout");
+  return result.ok ? { outcome: "not_spam" } : { error: DECISION_ERRORS[result.error] };
+}
+
+export type AutoHideFormState = { error?: string; saved?: boolean };
+
+/** "Hide spam comments for me" (T40), Settings → Replies. Off by default. */
+export async function setAutoHideSpam(
+  _prev: AutoHideFormState,
+  formData: FormData,
+): Promise<AutoHideFormState> {
+  const on = formData.get("autoHide") === "on";
+  const tenant = await getCurrentTenant();
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase
+    .from("tenants")
+    .update({ auto_hide_spam: on })
+    .eq("id", tenant.id)
+    .select("id");
+  if (error || !data?.length) return { error: "Couldn't change that. Please try again." };
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: on ? "auto_hide_spam_on" : "auto_hide_spam_off",
+    actor: tenant.userId,
+    details: {},
+  });
+  revalidatePath("/settings");
+  return { saved: true };
 }
 
 export type PauseFormState = { error?: string };

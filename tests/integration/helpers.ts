@@ -49,6 +49,8 @@ export function fakeZernio() {
     getConnectUrl: notImplemented,
     createPost: notImplemented,
     replyToComment: notImplemented,
+    hideComment: notImplemented,
+    unhideComment: notImplemented,
     sendDm: notImplemented,
     listConversationMessages: notImplemented,
     listCommentReplies: notImplemented,

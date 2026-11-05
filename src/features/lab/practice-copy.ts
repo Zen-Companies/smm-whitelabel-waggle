@@ -98,6 +98,12 @@ export function practiceCard(result: PreviewResult): PracticeCard {
         next: "I'd leave it alone. Spam doesn't show in your inbox.",
         tone: "quiet",
       };
+    case "hide":
+      return {
+        ...base,
+        next: "I'd hide it on your post and leave it alone. You can unhide it in Ignored.",
+        tone: "quiet",
+      };
     case "pause":
       return {
         ...base,
@@ -113,6 +119,12 @@ export function practiceCard(result: PreviewResult): PracticeCard {
           return {
             ...base,
             next: "Complaints always come to you. I never reply to these on my own.",
+            tone: "owner",
+          };
+        case "spam":
+          return {
+            ...base,
+            next: "It looks like spam, so I'd never answer it. I'd ask you to hide it on your post.",
             tone: "owner",
           };
         case "needs_human":

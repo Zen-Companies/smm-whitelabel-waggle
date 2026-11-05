@@ -47,13 +47,39 @@ describe("policy (TDD §11, in order)", () => {
     });
   });
 
-  describe("2. spam → ignore", () => {
-    it.each(["off", "approve", "auto"] as const)("whatever the mode (%s)", (autonomyMode) => {
-      expect(run({ classification: { category: "spam", confidence: 0.99 }, autonomyMode })).toEqual(
-        {
+  describe("2. spam: never answered (T40)", () => {
+    const spam = { classification: { category: "spam" as const, confidence: 0.99 } };
+    it.each(["off", "approve", "auto"] as const)(
+      "a spam DM is ignored, whatever the mode (%s)",
+      (autonomyMode) => {
+        expect(run({ ...spam, ...dm(1000), autonomyMode })).toEqual({
           decision: "ignore",
           reason: "spam",
-        },
+        });
+      },
+    );
+    it("a spam comment comes to the owner to hide, since it is public on the post", () => {
+      expect(run(spam)).toEqual({ decision: "escalate", reason: "spam" });
+    });
+    it.each(["off", "approve", "auto"] as const)(
+      "with auto-hide on, a spam comment is hidden, whatever the mode (%s)",
+      (autonomyMode) => {
+        expect(
+          run({ ...spam, autonomyMode, tenant: { ...base.tenant, autoHideSpam: true } }),
+        ).toEqual({ decision: "hide", reason: "spam" });
+      },
+    );
+    it("auto-hide only when Waggle is sure; otherwise the owner decides", () => {
+      expect(
+        run({
+          classification: { category: "spam", confidence: 0.6 },
+          tenant: { ...base.tenant, autoHideSpam: true },
+        }),
+      ).toEqual({ decision: "escalate", reason: "spam" });
+    });
+    it("auto-hide never applies to DMs (they can't be hidden)", () => {
+      expect(run({ ...spam, ...dm(1000), tenant: { ...base.tenant, autoHideSpam: true } })).toEqual(
+        { decision: "ignore", reason: "spam" },
       );
     });
   });
@@ -206,9 +232,10 @@ describe("triage (steps 1-4, before drafting)", () => {
     expect(triage(base)).toEqual({ decision: "draft" });
   });
   it("returns the same pre-draft decisions as policy", () => {
-    expect(triage({ ...base, classification: { category: "spam", confidence: 1 } }).decision).toBe(
-      "ignore",
-    );
+    expect(
+      triage({ ...base, ...dm(1000), classification: { category: "spam", confidence: 1 } })
+        .decision,
+    ).toBe("ignore");
     expect(triage({ ...base, autonomyMode: "off" }).decision).toBe("escalate");
     expect(triage({ ...base, account: { status: "error" } }).decision).toBe("pause");
   });
@@ -221,7 +248,12 @@ describe("monthly AI spend cap (T32)", () => {
       reason: "ai_cap_reached",
     });
     expect(
-      triage({ ...base, aiCapReached: true, classification: { category: "spam", confidence: 1 } }),
+      triage({
+        ...base,
+        ...dm(1000),
+        aiCapReached: true,
+        classification: { category: "spam", confidence: 1 },
+      }),
     ).toEqual({ decision: "ignore", reason: "spam" });
     expect(triage({ ...base, aiCapReached: false })).toEqual({ decision: "draft" });
   });

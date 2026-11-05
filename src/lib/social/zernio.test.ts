@@ -173,6 +173,43 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("hideComment posts to the comment's hide path with accountId (T40)", async () => {
+    respond = () => json({ status: "ok", commentId: "c_1", hidden: true, platform: "instagram" });
+
+    await provider.hideComment({ accountId: "acc_1", postId: "p_1", commentId: "c_1" });
+
+    const [req] = captured;
+    expect(req.method).toBe("POST");
+    expect(req.url.pathname).toBe("/api/v1/inbox/comments/p_1/c_1/hide");
+    expect(req.body).toEqual({ accountId: "acc_1" });
+  });
+
+  it("unhideComment deletes the hide with accountId in the query (T40)", async () => {
+    respond = () => json({ status: "ok", commentId: "c_1", hidden: false, platform: "instagram" });
+
+    await provider.unhideComment({ accountId: "acc_1", postId: "p_1", commentId: "c_1" });
+
+    const [req] = captured;
+    expect(req.method).toBe("DELETE");
+    expect(req.url.pathname).toBe("/api/v1/inbox/comments/p_1/c_1/hide");
+    expect(req.url.searchParams.get("accountId")).toBe("acc_1");
+  });
+
+  it("hideComment on a comment that's gone is a 400 with the platform code, not ambiguous", async () => {
+    respond = () =>
+      json({ error: "Comment not found", type: "platform_error", code: "PLATFORM_API_ERROR" }, 400);
+
+    const error = await provider
+      .hideComment({ accountId: "acc_1", postId: "p_1", commentId: "c_1" })
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(SocialProviderError);
+    expect((error as SocialProviderError).details).toMatchObject({
+      status: 400,
+      code: "PLATFORM_API_ERROR",
+      ambiguous: false,
+    });
+  });
+
   it("sendDm posts to the conversation with Idempotency-Key", async () => {
     respond = () => json({ success: true, data: { messageId: "m_1", conversationId: "conv_1" } });
 

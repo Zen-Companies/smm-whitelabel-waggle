@@ -15,6 +15,7 @@ import { ApprovalCard, RecentSends } from "./approval-card";
 import { loadConversation } from "./conversation-data";
 import { ContextPanel, ConversationPane } from "./conversation-pane";
 import { HeldCard } from "./held-card";
+import { SpamCard, SpamCommentFooter } from "./spam-card";
 import {
   countInboxTabs,
   heldReason,
@@ -22,6 +23,7 @@ import {
   loadInboxTab,
   loadNextPost,
   loadTodaySummary,
+  todayLine,
   needsOwner,
   normalizeTab,
   type InboxEntry,
@@ -118,9 +120,7 @@ function InboxHeadline({ today }: { today: TodaySummary }) {
       <h1 className="page-title">
         {n === 0 ? "Nothing needs you" : n === 1 ? "1 thing needs you" : `${n} things need you`}
       </h1>
-      <p className="text-ink-3">
-        Today Waggle answered {today.answered} and ignored {today.ignored}.
-      </p>
+      <p className="text-ink-3">{todayLine(today)}</p>
     </div>
   );
 }
@@ -299,8 +299,16 @@ export async function InboxView({
       entry={selected}
       nextHref={next ? href(tab, next.itemId) : null}
     />
+  ) : held && reason === "spam" && selected.category === "spam" && selected.kind === "comment" ? (
+    // T40: a spam comment comes to the owner to hide; it's never answered.
+    <SpamCard key={selected.itemId} entry={selected} />
   ) : held ? (
     <HeldCard key={selected.itemId} entry={selected} reason={reason} />
+  ) : selected.kind === "comment" &&
+    (selected.hiddenOnPlatformAt ||
+      (selected.category === "spam" &&
+        (selected.status === "ignored" || selected.status === "handled"))) ? (
+    <SpamCommentFooter key={selected.itemId} entry={selected} />
   ) : (
     <SentFooter entry={selected} />
   );

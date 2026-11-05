@@ -37,4 +37,6 @@ export type {
 } from "./policy";
 export { createPolicyStep, loadPolicyInput } from "./policy-step";
 export { createSendStep } from "./send-step";
+export { hideErrorOutcome, setCommentHidden } from "./hide-spam";
+export type { HideOutcome } from "./hide-spam";
 export { DM_WINDOW_WARNING_MS, escalateClosingDmWindows } from "./sweeps";

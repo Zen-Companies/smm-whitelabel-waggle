@@ -30,6 +30,8 @@ export interface InboxEntry {
   dmWindowClosesAt: string | null;
   /** Comments: the post on Instagram/Facebook, for "Open in Instagram" (null if not known). */
   permalink: string | null;
+  /** Comments: when it was hidden on the post (T40); null while it is visible. */
+  hiddenOnPlatformAt: string | null;
 }
 
 export interface InboxData {
@@ -78,6 +80,16 @@ export interface TodaySummary {
   answered: number;
   forYou: number;
   ignored: number;
+  /** Spam comments hidden on their post today, by Waggle or the owner (T40). */
+  hidden: number;
+}
+
+/** Pure: the gray line under the headline (design.md §4). */
+export function todayLine(today: Pick<TodaySummary, "answered" | "ignored" | "hidden">): string {
+  const hid = today.hidden === 1 ? "hid 1 spam comment" : `hid ${today.hidden} spam comments`;
+  return today.hidden > 0
+    ? `Today Waggle answered ${today.answered}, ignored ${today.ignored} and ${hid}.`
+    : `Today Waggle answered ${today.answered} and ignored ${today.ignored}.`;
 }
 
 /** Pure: midnight UTC of `now`'s day ("today" until businesses have a time zone). */
@@ -95,7 +107,7 @@ export async function loadTodaySummary(
   now = new Date(),
 ): Promise<TodaySummary> {
   const since = startOfTodayUtc(now).toISOString();
-  const [answered, forYou, ignored] = await Promise.all([
+  const [answered, forYou, ignored, hidden] = await Promise.all([
     supabase
       .from("drafts")
       .select("id", { count: "exact", head: true })
@@ -113,11 +125,17 @@ export async function loadTodaySummary(
       .eq("tenant_id", tenantId)
       .eq("status", "ignored")
       .gte("received_at", since),
+    supabase
+      .from("inbound_items")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .gte("hidden_on_platform_at", since),
   ]);
   return {
     answered: answered.count ?? 0,
     forYou: forYou.count ?? 0,
     ignored: ignored.count ?? 0,
+    hidden: hidden.count ?? 0,
   };
 }
 
@@ -233,7 +251,7 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, author_name, text, received_at, category, confidence, classifier_used, permalink, " +
+      "id, kind, status, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, " +
         "social_accounts (platform), conversations (last_customer_message_at)",
     )
     .eq("tenant_id", tenantId);
@@ -254,6 +272,7 @@ export async function loadEntries(
     confidence: number | null;
     classifier_used: string | null;
     permalink: string | null;
+    hidden_on_platform_at: string | null;
     social_accounts: { platform: string } | null;
     conversations: { last_customer_message_at: string | null } | null;
   }[];
@@ -307,6 +326,7 @@ export async function loadEntries(
           }
         : null,
       permalink: r.permalink,
+      hiddenOnPlatformAt: r.hidden_on_platform_at,
       dmWindowClosesAt:
         r.kind === "dm" && last
           ? new Date(new Date(last).getTime() + DM_REPLY_WINDOW_MS).toISOString()

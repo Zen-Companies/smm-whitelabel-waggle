@@ -314,6 +314,40 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async hideComment(input: {
+    accountId: string;
+    postId: string;
+    commentId: string;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    await call("hideComment", async (withFetch) => {
+      await this.zernio.comments.hideInboxComment(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId, commentId: input.commentId },
+          body: { accountId: input.accountId },
+        }),
+      );
+    });
+  }
+
+  async unhideComment(input: {
+    accountId: string;
+    postId: string;
+    commentId: string;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    await call("unhideComment", async (withFetch) => {
+      await this.zernio.comments.unhideInboxComment(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId, commentId: input.commentId },
+          query: { accountId: input.accountId },
+        }),
+      );
+    });
+  }
+
   async sendDm(input: {
     accountId: string;
     conversationId: string;

@@ -3,6 +3,7 @@ import {
   INBOX_TABS,
   needsOwner,
   normalizeTab,
+  todayLine,
   postTitle,
   responseTime,
   startOfTodayUtc,
@@ -47,6 +48,20 @@ describe("card details", () => {
   it("today starts at midnight UTC", () => {
     expect(startOfTodayUtc(new Date("2026-10-30T15:30:00Z")).toISOString()).toBe(
       "2026-10-30T00:00:00.000Z",
+    );
+  });
+});
+
+describe("todayLine (T40)", () => {
+  it("mentions hidden spam only when there is some", () => {
+    expect(todayLine({ answered: 12, ignored: 3, hidden: 0 })).toBe(
+      "Today Waggle answered 12 and ignored 3.",
+    );
+    expect(todayLine({ answered: 12, ignored: 3, hidden: 1 })).toBe(
+      "Today Waggle answered 12, ignored 3 and hid 1 spam comment.",
+    );
+    expect(todayLine({ answered: 12, ignored: 3, hidden: 2 })).toBe(
+      "Today Waggle answered 12, ignored 3 and hid 2 spam comments.",
     );
   });
 });

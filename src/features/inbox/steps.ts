@@ -14,7 +14,7 @@ export function getProductionSteps(): Steps {
   const llm = getLlmClientOrNull();
   return {
     ...(classifier ? { new: createClassifyStep({ classifier }) } : {}),
-    ...(llm ? { classified: createDraftStep({ llm }) } : {}),
+    ...(llm ? { classified: createDraftStep({ llm, social: getSocialProvider }) } : {}),
     drafted: createPolicyStep(),
     // Zernio, or the in-process mock when SOCIAL_PROVIDER_MODE=mock.
     sending: createSendStep({ social: getSocialProvider }),

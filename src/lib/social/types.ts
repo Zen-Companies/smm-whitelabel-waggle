@@ -113,6 +113,17 @@ export interface SocialProvider {
       idempotencyKey: string;
     } & CallOptions,
   ): Promise<{ providerReplyId: string }>;
+  /**
+   * Hides a comment on its post (`POST /v1/inbox/comments/{postId}/{commentId}/hide`, T40): only
+   * the commenter and the account see it. `unhideComment` is `DELETE` on the same path. A comment
+   * that no longer exists answers 400 (code PLATFORM_API_ERROR).
+   */
+  hideComment(
+    input: { accountId: string; postId: string; commentId: string } & CallOptions,
+  ): Promise<void>;
+  unhideComment(
+    input: { accountId: string; postId: string; commentId: string } & CallOptions,
+  ): Promise<void>;
   sendDm(
     input: {
       accountId: string;

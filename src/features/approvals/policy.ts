@@ -21,6 +21,8 @@ export interface PolicyInput {
     confidenceThreshold: number;
     /** The owner pressed "Pause all replies" (T27): nothing goes out on its own. */
     repliesPaused?: boolean;
+    /** "Hide spam comments for me" (T40): spam comments are hidden on the platform. */
+    autoHideSpam?: boolean;
   };
   account: { status: "active" | "disconnected" | "error" };
   autonomyMode: AutonomyMode;
@@ -48,9 +50,12 @@ export type PolicyReason =
 export type PolicyDecision =
   | { decision: "pause"; reason: "tenant_inactive" | "account_inactive" }
   | { decision: "ignore"; reason: "spam" }
+  /** A spam comment, auto-hide on: hide it on the platform, then ignore it (T40). */
+  | { decision: "hide"; reason: "spam" }
   | {
       decision: "escalate";
       reason:
+        | "spam"
         | "mode_off"
         | "complaint"
         | "unclear"
@@ -71,15 +76,24 @@ const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
  */
 export function triage(
   input: Omit<PolicyInput, "draft" | "lastCustomerMessageAt" | "now"> & { aiCapReached?: boolean },
-): Extract<PolicyDecision, { decision: "pause" | "ignore" | "escalate" }> | { decision: "draft" } {
+):
+  | Extract<PolicyDecision, { decision: "pause" | "ignore" | "hide" | "escalate" }>
+  | { decision: "draft" } {
   // 1. Not paying or account down: wait (handled before drafting, §11).
   if (!PAYING.includes(input.tenant.subscriptionStatus)) {
     return { decision: "pause", reason: "tenant_inactive" };
   }
   if (input.account.status !== "active") return { decision: "pause", reason: "account_inactive" };
-  // 2. Spam is dropped, whatever the mode.
+  // 2. Spam is never answered, whatever the mode. A spam DM is dropped. A spam comment is public
+  // on the post, so it is hidden (auto-hide on) or comes to the owner to hide (T40).
   const { category, confidence } = input.classification;
-  if (category === "spam") return { decision: "ignore", reason: "spam" };
+  if (category === "spam") {
+    if (input.item.kind === "dm") return { decision: "ignore", reason: "spam" };
+    // Hidden for the owner only when Waggle is sure (the same threshold as replies).
+    return input.tenant.autoHideSpam && confidence >= input.tenant.confidenceThreshold
+      ? { decision: "hide", reason: "spam" }
+      : { decision: "escalate", reason: "spam" };
+  }
   // 3. Always the owner's call.
   if (category === "complaint") return { decision: "escalate", reason: "complaint" };
   if (category === "unclear") return { decision: "escalate", reason: "unclear" };

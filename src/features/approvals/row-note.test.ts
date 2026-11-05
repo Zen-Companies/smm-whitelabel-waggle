@@ -17,6 +17,7 @@ const entry = (
   draft: null,
   dmWindowClosesAt: null,
   permalink: null,
+  hiddenOnPlatformAt: null,
   status: "awaiting_approval",
   ...over,
 });
@@ -75,5 +76,22 @@ describe("rowNote (Paper rule 4: what happens next, in plain words)", () => {
   it("ignored and closed items", () => {
     expect(rowNote(entry({ status: "ignored" })).text).toBe("Ignored: looked like spam");
     expect(rowNote(entry({ status: "rejected" })).text).toBe("You chose not to reply");
+  });
+});
+
+describe("rowNote: spam comments (T40)", () => {
+  const spam = { kind: "comment" as const, category: "spam" };
+  it("a spam comment waiting for the owner says so", () => {
+    expect(rowNote(entry({ ...spam, status: "escalated" }))).toEqual({
+      tone: "none",
+      text: "Looks like spam: hide it",
+    });
+  });
+  it("a hidden comment says where it was hidden", () => {
+    const hidden = { ...spam, hiddenOnPlatformAt: "2026-10-30T10:01:00Z" };
+    expect(rowNote(entry({ ...hidden, status: "ignored" })).text).toBe("Hidden on Instagram");
+    expect(rowNote(entry({ ...hidden, status: "handled", platform: "facebook" })).text).toBe(
+      "Hidden on Facebook",
+    );
   });
 });

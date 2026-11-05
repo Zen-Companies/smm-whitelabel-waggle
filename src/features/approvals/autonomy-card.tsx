@@ -8,6 +8,7 @@ import {
   CONFIGURABLE_CATEGORIES,
   FIXED_BEHAVIOUR,
 } from "./autonomy";
+import { AutoHideForm } from "./auto-hide-form";
 import { AutonomyForm } from "./autonomy-form";
 import { PauseForm } from "./pause-form";
 import type { AutonomyMode } from "./policy";
@@ -18,7 +19,7 @@ export async function AutonomyCard() {
   const supabase = await createServerSupabase();
   const [{ data }, { data: settings }] = await Promise.all([
     supabase.from("autonomy_settings").select("category, mode").eq("tenant_id", tenant.id),
-    supabase.from("tenants").select("replies_paused").eq("id", tenant.id).single(),
+    supabase.from("tenants").select("replies_paused, auto_hide_spam").eq("id", tenant.id).single(),
   ]);
   const modes = new Map((data ?? []).map((row) => [row.category, row.mode as AutonomyMode]));
 
@@ -50,11 +51,16 @@ export async function AutonomyCard() {
                 <span className="font-semibold">{CATEGORY_LABELS[category]}</span>
                 <span className="text-ink-2 text-sm">{CATEGORY_HINTS[category]}</span>
               </dt>
-              <dd className="text-ink-2 text-sm font-medium">{FIXED_BEHAVIOUR[category]}</dd>
+              <dd className="text-ink-2 text-sm font-medium">
+                {category === "spam" && !settings?.auto_hide_spam
+                  ? "Never answered"
+                  : FIXED_BEHAVIOUR[category]}
+              </dd>
             </div>
           ))}
         </dl>
       </div>
+      <AutoHideForm on={settings?.auto_hide_spam ?? false} />
       <Link
         href="/lab"
         className="card hover:bg-subtle flex items-center gap-3 p-5 transition-colors duration-150"

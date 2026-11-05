@@ -387,6 +387,7 @@ export type Database = {
           confidence: number | null
           conversation_id: string | null
           created_at: string
+          hidden_on_platform_at: string | null
           id: string
           kind: string
           last_error: string | null
@@ -411,6 +412,7 @@ export type Database = {
           confidence?: number | null
           conversation_id?: string | null
           created_at?: string
+          hidden_on_platform_at?: string | null
           id?: string
           kind: string
           last_error?: string | null
@@ -435,6 +437,7 @@ export type Database = {
           confidence?: number | null
           conversation_id?: string | null
           created_at?: string
+          hidden_on_platform_at?: string | null
           id?: string
           kind?: string
           last_error?: string | null
@@ -919,6 +922,7 @@ export type Database = {
       tenants: {
         Row: {
           ai_monthly_cap_usd: number | null
+          auto_hide_spam: boolean
           business_profile: string
           business_profile_updated_at: string | null
           confidence_threshold: number
@@ -933,6 +937,7 @@ export type Database = {
         }
         Insert: {
           ai_monthly_cap_usd?: number | null
+          auto_hide_spam?: boolean
           business_profile?: string
           business_profile_updated_at?: string | null
           confidence_threshold?: number
@@ -947,6 +952,7 @@ export type Database = {
         }
         Update: {
           ai_monthly_cap_usd?: number | null
+          auto_hide_spam?: boolean
           business_profile?: string
           business_profile_updated_at?: string | null
           confidence_threshold?: number

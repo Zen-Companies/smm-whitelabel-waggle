@@ -15,6 +15,8 @@ const EVENTS: Record<PolicyDecision["decision"], StatusEvent> = {
   approve: "await_approval",
   escalate: "escalate",
   ignore: "ignore",
+  // Spam is never drafted, so this can't come after drafting; ignoring is the safe answer.
+  hide: "ignore",
   pause: "pause",
 };
 
@@ -28,7 +30,7 @@ export async function loadPolicyInput(
     .from("inbound_items")
     .select(
       "id, tenant_id, kind, category, confidence, conversation_id, " +
-        "social_accounts!inner (status), tenants!inner (subscription_status, confidence_threshold, replies_paused)",
+        "social_accounts!inner (status), tenants!inner (subscription_status, confidence_threshold, replies_paused, auto_hide_spam)",
     )
     .eq("id", itemId)
     .single();
@@ -44,6 +46,7 @@ export async function loadPolicyInput(
       subscription_status: SubscriptionStatus;
       confidence_threshold: number;
       replies_paused: boolean;
+      auto_hide_spam: boolean;
     };
   };
   if (!row.category || row.confidence === null) throw new Error("policy: item is not classified");
@@ -83,6 +86,7 @@ export async function loadPolicyInput(
         subscriptionStatus: row.tenants.subscription_status,
         confidenceThreshold: Number(row.tenants.confidence_threshold),
         repliesPaused: row.tenants.replies_paused,
+        autoHideSpam: row.tenants.auto_hide_spam,
       },
       account: row.social_accounts,
       // A missing row means the default for a new category: the safest mode.

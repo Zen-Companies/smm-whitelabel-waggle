@@ -42,6 +42,8 @@ export function outcomeText(outcome: Outcome): string {
       return `Escalate to the owner${reason}`;
     case "ignore":
       return `Ignore${reason}`;
+    case "hide":
+      return `Hide on the post${reason}`;
     case "pause":
       return `Pause${reason}`;
     case "draft":

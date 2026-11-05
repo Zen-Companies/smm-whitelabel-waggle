@@ -90,6 +90,17 @@ export class MockSocialProvider implements SocialProvider {
     return { providerReplyId };
   }
 
+  /** Comment ids currently hidden (T40), keyed `accountId|commentId`. */
+  readonly hidden = new Set<string>();
+
+  async hideComment(input: { accountId: string; postId: string; commentId: string }) {
+    this.hidden.add(`${input.accountId}|${input.commentId}`);
+  }
+
+  async unhideComment(input: { accountId: string; postId: string; commentId: string }) {
+    this.hidden.delete(`${input.accountId}|${input.commentId}`);
+  }
+
   async sendDm(input: {
     accountId: string;
     conversationId: string;

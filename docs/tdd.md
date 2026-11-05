@@ -516,7 +516,7 @@ Input: item, classification, draft, tenant, account, autonomy mode, now. Output:
 Order:
 
 1. Tenant not active (billing) or account not active → `paused` (handled before drafting).
-2. Category `spam` → `ignore`.
+2. Category `spam` → never answered (T40, 2026-11-05). A spam **DM** → `ignore`. A spam **comment** is public on the post: with the owner's "Hide spam comments for me" on (`tenants.auto_hide_spam`) and confidence ≥ the tenant's threshold → `hide` (the draft step hides it through `SocialProvider.hideComment`, records `hidden_on_platform_at` and a `comment_hidden` audit row with actor `system`, then `ignored`; if the hide fails → `escalated` instead, so it doesn't stay public unnoticed); otherwise → `escalate` with reason `spam`, and the inbox shows the spam card (design v3 "T40 · Hide spam"): "Hide on Instagram/Facebook" (`hideSpamComment`: hide, then `handled` as spam; a 400 `PLATFORM_API_ERROR` = already gone, handled the same) or "It's not spam" (`markNotSpam`: category → `unclear`, audited `marked_not_spam`, stays in Needs you). Ignored/handled spam comments show "Hidden on Instagram" with Unhide (`DELETE …/hide`, `comment_unhidden`), or "Hide on Instagram" if still visible. T37's "It's spam: hide it" also hides comments on the platform. The headline adds "hid N spam comments" today.
 3. Mode `off`, category `complaint`/`unclear`, or `draft.needsHuman` → `escalate`.
 4. Confidence < tenant threshold → `escalate` (treat as unclear).
 5. DM outside 24-hour window → `escalate`.
@@ -531,7 +531,7 @@ As built (T10, `features/approvals`):
 - `triage(input)` is steps 1-4 without the draft, returning `draft` when the item is worth drafting. The T9 draft step uses it, so the pre-draft rules live in one place.
 - The `drafted` job step (`createPolicyStep`) loads the item, tenant, account, mode, latest pending draft and conversation window, runs `policy()`, and maps the decision to an event: send → `sending`, approve → `awaiting_approval`, escalate → `escalated`, ignore → `ignored`, pause → `paused`. In auto mode it also marks the draft `approved` (`decided_by` null = system) and writes `draft_auto_approved`. The decision, reason and mode go into the status_changed audit row.
 - `drafts.needs_human` and `drafts.needs_human_reason` columns (migration `draft_needs_human`) carry `DraftResult.needsHuman`.
-- Settings UI ("Reply autonomy"): a mode selector for **faq** and **lead** only. Complaints and unclear messages always escalate and spam is always ignored (steps 2-3), so those rows are shown as fixed rather than offering a setting that would do nothing. The Server Action updates `mode` through RLS and writes `autonomy_mode_changed` (from → to) with the owner as actor.
+- Settings UI ("Reply autonomy"): a mode selector for **faq** and **lead** only. Complaints and unclear messages always escalate and spam is never answered (steps 2-3; the auto-hide switch for spam comments sits under the modes, T40), so those rows are shown as fixed rather than offering a setting that would do nothing. The Server Action updates `mode` through RLS and writes `autonomy_mode_changed` (from → to) with the owner as actor.
 
 ## 12. Billing
 
