@@ -454,7 +454,15 @@ As built (T7):
 - **Report** (`pnpm triage:report`, `scripts/triage-report.ts`): runs the configured classifiers directly (no fallback, 30 s timeout, concurrency 4): `jev` (`JEV_API_URL`) and extra Jev endpoints from `TRIAGE_JEV_ENDPOINTS=name=url,...` (key `JEV_API_KEY_<NAME>`) by default; `jev-openrouter` and `llm` (`OPENROUTER_API_KEY` + LLM config) only when named in `--only`, because they spend money or free-tier quota (rule 14). `--only` matches whole names (`jev` never selects `jev-openrouter`). Prints accuracy, recall and precision per category, the confusion matrix, accuracy by language and on the ambiguous set, p50/p95/max latency, total AI cost and the misclassified messages; `--json` writes everything. No DB writes.
 
 - **Business profile (T25).** The job step now sends `businessContext()` (`lib/classifier/business-context.ts`): the name plus the owner's `tenants.business_profile`, or the name alone when there is none; the status_changed row records `businessContext` (`profile`/`name`) and `profileUpdatedAt`, never the text. `LLM_CLASSIFY_PROMPT_VERSION` 2026-10-30.1 says "a business" instead of "a local business" and counts "to buy something" as purchase intent. The report uses the same function: `business.json` now holds `{ name, profile }`, and `--context name|profile` (default profile) compares the two. Niche sets: `tests/fixtures/triage-sets/digital-products` (25) and `salon` (20), `expected` per message.
-- **Name only vs profile: not measured yet.** It needs jevos running (free) or paid calls: `pnpm triage:report --only jev --fixtures tests/fixtures/triage-sets/digital-products --context name`, then `--context profile`, and the same for `salon` and the café set. Record the per-category accuracy here before relying on the profile.
+- **Name only vs profile, measured 2026-11-05 on local jevos-v5** (`pnpm triage:report --only jev --fixtures <set> --context name|profile`, questions 2026-10-29.1). The profile made jevos **worse on every set**:
+
+  | Set | n | Name only | Profile |
+  |---|---|---|---|
+  | Digital products (Pixel Presets PH) | 25 | 56.0% | 40.0% |
+  | Salon (Glow Studio Salon) | 20 | 75.0% | 60.0% |
+  | Café (Harbour Bean Café) | 175 | 52.0% | 47.4% |
+
+  Per category, name only → profile. Digital products: faq 33→0%, lead 67→100% (precision 100→30%), unclear 100→0%: the profile pulls almost everything to `lead`. Salon: lead precision 100→57%, unclear 100→50%. Café: faq 43→31%, unclear 97→84%, lead 55→58%, ambiguous set 48→40%. Spam recall stays ~0% either way (0%, 0%, 3–6%): the profile does not fix the spam miss. Latency unchanged (p50 ~0.55–0.8 s). Not measured on the LLM classifier or jev-1.13 (paid). **Decision:** production Jev gets the name only (`getClassifier()` builds `JevClassifier` with `businessContext: "name"`, which sends `ClassifyInput.businessName`); the LLM fallback still gets name + profile. The status_changed row's `businessContext` still records what the step offered (`profile`/`name`), so a Jev answer with `profile` there was classified on the name.
 
 ## 10. LLM drafting
 

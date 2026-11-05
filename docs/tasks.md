@@ -129,10 +129,11 @@ Design: `docs/tdd.md` §19. Nothing in this phase may send, touch `inbound_items
       _Done when:_ a run shows both variants side by side, a saved case appears in its set, and non-operators get a 404.
       _Note:_ tables `lab_cases` (also for owner corrections, `origin`) and `lab_runs`; RLS on, no client grants (pgTAP). "Also draft" is off by default so a run costs one call per side. Checked in the browser with both sides on "Jev only" while jevos was down (errors shown, 0 AI calls); a run with real calls is still to do.
 
-- [ ] **T25. Business profile for classification**
+- [x] **T25. Business profile for classification**
       `tenants.business_profile` (text, length cap, owner-editable in Settings → Business, versioned in each classification's audit details). Pass it to both classifiers instead of the business name; remove "local business" from the LLM classifier prompt (bump `LLM_CLASSIFY_PROMPT_VERSION`). `pnpm triage:report` reads the same field so tests match production. Add a labeled digital-product set (and one more niche). Measure "name only" against "profile" in the Lab before switching.
       _Done when:_ both classifiers receive the profile, the report runs on the new sets, and the Lab comparison is recorded in TDD §9.6.
       _Status (2026-10-30):_ built and tested (unit, integration: the job sends the profile and records `businessContext`). Settings → Business has the profile form; the Lab has a "Saved profile" context. **Open:** the name-only vs profile measurement (needs jevos or paid calls; commands in TDD §9.6), so the box stays unchecked.
+      _Result (2026-11-05):_ measured on local jevos (TDD §9.6): the profile made Jev worse on every set (digital products 56→40%, salon 75→60%, café 52→47%). Production Jev now gets the business name only (`JevClassifier` `businessContext: "name"`); the LLM fallback and drafting keep the profile. The Lab and the report still measure either.
 
 - [x] **T26. Owner practice box**
       "Try a message" in Settings → Replies (and a later onboarding step): the tenant's current setup only, through the T23 engine. One plain card: what it looks like, the reply it would send, "Used your info: …", what happens next ("I'd ask you first"), or why it would pass to the owner with "Add an answer". No scores or model names (design.md principle 5). "Right / Not quite" saves a correction. Daily try limit per business, shown in the box. "Practice only. Nothing is posted."

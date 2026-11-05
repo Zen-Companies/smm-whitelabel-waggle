@@ -35,7 +35,14 @@ export function createClassifyStep(deps: { classifier: Classifier }): Step {
 
     // ctx.callSignal() caps the LLM fallback at 20 s; FallbackClassifier gives Jev its own 3 s.
     const result = await deps.classifier.classify(
-      { tenantId: item.tenantId, itemId: item.id, text, kind, businessContext: context.text },
+      {
+        tenantId: item.tenantId,
+        itemId: item.id,
+        text,
+        kind,
+        businessContext: context.text,
+        businessName: tenants.name.trim(),
+      },
       { signal: ctx.callSignal() },
     );
 

@@ -55,7 +55,11 @@ export function getClassifier(): Classifier | null {
   }
   const llm = getLlmClientOrNull();
   const jev = jevConfig
-    ? new JevClassifier(jevConfig, { usage: createDbUsageRecorder(getServiceClient()) })
+    ? new JevClassifier(
+        // Name only for Jev; the LLM fallback still gets the profile (T25, docs/tdd.md §9.6).
+        { ...jevConfig, businessContext: "name" },
+        { usage: createDbUsageRecorder(getServiceClient()) },
+      )
     : null;
   const fallback = llm ? new LlmClassifier(llm) : null;
   classifier =

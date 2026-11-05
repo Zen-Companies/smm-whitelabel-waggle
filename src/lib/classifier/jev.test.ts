@@ -71,6 +71,24 @@ describe("JevClassifier", () => {
     });
   });
 
+  it("sends only the business name in name mode (T25: the profile made jevos worse)", async () => {
+    const records: AiUsageRecord[] = [];
+    const fetchMock = vi.fn<typeof fetch>(async () => json(jevBody(scores)));
+    const jev = new JevClassifier(
+      { url: URL_, model: "jev-latest", costPerMTokInput: 0, businessContext: "name" },
+      { usage: { record: async (r) => void records.push(r) }, fetch: fetchMock },
+    );
+
+    await jev.classify({
+      ...input,
+      businessName: "Demo Coffee Shop",
+      businessContext: "Demo Coffee Shop. We roast our own beans and sell online.",
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.state.business).toBe("Demo Coffee Shop");
+  });
+
   it("omits Authorization without a key (local jevos)", async () => {
     const { jev, fetchMock } = setup(async () => json(jevBody(scores)), { apiKey: "" });
     await jev.classify(input);

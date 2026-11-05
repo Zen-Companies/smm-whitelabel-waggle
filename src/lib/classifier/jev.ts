@@ -61,7 +61,12 @@ const jevUsageSchema = z.object({
 // Only this adapter knows the wire format (§9). Never log the request: it holds customer text.
 export class JevClassifier implements Classifier {
   constructor(
-    private readonly config: Omit<JevConfig, "timeoutMs">,
+    /**
+     * businessContext "name": send only `input.businessName` (production; the profile made jevos
+     * less accurate on every labeled set, docs/tdd.md §9.6). "given" (default): send
+     * `input.businessContext` as is, so the Lab and the report can measure either.
+     */
+    private readonly config: Omit<JevConfig, "timeoutMs"> & { businessContext?: "name" | "given" },
     private readonly deps: { usage: UsageRecorder; fetch?: typeof fetch },
     /** Another question version (the Lab); production uses the current one. */
     private readonly questions: JevQuestions = JEV_QUESTIONS,
@@ -72,10 +77,14 @@ export class JevClassifier implements Classifier {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (this.config.apiKey) headers.Authorization = `Bearer ${this.config.apiKey}`;
 
+    const business =
+      this.config.businessContext === "name"
+        ? (input.businessName ?? input.businessContext)
+        : input.businessContext;
     const body = {
       model: this.config.model,
       state: {
-        ...(input.businessContext ? { business: input.businessContext } : {}),
+        ...(business ? { business } : {}),
         channel: input.kind,
         customer_message: input.text,
       },

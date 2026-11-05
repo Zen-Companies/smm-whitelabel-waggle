@@ -24,7 +24,10 @@ export interface ClassifyInput {
   itemId?: string | null;
   text: string;
   kind: "comment" | "dm";
+  /** Name plus the owner's profile when there is one (`businessContext()`). */
   businessContext?: string;
+  /** The business name alone, for classifiers that do worse with the profile (Jev, T25). */
+  businessName?: string;
 }
 
 export interface ClassifyOptions {
