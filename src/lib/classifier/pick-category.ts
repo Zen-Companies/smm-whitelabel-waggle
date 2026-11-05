@@ -2,7 +2,9 @@ import type { Category, UnclearReason } from "./types";
 
 // docs/tdd.md §9.3. Code constants until T7 tunes them on fixtures.
 export const YES = 0.5;
-export const SPAM_YES = 0.85;
+// 0.7 with the 2026-11-05.1 spam question: no false spam on the 180 labeled non-spam messages
+// (highest was a lead at 0.86, which lead outranks anyway); docs/tdd.md §9.6.
+export const SPAM_YES = 0.7;
 export const MIN_CONFIDENCE = 0.5;
 export const SPAM_MIN_WORDS = 4;
 

@@ -8,6 +8,8 @@ const COMPLAINT =
   "Is the customer unhappy, complaining, reporting a bad experience or a problem with the business, or asking for a refund?";
 const FAQ =
   "Is the customer asking a question that the business's own information could answer, such as hours, location, prices, services or policies?";
+const LEAD_PURCHASE_INTENT =
+  "Is the customer asking to make a booking or reservation, to place an order, for a price or quote for a specific order they want to make, or sharing their contact details so the business can contact them?";
 const SPAM =
   "Is this an unsolicited sales pitch, scam, promotion of another business, or something that has nothing to do with this business?";
 
@@ -23,14 +25,22 @@ export const JEV_QUESTION_SETS = {
   // to lead, which outranks faq (§9.3).
   "2026-10-29.1": {
     complaint: COMPLAINT,
-    lead: "Is the customer asking to make a booking or reservation, to place an order, for a price or quote for a specific order they want to make, or sharing their contact details so the business can contact them?",
+    lead: LEAD_PURCHASE_INTENT,
     faq: FAQ,
     spam: SPAM,
+  },
+  // Spam asked about the sender, not a list of kinds: jevos scored the list wording low on real
+  // spam (median 0.28) and caught 1 of 40; this one has median 0.74 (docs/tdd.md §9.6).
+  "2026-11-05.1": {
+    complaint: COMPLAINT,
+    lead: LEAD_PURCHASE_INTENT,
+    faq: FAQ,
+    spam: "Is this message from a spammer or scammer rather than a genuine customer of this business?",
   },
 } as const satisfies Record<string, JevQuestions>;
 
 export type JevQuestionsVersion = keyof typeof JEV_QUESTION_SETS;
 
-export const JEV_QUESTIONS_VERSION: JevQuestionsVersion = "2026-10-29.1";
+export const JEV_QUESTIONS_VERSION: JevQuestionsVersion = "2026-11-05.1";
 
 export const JEV_QUESTIONS: JevQuestions = JEV_QUESTION_SETS[JEV_QUESTIONS_VERSION];

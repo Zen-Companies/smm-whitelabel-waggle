@@ -59,9 +59,9 @@ describe("pickCategory", () => {
     expect(picked.confidence).toBeCloseTo(0.1);
   });
 
-  it("needs SPAM_YES (0.85) for spam", () => {
-    expect(pickCategory({ ...none, spam: 0.84 }, long).category).toBe("unclear");
-    expect(pickCategory({ ...none, spam: 0.85 }, long).category).toBe("spam");
+  it("needs SPAM_YES (0.7) for spam", () => {
+    expect(pickCategory({ ...none, spam: 0.69 }, long).category).toBe("unclear");
+    expect(pickCategory({ ...none, spam: 0.7 }, long).category).toBe("spam");
   });
 
   it("a real request wrapped in junk is not spam", () => {
