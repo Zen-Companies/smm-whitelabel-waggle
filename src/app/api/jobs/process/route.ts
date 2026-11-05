@@ -7,6 +7,7 @@ import {
   getMailer,
   handlePlatformPause,
 } from "@/features/alerts";
+import { syncAnalytics } from "@/features/analytics";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
@@ -83,6 +84,14 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
 
+    // T48: analytics copies for a few due brands (hourly / weekly / daily parts). Each call is
+    // started only with time left, so a slow Zernio never pushes the run past its limit.
+    const analytics = await syncAnalytics({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 25_000,
+    });
+
     const dmWindowsEscalated = await escalateClosingDmWindows(db);
     const nudges = await enqueueDraftNudges(db);
     const alerts = await deliverPendingAlerts({
@@ -104,6 +113,7 @@ export async function POST(request: Request): Promise<Response> {
       health,
       backfill,
       reviews,
+      analytics,
     });
   } catch (error) {
     // Visible in the Vercel logs even without Sentry. Our own error text only, never customer

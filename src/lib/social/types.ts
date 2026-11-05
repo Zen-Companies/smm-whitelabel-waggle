@@ -1,3 +1,13 @@
+import type {
+  BestTimeSlot,
+  DashboardSummary,
+  Demographics,
+  FollowerSeries,
+  OnlineFollowers,
+  PostTimelinePoint,
+  ProviderPostMetrics,
+} from "./analytics-types";
+
 export const SOCIAL_PLATFORMS = ["instagram", "facebook"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
@@ -157,6 +167,36 @@ export interface SocialProvider {
   listReviews(
     input: { accountId: string; limit?: number } & CallOptions,
   ): Promise<ProviderReview[]>;
+  // Analytics reads (T48). Called by the sync job only; pages read the stored copies.
+  /** `GET /v1/analytics/dashboard` for one window, with the previous window to compare. */
+  getAnalyticsDashboard(
+    input: {
+      profileId: string;
+      fromDate: string;
+      toDate: string;
+      platform?: SocialPlatform;
+    } & CallOptions,
+  ): Promise<DashboardSummary>;
+  /** `GET /v1/analytics`: posts published in the window with lifetime numbers, one page. */
+  listPostAnalytics(
+    input: { profileId: string; fromDate: string; toDate: string; page: number } & CallOptions,
+  ): Promise<{ posts: ProviderPostMetrics[]; pages: number }>;
+  /** `GET /v1/accounts/follower-stats`, daily (refreshed once a day upstream). */
+  getFollowerStats(
+    input: { profileId: string; fromDate: string; toDate: string } & CallOptions,
+  ): Promise<FollowerSeries[]>;
+  /** `GET /v1/analytics/best-time`: slots by average engagement, best first (UTC hours). */
+  getBestTimeToPost(input: { profileId: string } & CallOptions): Promise<BestTimeSlot[]>;
+  /** Instagram (age, gender, city, country) or Facebook (country, city) follower breakdown. */
+  getDemographics(
+    input: { accountId: string; platform: SocialPlatform } & CallOptions,
+  ): Promise<Demographics | null>;
+  /** Instagram followers online per hour, last 30 days. */
+  getOnlineFollowers(input: { accountId: string } & CallOptions): Promise<OnlineFollowers | null>;
+  /** `GET /v1/analytics/post-timeline`: a post's numbers day by day. */
+  getPostTimeline(
+    input: { postId: string; fromDate?: string; toDate?: string } & CallOptions,
+  ): Promise<PostTimelinePoint[]>;
   /** Public reply under a review (`POST /v1/inbox/reviews/{reviewId}/reply`, Idempotency-Key). */
   replyToReview(
     input: {

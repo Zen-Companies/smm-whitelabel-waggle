@@ -2,7 +2,7 @@
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(61);
+select plan(65);
 
 -- Fixtures, as postgres (bypasses RLS) ---------------------------------------------------------
 
@@ -57,6 +57,13 @@ insert into public.ai_usage (tenant_id, item_id, purpose, provider, model) value
 insert into public.kb_suggestions (tenant_id, title) values
   ('a1000000-0000-4000-8000-000000000001', 'Parking A'),
   ('b1000000-0000-4000-8000-000000000001', 'Parking B');
+
+insert into public.analytics_snapshots (tenant_id, key, data) values
+  ('a1000000-0000-4000-8000-000000000001', 'dashboard:30:all', '{"who": "A"}'),
+  ('b1000000-0000-4000-8000-000000000001', 'dashboard:30:all', '{"who": "B"}');
+insert into public.post_metrics (tenant_id, provider_post_id, platform, caption) values
+  ('a1000000-0000-4000-8000-000000000001', 'pa', 'instagram', 'Post A'),
+  ('b1000000-0000-4000-8000-000000000001', 'pb', 'instagram', 'Post B');
 
 insert into public.webhook_events (id, source, event_type, payload)
 values ('evt_1', 'zernio', 'message.received', '{}');
@@ -120,6 +127,8 @@ select throws_ok($$ select * from public.webhook_events $$, '42501', null, 'webh
 select throws_ok($$ select * from public.lab_cases $$, '42501', null, 'lab_cases: no client access');
 select throws_ok($$ select * from public.lab_runs $$, '42501', null, 'lab_runs: no client access');
 select results_eq($$ select title from public.kb_suggestions $$, $$ values ('Parking A') $$, 'kb_suggestions: only A');
+select results_eq($$ select data->>'who' from public.analytics_snapshots $$, $$ values ('A') $$, 'analytics_snapshots: only A');
+select results_eq($$ select caption from public.post_metrics $$, $$ values ('Post A') $$, 'post_metrics: only A');
 
 -- Writes on B's rows: updates and deletes match nothing, inserts are refused.
 
@@ -177,6 +186,9 @@ select throws_ok($$ insert into public.kb_suggestions (tenant_id, title) values 
   '42501', null, 'cannot insert kb_suggestions');
 select throws_ok($$ update public.kb_suggestions set status = 'accepted' $$, '42501', null, 'cannot update kb_suggestions');
 select throws_ok($$ update public.posts set status = 'published' $$, '42501', null, 'cannot change post status');
+select throws_ok($$ insert into public.post_metrics (tenant_id, provider_post_id, platform) values ('a1000000-0000-4000-8000-000000000001', 'x', 'instagram') $$,
+  '42501', null, 'cannot insert post_metrics');
+select throws_ok($$ update public.analytics_snapshots set data = '{}' $$, '42501', null, 'cannot update analytics_snapshots');
 
 -- Allowed writes in A's own tenant.
 

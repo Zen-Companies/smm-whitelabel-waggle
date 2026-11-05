@@ -15,6 +15,15 @@ import type {
   SocialProvider,
 } from "./types";
 import { SocialProviderError } from "./types";
+import {
+  MOCK_BEST_TIMES,
+  mockDashboard,
+  mockDemographics,
+  mockFollowerSeries,
+  mockOnlineFollowers,
+  mockPosts,
+  mockTimeline,
+} from "./mock-analytics";
 
 // SOCIAL_PROVIDER_MODE=mock (CLAUDE.md rule 14): a stand-in for Zernio for tests and local smoke
 // tests. Nothing leaves the process. Ids are derived from the input, so a retry with the same
@@ -132,6 +141,49 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   /** Reviews a test put on a Page (keyed by Zernio account id), newest first. */
+  // Analytics (T48): steady sample numbers; `analyticsCalls` lets tests count the reads.
+  analyticsCalls = 0;
+  async getAnalyticsDashboard(input: {
+    profileId: string;
+    fromDate: string;
+    toDate: string;
+    platform?: SocialPlatform;
+  }) {
+    this.analyticsCalls++;
+    return mockDashboard(input);
+  }
+  async listPostAnalytics(input: {
+    profileId: string;
+    fromDate: string;
+    toDate: string;
+    page: number;
+  }) {
+    this.analyticsCalls++;
+    const all = mockPosts(input.profileId, input.fromDate, input.toDate);
+    const pages = Math.max(1, Math.ceil(all.length / 50));
+    return { posts: all.slice((input.page - 1) * 50, input.page * 50), pages };
+  }
+  async getFollowerStats(input: { profileId: string; fromDate: string; toDate: string }) {
+    this.analyticsCalls++;
+    return mockFollowerSeries(input.fromDate, input.toDate);
+  }
+  async getBestTimeToPost() {
+    this.analyticsCalls++;
+    return MOCK_BEST_TIMES;
+  }
+  async getDemographics(input: { accountId: string; platform: SocialPlatform }) {
+    this.analyticsCalls++;
+    return mockDemographics(input.platform);
+  }
+  async getOnlineFollowers() {
+    this.analyticsCalls++;
+    return mockOnlineFollowers();
+  }
+  async getPostTimeline(input: { postId: string }) {
+    this.analyticsCalls++;
+    return mockTimeline(input.postId);
+  }
+
   readonly reviews = new Map<string, ProviderReview[]>();
 
   async listReviews(input: { accountId: string }): Promise<ProviderReview[]> {

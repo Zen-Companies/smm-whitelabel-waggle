@@ -214,6 +214,19 @@ Picked 2026-11-05 from the Zernio docs (docs.zernio.com, `zernio-docs` MCP) and 
       _Done when:_ an owner can add a brand, switch between brands from any page, a new brand starts on "Set up <brand>", and one brand's items never show in another's pages (integration test with one login owning two brands).
       _Status (2026-11-06):_ built to the approved design v3 "Brands" artboards. Migration `20261106120000_brands` (drops the one-tenant-per-owner index, adds `create_brand`). Brand cookie + `getCurrentTenant()` (TDD §4), brand menu with per-brand "needs you" counts and a honey dot when another brand waits, `/brands/new`, the setup screen replaces the inbox's first run, alert links switch brand. Query audit: every RLS-client query already filtered on the tenant except `getCurrentTenant` itself. Tests: unit `brand-pick.test.ts`, pgTAP `owner_tenant.test.sql`, integration `brands.test.ts`. Checked locally in the browser (switch, setup screen, duplicate name). **Open:** add a real brand on production (creates a Zernio profile) and connect its account; then check the box.
 
+## Phase 7: Analytics (base tier)
+
+Approved 2026-11-06 from the design v3 "Analytics" row (Overview, Posts, Audience, Waggle's work, States). Zernio's plan includes analytics (checked with one read call: 200). Per Zernio's multi-tenant guide, pages read our own tables; a sync job fills them and nothing calls Zernio while a page renders, except opening one post's daily timeline (cached). The paid "Insights" screens are a separate idea, not in this phase.
+
+- [ ] **T48. Analytics sync and storage**
+      `SocialProvider` gets read methods for the dashboard summary, post analytics (paged), follower stats, best time to post, Instagram demographics and online followers, Facebook demographics and a post's timeline; the mock provider returns steady sample data. Migration: `analytics_snapshots` (per tenant, keyed: dashboards per period and platform, audience per account) and `post_metrics` (one row per post and platform). The job route syncs a due tenant: dashboards and the last 30 days of posts hourly, the full 12 months once and then weekly, audience daily. A `429` waits for the next pass.
+      _Done when:_ a connected brand's tables fill on the job, a second pass updates rather than duplicates, RLS keeps them per tenant (pgTAP), and unit tests cover the mapping.
+      _Status (2026-11-06):_ built (TDD §7.7). Migration `20261106140000_analytics`. Unit: `analytics-map.test.ts`, `sync.test.ts`; pgTAP: `rls.test.sql` (+4); integration `analytics.test.ts` (fills, not due within the hour, hourly pass updates without duplicates, 429 leaves it due). **Open:** one real sync on production after deploy; the two VERIFY items in TDD §7.7.
+- [ ] **T49. Analytics page: Overview** (top-bar "Analytics"; period 7/30/90 days and platform filters; totals vs the previous period, daily chart with the previous period dashed, best posts, reach by platform, "What stood out" from rules, not AI).
+- [ ] **T50. Analytics: Posts** (sortable table, made in Waggle or on the platform, type filter, CSV, post detail with the first 14 days and what Waggle did with its comments).
+- [ ] **T51. Analytics: Audience** (followers per platform, when Instagram followers are online, best times to post, age and gender, cities and countries).
+- [ ] **T52. Analytics: Waggle's work** (from Waggle's own tables: messages in, replies by Waggle vs you, time to first reply, leads, time saved at an estimated 2 minutes a reply, what came in, most asked topics, where Waggle needed you). No "won" count: leads have no outcome yet.
+
 ## Next (held, after Phase 6)
 
 From the same review, agreed 2026-11-05 to hold until Phase 6 is done:

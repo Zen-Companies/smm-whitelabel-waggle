@@ -31,6 +31,8 @@ select results_eq(
   'one tenant_created audit row');
 
 -- Brands (T47): the same owner can add more tenants, one per name.
+-- One transaction gives every row the same now(): age the first tenant so "first" is real.
+update public.tenants set created_at = now() - interval '1 day' where id = (select tenant_id from first_call);
 create temp table brand_call as
   select * from public.create_brand('d0000000-0000-4000-8000-000000000001', '  Bloom Florist ');
 select is((select created from brand_call), true, 'create_brand adds a second tenant');

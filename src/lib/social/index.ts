@@ -18,6 +18,7 @@ export {
   updatePlatformPause,
 } from "./platform-pause";
 export type { PlatformPause } from "./platform-pause";
+export type * from "./analytics-types";
 export { isSocialPlatform, SOCIAL_PLATFORMS, SocialProviderError } from "./types";
 export type {
   AccountHealth,

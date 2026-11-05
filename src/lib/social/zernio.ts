@@ -1,6 +1,15 @@
 import Zernio, { RateLimitError, ZernioApiError } from "@zernio/node";
 import { z } from "zod";
 import {
+  toBestTimes,
+  toDashboard,
+  toDemographics,
+  toFollowerSeries,
+  toOnlineFollowers,
+  toPostList,
+  toTimeline,
+} from "./analytics-map";
+import {
   SocialProviderError,
   type AccountHealth,
   type CreatePostInput,
@@ -414,6 +423,138 @@ export class ZernioSocialProvider implements SocialProvider {
         hasReply: r.hasReply ?? false,
         reviewUrl: r.reviewUrl?.startsWith("https://") ? r.reviewUrl : null,
       }));
+    });
+  }
+
+  async getAnalyticsDashboard(input: {
+    profileId: string;
+    fromDate: string;
+    toDate: string;
+    platform?: "instagram" | "facebook";
+    signal?: AbortSignal;
+  }) {
+    return call("getAnalyticsDashboard", async (withFetch) => {
+      const { data } = await this.zernio.analytics.getAnalyticsDashboard(
+        withFetch({
+          signal: input.signal,
+          query: {
+            profileId: input.profileId,
+            fromDate: input.fromDate,
+            toDate: input.toDate,
+            compare: "previous_period" as const,
+            topPosts: 5,
+            recentPosts: 0,
+            ...(input.platform ? { platform: input.platform } : {}),
+          },
+        }),
+      );
+      return toDashboard(data, input);
+    });
+  }
+
+  async listPostAnalytics(input: {
+    profileId: string;
+    fromDate: string;
+    toDate: string;
+    page: number;
+    signal?: AbortSignal;
+  }) {
+    return call("listPostAnalytics", async (withFetch) => {
+      const { data } = await this.zernio.analytics.getAnalytics(
+        withFetch({
+          signal: input.signal,
+          query: {
+            profileId: input.profileId,
+            fromDate: input.fromDate,
+            toDate: input.toDate,
+            page: input.page,
+            limit: 50,
+            source: "all" as const,
+          },
+        }),
+      );
+      return toPostList(data);
+    });
+  }
+
+  async getFollowerStats(input: {
+    profileId: string;
+    fromDate: string;
+    toDate: string;
+    signal?: AbortSignal;
+  }) {
+    return call("getFollowerStats", async (withFetch) => {
+      const { data } = await this.zernio.accounts.getFollowerStats(
+        withFetch({
+          signal: input.signal,
+          query: {
+            profileId: input.profileId,
+            fromDate: input.fromDate,
+            toDate: input.toDate,
+            granularity: "daily" as const,
+          },
+        }),
+      );
+      return toFollowerSeries(data);
+    });
+  }
+
+  async getBestTimeToPost(input: { profileId: string; signal?: AbortSignal }) {
+    return call("getBestTimeToPost", async (withFetch) => {
+      const { data } = await this.zernio.analytics.getBestTimeToPost(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      return toBestTimes(data);
+    });
+  }
+
+  async getDemographics(input: {
+    accountId: string;
+    platform: "instagram" | "facebook";
+    signal?: AbortSignal;
+  }) {
+    return call("getDemographics", async (withFetch) => {
+      const { data } =
+        input.platform === "instagram"
+          ? await this.zernio.analytics.getInstagramDemographics(
+              withFetch({
+                signal: input.signal,
+                query: { accountId: input.accountId, breakdown: "age,gender,city,country" },
+              }),
+            )
+          : await this.zernio.analytics.getFacebookDemographics(
+              withFetch({
+                signal: input.signal,
+                query: { accountId: input.accountId, breakdown: "country,city" },
+              }),
+            );
+      return toDemographics(data);
+    });
+  }
+
+  async getOnlineFollowers(input: { accountId: string; signal?: AbortSignal }) {
+    return call("getOnlineFollowers", async (withFetch) => {
+      const { data } = await this.zernio.analytics.getInstagramOnlineFollowers(
+        withFetch({ signal: input.signal, query: { accountId: input.accountId } }),
+      );
+      return toOnlineFollowers(data);
+    });
+  }
+
+  async getPostTimeline(input: {
+    postId: string;
+    fromDate?: string;
+    toDate?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("getPostTimeline", async (withFetch) => {
+      const { data } = await this.zernio.analytics.getPostTimeline(
+        withFetch({
+          signal: input.signal,
+          query: { postId: input.postId, fromDate: input.fromDate, toDate: input.toDate },
+        }),
+      );
+      return toTimeline(data);
     });
   }
 

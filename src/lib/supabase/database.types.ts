@@ -174,6 +174,38 @@ export type Database = {
           },
         ]
       }
+      analytics_snapshots: {
+        Row: {
+          data: Json
+          id: string
+          key: string
+          synced_at: string
+          tenant_id: string
+        }
+        Insert: {
+          data: Json
+          id?: string
+          key: string
+          synced_at?: string
+          tenant_id: string
+        }
+        Update: {
+          data?: Json
+          id?: string
+          key?: string
+          synced_at?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -790,6 +822,95 @@ export type Database = {
         }
         Relationships: []
       }
+      post_metrics: {
+        Row: {
+          caption: string
+          clicks: number
+          comments: number
+          engagement_rate: number
+          format: string
+          id: string
+          impressions: number
+          is_external: boolean
+          likes: number
+          permalink: string | null
+          platform: string
+          provider_post_id: string
+          published_at: string | null
+          reach: number
+          saves: number
+          shares: number
+          sync_status: string
+          synced_at: string
+          tenant_id: string
+          thumbnail_url: string | null
+          timeline: Json | null
+          timeline_synced_at: string | null
+          views: number
+          zernio_post_id: string | null
+        }
+        Insert: {
+          caption?: string
+          clicks?: number
+          comments?: number
+          engagement_rate?: number
+          format?: string
+          id?: string
+          impressions?: number
+          is_external?: boolean
+          likes?: number
+          permalink?: string | null
+          platform: string
+          provider_post_id: string
+          published_at?: string | null
+          reach?: number
+          saves?: number
+          shares?: number
+          sync_status?: string
+          synced_at?: string
+          tenant_id: string
+          thumbnail_url?: string | null
+          timeline?: Json | null
+          timeline_synced_at?: string | null
+          views?: number
+          zernio_post_id?: string | null
+        }
+        Update: {
+          caption?: string
+          clicks?: number
+          comments?: number
+          engagement_rate?: number
+          format?: string
+          id?: string
+          impressions?: number
+          is_external?: boolean
+          likes?: number
+          permalink?: string | null
+          platform?: string
+          provider_post_id?: string
+          published_at?: string | null
+          reach?: number
+          saves?: number
+          shares?: number
+          sync_status?: string
+          synced_at?: string
+          tenant_id?: string
+          thumbnail_url?: string | null
+          timeline?: Json | null
+          timeline_synced_at?: string | null
+          views?: number
+          zernio_post_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_metrics_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           attempts: number
@@ -933,6 +1054,9 @@ export type Database = {
       }
       tenants: {
         Row: {
+          analytics_synced_at: string | null
+          analytics_full_at: string | null
+          analytics_audience_at: string | null
           ai_monthly_cap_usd: number | null
           auto_hide_spam: boolean
           business_profile: string
@@ -948,6 +1072,9 @@ export type Database = {
           zernio_profile_id: string | null
         }
         Insert: {
+          analytics_synced_at?: string | null
+          analytics_full_at?: string | null
+          analytics_audience_at?: string | null
           ai_monthly_cap_usd?: number | null
           auto_hide_spam?: boolean
           business_profile?: string
@@ -963,6 +1090,9 @@ export type Database = {
           zernio_profile_id?: string | null
         }
         Update: {
+          analytics_synced_at?: string | null
+          analytics_full_at?: string | null
+          analytics_audience_at?: string | null
           ai_monthly_cap_usd?: number | null
           auto_hide_spam?: boolean
           business_profile?: string
