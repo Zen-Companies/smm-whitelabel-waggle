@@ -1,0 +1,105 @@
+# CI/CD: every push and PR runs the checks. A push to main then applies the
+# hosted Supabase migrations and only after that deploys to Vercel production,
+# so the new code never runs against a database that lacks its columns.
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# One pipeline per branch at a time: two runs must never migrate or deploy in parallel.
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  VERCEL_ORG_ID: team_I8YLrpjCZjb2GDvVwNoCIAT9
+  VERCEL_PROJECT_ID: prj_loSuAss1JDKrq0b2BOY7Rjb4nU98
+  SUPABASE_CLI_VERSION: 3.0.0
+
+jobs:
+  checks:
+    name: Lint, typecheck, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  db-tests:
+    name: Migrations, RLS and integration tests (local Supabase)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - run: pnpm install --frozen-lockfile
+      # Applies every migration from scratch, so a broken migration fails here, not on hosted.
+      - run: supabase start -x studio,imgproxy,inbucket,logflare,vector,supavisor,edge-runtime
+      - run: pnpm test:db
+      - run: pnpm test:integration
+      - if: always()
+        run: supabase stop --no-backup
+
+  migrate:
+    name: Apply migrations to hosted Supabase
+    needs: [checks, db-tests]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - run: supabase link --project-ref vkwstnnrqxcbiafyjkfc
+      - name: Pending migrations
+        run: supabase migration list --remote
+      - run: supabase db push --remote --yes
+
+  deploy:
+    name: Deploy to Vercel production
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://waggle-wheat.vercel.app
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: npm i -g vercel@latest
+      - run: vercel pull --yes --environment=production --token=$VERCEL_TOKEN
+      - run: vercel build --prod --token=$VERCEL_TOKEN
+      - run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
+      - name: Smoke check
+        run: |
+          for p in / /login; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://waggle-wheat.vercel.app$p)
+            echo "$p $code"; [ "$code" = 200 ] || exit 1
+          done
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://waggle-wheat.vercel.app/api/jobs/process)
+          echo "job route $code (401 expected without the secret)"; [ "$code" = 401 ] || exit 1
