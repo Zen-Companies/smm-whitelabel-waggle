@@ -190,6 +190,31 @@ Follow-ups from the 2026-10-30 review (after Phase 5 starts paying off):
 - [x] **T33. First agent: business-info gap helper:** groups "Questions your info didn't answer" and drafts new topics for the owner to approve. Needs a tool-calling method in `src/lib/llm` that records `ai_usage` per step and caps steps.
       _Note:_ `LlmClient.runTools` (draft model, `stepCountIs`, one `ai_usage` row per model call with purpose `agent`, hard cap `AGENT_MAX_STEPS` 6; a run still calling tools at the cap fails, its calls stay recorded). The helper (`knowledge-base/gap-helper.ts`, version 2026-10-30.1) has three read-only tools: `list_unanswered_questions`, `list_topics`, `find_topic` (retrieval). Rule 8: it never writes a fact. A suggestion is a title plus wording with `[...]` blanks; wording with a digit, currency sign or no blank becomes a plain `[...]`; saving a topic with a `[...]` left is refused, so nothing reaches a draft until the owner fills it in. Owner flow on Business info: "Suggest topics" (2+ unanswered questions, 3 runs a day, monthly AI cap applies, calls count as live) → "Suggested topics" with "Add this topic" (opens the editor prefilled; saving accepts it, audited `kb_suggestion_accepted`) or "Not needed" (`kb_suggestion_dismissed`). New table `kb_suggestions` (owners read via RLS, service role writes). Tested with a fake OpenRouter only; whether the free models call tools properly is still to check with one real run.
 
+## Phase 6: More of Instagram and Facebook
+
+Picked 2026-11-05 from the Zernio docs (docs.zernio.com, `zernio-docs` MCP) and the coverage page (https://claude.ai/artifact/4FL1eUcsHtT1EhLr5hM7Gd). All three go through `SocialProvider` (rule 1) and the mock provider gets the same methods.
+
+- [ ] **T40. Hide spam comments on the platform**
+      Today "It's spam: hide it" (T37) only hides the item inside Waggle; the comment stays public on the post. Add `hideComment` / `unhideComment` to `SocialProvider` (`POST /v1/inbox/comments/{postId}/{commentId}/hide` with `accountId`; unhide is `DELETE` on the same path). The owner's "It's spam: hide it" also hides it on Instagram/Facebook, with "Unhide" next to it. Decide: should a comment Jev marks as spam (above `SPAM_YES`) be hidden automatically, behind a Settings switch that is off by default? Comments only (DMs can't be hidden). Audit `comment_hidden` / `comment_unhidden` with the outcome; a `400 PLATFORM_API_ERROR` (comment already gone) is shown in place, not retried.
+      _Done when:_ hiding from the inbox hides the comment on the platform (checked on a test post), Unhide reverses it, both are audited, and unit tests cover the provider call and the error mapping.
+
+- [ ] **T41. Private reply to a comment**
+      Answer a comment in the commenter's DMs instead of in public, for prices, bookings and anything personal (`POST /v1/inbox/comments/{postId}/{commentId}/private-reply`, Instagram and Facebook only). One per comment, within 7 days of the comment. On approval the owner picks "Reply publicly" or "Reply in DM"; the draft prompt gets a DM variant (bump the draft prompt version). Still passes `policy()` (rule 6). Errors: `400` with `details.privateReplyConsumed: true` means spent, never retry; `502` with `privateReplyOutcome: "unknown"` means check the conversation before anything else (rule 7), so this needs a reconcile step, not a retry. Send text only at first: Instagram can refuse buttons to non-followers and that still spends the reply. The commenter's answer arrives as a normal DM (`message.received`) and joins that conversation.
+      _Done when:_ a comment can be answered by DM from the inbox, the item shows where the reply went, a spent or unknown outcome never sends twice (unit tests on the error mapping), and it is audited.
+
+- [ ] **T42. Facebook Page reviews in the inbox**
+      Reviews (recommendations) on a connected Facebook Page become inbox items: list with `GET /v1/inbox/reviews?platform=facebook&accountId=…`, reply with `POST /v1/inbox/reviews/{reviewId}/reply` (`accountId`, `message`, `Idempotency-Key` header: rule 7). **VERIFY first:** the docs describe `review.new` / `review.updated` webhooks for Google Business Profile only, so Facebook reviews probably need polling from the job runner (dedupe by review id, like comments). New item kind `review` (migration on `inbound_items.kind`, RLS unchanged), classified like comments (a negative recommendation is usually a complaint), drafted from Business info, approved by the owner. A review reply is public and stays on the Page: never auto-send in the pilot, whatever the mode.
+      _Done when:_ a new review on the test Page appears in the inbox within the polling interval, a reply approved in Waggle shows on Facebook once, and the new kind passes the RLS tests (`pnpm test:db`).
+
+## Next (held, after Phase 6)
+
+From the same review, agreed 2026-11-05 to hold until Phase 6 is done:
+
+- [ ] **T43. Reply to DMs up to 7 days** with Meta's `HUMAN_AGENT` tag (`messagingType: "MESSAGE_TAG"`, `messageTag: "HUMAN_AGENT"`) instead of escalating when the 24-hour window closes. **Check first:** Meta allows it only for replies typed by a person; decide whether an AI draft the owner approved (or edited) qualifies before using it. Never on auto-sent replies.
+- [ ] **T44. Another app owns the conversation** (Meta handover): handle `message.received` with `metadata.standby: true` and a send that answers `409 not_thread_owner` (owner also replies from Page Inbox / Business Suite). Show it in place and don't retry; optionally offer "Take the conversation back" (`set-conversation-thread-control`). Listen to `conversation.control_changed`.
+- [ ] **T45. Ice breakers from Business info**: up to 4 starter questions (80 characters each) shown when someone opens a new DM, suggested from the owner's topics and set with `/v1/accounts/{accountId}/instagram-ice-breakers` and `/messenger-ice-breakers`. Owner approves the wording.
+- [ ] **T46. Post analytics**: reach, likes, comments and shares per Waggle post (`GET /v1/analytics`), shown on the Posts page; Instagram account insights later.
+
 ## Later
 
 - [ ] **T21. Customer offboarding**
