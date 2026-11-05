@@ -14,6 +14,7 @@ export { InboxView } from "./inbox-view";
 export {
   countInboxTabs,
   heldReason,
+  heldReasonFromDetails,
   loadEntries,
   loadInbox,
   loadInboxTab,

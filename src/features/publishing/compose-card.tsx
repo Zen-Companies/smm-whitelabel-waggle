@@ -2,8 +2,17 @@ import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ComposeForm } from "./compose-form";
 
-/** The composer, always beside the calendar (design v2). `day` comes from a clicked day. */
-export async function ComposeCard({ day = null }: { day?: string | null }) {
+/**
+ * The composer, always beside the calendar (design v2). `day` comes from a clicked day; `time`
+ * from an Analytics best time (T51).
+ */
+export async function ComposeCard({
+  day = null,
+  time = null,
+}: {
+  day?: string | null;
+  time?: string | null;
+}) {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
   const { data: accounts } = await supabase
@@ -29,7 +38,12 @@ export async function ComposeCard({ day = null }: { day?: string | null }) {
           </span>
         )}
       </div>
-      <ComposeForm key={day ?? "any"} accounts={accounts ?? []} day={day} />
+      <ComposeForm
+        key={`${day ?? "any"}-${time ?? ""}`}
+        accounts={accounts ?? []}
+        day={day}
+        time={time}
+      />
     </section>
   );
 }

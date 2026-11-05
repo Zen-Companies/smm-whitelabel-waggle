@@ -23,6 +23,11 @@ export function parseMonth(param: string | undefined, now = new Date()): Month {
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
+/** "08:00" when it's a real time of day, else null (Analytics links a best time, T51). */
+export function parseTime(param: string | undefined): string | null {
+  return param && /^([01]\d|2[0-3]):[0-5]\d$/.test(param) ? param : null;
+}
+
 /** "2026-11-01" when it's a real day, else null. */
 export function parseDay(param: string | undefined): string | null {
   if (!param || !/^\d{4}-\d{2}-\d{2}$/.test(param)) return null;

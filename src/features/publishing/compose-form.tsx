@@ -30,14 +30,17 @@ const localDay = (d: Date) =>
 
 /**
  * Compose a post: text, optional photo, accounts, now or on a day and time (PRD F3, design v2).
- * `day` (YYYY-MM-DD) comes from clicking a day on the calendar and preselects Schedule.
+ * `day` (YYYY-MM-DD) comes from clicking a day on the calendar and preselects Schedule; `time`
+ * (HH:MM) from an Analytics best time.
  */
 export function ComposeForm({
   accounts,
   day = null,
+  time = null,
 }: {
   accounts: ComposeAccount[];
   day?: string | null;
+  time?: string | null;
 }) {
   const [state, action, pending] = useActionState<ComposeState, FormData>(composePost, {});
   // A saved post changes savedAt, which remounts the fields: text, counter and time reset.
@@ -46,6 +49,7 @@ export function ComposeForm({
       key={state.savedAt}
       accounts={accounts}
       day={day}
+      initialTime={time}
       state={state}
       action={action}
       pending={pending}
@@ -56,19 +60,21 @@ export function ComposeForm({
 function ComposeFields({
   accounts,
   day,
+  initialTime,
   state,
   action,
   pending,
 }: {
   accounts: ComposeAccount[];
   day: string | null;
+  initialTime: string | null;
   state: ComposeState;
   action: (formData: FormData) => void;
   pending: boolean;
 }) {
   const [when, setWhen] = useState<"now" | "later">(day ? "later" : "now");
   const [date, setDate] = useState(() => day ?? localDay(new Date(Date.now() + 24 * 3_600_000)));
-  const [time, setTime] = useState("09:00");
+  const [time, setTime] = useState(initialTime ?? "09:00");
   const [length, setLength] = useState(0);
   const [photo, setPhoto] = useState<string | null>(null);
   // Day and time are the owner's local time; send them as an absolute ISO time.

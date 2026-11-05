@@ -7,6 +7,7 @@ import { cn } from "cn";
 const ITEMS = [
   { href: "/inbox", label: "Inbox" },
   { href: "/posts", label: "Posts" },
+  { href: "/analytics", label: "Analytics" },
   { href: "/leads", label: "Leads" },
   { href: "/knowledge-base", label: "Business info" },
   { href: "/lab", label: "Lab" },

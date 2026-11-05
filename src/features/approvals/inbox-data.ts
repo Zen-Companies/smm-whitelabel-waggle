@@ -227,7 +227,12 @@ export async function heldReason(
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const d = (data?.details ?? {}) as Record<string, unknown>;
+  return heldReasonFromDetails(data?.details ?? null);
+}
+
+/** Pure: the reason code in a `status_changed` audit row's details (also read by Analytics). */
+export function heldReasonFromDetails(details: unknown): string | null {
+  const d = (details && typeof details === "object" ? details : {}) as Record<string, unknown>;
   if (d.reason === "fail") return "retries_exhausted";
   if (d.reason === "delivery_failed") return "delivery_failed";
   const pick = (v: unknown) => (typeof v === "string" ? v : null);

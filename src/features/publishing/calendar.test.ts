@@ -4,6 +4,7 @@ import {
   monthWeeks,
   needsNewTime,
   parseDay,
+  parseTime,
   parseMonth,
   postDay,
   shiftMonth,
@@ -40,6 +41,9 @@ describe("calendar", () => {
   it("only accepts real days", () => {
     expect(parseDay("2026-11-01")).toBe("2026-11-01");
     expect(parseDay("2026-02-30")).toBeNull();
+    expect(parseTime("08:00")).toBe("08:00");
+    expect(parseTime("24:00")).toBeNull();
+    expect(parseTime("8am")).toBeNull();
     expect(parseDay("tomorrow")).toBeNull();
   });
 

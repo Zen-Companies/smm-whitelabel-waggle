@@ -268,6 +268,8 @@ Pages never call Zernio's analytics (one shared per-second budget, ~60 min upstr
 - **Daily** (`analytics_audience_at`): follower series (90 days) → `followers`; best times → `best_time` (UTC hours, day 0 = Monday); per account, demographics (Instagram age/gender/city/country, Facebook country/city; Meta refuses under 100 followers → stored as null) and Instagram online followers → `audience:<social_account_id>`.
 - A `429` stops the pass and leaves the tenant due; a `402/403` (plan) or other error marks it synced so it retries in an hour (Sentry for the unexpected ones).
 
+Pages (`/analytics`, T49–T52) read only these tables, tenant-filtered, through loaders in `src/features/analytics/data.ts`; the one exception is a post's 14-day timeline, fetched on click and cached on its row. A day-by-day series that never drops is read as running totals. Local data without Zernio: `pnpm analytics:seed`.
+
 Stored shapes are ours (`src/lib/social/analytics-types.ts`), mapped and validated in `analytics-map.ts`. A post's numbers not in yet keep `sync_status = pending`: the page shows "…", never 0. **VERIFY with a real post:** whether `post-timeline` rows are per-day amounts or running totals, and which time zone Meta's online-follower hours use (undocumented).
 
 ### 7.5 Publishing

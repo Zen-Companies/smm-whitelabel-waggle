@@ -20,7 +20,8 @@
     "draft:check": "tsx --tsconfig tsconfig.scripts.json scripts/draft-check.ts",
     "local:owner": "tsx --tsconfig tsconfig.scripts.json scripts/local-owner.ts",
     "local:operator": "tsx --tsconfig tsconfig.scripts.json scripts/local-operator.ts",
-    "demo:seed": "tsx --tsconfig tsconfig.scripts.json scripts/demo-seed.ts"
+    "demo:seed": "tsx --tsconfig tsconfig.scripts.json scripts/demo-seed.ts",
+    "analytics:seed": "tsx --tsconfig tsconfig.scripts.json scripts/analytics-seed.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

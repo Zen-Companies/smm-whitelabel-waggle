@@ -8,6 +8,7 @@ import {
   monthWeeks,
   needsNewTime,
   parseDay,
+  parseTime,
   parseMonth,
   postDay,
   shiftMonth,
@@ -86,6 +87,7 @@ export async function PostsView({
   const view: View = str("view") === "list" ? "list" : "month";
   const month = parseMonth(str("month"));
   const day = parseDay(str("day"));
+  const time = day ? parseTime(str("time")) : null;
   const postId = str("post");
   const names = accountNames(accounts);
   const selectedPost = postId ? posts.find((p) => p.id === postId) : undefined;
@@ -301,7 +303,7 @@ export async function PostsView({
               <Post post={selectedPost} accounts={names} as="div" />
             </section>
           )}
-          <ComposeCard day={day} />
+          <ComposeCard day={day} time={time} />
         </div>
       </div>
     </>
