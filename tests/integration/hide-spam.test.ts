@@ -57,7 +57,7 @@ async function spamItem(kind: "comment" | "dm" = "comment", confidence = 0.95) {
     kind,
     ...(kind === "comment"
       ? { zernio_post_id: `post_${id}`, zernio_comment_id: `c_${id}` }
-      : { zernio_message_id: `m_${id}` }),
+      : { zernio_message_id: `m_${id}`, conversation_id: await conversation() }),
     text: "Earn $500 a day from home, link in bio!",
     received_at: new Date().toISOString(),
     status: "classified",
@@ -66,6 +66,21 @@ async function spamItem(kind: "comment" | "dm" = "comment", confidence = 0.95) {
   });
   if (error) throw error;
   return id;
+}
+
+async function conversation() {
+  const { data } = await db
+    .from("conversations")
+    .insert({
+      tenant_id: tenantId,
+      social_account_id: accountId,
+      zernio_conversation_id: `conv_${randomUUID()}`,
+      platform: "instagram",
+      last_customer_message_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  return data!.id;
 }
 
 const itemOf = async (id: string) =>
