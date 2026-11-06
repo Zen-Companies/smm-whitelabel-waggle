@@ -1,0 +1,364 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* Waggle brand kit: core Honey, Hive, Wax, Pollen plus the supporting roles on the Colour board.
+   Light is the wax ground, dark is the hive. No colours outside the kit. */
+:root {
+  --honey: #f6b21b;
+  --honey-deep: #c98500;
+  --honey-glow: #ffd266;
+  --hive: #17140f;
+
+  --bg: #fff6e6;
+  --bg-cream: #efe6d2;
+  --bg-wash: #efe6d2;
+  --surface: #ffffff;
+  --surface-2: #fff6e6;
+  --ink: #17140f;
+  --ink-soft: #5e513a;
+  --muted: #5e513a;
+  --line: #d9ccb0;
+  --edge: #5e513a;
+  --accent-text: #8f5d00;
+  --stop: #c98500;
+  --mark-trail: #17140f;
+  --bee-head: #17140f;
+  --bee-wing: rgb(23 20 15 / 0.25);
+  --mark-glow: 0;
+  --honey-soft: rgb(246 178 27 / 0.16);
+  --shadow: 0 1px 2px rgb(23 20 15 / 0.04), 0 18px 40px -18px rgb(23 20 15 / 0.18);
+  --nav-bg: rgb(255 255 255 / 0.82);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #17140f;
+  --bg-cream: #221d15;
+  --bg-wash: #221d15;
+  --surface: #2e2719;
+  --surface-2: #221d15;
+  --ink: #fff6e6;
+  --ink-soft: #d9ccb0;
+  --muted: #b9a988;
+  --line: #3a3122;
+  --edge: #857559;
+  --accent-text: #f6b21b;
+  --stop: #f6b21b;
+  --mark-trail: #f6b21b;
+  --bee-head: #fff6e6;
+  --bee-wing: rgb(255 246 230 / 0.75);
+  --mark-glow: 0.25;
+  --honey-soft: rgb(246 178 27 / 0.14);
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 24px 48px -20px rgb(0 0 0 / 0.7);
+  --nav-bg: rgb(34 29 21 / 0.82);
+  color-scheme: dark;
+}
+
+/* No stored choice and no script: follow the system. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --bg: #17140f;
+    --bg-cream: #221d15;
+    --bg-wash: #221d15;
+    --surface: #2e2719;
+    --surface-2: #221d15;
+    --ink: #fff6e6;
+    --ink-soft: #d9ccb0;
+    --muted: #b9a988;
+    --line: #3a3122;
+    --edge: #857559;
+    --accent-text: #f6b21b;
+    --stop: #f6b21b;
+    --mark-trail: #f6b21b;
+    --bee-head: #fff6e6;
+    --bee-wing: rgb(255 246 230 / 0.75);
+    --mark-glow: 0.25;
+    --honey-soft: rgb(246 178 27 / 0.14);
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 24px 48px -20px rgb(0 0 0 / 0.7);
+    --nav-bg: rgb(34 29 21 / 0.82);
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-honey: var(--honey);
+  --color-honey-deep: var(--honey-deep);
+  --color-honey-glow: var(--honey-glow);
+  --color-hive: var(--hive);
+  --color-bg: var(--bg);
+  --color-cream: var(--bg-cream);
+  --color-wash: var(--bg-wash);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-edge: var(--edge);
+  --color-accent: var(--accent-text);
+  --color-honey-soft: var(--honey-soft);
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --shadow-card: var(--shadow);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 6rem;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+::selection {
+  background: var(--honey);
+  color: var(--hive);
+}
+
+/* "waggle." — always lowercase. Full stop: Honey on dark, Honey Deep on light, Hive on honey */
+.wordmark {
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+.wordmark em {
+  font-style: normal;
+  color: var(--stop);
+}
+
+/* Act label: "01 · The shift" */
+.act-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.act-label::before {
+  content: "";
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--ink-soft);
+  box-shadow: inset 0 0 0 2.5px var(--bg), inset 0 0 0 10px var(--honey);
+}
+
+/* Highlighter-style emphasis, like a honey marker pass */
+.mark {
+  background: linear-gradient(transparent 58%, var(--honey-soft) 58%);
+  padding: 0 0.1em;
+}
+
+/* Scroll reveal. Only hides content once JS is confirmed running. */
+.js [data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.8s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--d, 0ms);
+}
+.js [data-reveal].is-in {
+  opacity: 1;
+  transform: none;
+}
+
+/* Hero waggle trail drawing itself */
+.trail {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: draw 2.4s 0.3s cubic-bezier(0.6, 0, 0.2, 1) forwards;
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Guide bee: follows the reader and waggles at each section label */
+.guide-bee {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+  will-change: transform;
+}
+.guide-bee[data-ready="true"] {
+  opacity: 1;
+}
+.bee-bubble {
+  position: absolute;
+  top: -50px;
+  white-space: nowrap;
+  border-radius: 999px;
+  background: var(--honey);
+  color: var(--hive);
+  padding: 0.4rem 0.8rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transform: translateY(6px) scale(0.9);
+  transition: opacity 0.25s ease, transform 0.35s cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.bee-bubble[data-side="right"] {
+  left: 8px;
+  border-bottom-left-radius: 4px;
+}
+.bee-bubble[data-side="left"] {
+  right: 8px;
+  border-bottom-right-radius: 4px;
+}
+.bee-bubble[data-pos="beside"][data-side="right"] {
+  top: -16px;
+  left: 34px;
+}
+.bee-bubble[data-pos="beside"][data-side="left"] {
+  top: -16px;
+  right: 34px;
+}
+.bee-bubble[data-show="true"] {
+  opacity: 1;
+  transform: none;
+}
+.perched .wing {
+  animation-duration: 0.45s; /* lazy wing flicks while sitting */
+}
+.bee-bubble[data-swap="true"] {
+  opacity: 0;
+  transform: translateY(4px) scale(0.96);
+}
+/* the closing button answers each peck from the bee */
+.bee-tap {
+  animation: bee-tap 0.5s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+@keyframes bee-tap {
+  40% {
+    transform: scale(1.045);
+    box-shadow: 0 0 0 8px rgb(246 178 27 / 0.25), 0 14px 30px -12px rgb(246 178 27 / 0.9);
+  }
+}
+.act-label {
+  transition: color 0.3s ease;
+}
+.act-label.bee-here {
+  color: var(--ink);
+}
+
+/* Flowers on the key sections: they open a little when the bee arrives and bob when it feeds */
+.act-flower {
+  margin: -1rem 0 -0.6rem 0.3rem;
+  overflow: visible;
+}
+.act-flower .bloom {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 0.6s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.bee-here .act-flower .bloom {
+  transform: scale(1.12);
+}
+.act-flower.bee-tap {
+  animation: none;
+}
+.act-flower.bee-tap .bloom {
+  animation: flower-bob 0.55s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+@keyframes flower-bob {
+  45% {
+    transform: scale(1.12) translateY(2px) rotate(-6deg);
+  }
+}
+
+.wing {
+  transform-box: fill-box;
+  transform-origin: bottom center;
+  animation: buzz 0.12s ease-in-out infinite alternate;
+}
+@keyframes buzz {
+  to {
+    transform: scaleY(0.55);
+  }
+}
+
+.pulse-dot {
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(246 178 27 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 14px rgb(246 178 27 / 0);
+  }
+}
+
+/* Theme toggle: render both icons, show the right one from the DOM state so SSR never mismatches */
+.icon-sun,
+.icon-moon {
+  display: none;
+}
+:root[data-theme="dark"] .icon-sun,
+:root:not([data-theme="dark"]) .icon-moon {
+  display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .js [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .trail {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .guide-bee {
+    display: none;
+  }
+  .wing,
+  .pulse-dot {
+    animation: none;
+  }
+}
+
+/* Platform logo marquee: edges fade into the ground, pauses under the pointer */
+.marquee {
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+.marquee-track {
+  animation: marquee 32s linear infinite;
+}
+.marquee:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee {
+    mask-image: none;
+    width: auto;
+  }
+  .marquee-track {
+    animation: none;
+    width: auto;
+  }
+  .marquee-track > ul {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 23rem;
+  }
+  .marquee-track > ul[aria-hidden] {
+    display: none;
+  }
+}
