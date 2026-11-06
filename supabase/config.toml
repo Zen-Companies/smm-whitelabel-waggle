@@ -363,13 +363,16 @@ enabled = false
 # domain = "example.clerk.accounts.dev"
 
 # OAuth server configuration
+# MCP (docs/mcp/PLAN.md §4): AI assistants (Claude, ChatGPT, Grok) sign in here. They register
+# themselves (DCR), and our /oauth/consent page shows the brand picker. The hosted project's
+# switch is in Dashboard > Authentication > OAuth Server.
 [auth.oauth_server]
 # Enable OAuth server functionality
-enabled = false
+enabled = true
 # Path for OAuth consent flow UI
 authorization_url_path = "/oauth/consent"
 # Allow dynamic client registration
-allow_dynamic_registration = false
+allow_dynamic_registration = true
 
 [edge_runtime]
 enabled = true

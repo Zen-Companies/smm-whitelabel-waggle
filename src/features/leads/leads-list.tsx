@@ -7,7 +7,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "cn";
-import { CopyButton } from "./copy-button";
+import { CopyButton } from "@/components/app/copy-button";
 import { leadReplied, leadStatusText, phoneHref } from "./lead-status";
 
 // Leads Waggle captured (PRD F12), design v2: a table, because leads are compared,

@@ -1,6 +1,6 @@
 # Waggle MCP server: Phase 0 plan
 
-Status: **approved 2026-11-06**. Phase 1 (tools + server, behind `MCP_ENABLED` and with no token accepted yet) built 2026-11-06. Source prompt: `docs/mcp/PROMPT.md`.
+Status: **approved 2026-11-06**. Phase 1 (tools + server) built 2026-11-06. Phase 2 (sign-in: Supabase OAuth server, consent page with brand picker, `mcp_grants`, Data API block, Settings → AI assistants) built 2026-11-07; all behind `MCP_ENABLED`. Source prompt: `docs/mcp/PROMPT.md`.
 Researched on 2026-11-06, with outside claims linked.
 
 ## 1. Summary
@@ -303,3 +303,28 @@ Q6 roles are `admin`, `developer`, `support`, `viewer` (Stripe-style), matrix in
   - Grok auth and redirect;
   - which ChatGPT plans include Developer Mode;
   - `mcp-handler` on Next 16.
+
+## Phase 2 as built (2026-11-07)
+
+- Local: `supabase/config.toml` `[auth.oauth_server]` on, DCR on, consent at `/oauth/consent`.
+  Hosted: the same three settings in Dashboard → Authentication → OAuth Server; the Site URL must
+  be the app's address (Supabase sends users to Site URL + `/oauth/consent`).
+- `mcp_grants` (migration `20261107090000_mcp_grants`): one row per user and OAuth client with
+  `tenant_ids`. Written only by `features/mcp/grants.ts` (service role) after the session check.
+  It has no `tenant_id` (it spans brands), so `rls.test.sql` exempts it.
+- Every RLS table has a restrictive `"no oauth clients"` policy (`auth.jwt() ->> 'client_id'` is
+  null); `oauth_block.test.sql` fails if a table misses it. No `public` function is executable by
+  `authenticated`, so tables were the only way in.
+- `verifyMcpToken`: Supabase `getClaims` (signature, expiry), issuer = our project, a `client_id`
+  claim (browser sessions have none), and a grant row. Audience (RFC 8707) is not bound by
+  Supabase; the grant row and issuer check stand in for it (§4.3).
+- Metadata: `/.well-known/oauth-protected-resource[/api/mcp]`, `resource` = `<origin>/api/mcp`,
+  `authorization_servers` = `<supabase>/auth/v1`. The 401 points at the path-suffixed one.
+- Redirect allowlist: `features/mcp/redirects.ts` (defaults for Claude, Claude Code, ChatGPT;
+  `MCP_REDIRECT_URIS` replaces them). Grok's URI is still unknown: capture it on first connect.
+- Sign-in returns to the consent page (`?next=`, only `/oauth/consent?authorization_id=…`).
+- Consent pre-ticks nothing when the user has several brands (one brand: ticked). The "50 a day"
+  line from the design waits for Phase 3, which enforces it.
+- Tests: `mcp-oauth.test.ts` (register → authorize with PKCE → approve → token → tools →
+  Data API refused → refresh → revoke), `mcp-protocol.test.ts` (401 challenge, tools/list,
+  tools/call), `oauth_block.test.sql`.

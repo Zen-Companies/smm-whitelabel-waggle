@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
 
-export function AuthForm({ mode }: { mode: "signup" | "login" }) {
+export function AuthForm({ mode, next }: { mode: "signup" | "login"; next?: string }) {
   const [state, formAction, pending] = useActionState<AuthFormState, FormData>(
     mode === "signup" ? signUp : signIn,
     {},
@@ -24,6 +24,7 @@ export function AuthForm({ mode }: { mode: "signup" | "login" }) {
         </p>
       </div>
       <form action={formAction} className="flex flex-col gap-4">
+        {next && <input type="hidden" name="next" value={next} />}
         {isSignup && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="businessName" className="text-sm font-medium">

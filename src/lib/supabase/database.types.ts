@@ -740,6 +740,36 @@ export type Database = {
           },
         ]
       }
+      mcp_grants: {
+        Row: {
+          client_id: string
+          client_name: string
+          created_at: string
+          id: string
+          tenant_ids: string[]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          client_id: string
+          client_name?: string
+          created_at?: string
+          id?: string
+          tenant_ids?: string[]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          client_id?: string
+          client_name?: string
+          created_at?: string
+          id?: string
+          tenant_ids?: string[]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string

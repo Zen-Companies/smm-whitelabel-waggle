@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
 import { AutonomyCard } from "@/features/approvals";
+import { AssistantsCard } from "@/features/mcp";
 import { BusinessSettings } from "@/features/tenants";
 import { cn } from "cn";
 
@@ -14,6 +15,8 @@ const SECTIONS = [
   { key: "replies", label: "Replies" },
   { key: "notifications", label: "Notifications" },
   { key: "business", label: "Business" },
+  // MCP (docs/mcp/PLAN.md §4.2): per login, not per brand.
+  { key: "ai-assistants", label: "AI assistants" },
 ] as const;
 type Section = (typeof SECTIONS)[number]["key"];
 
@@ -43,6 +46,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         {section === "replies" && <AutonomyCard />}
         {section === "notifications" && <NotificationSettings />}
         {section === "business" && <BusinessSettings />}
+        {section === "ai-assistants" && <AssistantsCard />}
       </div>
     </div>
   );

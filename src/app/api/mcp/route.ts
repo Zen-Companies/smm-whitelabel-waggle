@@ -10,7 +10,10 @@ const handler = createMcpHandler(
   (server) => registerTools(server, () => ({ db: getServiceClient(), social: getSocialProvider })),
   { serverInfo: { name: "waggle", version: "1.0.0" }, instructions: SERVER_INSTRUCTIONS },
 );
-const authed = withMcpAuth(handler, verifyMcpToken, { required: true });
+const authed = withMcpAuth(handler, verifyMcpToken, {
+  required: true,
+  resourceMetadataPath: "/.well-known/oauth-protected-resource/api/mcp",
+});
 
 async function route(req: Request): Promise<Response> {
   if (!mcpEnabled()) return new Response("Not found", { status: 404 });

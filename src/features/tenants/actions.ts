@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { signInNext } from "./sign-in-next";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
@@ -62,7 +63,7 @@ export async function signIn(_prev: AuthFormState, formData: FormData): Promise<
   if (error) return { error: "Wrong email or password." };
 
   await setupTenantForUser(data.user);
-  redirect("/settings");
+  redirect(signInNext(formData.get("next")));
 }
 
 export async function signOut(): Promise<void> {

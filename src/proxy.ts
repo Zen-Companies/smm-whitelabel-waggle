@@ -25,5 +25,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Not webhooks or jobs (no user session), not static assets.
-  matcher: ["/((?!api/webhooks|api/jobs|_next/static|_next/image|favicon.ico).*)"],
+  // Not /api/mcp or its metadata either: AI assistants send a bearer token, not cookies.
+  matcher: [
+    "/((?!api/webhooks|api/jobs|api/mcp|\\.well-known|_next/static|_next/image|favicon.ico).*)",
+  ],
 };
