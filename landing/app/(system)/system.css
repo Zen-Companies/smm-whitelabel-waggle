@@ -1,0 +1,15 @@
+/* Logged-in screens only. Colours and type come from the homepage's tokens in globals.css. */
+.system :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Rows fill their card, which clips the corners, so their focus ring sits inside */
+.system li > :focus-visible {
+  outline-offset: -2px;
+}
+
+/* The height of the phone tab bar, so thumb controls can sit right on top of it */
+.system {
+  --tabbar: calc(62px + env(safe-area-inset-bottom));
+}

@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // The dev badge covers Sign out and the Today tab in the logged-in prototype
+  devIndicators: false,
   /* config options here */
   experimental: {
     agentFeedback: true,
