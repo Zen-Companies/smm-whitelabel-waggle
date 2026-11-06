@@ -52,7 +52,7 @@ function Google() {
   );
 }
 
-const LOGOS: { name: string; icon: React.ReactNode }[] = [
+export const LOGOS: { name: string; icon: React.ReactNode }[] = [
   { name: "Instagram", icon: <Instagram /> },
   ...MONO.slice(0, 4).map((m) => ({ name: m.name, icon: monoIcon(m) })),
   {
