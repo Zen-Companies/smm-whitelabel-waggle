@@ -1,5 +1,7 @@
 export { cancelPost, composePost, retryPost } from "./actions";
 export type { ComposeState, PostActionState } from "./actions";
+export { cancelScheduledPost, createPost, MIN_SCHEDULE_AHEAD_MS } from "./posts";
+export type { CancelPostResult, CreatePostResult, PostDeps } from "./posts";
 export { ComposeCard } from "./compose-card";
 export { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX } from "./limits";
 export { settleMockPosts } from "./mock-settle";

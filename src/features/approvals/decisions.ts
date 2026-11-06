@@ -374,3 +374,107 @@ export async function replyPublicly(
   });
   return { ok: true };
 }
+
+export type OwnerReplyResult =
+  | { ok: true; draftId: string }
+  | { ok: false; error: "not_found" | "already_decided" | "empty_reply" | "too_long" };
+
+/**
+ * The owner answers a message with their own words (MCP Q1). On a message waiting for approval
+ * this is an edited approval. On a message Waggle handed to them (a complaint, an unclear
+ * message) it becomes a new draft, written by the owner, sent through the same send step:
+ * policy() lets it out within the hard limits, the idempotency key comes with the draft, and the
+ * undo window holds it first.
+ */
+export async function writeOwnerReply(
+  db: ServiceClient,
+  input: {
+    tenantId: string;
+    userId: string;
+    itemId: string;
+    body: string;
+    replyVia?: ReplyVia;
+    /** The AI assistant that made the call, for the audit trail. */
+    via?: Record<string, string>;
+  },
+): Promise<OwnerReplyResult> {
+  const body = input.body.trim();
+  if (!body) return { ok: false, error: "empty_reply" };
+  if (body.length > REPLY_MAX) return { ok: false, error: "too_long" };
+  const { data: item } = await db
+    .from("inbound_items")
+    .select("id, status, kind")
+    .eq("id", input.itemId)
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle();
+  if (!item) return { ok: false, error: "not_found" };
+
+  if (item.status === "awaiting_approval") {
+    const { data: draft } = await db
+      .from("drafts")
+      .select("id")
+      .eq("item_id", item.id)
+      .eq("tenant_id", input.tenantId)
+      .in("status", ["pending", "approved"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!draft) return { ok: false, error: "not_found" };
+    const approved = await approveDraft(db, {
+      tenantId: input.tenantId,
+      userId: input.userId,
+      itemId: item.id,
+      draftId: draft.id,
+      editedBody: body,
+      replyVia: input.replyVia,
+    });
+    return approved.ok ? { ok: true, draftId: draft.id } : approved;
+  }
+  if (item.status !== "escalated") return { ok: false, error: "already_decided" };
+
+  const now = new Date();
+  const { data: draft, error } = await db
+    .from("drafts")
+    .insert({
+      tenant_id: input.tenantId,
+      item_id: item.id,
+      body,
+      status: "approved",
+      owner_written: true,
+      needs_human: false,
+      reply_via: item.kind === "comment" && input.replyVia === "dm" ? "dm" : "public",
+      decided_by: input.userId,
+      decided_at: now.toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`owner reply: saving the draft failed: ${error.message}`);
+
+  const { applied } = await transitionItem(db, {
+    itemId: item.id,
+    from: "escalated",
+    event: "send",
+    details: { draftId: draft.id, decidedBy: input.userId, ownerWritten: true },
+  });
+  if (!applied) {
+    await db.from("drafts").update({ status: "rejected" }).eq("id", draft.id);
+    return { ok: false, error: "already_decided" };
+  }
+  // Held for the undo window, like an approval.
+  await db
+    .from("inbound_items")
+    .update({ next_run_at: new Date(now.getTime() + UNDO_WINDOW_MS).toISOString() })
+    .eq("id", item.id)
+    .eq("status", "sending");
+  await writeAudit(db, {
+    tenantId: input.tenantId,
+    itemId: item.id,
+    action: "owner_reply_written",
+    actor: input.userId,
+    details: {
+      draftId: draft.id,
+      ...(input.via ? { via: input.via } : {}),
+    },
+  });
+  return { ok: true, draftId: draft.id };
+}

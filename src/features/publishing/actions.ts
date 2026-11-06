@@ -8,11 +8,11 @@ import { getCurrentTenant } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
-import { SocialProviderError } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import { getServiceClient } from "@/lib/supabase/service";
 import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX } from "./limits";
 import { publishPost } from "./publish";
+import { cancelScheduledPost, createPost } from "./posts";
 
 export interface ComposeState {
   error?: string;
@@ -57,22 +57,6 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
 
   const tenant = await getCurrentTenant();
   const db = getServiceClient();
-  // Only the tenant's own accounts (Zernio would accept any account of the team).
-  const { data: owned } = await db
-    .from("social_accounts")
-    .select("id, status")
-    .eq("tenant_id", tenant.id)
-    .in("id", accounts);
-  if (owned?.length !== accounts.length) {
-    return { error: "Pick your connected accounts only.", field: "accounts" };
-  }
-  if (owned.some((a) => a.status !== "active")) {
-    return {
-      error: "One of these accounts is disconnected. Reconnect it in Settings first.",
-      field: "accounts",
-    };
-  }
-
   // Optional image: uploaded through Zernio's presign flow before the post is created.
   const media: { url: string }[] = [];
   const image = formData.get("image");
@@ -104,37 +88,37 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     }
   }
 
-  const { data: post, error } = await db
-    .from("posts")
-    .insert({
-      tenant_id: tenant.id,
+  const result = await createPost(
+    { db, social: getSocialProvider },
+    {
+      tenantId: tenant.id,
+      userId: tenant.userId,
       content,
+      accountIds: accounts,
+      scheduledFor,
       media,
-      target_account_ids: accounts,
-      scheduled_for: scheduledFor?.toISOString() ?? null,
-      status: "queued",
-    })
-    .select("id")
-    .single();
-  if (error) return { error: "Couldn't save the post. Try again." };
-  await writeAudit(db, {
-    tenantId: tenant.id,
-    action: "post_created",
-    actor: tenant.userId,
-    details: {
-      postId: post.id,
-      scheduled: !!scheduledFor,
-      accounts: accounts.length,
-      image: media.length > 0,
     },
-  });
-
-  const result = await publishPost({ db, social: getSocialProvider }, post.id);
+  );
+  if (!result.ok) {
+    if (result.error === "accounts_not_owned") {
+      return { error: "Pick your connected accounts only.", field: "accounts" };
+    }
+    if (result.error === "account_disconnected") {
+      return {
+        error: "One of these accounts is disconnected. Reconnect it in Settings first.",
+        field: "accounts",
+      };
+    }
+    if (result.error === "too_soon") {
+      return { error: "Pick a time at least 5 minutes from now.", field: "when" };
+    }
+    return { error: "Couldn't save the post. Try again." };
+  }
   revalidatePath("/posts");
-  if (result.outcome === "failed")
+  if (result.outcome === "failed") {
     return { error: result.error, savedAt: Date.now(), outcome: "failed" };
-  if (result.outcome === "retry_later") return { savedAt: Date.now(), outcome: "waiting" };
-  return { savedAt: Date.now(), outcome: scheduledFor ? "scheduled" : "published" };
+  }
+  return { savedAt: Date.now(), outcome: result.outcome };
 }
 
 export interface PostActionState {
@@ -151,36 +135,18 @@ export async function cancelPost(
   const parsed = idSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Reload the page." };
   const tenant = await getCurrentTenant();
-  const db = getServiceClient();
-  const { data: post } = await db
-    .from("posts")
-    .select("id, status, zernio_post_id")
-    .eq("id", parsed.data.postId)
-    .eq("tenant_id", tenant.id)
-    .maybeSingle();
-  if (!post || !["scheduled", "queued"].includes(post.status)) {
-    return { error: "This post can't be cancelled any more." };
+  const result = await cancelScheduledPost(
+    { db: getServiceClient(), social: getSocialProvider },
+    { tenantId: tenant.id, userId: tenant.userId, postId: parsed.data.postId },
+  );
+  if (!result.ok) {
+    return {
+      error:
+        result.error === "not_cancellable"
+          ? "This post can't be cancelled any more."
+          : "Couldn't cancel it right now. Try again.",
+    };
   }
-  if (post.zernio_post_id) {
-    try {
-      await getSocialProvider().deletePost({
-        postId: post.zernio_post_id,
-        signal: AbortSignal.timeout(20_000),
-      });
-    } catch (error) {
-      if (isPlatformPaused(error)) await recordPlatformPause(db);
-      if (!(error instanceof SocialProviderError) || error.details.status !== 404) {
-        return { error: "Couldn't cancel it right now. Try again." };
-      }
-    }
-  }
-  await db.from("posts").update({ status: "cancelled", failure_reason: null }).eq("id", post.id);
-  await writeAudit(db, {
-    tenantId: tenant.id,
-    action: "post_cancelled",
-    actor: tenant.userId,
-    details: { postId: post.id },
-  });
   revalidatePath("/posts");
   return {};
 }

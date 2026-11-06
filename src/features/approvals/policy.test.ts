@@ -295,3 +295,44 @@ describe("monthly AI spend cap (T32)", () => {
     expect(policy(base).decision).toBe("approve");
   });
 });
+
+describe("the owner's own reply to a message handed to them (MCP Q1)", () => {
+  const own = { needsHuman: true, approvedByOwner: true, writtenByOwner: true };
+  it.each(["complaint", "unclear", "spam"] as const)(
+    "%s: sent on the owner's say-so",
+    (category) => {
+      expect(run({ classification: { category, confidence: 0.4 }, draft: own })).toEqual({
+        decision: "send",
+        reason: "owner_approved",
+      });
+    },
+  );
+  it("sent even with replies off or paused", () => {
+    expect(
+      run({ autonomyMode: "off", tenant: { ...base.tenant, repliesPaused: true }, draft: own })
+        .decision,
+    ).toBe("send");
+  });
+  it("hard limits still apply: unpaid, account down, DM window closed", () => {
+    expect(run({ tenant: { ...base.tenant, subscriptionStatus: "canceled" }, draft: own })).toEqual(
+      { decision: "pause", reason: "tenant_inactive" },
+    );
+    expect(run({ account: { status: "disconnected" }, draft: own })).toEqual({
+      decision: "pause",
+      reason: "account_inactive",
+    });
+    expect(run({ ...dm(DM_REPLY_WINDOW_MS + 1), draft: own })).toEqual({
+      decision: "escalate",
+      reason: "dm_window_closed",
+    });
+    expect(run({ ...dm(60_000), draft: own }).decision).toBe("send");
+  });
+  it("written but not approved yet (undone): the usual rules", () => {
+    expect(
+      run({
+        classification: { category: "complaint", confidence: 0.9 },
+        draft: { ...own, approvedByOwner: false },
+      }),
+    ).toEqual({ decision: "escalate", reason: "complaint" });
+  });
+});

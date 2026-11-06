@@ -50,6 +50,7 @@ interface SendContext {
     status: string;
     needsHuman: boolean;
     approvedByOwner: boolean;
+    writtenByOwner: boolean;
     idempotencyKey: string;
     sendAttemptedAt: string | null;
     zernioReplyId: string | null;
@@ -104,7 +105,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
       .from("drafts")
       .select(
         "id, body, edited_body, status, needs_human, decided_by, idempotency_key, " +
-          "send_attempted_at, zernio_reply_id, reply_via",
+          "send_attempted_at, zernio_reply_id, reply_via, owner_written",
       )
       .eq("item_id", itemId)
       .in("status", ["approved", "sent"])
@@ -123,6 +124,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     send_attempted_at: string | null;
     zernio_reply_id: string | null;
     reply_via: string;
+    owner_written: boolean;
   } | null;
 
   const last = row.conversations?.last_customer_message_at ?? null;
@@ -162,6 +164,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
           status: d.status,
           needsHuman: d.needs_human,
           approvedByOwner: d.decided_by !== null,
+          writtenByOwner: d.owner_written,
           idempotencyKey: d.idempotency_key,
           sendAttemptedAt: d.send_attempted_at,
           zernioReplyId: d.zernio_reply_id,
@@ -230,7 +233,11 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
     // while the draft waited.
     const decision = policy({
       ...c.input,
-      draft: { needsHuman: draft.needsHuman, approvedByOwner: draft.approvedByOwner },
+      draft: {
+        needsHuman: draft.needsHuman,
+        approvedByOwner: draft.approvedByOwner,
+        writtenByOwner: draft.writtenByOwner,
+      },
       now,
     });
     if (decision.decision !== "send") {

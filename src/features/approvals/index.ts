@@ -2,13 +2,17 @@ export { decideDraft, markHandledAction, undoApprovalAction, updateAutonomyMode 
 export type { AutonomyFormState, DecisionFormState } from "./actions";
 export {
   approveDraft,
+  hideSpamComment,
   markHandled,
+  markNotSpam,
   rejectDraft,
   REPLY_MAX,
   undoApproval,
   UNDO_WINDOW_MS,
+  unhideComment,
+  writeOwnerReply,
 } from "./decisions";
-export type { DecisionResult } from "./decisions";
+export type { DecisionResult, HideSpamResult, OwnerReplyResult } from "./decisions";
 export { InboxSkeleton } from "./inbox-skeleton";
 export { InboxView } from "./inbox-view";
 export {
@@ -21,6 +25,7 @@ export {
   NEEDS_OWNER,
 } from "./inbox-data";
 export { tabForStatus } from "./conversation-data";
+export { INBOX_TABS } from "./inbox-data";
 export type { InboxData, InboxEntry, InboxTab } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";
 export { ReadinessCard } from "./readiness-card";

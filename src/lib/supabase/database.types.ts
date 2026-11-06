@@ -347,6 +347,7 @@ export type Database = {
           needs_human_reason: string | null
           reply_via: string
           nudged_at: string | null
+          owner_written: boolean
           send_attempted_at: string | null
           sent_at: string | null
           status: string
@@ -368,6 +369,7 @@ export type Database = {
           needs_human_reason?: string | null
           reply_via?: string
           nudged_at?: string | null
+          owner_written?: boolean
           send_attempted_at?: string | null
           sent_at?: string | null
           status?: string
@@ -389,6 +391,7 @@ export type Database = {
           needs_human_reason?: string | null
           reply_via?: string
           nudged_at?: string | null
+          owner_written?: boolean
           send_attempted_at?: string | null
           sent_at?: string | null
           status?: string

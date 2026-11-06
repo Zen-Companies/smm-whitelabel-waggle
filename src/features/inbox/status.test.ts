@@ -19,6 +19,8 @@ describe("nextStatus", () => {
     ["escalated", "handle", "handled"],
     // T41: "Reply publicly" after a comment's DM couldn't go out.
     ["escalated", "await_approval", "awaiting_approval"],
+    // MCP Q1: the owner's own reply to a handed-over message.
+    ["escalated", "send", "sending"],
     ["failed", "handle", "handled"],
     ["paused", "resume", "new"],
   ])("%s --%s--> %s (TDD §6)", (from, event, to) => {
@@ -67,6 +69,7 @@ describe("nextStatus", () => {
     ] as const) {
       for (const event of events) {
         if (terminal === "escalated" && event === "await_approval") continue; // T41
+        if (terminal === "escalated" && event === "send") continue; // MCP Q1
         expect(nextStatus(terminal, event)).toBeNull();
       }
     }

@@ -13,9 +13,10 @@ export interface PolicyInput {
   classification: { category: Category; confidence: number };
   /**
    * null before drafting (triage), or when no draft was written. `approvedByOwner`: the owner
-   * approved it in the inbox (checked again at send time, T12).
+   * approved it in the inbox (checked again at send time, T12). `writtenByOwner`: the owner wrote
+   * the reply themselves, for a message handed to them (MCP Q1).
    */
-  draft: { needsHuman: boolean; approvedByOwner?: boolean } | null;
+  draft: { needsHuman: boolean; approvedByOwner?: boolean; writtenByOwner?: boolean } | null;
   tenant: {
     subscriptionStatus: SubscriptionStatus;
     confidenceThreshold: number;
@@ -70,6 +71,11 @@ export type PolicyDecision =
 
 const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
 
+function dmWindowOpen(input: Pick<PolicyInput, "lastCustomerMessageAt" | "now">): boolean {
+  const last = input.lastCustomerMessageAt;
+  return !!last && input.now.getTime() - last.getTime() < DM_REPLY_WINDOW_MS;
+}
+
 /**
  * Steps 1-4 without the draft: whether an item is worth drafting at all. `aiCapReached`: the
  * business has used this month's AI allowance (T32), so nothing more is drafted. policy() never
@@ -110,6 +116,19 @@ export function triage(
 }
 
 export function policy(input: PolicyInput): PolicyDecision {
+  // The owner's own words for a message Waggle handed to them (a complaint, an unclear message):
+  // the owner's call, so only the hard limits apply (paying, account up, Meta's DM window).
+  if (input.draft?.writtenByOwner && input.draft.approvedByOwner) {
+    if (!PAYING.includes(input.tenant.subscriptionStatus)) {
+      return { decision: "pause", reason: "tenant_inactive" };
+    }
+    if (input.account.status !== "active") return { decision: "pause", reason: "account_inactive" };
+    if (input.item.kind === "dm" && !dmWindowOpen(input)) {
+      return { decision: "escalate", reason: "dm_window_closed" };
+    }
+    return { decision: "send", reason: "owner_approved" };
+  }
+
   const pre = triage({ ...input, aiCapReached: false });
   if (pre.decision !== "draft") return pre;
 
@@ -118,11 +137,8 @@ export function policy(input: PolicyInput): PolicyDecision {
     return { decision: "escalate", reason: "needs_human" };
 
   // 5. A DM reply must go out inside Meta's 24-hour window.
-  if (input.item.kind === "dm") {
-    const last = input.lastCustomerMessageAt;
-    if (!last || input.now.getTime() - last.getTime() >= DM_REPLY_WINDOW_MS) {
-      return { decision: "escalate", reason: "dm_window_closed" };
-    }
+  if (input.item.kind === "dm" && !dmWindowOpen(input)) {
+    return { decision: "escalate", reason: "dm_window_closed" };
   }
 
   // A review's reply stays public on the Page (T42): never sent on its own, whatever the mode.

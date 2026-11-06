@@ -49,7 +49,7 @@ export type StatusEvent =
    * owner switched a comment's reply from DM to public (T41)
    */
   | "await_approval"
-  /** policy auto, or the owner approved */
+  /** policy auto, or the owner approved (or wrote their own reply to an escalated item) */
   | "send"
   | "sent"
   | "reject"
@@ -92,7 +92,8 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
   rejected: {},
   ignored: {},
   // T41: "Reply publicly" after a comment's DM couldn't go out: the draft waits for approval again.
-  escalated: { handle: "handled", await_approval: "awaiting_approval" },
+  // MCP Q1: the owner answers a handed-over message with their own words (`send`).
+  escalated: { handle: "handled", await_approval: "awaiting_approval", send: "sending" },
   failed: { handle: "handled" },
   handled: {},
 };
