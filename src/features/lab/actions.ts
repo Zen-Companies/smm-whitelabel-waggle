@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { isOperator } from "@/features/billing";
+import { hasPermission } from "@/features/staff";
 import type { Json } from "@/lib/supabase/database.types";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -28,7 +28,7 @@ export type LabRunState = { run?: LabRun; error?: string };
 
 async function operator() {
   const user = await getCurrentUser();
-  return isOperator(user) ? user : null;
+  return (await hasPermission("admin.lab.use")) ? user : null;
 }
 
 export async function runLab(_prev: LabRunState, formData: FormData): Promise<LabRunState> {

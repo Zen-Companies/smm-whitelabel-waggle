@@ -2,7 +2,7 @@ import { CopyButton } from "@/components/app/copy-button";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { AssistantRow } from "./assistant-row";
-import { mcpEnabled } from "./auth";
+import { mcpBrandsOn, mcpOnGlobally } from "./flags";
 import { loadGrants, loadUserBrands } from "./grants";
 
 const day = (iso: string) =>
@@ -20,7 +20,13 @@ export async function AssistantsCard() {
     loadUserBrands(db, user.id),
   ]);
   const address = `${(process.env.APP_URL ?? "").replace(/\/$/, "")}/api/mcp`;
-  const on = mcpEnabled();
+  const [on, brandsOn] = await Promise.all([
+    mcpOnGlobally(db),
+    mcpBrandsOn(
+      db,
+      brands.map((b) => b.id),
+    ),
+  ]);
 
   return (
     <section className="flex flex-col gap-5" aria-labelledby="assistants-heading">
@@ -78,7 +84,11 @@ export async function AssistantsCard() {
                 clientId={g.clientId}
                 clientName={g.clientName || "AI assistant"}
                 connectedOn={day(g.createdAt)}
-                brands={brands.map((b) => ({ ...b, shared: g.brandIds.includes(b.id) }))}
+                brands={brands.map((b) => ({
+                  ...b,
+                  shared: g.brandIds.includes(b.id),
+                  on: brandsOn.has(b.id),
+                }))}
               />
             ))}
           </ul>

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { ToolError, type McpDeps } from "./context";
-import { callTool, principalFrom } from "./server";
+import { principalFrom, runTool } from "./server";
 import { defineTool, READ } from "./tools/define";
 
 vi.mock("@sentry/nextjs", () => ({ captureException: vi.fn() }));
@@ -21,9 +21,9 @@ const tool = (run: () => Promise<{ ok: boolean }>) =>
 const deps = {} as McpDeps;
 const principal = { userId: "u1", clientId: "c1", clientName: "Claude", brandIds: ["b1"] };
 
-describe("callTool", () => {
+describe("runTool", () => {
   it("returns JSON text and structuredContent", async () => {
-    const r = await callTool(
+    const r = await runTool(
       tool(async () => ({ ok: true })),
       deps,
       principal,
@@ -37,13 +37,13 @@ describe("callTool", () => {
 
   it("no principal: refused before running", async () => {
     const run = vi.fn(async () => ({ ok: true }));
-    const r = await callTool(tool(run), deps, null, {});
+    const r = await runTool(tool(run), deps, null, {});
     expect(r.isError).toBe(true);
     expect(run).not.toHaveBeenCalled();
   });
 
   it("a refusal keeps its code and message", async () => {
-    const r = await callTool(
+    const r = await runTool(
       tool(async () => {
         throw new ToolError("not_found", "No such message for this brand.");
       }),
@@ -59,7 +59,7 @@ describe("callTool", () => {
   });
 
   it("an unexpected error never leaks its message", async () => {
-    const r = await callTool(
+    const r = await runTool(
       tool(async () => {
         throw new Error("relation inbound_items: secret detail");
       }),

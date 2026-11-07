@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { shortTime } from "@/components/app/time";
-import { requireOperator } from "@/features/billing";
+import { requirePermission } from "@/features/staff";
 import { DRAFT_PROMPTS } from "@/features/drafting";
 import { CATEGORIES, JEV_QUESTION_SETS, LLM_CLASSIFY_PROMPTS } from "@/lib/classifier";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -124,7 +124,7 @@ export async function LabView({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireOperator();
+  await requirePermission("admin.lab.use");
   const params = await searchParams;
   const tab = TABS.find((t) => t.key === params.tab)?.key ?? "try";
   const runId = typeof params.run === "string" ? params.run : undefined;

@@ -24,11 +24,11 @@ pnpm dev              # the app at http://localhost:3000 (also runs the job queu
 
 Stop with Ctrl+C (app) and `supabase stop` (database; data is kept).
 
-| Local page | URL |
-|---|---|
-| App | http://localhost:3000 |
-| Supabase Studio (browse tables) | http://127.0.0.1:55323 |
-| Test emails (Inbucket) | http://127.0.0.1:55324 |
+| Local page                       | URL                                           |
+| -------------------------------- | --------------------------------------------- |
+| App                              | http://localhost:3000                         |
+| Supabase Studio (browse tables)  | http://127.0.0.1:55323                        |
+| Test emails (Inbucket)           | http://127.0.0.1:55324                        |
 | Admin lab and Costs (admin role) | http://localhost:3000/admin/lab, /admin/costs |
 
 ## Signing in
@@ -45,8 +45,8 @@ Demo login: **owner@example.com** / **password123** (Harbour Bean Café, after `
 Admin pages need the admin role on a login (nobody has it by default):
 
 ```powershell
-pnpm local:operator --email you@example.com            # make a login an admin
-pnpm local:operator --email you@example.com --remove   # take it away
+pnpm local:staff --email you@example.com --role admin  # staff role: admin|developer|support|viewer
+pnpm local:staff --email you@example.com --remove     # take it away
 ```
 
 ## Demo (no real calls)
@@ -111,25 +111,25 @@ Classifiers and drafts that call OpenRouter only run when named, to avoid using 
 
 ## Troubleshooting
 
-| Problem | Fix |
-|---|---|
-| `supabase start` fails on ports 553xx ("bind: access forbidden"), usually after a reboot | Admin PowerShell: `net stop winnat; net start winnat`, then `supabase start` |
-| The page keeps reloading and the terminal shows `✓ Compiled in 1ms` over and over | Ctrl+C, `Remove-Item -Recurse -Force .next\dev`, `pnpm dev` |
-| Sign-in link gives `ERR_SSL_PROTOCOL_ERROR` on localhost | Open the link with `http://localhost:3000` instead of the ngrok address |
-| Zernio webhook deliveries return 400 | The endpoint's secret in Zernio doesn't match `ZERNIO_WEBHOOK_SECRET` |
-| New messages aren't sorted, or the free daily limit runs out fast | Start jevos (see Live test, step 2) |
-| Business info topic stays "getting ready…" | The embedding call failed or the free limit ran out; check the `pnpm dev` terminal |
+| Problem                                                                                  | Fix                                                                                |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `supabase start` fails on ports 553xx ("bind: access forbidden"), usually after a reboot | Admin PowerShell: `net stop winnat; net start winnat`, then `supabase start`       |
+| The page keeps reloading and the terminal shows `✓ Compiled in 1ms` over and over        | Ctrl+C, `Remove-Item -Recurse -Force .next\dev`, `pnpm dev`                        |
+| Sign-in link gives `ERR_SSL_PROTOCOL_ERROR` on localhost                                 | Open the link with `http://localhost:3000` instead of the ngrok address            |
+| Zernio webhook deliveries return 400                                                     | The endpoint's secret in Zernio doesn't match `ZERNIO_WEBHOOK_SECRET`              |
+| New messages aren't sorted, or the free daily limit runs out fast                        | Start jevos (see Live test, step 2)                                                |
+| Business info topic stays "getting ready…"                                               | The embedding call failed or the free limit ran out; check the `pnpm dev` terminal |
 
 ## Environment
 
 Copy `.env.example` to `.env.local`; every variable is explained there. The main ones:
 
-| Variable | What it's for |
-|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Local database (from `supabase start`) |
-| `APP_URL` | Where links point: `http://localhost:3000`, or the ngrok URL during a live test |
-| `SOCIAL_PROVIDER_MODE=mock` | No Zernio calls (demo and smoke tests) |
-| `ZERNIO_API_KEY`, `ZERNIO_WEBHOOK_SECRET` | Zernio (live only) |
-| `JEV_API_URL` | Local jevos: `http://127.0.0.1:8017/v1/systemone` |
-| `OPENROUTER_API_KEY`, `LLM_*_MODEL`, `EMBEDDING_MODEL` | Drafting and embeddings (free `:free` models for now) |
-| `CRON_SECRET` | Job queue; locally `local-dev-cron-secret` |
+| Variable                                                                                 | What it's for                                                                   |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | Local database (from `supabase start`)                                          |
+| `APP_URL`                                                                                | Where links point: `http://localhost:3000`, or the ngrok URL during a live test |
+| `SOCIAL_PROVIDER_MODE=mock`                                                              | No Zernio calls (demo and smoke tests)                                          |
+| `ZERNIO_API_KEY`, `ZERNIO_WEBHOOK_SECRET`                                                | Zernio (live only)                                                              |
+| `JEV_API_URL`                                                                            | Local jevos: `http://127.0.0.1:8017/v1/systemone`                               |
+| `OPENROUTER_API_KEY`, `LLM_*_MODEL`, `EMBEDDING_MODEL`                                   | Drafting and embeddings (free `:free` models for now)                           |
+| `CRON_SECRET`                                                                            | Job queue; locally `local-dev-cron-secret`                                      |

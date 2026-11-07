@@ -2,7 +2,7 @@ export { resolveBrand, ToolError, viaOf } from "./context";
 export type { McpDeps, McpPrincipal, ToolContext, ToolErrorCode } from "./context";
 export { authIssuer, mcpEnabled, oauthSubject, verifyMcpToken, verifyWith } from "./auth";
 export type { TokenClaims, VerifyDeps } from "./auth";
-export { callTool, principalFrom, registerTools, SERVER_INSTRUCTIONS } from "./server";
+export { callTool, principalFrom, registerTools, runTool, SERVER_INSTRUCTIONS } from "./server";
 export { TOOLS, toolByName } from "./tools/registry";
 export type { McpTool, ToolAccess, ToolAnnotations } from "./tools/define";
 export { ConsentScreen } from "./consent-screen";
@@ -22,3 +22,7 @@ export {
   redirectAllowlist,
 } from "./redirects";
 export { AssistantsCard } from "./assistants-card";
+export { brandDailyCap, MCP_FLAG, mcpBrandsOn, mcpOnGlobally } from "./flags";
+export { countCalls, finishCall, MCP_CALLS_KEEP_MS, pruneCalls, startCall } from "./activity";
+export { brandOfCall, kindOf, limitsFromEnv, overLimit, redactArgs, SEND_TOOLS } from "./limits";
+export type { CallCounts, CallKind, LimitBreach, McpLimits } from "./limits";

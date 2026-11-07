@@ -1,5 +1,6 @@
 import type { SocialProvider } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { mcpBrandsOn } from "./flags";
 
 // Who is calling a tool (docs/mcp/PLAN.md §4.2). Built by the auth layer from a verified token:
 // never from tool arguments. `brandIds` are the brands the user ticked when connecting this AI
@@ -50,8 +51,9 @@ export type ToolErrorCode =
 export const viaOf = (p: McpPrincipal) => ({ mcpClientId: p.clientId, clientName: p.clientName });
 
 /**
- * The brand a call acts on. It must be one the user ticked for this assistant and one they still
- * own (a removed membership wins over an old grant). Omitted: allowed when exactly one is ticked.
+ * The brand a call acts on. It must be one the user ticked for this assistant, one they still own
+ * (a removed membership wins over an old grant), and switched on for AI assistants (flags.ts).
+ * Omitted: allowed when exactly one is ticked.
  */
 export async function resolveBrand(ctx: ToolContext, brandId: string | undefined): Promise<string> {
   const { principal } = ctx;
@@ -73,6 +75,9 @@ export async function resolveBrand(ctx: ToolContext, brandId: string | undefined
     .maybeSingle();
   if (!data) {
     throw new ToolError("brand_not_allowed", "This brand isn't available to this login any more.");
+  }
+  if (!(await mcpBrandsOn(ctx.db, [id])).has(id)) {
+    throw new ToolError("brand_not_allowed", "AI assistants aren't turned on for this brand yet.");
   }
   return id;
 }

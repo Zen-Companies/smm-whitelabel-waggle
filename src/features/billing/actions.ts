@@ -6,17 +6,17 @@ import { writeAudit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { parseCapInput } from "./ai-cap";
-import { isOperator } from "./operator";
+import { hasPermission } from "@/features/staff";
 
 export type CapFormState = { saved?: boolean; error?: string };
 
 /**
- * The operator sets one business's monthly AI cap (T32). Operator only, checked here too: a Server
- * Action is reachable without the page. Owners have no update grant on the column.
+ * Staff set one business's monthly AI cap (T32). Admins only (`admin.caps.manage`), checked here
+ * too: a Server Action is reachable without the page. Owners have no update grant on the column.
  */
 export async function updateAiCap(_prev: CapFormState, formData: FormData): Promise<CapFormState> {
   const user = await getCurrentUser();
-  if (!user || !isOperator(user)) return { error: "Not available." };
+  if (!(await hasPermission("admin.caps.manage"))) return { error: "Not available." };
   const tenantId = z.string().uuid().safeParse(formData.get("tenantId"));
   if (!tenantId.success) return { error: "That business wasn't found." };
   const parsed = parseCapInput(formData.get("cap"));

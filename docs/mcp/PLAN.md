@@ -1,6 +1,6 @@
 # Waggle MCP server: Phase 0 plan
 
-Status: **approved 2026-11-06**. Phase 1 (tools + server) built 2026-11-06. Phase 2 (sign-in: Supabase OAuth server, consent page with brand picker, `mcp_grants`, Data API block, Settings → AI assistants) built 2026-11-07; all behind `MCP_ENABLED`. Source prompt: `docs/mcp/PROMPT.md`.
+Status: **approved 2026-11-06**. Phase 1 (tools + server) built 2026-11-06. Phase 2 (sign-in: Supabase OAuth server, consent page with brand picker, `mcp_grants`, Data API block, Settings → AI assistants) built 2026-11-07. Phase 3 (staff roles, switches, activity log, limits) built 2026-11-07. All behind `MCP_ENABLED`. Source prompt: `docs/mcp/PROMPT.md`.
 Researched on 2026-11-06, with outside claims linked.
 
 ## 1. Summary
@@ -191,8 +191,15 @@ It is documented for Next 13+, not tested on 16 specifically; the first spike co
 `approve_reply` and `write_reply` set the item to `sending` exactly as the app does. The send step
 runs `policy()`, uses the idempotency key, and the 8-second undo window applies. On top:
 
-- **Daily cap per brand:** `MCP_DAILY_SEND_CAP` (default 50, Q3) counts AI-initiated sends and
-  publishes from `mcp_calls`. Over the cap, the tool returns `{error: "daily_limit"}`.
+- **Send limits per brand (revised 2026-11-07, replaces the flat 50/day):** a burst limit of
+  `MCP_BURST_SEND_CAP` (default 10) AI-initiated sends and publishes per 10 minutes, which stops
+  loops, injected instructions and bursts Meta may flag; and a daily limit of
+  `MCP_DAILY_SEND_CAP` (default 100) that staff can raise per brand. Both count from `mcp_calls`.
+  Over a limit, the tool returns `{error: "rate_limited"}` (burst) or `{error: "daily_limit"}`.
+  Why a limit at all: hosts let users "always allow" a tool (no confirmation), customer text can
+  try to steer the model, assistants can loop, Instagram/Facebook penalise bursts, and a stolen
+  token. Not cost: sends make no AI call on our side. The numbers are starting points; every send
+  is logged so real volumes can set them later.
 - **Attribution:** `audit_log.details.via = {mcp_client_id, client_name}`.
 
 ## 6. Where "no LLM in tool handlers" forces a change
@@ -271,7 +278,7 @@ the consent page is closed. A brand that's off is left out of `list_brands` and 
 ## 10. Decisions (2026-11-06)
 
 Q1 yes (the AI can reply to escalated messages, owner-confirmed, through `policy()`) · Q2 yes
-(settings stay out of v1) · Q3 cap 50 per brand per day · Q4 yes, enable the Supabase OAuth server
+(settings stay out of v1) · Q3 cap 50 per brand per day (revised 2026-11-07: 10 per 10 minutes + 100 a day, raisable per brand; §5.3) · Q4 yes, enable the Supabase OAuth server
 with DCR when Phase 2 is ready · Q5 yes, `https://waggle-wheat.vercel.app/api/mcp` for now ·
 Q6 roles are `admin`, `developer`, `support`, `viewer` (Stripe-style), matrix in §7.
 
@@ -323,8 +330,31 @@ Q6 roles are `admin`, `developer`, `support`, `viewer` (Stripe-style), matrix in
 - Redirect allowlist: `features/mcp/redirects.ts` (defaults for Claude, Claude Code, ChatGPT;
   `MCP_REDIRECT_URIS` replaces them). Grok's URI is still unknown: capture it on first connect.
 - Sign-in returns to the consent page (`?next=`, only `/oauth/consent?authorization_id=…`).
-- Consent pre-ticks nothing when the user has several brands (one brand: ticked). The "50 a day"
-  line from the design waits for Phase 3, which enforces it.
+- Consent pre-ticks nothing when the user has several brands (one brand: ticked). The limits line
+  from the design waits for Phase 3, which enforces them (§5.3).
 - Tests: `mcp-oauth.test.ts` (register → authorize with PKCE → approve → token → tools →
   Data API refused → refresh → revoke), `mcp-protocol.test.ts` (401 challenge, tools/list,
   tools/call), `oauth_block.test.sql`.
+
+## Phase 3 as built (2026-11-07)
+
+- Migration `20261107100000_staff_flags_mcp_calls`: `staff_members`, `staff_role_permissions`
+  (seeded matrix), `feature_flags`, `tenants.mcp_daily_send_cap`, `mcp_calls`. All server-only
+  (no grants to `authenticated`), plus the "no oauth clients" policy.
+- Staff: `features/staff` (`staffAccess`, `requirePermission` = 404, `hasPermission`). Replaces
+  the `operator` app_metadata role everywhere (costs, lab, top bar); today's operators become
+  admins in the migration. One permission added to the approved matrix: `admin.caps.manage`
+  (admins only), because changing a brand's AI cap on the Costs page shouldn't come with
+  "see costs" (viewers have that). `pnpm local:staff --email … --role …` replaces
+  `pnpm local:operator`.
+- Switches (`features/mcp/flags.ts`): `MCP_ENABLED` is the deployment master; a global `mcp`
+  row switches everyone off (no row = on); per brand, no row = off. A brand that's off is left out
+  of `list_brands`, refused by every tool, and greyed out on the consent page and in Settings
+  (a brand already shared stays shared while off).
+- Every tool call through `callTool`: switches → logged in `mcp_calls` (redacted args) → limits
+  (`limits.ts`: 60/min per user+assistant, 1000/day per user, 30 actions/hour per brand,
+  10 sends per 10 minutes and 100 per 24 hours per brand, or the brand's own) → the tool →
+  outcome and latency. Refused calls are logged as `rejected` and don't count. `runTool` is the
+  bare tool run (unit tests; the Phase 4 playground passes `playground: true` to `callTool`).
+- The job route prunes `mcp_calls` older than 90 days.
+- Tests: `mcp-limits.test.ts`, `staff.test.ts`, `staff.test.sql`, `limits.test.ts`.

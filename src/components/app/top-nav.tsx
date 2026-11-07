@@ -18,16 +18,20 @@ const ITEMS = [
  * The top bar's links (docs/design.md §4): active = ink text with a 2px ink underline. A honey dot
  * on Inbox while replies wait for approval. Scrolls sideways on phones.
  */
-export function TopNav({ showAdmin, inboxCount }: { showAdmin: boolean; inboxCount: number }) {
+export function TopNav({
+  admin,
+  inboxCount,
+}: {
+  /** Staff pages the signed-in user's role may open (features/staff). */
+  admin: { lab: boolean; costs: boolean };
+  inboxCount: number;
+}) {
   const pathname = usePathname();
-  // Admin pages only for the operator role (T34).
-  const items: { href: string; label: string }[] = showAdmin
-    ? [
-        ...ITEMS,
-        { href: "/admin/lab", label: "Admin lab" },
-        { href: "/admin/costs", label: "Costs" },
-      ]
-    : [...ITEMS];
+  const items: { href: string; label: string }[] = [
+    ...ITEMS,
+    ...(admin.lab ? [{ href: "/admin/lab", label: "Admin lab" }] : []),
+    ...(admin.costs ? [{ href: "/admin/costs", label: "Costs" }] : []),
+  ];
   return (
     <nav aria-label="Main" className="-mx-1 flex self-stretch overflow-x-auto">
       {items.map(({ href, label }) => {

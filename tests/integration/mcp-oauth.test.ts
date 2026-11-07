@@ -55,6 +55,7 @@ async function form(path: string, body: Record<string, string>) {
 }
 
 beforeAll(async () => {
+  process.env.MCP_ENABLED = "true";
   email = uniqueEmail();
   const { data } = await anonClient().auth.signUp({ email, password: "password123" });
   userId = data.user!.id;
@@ -64,6 +65,9 @@ beforeAll(async () => {
   cafeId = a![0].tenant_id;
   floristId = b![0].tenant_id;
   tenantIds.push(cafeId, floristId);
+  await db
+    .from("feature_flags")
+    .insert([cafeId, floristId].map((t) => ({ key: "mcp", tenant_id: t, enabled: true })));
 });
 
 afterAll(async () => {

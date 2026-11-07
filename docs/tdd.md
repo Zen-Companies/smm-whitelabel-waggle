@@ -577,6 +577,13 @@ As built (T10, `features/approvals`):
 - Verify signatures on Zernio and Stripe webhooks; `CRON_SECRET` on the job route.
 - Never log full webhook payloads to Sentry (customer messages); log ids.
 
+- **Staff roles (MCP Phase 3, 2026-11-07).** The `operator` role in `app_metadata` (T34) is
+  replaced by `staff_members` + `staff_role_permissions` (admin, developer, support, viewer;
+  docs/mcp/PLAN.md §7). Server-only tables; staff pages 404 without the permission. Today's
+  operators were migrated to admins.
+- **AI assistants (MCP).** OAuth tokens are refused on every table by a restrictive policy; the
+  MCP server reads through the service role after its own checks (docs/mcp/PLAN.md §4.4).
+
 ## 14. Errors and retries
 
 - Step failure → `attempts + 1`, `next_run_at = now() + 2^attempts minutes`, `last_error` set.

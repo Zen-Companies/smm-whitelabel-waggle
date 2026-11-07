@@ -3,7 +3,7 @@ import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 import { CapForm } from "./cap-form";
 import { loadCostView } from "./costs";
-import { requireOperator } from "./operator";
+import { requirePermission } from "@/features/staff";
 
 const usd = (n: number | null, digits = 4) =>
   n === null
@@ -17,9 +17,11 @@ const date = (iso: string) =>
     minute: "2-digit",
   });
 
-/** Operator page: AI cost per business and per message, plus Zernio's spend per business. */
+/** Staff page: AI cost per business and per message, plus Zernio's spend per business. */
 export async function CostView() {
-  await requireOperator();
+  const access = await requirePermission("admin.costs.view");
+  // Viewers and developers see the caps; only admins change them.
+  const canEditCaps = access.permissions.has("admin.caps.manage");
   const db = getServiceClient();
   const [view, spend] = await Promise.all([
     loadCostView({ db, social: getSocialProvider }),
@@ -124,12 +126,18 @@ export async function CostView() {
                     </td>
                     <td className="p-3">{LEVEL[s.level]}</td>
                     <td className="p-3">
-                      <CapForm
-                        tenantId={t.tenantId}
-                        name={t.name}
-                        cap={s.customCap ? s.capUsd : null}
-                        defaultCap={defaultCap}
-                      />
+                      {canEditCaps ? (
+                        <CapForm
+                          tenantId={t.tenantId}
+                          name={t.name}
+                          cap={s.customCap ? s.capUsd : null}
+                          defaultCap={defaultCap}
+                        />
+                      ) : (
+                        <span className="text-ink-2">
+                          {s.customCap ? usd(s.capUsd, 2) : `Default (${usd(defaultCap, 2)})`}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );

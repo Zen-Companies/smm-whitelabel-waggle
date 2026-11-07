@@ -19,6 +19,7 @@ import {
 } from "@/features/approvals";
 import { loadThreadHistory } from "@/features/drafting";
 import { resolveBrand, ToolError, viaOf, type ToolContext } from "../context";
+import { mcpBrandsOn } from "../flags";
 import {
   brandId,
   clip,
@@ -94,7 +95,12 @@ export const listBrands = defineTool({
       .eq("user_id", ctx.principal.userId)
       .in("tenant_id", ids);
     const rows = (members ?? []) as unknown as { tenants: { id: string; name: string } | null }[];
-    const brands = rows.flatMap((m) => (m.tenants ? [m.tenants] : []));
+    const on = await mcpBrandsOn(
+      ctx.db,
+      rows.flatMap((m) => (m.tenants ? [m.tenants.id] : [])),
+    );
+    // Only brands switched on for AI assistants (flags.ts); the others aren't offered.
+    const brands = rows.flatMap((m) => (m.tenants && on.has(m.tenants.id) ? [m.tenants] : []));
     const { data: accounts } = await ctx.db
       .from("social_accounts")
       .select("id, tenant_id, platform, username, status")

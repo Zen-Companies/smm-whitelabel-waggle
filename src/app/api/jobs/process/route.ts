@@ -8,6 +8,7 @@ import {
   handlePlatformPause,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
+import { pruneCalls } from "@/features/mcp";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
@@ -92,6 +93,8 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 25_000,
     });
 
+    // MCP: the AI-assistant activity log keeps 90 days.
+    const mcpCallsPruned = await pruneCalls(db, new Date());
     const dmWindowsEscalated = await escalateClosingDmWindows(db);
     const nudges = await enqueueDraftNudges(db);
     const alerts = await deliverPendingAlerts({
@@ -114,6 +117,7 @@ export async function POST(request: Request): Promise<Response> {
       backfill,
       reviews,
       analytics,
+      mcpCallsPruned,
     });
   } catch (error) {
     // Visible in the Vercel logs even without Sentry. Our own error text only, never customer

@@ -80,6 +80,8 @@ let other: { tenantId: string; accountId: string };
 let claude: McpPrincipal;
 
 beforeAll(async () => {
+  // The deployment's switch (MCP_ENABLED); brands are switched on one by one below.
+  process.env.MCP_ENABLED = "true";
   maria = await signUp();
   cafe = await brand(maria, "Harbour Bean Cafe", true);
   florist = await brand(maria, "Bloom and Stem", false);
@@ -91,6 +93,8 @@ beforeAll(async () => {
     clientName: "Claude",
     brandIds: [cafe.tenantId],
   };
+  // AI assistants on for the café only (Phase 3 switches; the florist stays off).
+  await db.from("feature_flags").insert({ key: "mcp", tenant_id: cafe.tenantId, enabled: true });
   await db.from("kb_entries").insert([
     { tenant_id: cafe.tenantId, title: "Sunday hours", content: "Open 8am to 10pm on Sundays." },
     { tenant_id: cafe.tenantId, title: "Parking", content: "Free parking behind the shop." },

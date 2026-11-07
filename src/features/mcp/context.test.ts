@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { resolveBrand, type ToolContext } from "./context";
 
-// A stand-in for the tenant_members lookup: rows of [tenant_id, user_id].
-function fakeDb(members: [string, string][]) {
+// A stand-in for the two lookups: tenant_members rows [tenant_id, user_id], and the brands with
+// AI assistants switched on (feature_flags).
+function fakeDb(members: [string, string][], on: string[]) {
   return {
-    from: () => {
+    from: (table: string) => {
       const f: Record<string, string> = {};
       const q = {
         select: () => q,
@@ -12,6 +13,13 @@ function fakeDb(members: [string, string][]) {
           f[col] = val;
           return q;
         },
+        in: async (_col: string, ids: string[]) => ({
+          data:
+            table === "feature_flags"
+              ? ids.filter((id) => on.includes(id)).map((tenant_id) => ({ tenant_id }))
+              : [],
+          error: null,
+        }),
         maybeSingle: async () => ({
           data: members.some(([t, u]) => t === f.tenant_id && u === f.user_id)
             ? { tenant_id: f.tenant_id }
@@ -23,9 +31,9 @@ function fakeDb(members: [string, string][]) {
   };
 }
 
-const ctx = (brandIds: string[], members: [string, string][]) =>
+const ctx = (brandIds: string[], members: [string, string][], on = ["b1", "b2"]) =>
   ({
-    db: fakeDb(members),
+    db: fakeDb(members, on),
     social: () => {
       throw new Error("unused");
     },
@@ -56,6 +64,12 @@ describe("resolveBrand", () => {
   it("a ticked brand the user no longer owns is refused", async () => {
     await expect(resolveBrand(ctx(["b1"], [["b1", "other"]]), "b1")).rejects.toMatchObject({
       code: "brand_not_allowed",
+    });
+  });
+  it("a brand with AI assistants switched off is refused", async () => {
+    await expect(resolveBrand(ctx(["b1"], [["b1", "u1"]], []), "b1")).rejects.toMatchObject({
+      code: "brand_not_allowed",
+      message: "AI assistants aren't turned on for this brand yet.",
     });
   });
 });

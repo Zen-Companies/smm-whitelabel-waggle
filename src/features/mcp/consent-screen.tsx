@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { denyConnection } from "./actions";
-import { mcpEnabled } from "./auth";
+import { mcpBrandsOn, mcpOnGlobally } from "./flags";
 import { ConsentForm } from "./consent-form";
 import { loadUserBrands } from "./grants";
 import { assistantName, redirectAllowed, redirectAllowlist } from "./redirects";
@@ -37,7 +37,7 @@ function Tiles({ letter }: { letter: string }) {
 }
 
 export async function ConsentScreen({ authorizationId }: { authorizationId: string | null }) {
-  if (!mcpEnabled()) {
+  if (!(await mcpOnGlobally(getServiceClient()))) {
     return (
       <Message title="AI assistants are paused">
         <p>
@@ -111,7 +111,25 @@ export async function ConsentScreen({ authorizationId }: { authorizationId: stri
       "tenant_id",
       brands.map((b) => b.id),
     );
-  const ticked = new Set(grant?.tenant_ids ?? (brands.length === 1 ? [brands[0].id] : []));
+  const on = await mcpBrandsOn(
+    db,
+    brands.map((b) => b.id),
+  );
+  if (!on.size) {
+    return (
+      <Message title="AI assistants aren't available for your brands yet">
+        <p>We&apos;re turning this on brand by brand. Nothing was shared with {assistant}.</p>
+        <form action={denyConnection}>
+          <input type="hidden" name="authorizationId" value={details.authorization_id} />
+          <Button type="submit">Back to {assistant}</Button>
+        </form>
+      </Message>
+    );
+  }
+  const usable = brands.filter((b) => on.has(b.id));
+  const ticked = new Set(
+    (grant?.tenant_ids ?? (usable.length === 1 ? [usable[0].id] : [])).filter((id) => on.has(id)),
+  );
   const accountsOf = (tenantId: string) => {
     const list = (accounts ?? [])
       .filter((a) => a.tenant_id === tenantId)
@@ -137,8 +155,11 @@ export async function ConsentScreen({ authorizationId }: { authorizationId: stri
         brands={brands.map((b) => ({
           id: b.id,
           name: b.name,
-          accounts: accountsOf(b.id),
+          accounts: on.has(b.id)
+            ? accountsOf(b.id)
+            : "AI assistants aren't turned on for this brand yet.",
           checked: ticked.has(b.id),
+          disabled: !on.has(b.id),
         }))}
       />
     </div>

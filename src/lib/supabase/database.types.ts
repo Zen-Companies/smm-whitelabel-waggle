@@ -415,6 +415,33 @@ export type Database = {
           },
         ]
       }
+      feature_flags: {
+        Row: {
+          enabled: boolean
+          id: string
+          key: string
+          tenant_id: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          enabled: boolean
+          id?: string
+          key: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          enabled?: boolean
+          id?: string
+          key?: string
+          tenant_id?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       inbound_items: {
         Row: {
           attempts: number
@@ -740,6 +767,54 @@ export type Database = {
           },
         ]
       }
+      mcp_calls: {
+        Row: {
+          args: Json
+          at: string
+          client_id: string
+          client_name: string
+          error_code: string | null
+          id: string
+          kind: string
+          latency_ms: number | null
+          playground: boolean
+          status: string
+          tenant_id: string | null
+          tool: string
+          user_id: string
+        }
+        Insert: {
+          args?: Json
+          at?: string
+          client_id: string
+          client_name?: string
+          error_code?: string | null
+          id?: string
+          kind: string
+          latency_ms?: number | null
+          playground?: boolean
+          status?: string
+          tenant_id?: string | null
+          tool: string
+          user_id: string
+        }
+        Update: {
+          args?: Json
+          at?: string
+          client_id?: string
+          client_name?: string
+          error_code?: string | null
+          id?: string
+          kind?: string
+          latency_ms?: number | null
+          playground?: boolean
+          status?: string
+          tenant_id?: string | null
+          tool?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       mcp_grants: {
         Row: {
           client_id: string
@@ -1053,6 +1128,42 @@ export type Database = {
           },
         ]
       }
+      staff_members: {
+        Row: {
+          added_by: string | null
+          created_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      staff_role_permissions: {
+        Row: {
+          permission: string
+          role: string
+        }
+        Insert: {
+          permission: string
+          role: string
+        }
+        Update: {
+          permission?: string
+          role?: string
+        }
+        Relationships: []
+      }
       tenant_members: {
         Row: {
           created_at: string
@@ -1098,6 +1209,7 @@ export type Database = {
           created_at: string
           health_checked_at: string | null
           id: string
+          mcp_daily_send_cap: number | null
           name: string
           replies_paused: boolean
           stripe_customer_id: string | null
@@ -1116,6 +1228,7 @@ export type Database = {
           created_at?: string
           health_checked_at?: string | null
           id?: string
+          mcp_daily_send_cap?: number | null
           name: string
           replies_paused?: boolean
           stripe_customer_id?: string | null
@@ -1134,6 +1247,7 @@ export type Database = {
           created_at?: string
           health_checked_at?: string | null
           id?: string
+          mcp_daily_send_cap?: number | null
           name?: string
           replies_paused?: boolean
           stripe_customer_id?: string | null

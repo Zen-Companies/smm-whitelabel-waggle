@@ -79,8 +79,10 @@ select is_empty(
 select is_empty(
   $$ select t.table_name from information_schema.tables t
      where t.table_schema = 'public' and t.table_type = 'BASE TABLE'
-       -- mcp_grants belongs to a login and lists several brands (tenant_ids); oauth_block.test.sql
-       and t.table_name not in ('tenants', 'webhook_events', 'platform_state', 'mcp_grants')
+       -- mcp_grants belongs to a login and lists several brands (tenant_ids); staff tables belong to
+       -- Zen Companies people, not a brand. Both are server-only (oauth_block.test.sql, staff.test.sql).
+       and t.table_name not in ('tenants', 'webhook_events', 'platform_state', 'mcp_grants',
+                                'staff_members', 'staff_role_permissions')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

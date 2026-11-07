@@ -8,7 +8,8 @@ export interface AssistantRowProps {
   clientId: string;
   clientName: string;
   connectedOn: string;
-  brands: { id: string; name: string; shared: boolean }[];
+  /** `on`: AI assistants switched on for the brand (staff switch). */
+  brands: { id: string; name: string; shared: boolean; on: boolean }[];
 }
 
 /**
@@ -76,15 +77,26 @@ export function AssistantRow({ clientId, clientName, connectedOn, brands }: Assi
           <fieldset className="flex flex-col gap-2">
             <legend className="mb-1 text-sm font-semibold">Brands {clientName} can use</legend>
             {brands.map((b) => (
-              <label key={b.id} className="flex min-h-11 items-center gap-3">
+              <label
+                key={b.id}
+                className="flex min-h-11 items-center gap-3 has-[:disabled]:opacity-60"
+              >
                 <input
                   type="checkbox"
                   name="brands"
                   value={b.id}
                   defaultChecked={b.shared}
+                  disabled={!b.on && !b.shared}
                   className="accent-honey size-5"
                 />
-                {b.name}
+                <span className="flex flex-col">
+                  {b.name}
+                  {!b.on && (
+                    <span className="text-ink-3 text-sm">
+                      AI assistants aren&apos;t turned on for this brand yet.
+                    </span>
+                  )}
+                </span>
               </label>
             ))}
           </fieldset>

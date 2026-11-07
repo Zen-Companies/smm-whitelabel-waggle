@@ -10,6 +10,7 @@ export interface ConsentBrand {
   name: string;
   accounts: string;
   checked: boolean;
+  disabled: boolean;
 }
 
 /**
@@ -35,13 +36,14 @@ export function ConsentForm({
           {brands.map((b) => (
             <label
               key={b.id}
-              className="border-line has-[:checked]:border-honey flex cursor-pointer items-start gap-3 rounded-[10px] border px-3.5 py-3"
+              className="border-line has-[:checked]:border-honey flex cursor-pointer items-start gap-3 rounded-[10px] border px-3.5 py-3 has-[:disabled]:cursor-default has-[:disabled]:opacity-60"
             >
               <input
                 type="checkbox"
                 name="brands"
                 value={b.id}
                 defaultChecked={b.checked}
+                disabled={b.disabled}
                 className="accent-honey mt-0.5 size-5 shrink-0"
               />
               <span className="flex flex-col gap-0.5">
@@ -85,8 +87,9 @@ export function ConsentForm({
               aria-hidden
             />
             <span className="text-ink-2">
-              Waggle&apos;s rules still apply: every reply can be undone for 8 seconds, and replies
-              only use your business info.
+              Waggle&apos;s rules still apply: every reply can be undone for 8 seconds, and AI
+              assistants can send at most 10 replies and posts every 10 minutes, and 100 a day, per
+              brand.
             </span>
           </p>
         </section>

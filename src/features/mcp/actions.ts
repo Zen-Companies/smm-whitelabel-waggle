@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
-import { mcpEnabled } from "./auth";
+import { mcpOnGlobally } from "./flags";
 import { deleteGrant, saveGrant } from "./grants";
 import { assistantName, redirectAllowed, redirectAllowlist } from "./redirects";
 
@@ -27,7 +27,9 @@ export async function approveConnection(
   _prev: ConsentState,
   formData: FormData,
 ): Promise<ConsentState> {
-  if (!mcpEnabled()) return { error: "Connecting AI assistants is paused right now." };
+  if (!(await mcpOnGlobally(getServiceClient()))) {
+    return { error: "Connecting AI assistants is paused right now." };
+  }
   const parsed = consentSchema.safeParse({
     authorizationId: formData.get("authorizationId"),
     brands: formData.getAll("brands"),
@@ -59,7 +61,9 @@ export async function approveConnection(
       error:
         saved.error === "no_brands"
           ? "Pick at least one brand."
-          : "Pick your own brands only. Reload the page and try again.",
+          : saved.error === "brand_not_on"
+            ? "AI assistants aren't turned on for one of these brands yet."
+            : "Pick your own brands only. Reload the page and try again.",
     };
   }
   const { data: done, error: approveError } = await supabase.auth.oauth.approveAuthorization(
@@ -135,7 +139,9 @@ export async function updateGrantBrands(
       error:
         saved.error === "no_brands"
           ? "Pick at least one brand, or disconnect it instead."
-          : "Pick your own brands only.",
+          : saved.error === "brand_not_on"
+            ? "AI assistants aren't turned on for that brand yet."
+            : "Pick your own brands only.",
     };
   }
   revalidatePath("/settings");

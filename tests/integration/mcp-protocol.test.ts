@@ -23,6 +23,7 @@ const handler = createMcpHandler(
 );
 
 beforeAll(async () => {
+  process.env.MCP_ENABLED = "true";
   const { data } = await anonClient().auth.signUp({
     email: uniqueEmail(),
     password: "password123",
@@ -34,14 +35,13 @@ beforeAll(async () => {
     p_name: "Proto Cafe",
   });
   tenantId = rows![0].tenant_id;
-  await db
-    .from("mcp_grants")
-    .insert({
-      user_id: userId,
-      client_id: "client-proto",
-      client_name: "Claude",
-      tenant_ids: [tenantId],
-    });
+  await db.from("feature_flags").insert({ key: "mcp", tenant_id: tenantId, enabled: true });
+  await db.from("mcp_grants").insert({
+    user_id: userId,
+    client_id: "client-proto",
+    client_name: "Claude",
+    tenant_ids: [tenantId],
+  });
 });
 
 afterAll(async () => {

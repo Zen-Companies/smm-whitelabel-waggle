@@ -2,8 +2,9 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { Brand } from "@/components/app/brand";
 import { TopNav } from "@/components/app/top-nav";
-import { isOperator } from "@/features/billing";
+import { staffAccess } from "@/features/staff";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 import { signOut } from "./actions";
 import { BrandMenu } from "./brand-menu";
 import { listBrands } from "./brands";
@@ -26,6 +27,7 @@ export async function AppHeader({
     getCurrentUser(),
     listBrands(needsYouStatuses),
   ]);
+  const staff = await staffAccess(getServiceClient(), user.id);
   const supabase = await createServerSupabase();
   const { count } = await supabase
     .from("inbound_items")
@@ -40,7 +42,13 @@ export async function AppHeader({
           <Brand />
         </Link>
         <div className="order-last -mb-px w-full md:order-none md:w-auto md:flex-1">
-          <TopNav showAdmin={isOperator(user)} inboxCount={count ?? 0} />
+          <TopNav
+            admin={{
+              lab: staff.permissions.has("admin.lab.use"),
+              costs: staff.permissions.has("admin.costs.view"),
+            }}
+            inboxCount={count ?? 0}
+          />
         </div>
         <div className="ml-auto flex min-h-14 items-center gap-2">
           <BrandMenu brands={brands} currentId={tenant.id} />

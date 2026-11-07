@@ -1,5 +1,6 @@
 import { writeAudit } from "@/lib/audit";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { mcpBrandsOn } from "./flags";
 
 // The brands a user shares with an AI assistant (mcp_grants, docs/mcp/PLAN.md §4.2). Written only
 // here, through the service role, after the caller checked the signed-in user.
@@ -45,7 +46,8 @@ export async function loadGrants(db: ServiceClient, userId: string): Promise<Gra
   }));
 }
 
-export type SaveGrantResult = { ok: true } | { ok: false; error: "no_brands" | "not_your_brand" };
+export type SaveGrantResult =
+  { ok: true } | { ok: false; error: "no_brands" | "not_your_brand" | "brand_not_on" };
 
 /**
  * Saves which brands an assistant may use. Every brand must be the user's own; one at least.
@@ -66,6 +68,12 @@ export async function saveGrant(
     .eq("user_id", input.userId)
     .eq("client_id", input.clientId)
     .maybeSingle();
+  const had = new Set(before?.tenant_ids ?? []);
+  // A brand newly shared must have AI assistants switched on; one already shared may stay while
+  // staff have it switched off (it just can't be used until it's back on).
+  const added = wanted.filter((b) => !had.has(b));
+  const on = await mcpBrandsOn(db, added);
+  if (added.some((b) => !on.has(b))) return { ok: false, error: "brand_not_on" };
   const { error } = await db.from("mcp_grants").upsert(
     {
       user_id: input.userId,
@@ -78,7 +86,6 @@ export async function saveGrant(
   );
   if (error) throw new Error(`mcp: saving the grant failed: ${error.message}`);
 
-  const had = new Set(before?.tenant_ids ?? []);
   const details = { clientId: input.clientId, clientName: input.clientName };
   for (const id of wanted.filter((b) => !had.has(b))) {
     await writeAudit(db, {
