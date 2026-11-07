@@ -30,7 +30,7 @@ export async function McpActivityView({
     {
       label: "Calls",
       value: n(s.calls),
-      note: change ? `${change} vs ${before} before` : period,
+      note: change ? `${change} vs ${before} before` : `none in ${before} before`,
     },
     {
       label: "Errors",

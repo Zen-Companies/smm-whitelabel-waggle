@@ -1,7 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { addStaff, changeRole, removeStaff, type StaffFormState } from "./actions";
 
@@ -19,17 +19,29 @@ export function RoleSelect({
   role: string;
   roles: Option[];
 }) {
-  const [state, action, pending] = useActionState<StaffFormState, FormData>(changeRole, {});
-  const form = useRef<HTMLFormElement>(null);
+  // Not a <form action>: React resets a form after its action, which showed the old role again.
+  const [value, setValue] = useState(role);
+  const [state, setState] = useState<StaffFormState>({});
+  const [pending, startTransition] = useTransition();
+  const save = (next: string) => {
+    const before = value;
+    setValue(next);
+    const fd = new FormData();
+    fd.set("userId", userId);
+    fd.set("role", next);
+    startTransition(async () => {
+      const out = await changeRole({}, fd);
+      if (out.error) setValue(before);
+      setState(out);
+    });
+  };
   return (
-    <form ref={form} action={action} className="flex flex-wrap items-center gap-2">
-      <input type="hidden" name="userId" value={userId} />
+    <div className="flex flex-wrap items-center gap-2">
       <select
-        name="role"
-        defaultValue={role}
+        value={value}
         aria-label={`Role for ${name}`}
         disabled={pending}
-        onChange={() => form.current?.requestSubmit()}
+        onChange={(e) => save(e.target.value)}
         className="field min-h-9 w-auto pr-8 text-[13px]"
       >
         {roles.map((r) => (
@@ -49,7 +61,7 @@ export function RoleSelect({
           {state.error}
         </span>
       )}
-    </form>
+    </div>
   );
 }
 
