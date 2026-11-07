@@ -1209,6 +1209,7 @@ export type Database = {
           created_at: string
           health_checked_at: string | null
           id: string
+          is_test: boolean
           mcp_daily_send_cap: number | null
           name: string
           replies_paused: boolean
@@ -1228,6 +1229,7 @@ export type Database = {
           created_at?: string
           health_checked_at?: string | null
           id?: string
+          is_test?: boolean
           mcp_daily_send_cap?: number | null
           name: string
           replies_paused?: boolean
@@ -1247,6 +1249,7 @@ export type Database = {
           created_at?: string
           health_checked_at?: string | null
           id?: string
+          is_test?: boolean
           mcp_daily_send_cap?: number | null
           name?: string
           replies_paused?: boolean
@@ -1297,6 +1300,17 @@ export type Database = {
           spent_usd: number
           tenant_id: string
         }[]
+      }
+      user_emails: {
+        Args: { p_ids: string[] }
+        Returns: {
+          email: string
+          id: string
+        }[]
+      }
+      user_id_by_email: {
+        Args: { p_email: string }
+        Returns: string
       }
       claim_items: {
         Args: { p_limit: number; p_per_tenant?: number; p_statuses?: string[] }

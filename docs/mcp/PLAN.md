@@ -1,6 +1,6 @@
 # Waggle MCP server: Phase 0 plan
 
-Status: **approved 2026-11-06**. Phase 1 (tools + server) built 2026-11-06. Phase 2 (sign-in: Supabase OAuth server, consent page with brand picker, `mcp_grants`, Data API block, Settings → AI assistants) built 2026-11-07. Phase 3 (staff roles, switches, activity log, limits) built 2026-11-07. All behind `MCP_ENABLED`. Source prompt: `docs/mcp/PROMPT.md`.
+Status: **approved 2026-11-06**. Phase 1 (tools + server) built 2026-11-06. Phase 2 (sign-in: Supabase OAuth server, consent page with brand picker, `mcp_grants`, Data API block, Settings → AI assistants) built 2026-11-07. Phase 3 (staff roles, switches, activity log, limits) built 2026-11-07. Phase 4 (staff pages) built 2026-11-07. All behind `MCP_ENABLED`. Source prompt: `docs/mcp/PROMPT.md`.
 Researched on 2026-11-06, with outside claims linked.
 
 ## 1. Summary
@@ -358,3 +358,33 @@ Q6 roles are `admin`, `developer`, `support`, `viewer` (Stripe-style), matrix in
   bare tool run (unit tests; the Phase 4 playground passes `playground: true` to `callTool`).
 - The job route prunes `mcp_calls` older than 90 days.
 - Tests: `mcp-limits.test.ts`, `staff.test.ts`, `staff.test.sql`, `limits.test.ts`.
+
+## Phase 4 as built (2026-11-07)
+
+- Staff pages under `/admin` with a staff strip (role chip + tabs the role may open,
+  `features/staff/pages.ts`). The top bar's "Admin lab" and "Costs" links became one "Staff" link
+  to the first page the role may open.
+- **MCP tools** (`/admin/mcp-tools`, `mcp.docs.view`): generated from the registry
+  (`features/mcp/docs.ts`: zod → JSON Schema → field tables, traits from the annotations, errors
+  by kind). "OpenAPI spec (JSON)" at `/admin/mcp-tools/openapi.json` (staff only; each tool as
+  POST /tools/{name}, marked as MCP, not REST).
+- **Try it** (`mcp.playground.run`): runs `callTool` with `playground: true` as a test brand's
+  owner. Test brands only: new column `tenants.is_test` (staff set it in SQL; `pnpm demo:seed`
+  sets it locally; owners can't). The brand_id is forced to the picked brand. Each run writes
+  `mcp_playground_run` to audit_log (actor = the staff member) and shows as "Playground · email"
+  in the activity log. Switches and limits apply as for a real assistant.
+- **MCP activity** (`mcp.audit.view`): summary tiles for the period (calls vs the period before,
+  errors and how many were limits, median/p95 time, sends), filters (tool, brand, assistant,
+  period: 24h/7d/30d/90d, errors only) in the URL, 100 per page with "Older calls", a row opens
+  its redacted input. "Today" in the design became rolling periods (no timezone question).
+- **Staff** (`staff.manage`): add by email (login must exist), change role, remove (inline
+  confirm). Nobody changes or removes themselves, so the last admin can't be locked out. The
+  matrix is read from `staff_role_permissions`. Who added/changed: `staff_members.added_by`.
+- **Switches** (`flags.manage`): everyone switch, brand list (search by name, 50 at a time) with
+  owner, switch, connected assistants, AI sends in the last 24 hours, daily limit (blank = the
+  default). Brand switch and limit changes write audit_log; the everyone switch records
+  `updated_by` on its row (audit_log needs a brand). A banner says when `MCP_ENABLED` is off.
+- Migration `20261107120000_staff_pages`: `tenants.is_test`, server-only `user_emails(uuid[])`
+  and `user_id_by_email(text)` (auth.users isn't in the Data API); `lib/supabase/users.ts`.
+- Tests: `docs.test.ts`, `admin-filters.test.ts`, `staff/pages.test.ts`,
+  `tests/integration/staff-pages.test.ts`, `staff_pages.test.sql`.

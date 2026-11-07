@@ -26,3 +26,29 @@ export { brandDailyCap, MCP_FLAG, mcpBrandsOn, mcpOnGlobally } from "./flags";
 export { countCalls, finishCall, MCP_CALLS_KEEP_MS, pruneCalls, startCall } from "./activity";
 export { brandOfCall, kindOf, limitsFromEnv, overLimit, redactArgs, SEND_TOOLS } from "./limits";
 export type { CallCounts, CallKind, LimitBreach, McpLimits } from "./limits";
+export { buildOpenApi, errorsFor, fieldsOf, sampleInput, toolDoc, typeLabel } from "./docs";
+export type { FieldDoc, ToolDoc } from "./docs";
+export {
+  activityHref,
+  ASSISTANTS,
+  changeVsBefore,
+  parseActivityFilters,
+  parseDailyCap,
+  percentile,
+  WINDOWS,
+} from "./admin-filters";
+export type { ActivityFilters, WindowKey } from "./admin-filters";
+export {
+  globalSwitch,
+  loadActivity,
+  loadPlaygroundTargets,
+  loadSwitches,
+  runPlayground,
+  setBrandDailyCap,
+  setBrandSwitch,
+  setGlobalSwitch,
+} from "./admin";
+export type { ActivityRow, PlaygroundResult, PlaygroundTarget, SwitchRow } from "./admin";
+export { McpToolsView } from "./tools-view";
+export { McpActivityView } from "./activity-view";
+export { SwitchesView } from "./switches-view";

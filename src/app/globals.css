@@ -25,6 +25,8 @@
   --color-danger-border: var(--danger-border);
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
 
   /* shadcn names, mapped onto the palette */
   --color-background: var(--background);
@@ -84,6 +86,9 @@
   --danger-border: #fecdca;
   --success: #15803d;
   --success-soft: #f0fdf4;
+  /* Staff-only marks (Playground, staff role); never on owner screens. */
+  --info: #1e4f8a;
+  --info-soft: #e0edfb;
   --focus-ring: rgba(24, 24, 27, 0.08);
 
   --background: var(--page);

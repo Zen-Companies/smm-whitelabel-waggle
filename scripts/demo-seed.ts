@@ -294,6 +294,8 @@ async function main() {
       zernio_profile_id: "demo_profile_harbour_bean",
       subscription_status: "active",
       health_checked_at: new Date().toISOString(),
+      // A test brand: staff can run MCP "Try it" on it (MCP Phase 4).
+      is_test: true,
     })
     .eq("id", TENANT);
   await db

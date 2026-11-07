@@ -9,7 +9,7 @@ export default function LabPage(props: PageProps<"/admin/lab">) {
       <div className="flex flex-col gap-1">
         <h1 className="page-title">Lab</h1>
         <p className="text-ink-2">
-          Operator view: run one message through two setups and compare what would happen.
+          Staff view: run one message through two setups and compare what would happen.
         </p>
       </div>
       <Suspense fallback={<div className="skeleton h-96" />}>

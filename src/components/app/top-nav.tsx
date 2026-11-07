@@ -19,23 +19,25 @@ const ITEMS = [
  * on Inbox while replies wait for approval. Scrolls sideways on phones.
  */
 export function TopNav({
-  admin,
+  staffHref,
   inboxCount,
 }: {
-  /** Staff pages the signed-in user's role may open (features/staff). */
-  admin: { lab: boolean; costs: boolean };
+  /** The first staff page the signed-in user's role may open (features/staff), or none. */
+  staffHref: string | null;
   inboxCount: number;
 }) {
   const pathname = usePathname();
   const items: { href: string; label: string }[] = [
     ...ITEMS,
-    ...(admin.lab ? [{ href: "/admin/lab", label: "Admin lab" }] : []),
-    ...(admin.costs ? [{ href: "/admin/costs", label: "Costs" }] : []),
+    ...(staffHref ? [{ href: staffHref, label: "Staff" }] : []),
   ];
   return (
     <nav aria-label="Main" className="-mx-1 flex self-stretch overflow-x-auto">
       {items.map(({ href, label }) => {
-        const active = pathname === href || pathname.startsWith(`${href}/`);
+        const active =
+          href === staffHref
+            ? pathname.startsWith("/admin/")
+            : pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
             key={href}

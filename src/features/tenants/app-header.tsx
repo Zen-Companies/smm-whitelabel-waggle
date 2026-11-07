@@ -2,7 +2,7 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { Brand } from "@/components/app/brand";
 import { TopNav } from "@/components/app/top-nav";
-import { staffAccess } from "@/features/staff";
+import { firstStaffPage, staffAccess } from "@/features/staff";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { signOut } from "./actions";
@@ -42,13 +42,7 @@ export async function AppHeader({
           <Brand />
         </Link>
         <div className="order-last -mb-px w-full md:order-none md:w-auto md:flex-1">
-          <TopNav
-            admin={{
-              lab: staff.permissions.has("admin.lab.use"),
-              costs: staff.permissions.has("admin.costs.view"),
-            }}
-            inboxCount={count ?? 0}
-          />
+          <TopNav staffHref={firstStaffPage(staff.permissions)} inboxCount={count ?? 0} />
         </div>
         <div className="ml-auto flex min-h-14 items-center gap-2">
           <BrandMenu brands={brands} currentId={tenant.id} />
