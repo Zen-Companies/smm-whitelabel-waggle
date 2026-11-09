@@ -175,8 +175,10 @@ export async function deliverPendingAlerts(deps: DeliverDeps): Promise<DeliverSu
       const [content, to, { data: tenant }] = await Promise.all([
         contentOf(db, alert),
         ownerEmails(db, alert.tenant_id),
-        db.from("tenants").select("name").eq("id", alert.tenant_id).single(),
+        db.from("tenants").select("name, offboarded_at").eq("id", alert.tenant_id).single(),
       ]);
+      // T21: nobody is told about a brand our team offboarded.
+      if (tenant?.offboarded_at) throw new PermanentAlertError("brand_offboarded");
       if (to.length === 0) throw new PermanentAlertError("no_owner_email");
       const email = composeAlert(content, {
         businessName: tenant?.name ?? "Your business",

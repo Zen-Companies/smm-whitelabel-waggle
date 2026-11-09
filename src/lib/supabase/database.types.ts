@@ -1090,6 +1090,7 @@ export type Database = {
           created_at: string
           id: string
           platform: string
+          released_at: string | null
           reviews_polled_at: string | null
           status: string
           tenant_id: string
@@ -1101,6 +1102,7 @@ export type Database = {
           created_at?: string
           id?: string
           platform: string
+          released_at?: string | null
           reviews_polled_at?: string | null
           status?: string
           tenant_id: string
@@ -1112,6 +1114,7 @@ export type Database = {
           created_at?: string
           id?: string
           platform?: string
+          released_at?: string | null
           reviews_polled_at?: string | null
           status?: string
           tenant_id?: string
@@ -1212,6 +1215,12 @@ export type Database = {
           is_test: boolean
           mcp_daily_send_cap: number | null
           name: string
+          offboard_issue: string | null
+          offboarded_at: string | null
+          offboarded_by: string | null
+          purge_after: string | null
+          purge_tried_at: string | null
+          purged_at: string | null
           replies_paused: boolean
           stripe_customer_id: string | null
           subscription_status: string
@@ -1232,6 +1241,12 @@ export type Database = {
           is_test?: boolean
           mcp_daily_send_cap?: number | null
           name: string
+          offboard_issue?: string | null
+          offboarded_at?: string | null
+          offboarded_by?: string | null
+          purge_after?: string | null
+          purge_tried_at?: string | null
+          purged_at?: string | null
           replies_paused?: boolean
           stripe_customer_id?: string | null
           subscription_status?: string
@@ -1252,6 +1267,12 @@ export type Database = {
           is_test?: boolean
           mcp_daily_send_cap?: number | null
           name?: string
+          offboard_issue?: string | null
+          offboarded_at?: string | null
+          offboarded_by?: string | null
+          purge_after?: string | null
+          purge_tried_at?: string | null
+          purged_at?: string | null
           replies_paused?: boolean
           stripe_customer_id?: string | null
           subscription_status?: string
@@ -1366,6 +1387,18 @@ export type Database = {
         }[]
       }
       enqueue_draft_nudges: { Args: { p_older_than: string }; Returns: number }
+      offboard_tenant: {
+        Args: { p_actor: string; p_tenant_id: string }
+        Returns: string | null
+      }
+      purge_tenant: {
+        Args: { p_tenant_id: string }
+        Returns: boolean
+      }
+      restore_tenant: {
+        Args: { p_actor: string; p_tenant_id: string }
+        Returns: boolean
+      }
       match_kb_entries: {
         Args: {
           p_limit?: number

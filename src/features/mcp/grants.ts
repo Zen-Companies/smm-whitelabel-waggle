@@ -14,11 +14,15 @@ export interface UserBrand {
 export async function loadUserBrands(db: ServiceClient, userId: string): Promise<UserBrand[]> {
   const { data, error } = await db
     .from("tenant_members")
-    .select("tenants (id, name)")
+    .select("tenants (id, name, offboarded_at)")
     .eq("user_id", userId);
   if (error) throw new Error(`mcp: loading brands failed: ${error.message}`);
-  return ((data ?? []) as unknown as { tenants: UserBrand | null }[])
-    .flatMap((m) => (m.tenants ? [m.tenants] : []))
+  type Row = { tenants: (UserBrand & { offboarded_at: string | null }) | null };
+  // Offboarded brands (T21) can't be shared any more.
+  return ((data ?? []) as unknown as Row[])
+    .flatMap((m) =>
+      m.tenants && !m.tenants.offboarded_at ? [{ id: m.tenants.id, name: m.tenants.name }] : [],
+    )
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

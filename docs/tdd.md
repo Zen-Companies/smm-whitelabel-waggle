@@ -675,3 +675,15 @@ Goal: measure a change before it ships (operators), and let owners see exactly w
 **Pause all replies (T27).** `tenants.replies_paused`: `policy()` returns `approve` (`replies_paused`) where it would auto-send, so the reply waits in the inbox; an owner-approved reply still decides `send`, and the send step holds it (`RetryLaterError`, 120 s, no attempt) until the switch is off. Escalations are unchanged. Audited as `replies_paused` / `replies_resumed`.
 
 **Draft checks (T28).** `checkDraft()` (`features/drafting/checks.ts`), free and deterministic: grounding issues only if the draft went to the owner; `needsHuman` against a sample's "covered" / "NOT covered" note; at most 2 sentences in a comment, 4 in a DM; at most one emoji and only if the customer used one; no switch to Taglish for an English message (word-list heuristic); no phone or email in a public comment. `pnpm draft:preview` (real calls) and `pnpm draft:check` (saved drafts, no calls) print them. A model judge for "uses only the facts given" is later (paid or local).
+
+## 20. Offboarding (T21, built 2026-11-09)
+
+Decisions (2026-11-09): only our admins offboard (staff permission `brands.manage`, Staff → Brands); a 3-month soft delete our team can undo; then a hard delete that keeps costs and the audit log.
+
+- **Offboard** (`offboard_tenant`): sets `tenants.offboarded_at`, `purge_after = now() + 3 months`. `private.user_tenant_ids()` skips offboarded tenants, so every RLS policy, Realtime and the brand menu lose the brand at once. Then each account is marked `disconnected` here (open items pause) and removed on Zernio (`DELETE /v1/accounts/{id}`, 404 = done, `social_accounts.released_at`). A Zernio failure never undoes the stop: it is saved in `tenants.offboard_issue` ("Needs attention", Try again).
+- **Owner side**: a cookie pointing at an offboarded brand, or a login with only offboarded brands, lands on `/brands/closed` (kept-until date, email to reopen, "Go to" another brand).
+- **Skipped while offboarded**: health checks, alert emails (failed as `brand_offboarded`), AI assistants (`mcpBrandsOn`, consent brand list). Analytics, reviews and backfill already skip disconnected accounts.
+- **Restore** (`restore_tenant`): clears the columns; accounts stay disconnected until the owner reconnects (same Zernio profile).
+- **Hard delete** (`purgeDueBrands` in the minute job, at most 2 per run, retried hourly on failure): accounts still on Zernio, then `DELETE /v1/profiles/{id}`, then `purge_tenant` deletes every tenant table except `ai_usage` and `audit_log` (audit details lose `groundingIssues` and `note`), removes the brand from `mcp_grants`, blanks business info and the profile id, and sets `purged_at`. The tenant row stays for costs. `audit_log`/`ai_usage` item links became `on delete set null (item_id)` so they survive. A pgTAP test fails if a new tenant table isn't listed in `purge_tenant` or kept on purpose.
+- Not covered: `webhook_events` payloads have no tenant id and are not deleted with the brand.
+

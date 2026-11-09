@@ -21,3 +21,4 @@ export { BrandMenu } from "./brand-menu";
 export { listBrands, openBrandFromLink } from "./brands";
 export type { BrandSummary } from "./brands";
 export { AddBrandForm } from "./add-brand-form";
+export { ClosedBrandView } from "./closed-view";

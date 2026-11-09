@@ -14,6 +14,8 @@ export const PERMISSIONS = [
   "mcp.audit.view",
   "flags.manage",
   "staff.manage",
+  /** Offboard and restore brands (T21, admins only). */
+  "brands.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

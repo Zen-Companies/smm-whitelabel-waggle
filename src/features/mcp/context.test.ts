@@ -13,12 +13,15 @@ function fakeDb(members: [string, string][], on: string[]) {
           f[col] = val;
           return q;
         },
-        in: async (_col: string, ids: string[]) => ({
-          data:
-            table === "feature_flags"
-              ? ids.filter((id) => on.includes(id)).map((tenant_id) => ({ tenant_id }))
-              : [],
-          error: null,
+        in: (_col: string, ids: string[]) => ({
+          // `.is("tenants.offboarded_at", null)`: none of these brands is offboarded.
+          is: async () => ({
+            data:
+              table === "feature_flags"
+                ? ids.filter((id) => on.includes(id)).map((tenant_id) => ({ tenant_id }))
+                : [],
+            error: null,
+          }),
         }),
         maybeSingle: async () => ({
           data: members.some(([t, u]) => t === f.tenant_id && u === f.user_id)

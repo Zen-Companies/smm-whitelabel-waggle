@@ -245,3 +245,4 @@ From the same review, agreed 2026-11-05 to hold until Phase 6 is done:
 - [ ] **T21. Customer offboarding**
       When a tenant leaves: disconnect each of its accounts (`DELETE /v1/accounts/{accountId}`; active accounts block profile deletion with 400), then delete the Zernio profile, then delete or anonymize the tenant's data per the retention policy. Audit each step.
       _Done when:_ offboarding a test tenant leaves no connected accounts or profile on Zernio and no tenant rows here.
+      _Built 2026-11-09 (tdd.md §20): staff Brands page, 3-month soft delete, restore, hard delete job; tested against the mock and local DB. Still open: one live run on a throwaway Zernio profile (needs an OK for real Zernio calls), then tick._

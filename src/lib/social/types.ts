@@ -232,6 +232,17 @@ export interface SocialProvider {
     } & CallOptions,
   ): Promise<ProviderCommentReply[]>;
   getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
+  /**
+   * Offboarding (T21): removes an account from Zernio (`DELETE /v1/accounts/{accountId}`; a
+   * 1-hour grace period keeps it restorable on Zernio's side). An account already gone (404)
+   * counts as done.
+   */
+  disconnectAccount(input: { accountId: string } & CallOptions): Promise<void>;
+  /**
+   * Offboarding (T21): deletes the brand's profile (`DELETE /v1/profiles/{profileId}`). Zernio
+   * refuses (400) while any account is still connected to it. Already gone (404) is done.
+   */
+  deleteProfile(input: { profileId: string } & CallOptions): Promise<void>;
   /** Recent posts of an account that have comments (`GET /v1/inbox/comments`), newest first. */
   listCommentedPosts(
     input: {

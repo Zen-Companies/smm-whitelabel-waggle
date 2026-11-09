@@ -34,6 +34,8 @@ export async function checkAccountsHealth(
     .from("tenants")
     .select("id, zernio_profile_id")
     .not("zernio_profile_id", "is", null)
+    // An offboarded brand (T21) stays disconnected: a health check could otherwise revive it.
+    .is("offboarded_at", null)
     .or(
       `health_checked_at.is.null,health_checked_at.lt.${new Date(now.getTime() - HEALTH_CHECK_INTERVAL_MS).toISOString()}`,
     )

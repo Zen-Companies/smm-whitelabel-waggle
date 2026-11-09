@@ -6,7 +6,7 @@ select plan(8);
 
 select results_eq(
   $$ select role, count(*)::int from public.staff_role_permissions group by role order by role $$,
-  $$ values ('admin', 8), ('developer', 5), ('support', 2), ('viewer', 3) $$,
+  $$ values ('admin', 9), ('developer', 5), ('support', 2), ('viewer', 3) $$,
   'each role has the approved number of permissions'
 );
 select results_eq(
@@ -16,8 +16,8 @@ select results_eq(
 );
 select is_empty(
   $$ select 1 from public.staff_role_permissions
-     where role <> 'admin' and permission in ('flags.manage', 'staff.manage', 'admin.caps.manage') $$,
-  'only admins manage switches, staff and AI caps'
+     where role <> 'admin' and permission in ('flags.manage', 'staff.manage', 'admin.caps.manage', 'brands.manage') $$,
+  'only admins manage switches, staff, AI caps and brands'
 );
 
 insert into auth.users (id, email) values ('d0000000-0000-4000-8000-000000000001', 'owner@test.local');

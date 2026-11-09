@@ -211,6 +211,16 @@ async function call<T>(operation: string, run: (withFetch: WithFetch) => Promise
   }
 }
 
+/** A delete that finds nothing (404) already has the outcome it wanted. */
+async function ignoreGone(run: Promise<void>): Promise<void> {
+  try {
+    await run;
+  } catch (error) {
+    if (error instanceof SocialProviderError && error.details.status === 404) return;
+    throw error;
+  }
+}
+
 export class ZernioSocialProvider implements SocialProvider {
   constructor(private readonly zernio: Zernio) {}
 
@@ -717,6 +727,26 @@ export class ZernioSocialProvider implements SocialProvider {
         })),
       };
     });
+  }
+
+  async disconnectAccount(input: { accountId: string; signal?: AbortSignal }): Promise<void> {
+    await ignoreGone(
+      call("disconnectAccount", async (withFetch) => {
+        await this.zernio.accounts.deleteAccount(
+          withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+        );
+      }),
+    );
+  }
+
+  async deleteProfile(input: { profileId: string; signal?: AbortSignal }): Promise<void> {
+    await ignoreGone(
+      call("deleteProfile", async (withFetch) => {
+        await this.zernio.profiles.deleteProfile(
+          withFetch({ signal: input.signal, path: { profileId: input.profileId } }),
+        );
+      }),
+    );
   }
 
   async ping(): Promise<void> {

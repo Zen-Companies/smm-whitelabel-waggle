@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { BRAND_COOKIE, pickBrand } from "./brand-pick";
+import { closedBrandFor } from "./closed";
 
 export interface CurrentTenant {
   id: string;
@@ -25,7 +26,13 @@ export const getCurrentTenant = cache(async (): Promise<CurrentTenant> => {
     supabase.from("tenants").select("id, name, zernio_profile_id").order("created_at").order("id"),
     cookies(),
   ]);
-  const tenant = pickBrand(data ?? [], store.get(BRAND_COOKIE)?.value);
+  const cookie = store.get(BRAND_COOKIE)?.value;
+  const tenant = pickBrand(data ?? [], cookie);
+  // T21: the open brand (or the only one) was offboarded: say so instead of switching silently.
+  if (!tenant || (cookie && tenant.id !== cookie)) {
+    const closed = await closedBrandFor(user.id, cookie);
+    if (closed && (!tenant || closed.id === cookie)) redirect("/brands/closed");
+  }
   if (!tenant) redirect("/login");
   return {
     id: tenant.id,

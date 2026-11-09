@@ -27,10 +27,12 @@ export async function mcpBrandsOn(
   if (!tenantIds.length) return new Set();
   const { data, error } = await db
     .from("feature_flags")
-    .select("tenant_id")
+    .select("tenant_id, tenants!inner (offboarded_at)")
     .eq("key", MCP_FLAG)
     .eq("enabled", true)
-    .in("tenant_id", [...tenantIds]);
+    .in("tenant_id", [...tenantIds])
+    // An offboarded brand (T21) is off for AI assistants whatever its switch says.
+    .is("tenants.offboarded_at", null);
   if (error) throw new Error(`mcp: reading switches failed: ${error.message}`);
   return new Set((data ?? []).flatMap((r) => (r.tenant_id ? [r.tenant_id] : [])));
 }

@@ -239,6 +239,26 @@ export class MockSocialProvider implements SocialProvider {
       .map((s) => ({ id: s.providerId, text: s.message, fromOwner: true, createdAt: null }));
   }
 
+  /** Offboarding (T21): what was removed, and ids whose removal should fail once (tests). */
+  readonly disconnectedAccounts: string[] = [];
+  readonly deletedProfiles: string[] = [];
+  readonly failRemoval = new Set<string>();
+
+  async disconnectAccount(input: { accountId: string }): Promise<void> {
+    this.failIfAsked(input.accountId, "disconnectAccount");
+    this.disconnectedAccounts.push(input.accountId);
+  }
+
+  async deleteProfile(input: { profileId: string }): Promise<void> {
+    this.failIfAsked(input.profileId, "deleteProfile");
+    this.deletedProfiles.push(input.profileId);
+  }
+
+  private failIfAsked(id: string, operation: string): void {
+    if (!this.failRemoval.delete(id)) return;
+    throw new SocialProviderError(`${operation}: mock failure`, { status: 503, ambiguous: true });
+  }
+
   async ping(): Promise<void> {}
 
   /** No Zernio account behind the mock: usage isn't available. */

@@ -9,6 +9,7 @@ import {
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
 import { pruneCalls } from "@/features/mcp";
+import { purgeDueBrands } from "@/features/offboarding";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
@@ -93,6 +94,13 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 25_000,
     });
 
+    // T21: brands offboarded 3 months ago are deleted for good (Zernio clean-up first).
+    const offboarding = await purgeDueBrands({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+
     // MCP: the AI-assistant activity log keeps 90 days.
     const mcpCallsPruned = await pruneCalls(db, new Date());
     const dmWindowsEscalated = await escalateClosingDmWindows(db);
@@ -118,6 +126,7 @@ export async function POST(request: Request): Promise<Response> {
       reviews,
       analytics,
       mcpCallsPruned,
+      offboarding,
     });
   } catch (error) {
     // Visible in the Vercel logs even without Sentry. Our own error text only, never customer
