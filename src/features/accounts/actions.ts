@@ -6,6 +6,7 @@ import { z } from "zod";
 import { ensureZernioProfile, getCurrentTenant } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
+import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 
 const connectSchema = z.object({ platform: z.enum(["instagram", "facebook"]) });
@@ -40,7 +41,10 @@ export async function connectAccount(formData: FormData): Promise<void> {
       error instanceof Error && "details" in error ? JSON.stringify(error.details) : "",
     );
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform } });
-    redirect(`/settings?connect_error=unavailable&platform=${platform}`);
+    const planLimit = error instanceof SocialProviderError && error.details.status === 402;
+    redirect(
+      `/settings?connect_error=${planLimit ? "plan_limit" : "unavailable"}&platform=${platform}`,
+    );
   }
   redirect(authUrl);
 }

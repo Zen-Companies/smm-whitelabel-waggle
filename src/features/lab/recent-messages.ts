@@ -1,4 +1,5 @@
 import "server-only";
+import { loadThreadHistory } from "@/features/drafting";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { practiceCard, thenText, type PracticeCard } from "./practice-copy";
@@ -51,6 +52,8 @@ export async function recentMessagesFor(
   const results: RecentMessageResult[] = [];
   for (const item of items) {
     const kind = item.kind as "comment" | "dm";
+    // A DM is drafted with its earlier messages, as in production (T30); comments have none.
+    const history = kind === "dm" ? await loadThreadHistory(db, item.id) : [];
     const tried = await run(db, {
       tenant: snapshot,
       text: item.text,
@@ -58,6 +61,7 @@ export async function recentMessagesFor(
       variant: currentVariant(),
       source: "practice",
       stopAfter: "policy",
+      history,
     });
     await db.from("lab_runs").insert({
       tenant_id: input.tenantId,

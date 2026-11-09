@@ -18,6 +18,13 @@ export function connectBanner(params: Params): ConnectBanner | null {
   const platformKey = first(params.platform) ?? first(params.connecting) ?? "";
   const platform = PLATFORM_NAMES[platformKey] ?? "the account";
 
+  // Our Zernio plan has no room for another profile (402): ours to fix, not the owner's.
+  if (first(params.connect_error) === "plan_limit") {
+    return {
+      tone: "error",
+      text: `We can't add ${platform} for this brand right now: our connection limit is full. We've been alerted; please try again later.`,
+    };
+  }
   if (first(params.connect_error)) {
     return { tone: "error", text: `Couldn't start connecting ${platform}. Please try again.` };
   }

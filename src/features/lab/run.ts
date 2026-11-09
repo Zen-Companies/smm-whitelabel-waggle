@@ -1,5 +1,6 @@
 import "server-only";
 import type { AutonomyMode } from "@/features/approvals";
+import type { ThreadMessage } from "@/features/drafting";
 import {
   FallbackClassifier,
   JEV_QUESTION_SETS,
@@ -137,6 +138,7 @@ export async function runVariant(
     variant: Variant;
     source: Exclude<AiUsageSource, "live">;
     stopAfter?: "triage" | "policy";
+    history?: ThreadMessage[];
   },
 ): Promise<VariantRun> {
   const usage = collectUsage(withUsageSource(createDbUsageRecorder(db), input.source));
@@ -153,6 +155,7 @@ export async function runVariant(
         businessContext: resolveContext(input.variant, input.tenant),
         draftPromptVersion: input.variant.draftPromptVersion,
         stopAfter: input.stopAfter,
+        history: input.history,
       },
     );
   } catch (error) {

@@ -1,5 +1,5 @@
 import { policy, triage, type AutonomyMode, type PolicyDecision } from "@/features/approvals";
-import { generateDraft, type DraftPromptVersion } from "@/features/drafting";
+import { generateDraft, type DraftPromptVersion, type ThreadMessage } from "@/features/drafting";
 import type { Category, Classification, Classifier } from "@/lib/classifier/types";
 import type { LlmClient } from "@/lib/llm/client";
 import type { AiUsageRecord, UsageRecorder } from "@/lib/llm/usage";
@@ -36,6 +36,8 @@ export interface PreviewInput {
   draftPromptVersion?: DraftPromptVersion;
   /** "triage": stop before any draft (classification-only runs cost one call). */
   stopAfter?: "triage" | "policy";
+  /** Earlier messages of a real DM thread, oldest first, as production drafting gets them (T30). */
+  history?: ThreadMessage[];
 }
 
 export interface PreviewDeps {
@@ -137,6 +139,7 @@ export async function previewMessage(
         category,
         text: input.text,
         promptVersion: input.draftPromptVersion,
+        history: input.history,
       },
     );
     result.facts = generated.facts.map((f) => ({

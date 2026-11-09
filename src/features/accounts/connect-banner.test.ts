@@ -37,6 +37,12 @@ describe("connectBanner", () => {
     );
   });
 
+  it("a full Zernio plan is ours to fix, not the owner's", () => {
+    expect(connectBanner({ connect_error: "plan_limit", platform: "instagram" })?.text).toBe(
+      "We can't add Instagram for this brand right now: our connection limit is full. We've been alerted; please try again later.",
+    );
+  });
+
   it("reports our own failure to start the flow", () => {
     expect(connectBanner({ connect_error: "unavailable", platform: "facebook" })).toEqual({
       tone: "error",

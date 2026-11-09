@@ -127,4 +127,74 @@ describe("recentMessagesFor", () => {
       .eq("origin", "owner");
     expect(count).toBe(2);
   });
+
+  it("a DM is tried with its earlier messages, as production drafts it (T30)", async () => {
+    const { data: convo } = await db
+      .from("conversations")
+      .insert({
+        tenant_id: tenantId,
+        social_account_id: accountId,
+        zernio_conversation_id: `conv_${randomUUID().slice(0, 8)}`,
+        platform: "instagram",
+      })
+      .select("id")
+      .single();
+    const dm = async (text: string, agoMin: number, status: string) => {
+      const id = randomUUID();
+      await db.from("inbound_items").insert({
+        id,
+        tenant_id: tenantId,
+        social_account_id: accountId,
+        conversation_id: convo!.id,
+        kind: "dm",
+        zernio_message_id: `m_${id}`,
+        author_name: "Jun",
+        text,
+        received_at: new Date(Date.now() - agoMin * 60_000).toISOString(),
+        status,
+      });
+      ids.push(id);
+      return id;
+    };
+    const first = await dm("Do you take reservations?", 3, "sent");
+    await db.from("drafts").insert({
+      tenant_id: tenantId,
+      item_id: first,
+      body: "Yes, for groups of 4 or more.",
+      status: "sent",
+      sent_at: new Date(Date.now() - 2 * 60_000).toISOString(),
+    });
+    await dm("For tomorrow 7pm?", 1, "awaiting_approval");
+
+    const seen: { text: string; history?: unknown }[] = [];
+    const recording = async (_db: unknown, input: { text: string; history?: unknown }) => {
+      seen.push({ text: input.text, history: input.history });
+      return {
+        variant: currentVariant(),
+        usage: { calls: 0, inputTokens: 0, outputTokens: 0, costUsd: 0, models: [] },
+        totalMs: 1,
+        result: {
+          classification: null,
+          triage: null,
+          facts: null,
+          draft: null,
+          groundingIssues: [],
+          policy: null,
+          reachedStep: "classify",
+          error: null,
+          timings: { classifyMs: 1, draftMs: null },
+        },
+      } as VariantRun;
+    };
+    await recentMessagesFor(db, { tenantId, userId, limit: 1 }, { run: recording });
+    expect(seen).toEqual([
+      {
+        text: "For tomorrow 7pm?",
+        history: [
+          { from: "customer", text: "Do you take reservations?" },
+          { from: "business", text: "Yes, for groups of 4 or more." },
+        ],
+      },
+    ]);
+  });
 });
