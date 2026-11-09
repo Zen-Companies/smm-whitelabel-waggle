@@ -1,7 +1,6 @@
 import { BookOpen, Check, CircleAlert, CircleCheck, Clock3, UserPlus } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/app/avatar";
-import { IllustratedEmpty } from "@/components/app/illustrated-empty";
 import { clockTime, shortTime } from "@/components/app/time";
 import { BrandSetup } from "@/features/accounts";
 import { MarkItemRead } from "@/features/alerts";
@@ -11,6 +10,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
 import { allowanceNotice } from "./allowance-notice";
+import { CaughtUpCard } from "./caught-up-card";
 import { ApprovalCard, RecentSends } from "./approval-card";
 import { loadConversation } from "./conversation-data";
 import { ContextPanel, ConversationPane } from "./conversation-pane";
@@ -22,6 +22,7 @@ import {
   INBOX_TABS,
   loadInboxTab,
   loadNextPost,
+  loadTodayActivity,
   loadTodaySummary,
   todayLine,
   needsOwner,
@@ -326,20 +327,19 @@ export async function InboxView({
   // First run of a brand: nothing connected yet (T47 "Set up <brand>").
   if (!accounts) return <BrandSetup brandName={tenant.name} />;
 
-  const empty =
-    tab === "for_you" ? (
-      <IllustratedEmpty illustration="inbox-clear" title="All caught up">
-        Nothing needs you. Go run the shop; we&apos;ll email you when a customer does.
-      </IllustratedEmpty>
-    ) : (
-      <p className="meta py-6">
-        {tab === "ignored"
-          ? "Spam and messages that need no reply show up here."
-          : autoOnly
-            ? "Nothing has gone out on its own yet."
-            : "Replies that went out show up here."}
-      </p>
-    );
+  const empty = (
+    <p className="meta py-6">
+      {tab === "ignored"
+        ? "Spam and messages that need no reply show up here."
+        : autoOnly
+          ? "Nothing has gone out on its own yet."
+          : "Replies that went out show up here."}
+    </p>
+  );
+
+  // Nothing for the owner: the space a conversation would take shows what Waggle did today.
+  const caughtUp = tab === "for_you" && entries.length === 0;
+  const activity = caughtUp ? await loadTodayActivity(supabase, tenant.id) : [];
 
   const conversation = selected
     ? await loadConversation(supabase, tenant.id, selected.itemId)
@@ -387,57 +387,71 @@ export async function InboxView({
         </p>
       )}
       <RecentSends />
-      <div className="grid items-start gap-8 lg:grid-cols-[minmax(280px,360px)_minmax(0,600px)] xl:grid-cols-[minmax(280px,360px)_minmax(0,600px)_220px]">
-        <div className={cn("flex min-w-0 flex-col", itemParam && "hidden lg:flex")}>
-          {tabs}
-          {entries.length === 0 ? (
-            empty
-          ) : (
-            <ul className="flex flex-col pt-1" aria-label="Messages">
-              {entries.map((e) => (
-                <Row
-                  key={e.itemId}
-                  entry={e}
-                  tab={tab}
-                  autoOnly={autoOnly}
-                  selected={e.itemId === selected?.itemId}
-                />
-              ))}
-            </ul>
-          )}
-          {nextPost && <NextPostNote post={nextPost} />}
+      {caughtUp ? (
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-4">
+            {tabs}
+            <p className="meta text-[13px]">Nothing waiting. New messages show up here.</p>
+            {nextPost && <NextPostNote post={nextPost} />}
+          </div>
+          <CaughtUpCard activity={activity} />
         </div>
-        {selected && (
-          <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
-            {itemParam && (
-              <Link href={href(tab, undefined, autoOnly)} className="text-ink-2 text-sm lg:hidden">
-                ← All messages
-              </Link>
+      ) : (
+        <div className="grid items-start gap-8 lg:grid-cols-[minmax(280px,360px)_minmax(0,600px)] xl:grid-cols-[minmax(280px,360px)_minmax(0,600px)_220px]">
+          <div className={cn("flex min-w-0 flex-col", itemParam && "hidden lg:flex")}>
+            {tabs}
+            {entries.length === 0 ? (
+              empty
+            ) : (
+              <ul className="flex flex-col pt-1" aria-label="Messages">
+                {entries.map((e) => (
+                  <Row
+                    key={e.itemId}
+                    entry={e}
+                    tab={tab}
+                    autoOnly={autoOnly}
+                    selected={e.itemId === selected?.itemId}
+                  />
+                ))}
+              </ul>
             )}
-            <MarkItemRead itemId={selected.itemId} />
-            <ConversationPane
-              entry={selected}
-              thread={
-                conversation?.thread ?? [
-                  {
-                    key: selected.itemId,
-                    from: "customer",
-                    text: selected.text,
-                    at: selected.receivedAt,
-                    itemId: selected.itemId,
-                  },
-                ]
-              }
-              footer={footer}
-            />
+            {nextPost && <NextPostNote post={nextPost} />}
           </div>
-        )}
-        {selected && conversation && (
-          <div className={cn("lg:col-start-2 xl:col-start-3", !itemParam && "hidden lg:block")}>
-            <ContextPanel context={conversation.context} />
-          </div>
-        )}
-      </div>
+          {selected && (
+            <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
+              {itemParam && (
+                <Link
+                  href={href(tab, undefined, autoOnly)}
+                  className="text-ink-2 text-sm lg:hidden"
+                >
+                  ← All messages
+                </Link>
+              )}
+              <MarkItemRead itemId={selected.itemId} />
+              <ConversationPane
+                entry={selected}
+                thread={
+                  conversation?.thread ?? [
+                    {
+                      key: selected.itemId,
+                      from: "customer",
+                      text: selected.text,
+                      at: selected.receivedAt,
+                      itemId: selected.itemId,
+                    },
+                  ]
+                }
+                footer={footer}
+              />
+            </div>
+          )}
+          {selected && conversation && (
+            <div className={cn("lg:col-start-2 xl:col-start-3", !itemParam && "hidden lg:block")}>
+              <ContextPanel context={conversation.context} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

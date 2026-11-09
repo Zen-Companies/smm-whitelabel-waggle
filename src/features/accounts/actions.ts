@@ -32,6 +32,13 @@ export async function connectAccount(formData: FormData): Promise<void> {
       details: { platform },
     });
   } catch (error) {
+    // Visible in the server log even without Sentry (local dev). Our own and Zernio's error
+    // text only, never customer text (rule 10).
+    console.error(
+      `connect ${platform} failed for tenant ${tenant.id}:`,
+      error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 500) : "unknown error",
+      error instanceof Error && "details" in error ? JSON.stringify(error.details) : "",
+    );
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform } });
     redirect(`/settings?connect_error=unavailable&platform=${platform}`);
   }

@@ -181,6 +181,60 @@ export function BeeCaughtUp({ className }: { className?: string }) {
 }
 
 /**
+ * A disconnected account (design v3 "Reconnect banner · D"): the bee hovers by a cord pulled out
+ * of its socket; a small honey spark flickers at the gap now and then.
+ */
+export function BeeUnplugged({ className }: { className?: string }) {
+  const line = { stroke: INK, strokeWidth: 1.5, strokeLinecap: "round" as const };
+  return (
+    <svg
+      width="112"
+      height="56"
+      viewBox="0 0 112 56"
+      aria-hidden
+      className={cn("shrink-0", className)}
+    >
+      <path d="M4,44 C20,44 26,30 42,32 S62,42 68,40" fill="none" {...line} />
+      <rect
+        x="66"
+        y="34"
+        width="11"
+        height="11"
+        rx="2"
+        fill="#fff"
+        stroke={INK}
+        strokeWidth="1.4"
+      />
+      <path d="M77,37h5M77,42h5" fill="none" {...line} />
+      <rect
+        x="94"
+        y="30"
+        width="13"
+        height="18"
+        rx="3"
+        fill="var(--subtle)"
+        stroke={INK}
+        strokeWidth="1.4"
+      />
+      <path d="M98.5,36v5M102.5,36v5" fill="none" {...line} />
+      <path
+        d="M86,32l2,-4M88,38h4M86,44l2,4"
+        fill="none"
+        stroke={HONEY}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        className="bee-spark"
+      />
+      <g className="bee-bob">
+        <g transform="translate(70 6)">
+          <BeeBody />
+        </g>
+      </g>
+    </svg>
+  );
+}
+
+/**
  * The landing page's dance: the bee flies a wide figure-8 (9 s) while the trail draws in honey.
  * Drawn inside the SVG (SMIL motion) so it scales with its container; the pills that sit on the
  * trail are laid over it by the caller. Reduced motion hides the flight and shows a still bee.

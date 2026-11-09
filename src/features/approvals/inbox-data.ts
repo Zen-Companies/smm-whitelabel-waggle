@@ -1,6 +1,7 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { DM_REPLY_WINDOW_MS } from "./policy";
+import { type ActivityEntry, mergeActivity } from "./today-activity";
 
 // What the approval inbox shows (PRD F8). Read with the owner's client, so RLS scopes it.
 
@@ -143,6 +144,63 @@ export async function loadTodaySummary(
     ignored: ignored.count ?? 0,
     hidden: hidden.count ?? 0,
   };
+}
+
+/** "What Waggle did today" (empty inbox): replies sent and messages ignored since midnight UTC. */
+export async function loadTodayActivity(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  now = new Date(),
+  limit = 5,
+): Promise<ActivityEntry[]> {
+  const since = startOfTodayUtc(now).toISOString();
+  const [sent, ignored] = await Promise.all([
+    supabase
+      .from("drafts")
+      .select("sent_at, inbound_items!inner (id, kind, author_name, text)")
+      .eq("tenant_id", tenantId)
+      .eq("status", "sent")
+      .gte("sent_at", since)
+      .order("sent_at", { ascending: false })
+      .limit(limit),
+    supabase
+      .from("inbound_items")
+      .select("id, kind, author_name, text, received_at")
+      .eq("tenant_id", tenantId)
+      .eq("status", "ignored")
+      .gte("received_at", since)
+      .order("received_at", { ascending: false })
+      .limit(limit),
+  ]);
+  const answered = (sent.data ?? []).flatMap((d): ActivityEntry[] => {
+    const i = d.inbound_items as unknown as {
+      id: string;
+      kind: ActivityEntry["kind"];
+      author_name: string | null;
+      text: string;
+    } | null;
+    return i && d.sent_at
+      ? [
+          {
+            itemId: i.id,
+            what: "answered",
+            kind: i.kind,
+            authorName: i.author_name,
+            text: i.text,
+            at: d.sent_at,
+          },
+        ]
+      : [];
+  });
+  const skipped = (ignored.data ?? []).map((i): ActivityEntry => ({
+    itemId: i.id,
+    what: "ignored",
+    kind: i.kind as ActivityEntry["kind"],
+    authorName: i.author_name,
+    text: i.text,
+    at: i.received_at,
+  }));
+  return mergeActivity(answered, skipped, limit);
 }
 
 /** Pure: how long the customer waited for the reply, short ("6s", "4m", "2h", "3d"). */

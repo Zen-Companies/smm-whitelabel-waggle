@@ -421,6 +421,21 @@
     transform: rotate(3deg);
   }
 }
+@keyframes bee-spark {
+  0%,
+  70%,
+  100% {
+    opacity: 0;
+  }
+  78%,
+  90% {
+    opacity: 1;
+  }
+}
+.bee-spark {
+  opacity: 0;
+  animation: bee-spark 2.4s ease-in-out infinite;
+}
 .bee-fly {
   position: absolute;
   top: 0;
