@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getCurrentTenant } from "@/features/tenants";
+import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getLlmClientOrNull } from "@/lib/llm";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -21,7 +21,8 @@ const REASONS = {
 } as const;
 
 export async function suggestTopics(): Promise<SuggestState> {
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
   const llm = getLlmClientOrNull();
   if (!llm) return { error: REASONS.failed };
   const result = await requestSuggestions(
@@ -37,7 +38,8 @@ const idSchema = z.object({ id: z.uuid() });
 
 export async function dismissSuggestion(formData: FormData): Promise<void> {
   const { id } = idSchema.parse(Object.fromEntries(formData));
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return;
   const db = getServiceClient();
   const { data } = await db
     .from("kb_suggestions")

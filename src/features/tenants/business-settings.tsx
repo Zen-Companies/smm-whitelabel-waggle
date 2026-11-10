@@ -2,7 +2,9 @@ import { Button } from "@/components/ui/button";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { signOut } from "./actions";
+import { can } from "@/features/orgs";
 import { getCurrentTenant } from "./current-tenant";
+import { RoleGate } from "./role-gate";
 import { ProfileForm } from "./profile-form";
 
 /** Business and account (Settings). */
@@ -33,7 +35,13 @@ export async function BusinessSettings() {
           </Button>
         </form>
       </div>
-      <ProfileForm profile={data?.business_profile ?? ""} max={BUSINESS_PROFILE_MAX} />
+      <RoleGate
+        allowed={can(tenant.role, "brand.settings")}
+        role={tenant.role}
+        what="the business description"
+      >
+        <ProfileForm profile={data?.business_profile ?? ""} max={BUSINESS_PROFILE_MAX} />
+      </RoleGate>
     </section>
   );
 }

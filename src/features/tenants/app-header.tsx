@@ -44,7 +44,8 @@ export async function AppHeader({
   ]);
   const brandCounts: Record<string, number> = {};
   for (const t of orgBrands ?? []) {
-    if (t.organization_id) brandCounts[t.organization_id] = (brandCounts[t.organization_id] ?? 0) + 1;
+    if (t.organization_id)
+      brandCounts[t.organization_id] = (brandCounts[t.organization_id] ?? 0) + 1;
   }
   const supabase = await createServerSupabase();
   const { count } = await supabase

@@ -1,4 +1,5 @@
-import { getCurrentTenant } from "@/features/tenants";
+import { can } from "@/features/orgs";
+import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ComposeForm } from "./compose-form";
 
@@ -38,12 +39,16 @@ export async function ComposeCard({
           </span>
         )}
       </div>
-      <ComposeForm
-        key={`${day ?? "any"}-${time ?? ""}`}
-        accounts={accounts ?? []}
-        day={day}
-        time={time}
-      />
+      {can(tenant.role, "posts.write") ? (
+        <ComposeForm
+          key={`${day ?? "any"}-${time ?? ""}`}
+          accounts={accounts ?? []}
+          day={day}
+          time={time}
+        />
+      ) : (
+        <ReadOnlyNote role={tenant.role} what="the posts" />
+      )}
     </section>
   );
 }

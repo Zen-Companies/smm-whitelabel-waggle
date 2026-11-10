@@ -12,7 +12,7 @@ import { getServiceClient } from "@/lib/supabase/service";
 import { ORG_COOKIE } from "@/features/orgs";
 import { BRAND_COOKIE } from "./brand-pick";
 import { PASSWORD_MIN } from "./password";
-import { getCurrentTenant } from "./current-tenant";
+import { getTenantFor, NOT_ALLOWED } from "./current-tenant";
 import { setupTenantForUser } from "./server";
 
 export interface AuthFormState {
@@ -93,7 +93,8 @@ export async function updateBusinessProfile(
 ): Promise<ProfileFormState> {
   const parsed = profileSchema.safeParse(formData.get("profile") ?? "");
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
   const supabase = await createServerSupabase();
   const { error } = await supabase
     .from("tenants")

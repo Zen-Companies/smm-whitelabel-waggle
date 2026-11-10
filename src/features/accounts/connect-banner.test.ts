@@ -49,4 +49,9 @@ describe("connectBanner", () => {
       text: "Couldn't start connecting Facebook. Please try again.",
     });
   });
+  it("says only Owners and Admins connect", () => {
+    expect(connectBanner({ connect_error: "not_allowed" })?.text).toBe(
+      "Only Owners and Admins can connect accounts.",
+    );
+  });
 });

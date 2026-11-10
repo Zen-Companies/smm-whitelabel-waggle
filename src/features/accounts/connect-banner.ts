@@ -25,6 +25,10 @@ export function connectBanner(params: Params): ConnectBanner | null {
       text: `We can't add ${platform} for this brand right now: our connection limit is full. We've been alerted; please try again later.`,
     };
   }
+  // T55: only Owners and Admins connect accounts.
+  if (first(params.connect_error) === "not_allowed") {
+    return { tone: "error", text: "Only Owners and Admins can connect accounts." };
+  }
   if (first(params.connect_error)) {
     return { tone: "error", text: `Couldn't start connecting ${platform}. Please try again.` };
   }

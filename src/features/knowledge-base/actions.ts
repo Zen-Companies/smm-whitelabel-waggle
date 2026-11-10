@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
-import { getCurrentTenant } from "@/features/tenants";
+import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getLlmClientOrNull } from "@/lib/llm";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -52,7 +52,8 @@ export async function createKbEntry(_prev: KbFormState, formData: FormData): Pro
   const parsed = createSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { suggestionId, ...entry } = parsed.data;
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
 
   // Through RLS: owners may insert title/content for their own tenant.
   const supabase = await createServerSupabase();
@@ -96,7 +97,8 @@ export async function updateKbEntry(_prev: KbFormState, formData: FormData): Pro
   const parsed = entrySchema.merge(idSchema).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { id, title, content } = parsed.data;
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
 
   const supabase = await createServerSupabase();
   const { data, error } = await supabase
@@ -121,7 +123,8 @@ export async function updateKbEntry(_prev: KbFormState, formData: FormData): Pro
 
 export async function deleteKbEntry(formData: FormData): Promise<void> {
   const { id } = idSchema.parse(Object.fromEntries(formData));
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return;
   const supabase = await createServerSupabase();
   const { data } = await supabase
     .from("kb_entries")

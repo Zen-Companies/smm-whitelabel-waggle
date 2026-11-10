@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { ensureZernioProfile, getCurrentTenant } from "@/features/tenants";
+import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { SocialProviderError } from "@/lib/social/types";
@@ -14,7 +14,8 @@ const connectSchema = z.object({ platform: z.enum(["instagram", "facebook"]) });
 /** Starts Zernio's connect flow; Zernio sends the browser back to /settings afterwards. */
 export async function connectAccount(formData: FormData): Promise<void> {
   const { platform } = connectSchema.parse(Object.fromEntries(formData));
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) redirect("/settings?connect_error=not_allowed");
   const db = getServiceClient();
 
   let authUrl: string;

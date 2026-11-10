@@ -5,7 +5,11 @@ import { AddBrandForm, getCurrentTenant, getOpenOrg } from "@/features/tenants";
 
 export const metadata = { title: "Add a brand" };
 
-async function Content({ searchParams }: { searchParams: PageProps<"/brands/new">["searchParams"] }) {
+async function Content({
+  searchParams,
+}: {
+  searchParams: PageProps<"/brands/new">["searchParams"];
+}) {
   const { org: orgParam } = await searchParams;
   const [tenant, orgs, open] = await Promise.all([getCurrentTenant(), listMyOrgs(), getOpenOrg()]);
   const org = orgs.find((o) => o.id === orgParam) ?? open;

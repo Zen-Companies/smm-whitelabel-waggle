@@ -1,6 +1,7 @@
 import { FlaskConical } from "lucide-react";
 import Link from "next/link";
-import { getCurrentTenant } from "@/features/tenants";
+import { can } from "@/features/orgs";
+import { getCurrentTenant, RoleGate } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import {
   CATEGORY_HINTS,
@@ -33,34 +34,40 @@ export async function AutonomyCard() {
           What Waggle does with each kind of message. Changes apply to the next message.
         </p>
       </div>
-      <PauseForm paused={settings?.replies_paused ?? false} />
-      <div className="card flex flex-col divide-y">
-        {CONFIGURABLE_CATEGORIES.map((category) => (
-          <AutonomyForm
-            key={category}
-            category={category}
-            label={CATEGORY_LABELS[category]}
-            hint={CATEGORY_HINTS[category]}
-            mode={modes.get(category) ?? "off"}
-          />
-        ))}
-        <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-3 p-5">
-          {(Object.keys(FIXED_BEHAVIOUR) as (keyof typeof FIXED_BEHAVIOUR)[]).map((category) => (
-            <div key={category} className="contents">
-              <dt className="flex flex-col">
-                <span className="font-semibold">{CATEGORY_LABELS[category]}</span>
-                <span className="text-ink-2 text-sm">{CATEGORY_HINTS[category]}</span>
-              </dt>
-              <dd className="text-ink-2 text-sm font-medium">
-                {category === "spam" && !settings?.auto_hide_spam
-                  ? "Never answered"
-                  : FIXED_BEHAVIOUR[category]}
-              </dd>
-            </div>
+      <RoleGate
+        allowed={can(tenant.role, "brand.settings")}
+        role={tenant.role}
+        what="the reply rules"
+      >
+        <PauseForm paused={settings?.replies_paused ?? false} />
+        <div className="card flex flex-col divide-y">
+          {CONFIGURABLE_CATEGORIES.map((category) => (
+            <AutonomyForm
+              key={category}
+              category={category}
+              label={CATEGORY_LABELS[category]}
+              hint={CATEGORY_HINTS[category]}
+              mode={modes.get(category) ?? "off"}
+            />
           ))}
-        </dl>
-      </div>
-      <AutoHideForm on={settings?.auto_hide_spam ?? false} />
+          <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-3 p-5">
+            {(Object.keys(FIXED_BEHAVIOUR) as (keyof typeof FIXED_BEHAVIOUR)[]).map((category) => (
+              <div key={category} className="contents">
+                <dt className="flex flex-col">
+                  <span className="font-semibold">{CATEGORY_LABELS[category]}</span>
+                  <span className="text-ink-2 text-sm">{CATEGORY_HINTS[category]}</span>
+                </dt>
+                <dd className="text-ink-2 text-sm font-medium">
+                  {category === "spam" && !settings?.auto_hide_spam
+                    ? "Never answered"
+                    : FIXED_BEHAVIOUR[category]}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+        <AutoHideForm on={settings?.auto_hide_spam ?? false} />
+      </RoleGate>
       <Link
         href="/lab"
         className="card hover:bg-subtle flex items-center gap-3 p-5 transition-colors duration-150"

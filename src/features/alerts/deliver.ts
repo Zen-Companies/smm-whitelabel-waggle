@@ -128,13 +128,22 @@ async function contentOf(db: ServiceClient, alert: AlertRow): Promise<AlertConte
   }
 }
 
-/** The tenant's owner addresses (auth.users), via the admin API. */
-async function ownerEmails(db: ServiceClient, tenantId: string): Promise<string[]> {
+/**
+ * Who gets an alert (T55): everyone who can act on it. A lost connection goes to owners and
+ * admins (they reconnect); messages to owners, admins and members (they approve). Viewers get
+ * none. Addresses come from auth.users via the admin API.
+ */
+async function recipientEmails(
+  db: ServiceClient,
+  tenantId: string,
+  kind: string,
+): Promise<string[]> {
+  const roles = kind === "disconnect" ? ["owner", "admin"] : ["owner", "admin", "member"];
   const { data: members, error } = await db
     .from("tenant_members")
     .select("user_id")
     .eq("tenant_id", tenantId)
-    .eq("role", "owner");
+    .in("role", roles);
   if (error) throw new Error(`owner lookup failed: ${error.message}`);
   const emails: string[] = [];
   for (const m of members ?? []) {
@@ -174,7 +183,7 @@ export async function deliverPendingAlerts(deps: DeliverDeps): Promise<DeliverSu
     try {
       const [content, to, { data: tenant }] = await Promise.all([
         contentOf(db, alert),
-        ownerEmails(db, alert.tenant_id),
+        recipientEmails(db, alert.tenant_id, alert.kind),
         db.from("tenants").select("name, offboarded_at").eq("id", alert.tenant_id).single(),
       ]);
       // T21: nobody is told about a brand our team offboarded.

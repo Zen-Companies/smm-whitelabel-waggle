@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { shortTime } from "@/components/app/time";
 import { buttonVariants } from "@/components/ui/button";
-import { getCurrentTenant } from "@/features/tenants";
+import { can } from "@/features/orgs";
+import { getCurrentTenant, RoleGate } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "cn";
 import { dismissSuggestion } from "./gap-actions";
@@ -71,6 +72,7 @@ export async function KbList({
     ? suggestions.find((s) => s.id === suggestionParam)
     : undefined;
   const prefill = suggestion?.title ?? gap?.text.slice(0, KB_TITLE_MAX);
+  const mayEdit = can(tenant.role, "brand.settings");
 
   return (
     <>
@@ -81,9 +83,11 @@ export async function KbList({
             The only facts Waggle uses in replies. If it isn&apos;t here, it asks you.
           </p>
         </div>
-        <Link href={href({ topic: "new", q })} className={buttonVariants({ variant: "primary" })}>
-          Add a topic
-        </Link>
+        {mayEdit && (
+          <Link href={href({ topic: "new", q })} className={buttonVariants({ variant: "primary" })}>
+            Add a topic
+          </Link>
+        )}
       </header>
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,320px)]">
@@ -131,25 +135,27 @@ export async function KbList({
           )}
         </div>
 
-        {selected ? (
-          <KbEntryForm
-            key={selected.id}
-            entry={{
-              id: selected.id,
-              title: selected.title,
-              content: selected.content,
-              searchable: selected.embedding !== null,
-            }}
-            changed={dayOnly(shortTime(selected.updated_at))}
-          />
-        ) : (
-          <KbEntryForm
-            key={`new-${from ?? ""}-${suggestion?.id ?? ""}`}
-            prefillTitle={prefill}
-            prefillContent={suggestion?.content}
-            suggestionId={suggestion?.id}
-          />
-        )}
+        <RoleGate allowed={mayEdit} role={tenant.role} what="the business info">
+          {selected ? (
+            <KbEntryForm
+              key={selected.id}
+              entry={{
+                id: selected.id,
+                title: selected.title,
+                content: selected.content,
+                searchable: selected.embedding !== null,
+              }}
+              changed={dayOnly(shortTime(selected.updated_at))}
+            />
+          ) : (
+            <KbEntryForm
+              key={`new-${from ?? ""}-${suggestion?.id ?? ""}`}
+              prefillTitle={prefill}
+              prefillContent={suggestion?.content}
+              suggestionId={suggestion?.id}
+            />
+          )}
+        </RoleGate>
 
         <aside
           aria-labelledby="gaps"
@@ -182,10 +188,10 @@ export async function KbList({
                   </li>
                 ))}
               </ul>
-              {gaps.length >= GAP_HELPER_MIN_QUESTIONS && <SuggestButton />}
+              {mayEdit && gaps.length >= GAP_HELPER_MIN_QUESTIONS && <SuggestButton />}
             </>
           )}
-          {suggestions.length > 0 && (
+          {mayEdit && suggestions.length > 0 && (
             <section aria-labelledby="suggested" className="flex flex-col gap-2 border-t pt-3">
               <h3 id="suggested" className="font-semibold">
                 Suggested topics

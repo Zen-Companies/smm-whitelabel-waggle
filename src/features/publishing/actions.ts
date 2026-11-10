@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { getCurrentTenant } from "@/features/tenants";
+import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
@@ -55,7 +55,8 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     scheduledFor = at;
   }
 
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
   const db = getServiceClient();
   // Optional image: uploaded through Zernio's presign flow before the post is created.
   const media: { url: string }[] = [];
@@ -134,7 +135,8 @@ export async function cancelPost(
 ): Promise<PostActionState> {
   const parsed = idSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Reload the page." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
   const result = await cancelScheduledPost(
     { db: getServiceClient(), social: getSocialProvider },
     { tenantId: tenant.id, userId: tenant.userId, postId: parsed.data.postId },
@@ -173,7 +175,8 @@ export async function retryPost(
   if (at && (Number.isNaN(at.getTime()) || at.getTime() < Date.now() + 5 * 60_000)) {
     return { error: "Pick a time at least 5 minutes from now." };
   }
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
   const db = getServiceClient();
   const { data: updated } = await db
     .from("posts")

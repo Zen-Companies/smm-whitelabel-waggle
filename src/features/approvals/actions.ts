@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { z } from "zod";
-import { getCurrentTenant } from "@/features/tenants";
+import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -41,7 +41,8 @@ export async function updateAutonomyMode(
   const parsed = schema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Choose a valid mode." };
   const { category, mode } = parsed.data;
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
 
   // Through RLS: the owner may update `mode` on their own tenant's rows only.
   const supabase = await createServerSupabase();
@@ -101,7 +102,8 @@ export async function decideDraft(
   const parsed = decisionSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
   const { intent, itemId, draftId, body, replyVia } = parsed.data;
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
   const db = getServiceClient();
   const input = { tenantId: tenant.id, userId: tenant.userId, itemId, draftId };
 
@@ -127,7 +129,8 @@ export async function undoApprovalAction(
     .pick({ itemId: true, draftId: true })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
   const result = await undoApproval(getServiceClient(), {
     tenantId: tenant.id,
     userId: tenant.userId,
@@ -146,7 +149,8 @@ export async function markHandledAction(
     .object({ itemId: z.uuid(), asSpam: z.literal("1").optional() })
     .safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
   const ids = { tenantId: tenant.id, userId: tenant.userId, itemId: parsed.data.itemId };
   // "It's spam: hide it" on a comment also hides it on the post (T40). A DM can't be hidden, so
   // it only leaves the inbox (hideSpamComment answers not_found for anything but a comment).
@@ -189,7 +193,8 @@ export async function hideSpamAction(
 ): Promise<SpamFormState> {
   const parsed = itemOnly.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
   const result = await hideSpamComment(
     { db: getServiceClient(), social: getSocialProvider() },
     { tenantId: tenant.id, userId: tenant.userId, itemId: parsed.data.itemId },
@@ -211,7 +216,8 @@ export async function unhideAction(
 ): Promise<SpamFormState> {
   const parsed = itemOnly.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
   const result = await unhideComment(
     { db: getServiceClient(), social: getSocialProvider() },
     { tenantId: tenant.id, userId: tenant.userId, itemId: parsed.data.itemId },
@@ -233,7 +239,8 @@ export async function notSpamAction(
 ): Promise<SpamFormState> {
   const parsed = itemOnly.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
   const result = await markNotSpam(getServiceClient(), {
     tenantId: tenant.id,
     userId: tenant.userId,
@@ -250,7 +257,8 @@ export async function replyPubliclyAction(
 ): Promise<DecisionFormState> {
   const parsed = itemOnly.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: "Something went wrong. Please reload." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
   const result = await replyPublicly(getServiceClient(), {
     tenantId: tenant.id,
     userId: tenant.userId,
@@ -268,7 +276,8 @@ export async function setAutoHideSpam(
   formData: FormData,
 ): Promise<AutoHideFormState> {
   const on = formData.get("autoHide") === "on";
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
   const supabase = await createServerSupabase();
   const { data, error } = await supabase
     .from("tenants")
@@ -297,7 +306,8 @@ export async function setRepliesPaused(
   formData: FormData,
 ): Promise<PauseFormState> {
   const paused = formData.get("paused") === "true";
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
   const supabase = await createServerSupabase();
   const { data, error } = await supabase
     .from("tenants")

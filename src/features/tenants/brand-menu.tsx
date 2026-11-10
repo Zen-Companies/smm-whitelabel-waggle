@@ -148,9 +148,7 @@ export function BrandMenu({
         <BrandAvatar brand={current} size={26} />
         {currentOrg && !simple && (
           <>
-            <span className="text-ink-3 hidden max-w-36 truncate sm:inline">
-              {currentOrg.name}
-            </span>
+            <span className="text-ink-3 hidden max-w-36 truncate sm:inline">{currentOrg.name}</span>
             <span aria-hidden className="text-line-strong hidden sm:inline">
               /
             </span>

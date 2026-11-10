@@ -1,7 +1,8 @@
 import { CircleAlert, CircleCheck } from "lucide-react";
 import { IllustratedEmpty } from "@/components/app/illustrated-empty";
 import { Button } from "@/components/ui/button";
-import { getCurrentTenant } from "@/features/tenants";
+import { can } from "@/features/orgs";
+import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { connectAccount } from "./actions";
 import { connectBanner } from "./connect-banner";
@@ -25,19 +26,23 @@ export async function AccountsCard({
     .eq("tenant_id", tenant.id)
     .order("created_at");
   const down = (accounts ?? []).find((a) => a.status !== "active");
+  const mayConnect = can(tenant.role, "accounts.manage");
 
-  const connectButtons = (variant: "primary" | "secondary") => (
-    <div className="flex flex-wrap gap-2">
-      {SUPPORTED_PLATFORMS.map((platform, i) => (
-        <form key={platform} action={connectAccount}>
-          <input type="hidden" name="platform" value={platform} />
-          <Button type="submit" variant={i === 0 ? variant : "secondary"}>
-            Connect {name(platform)}
-          </Button>
-        </form>
-      ))}
-    </div>
-  );
+  const connectButtons = (variant: "primary" | "secondary") =>
+    !mayConnect ? (
+      <ReadOnlyNote role={tenant.role} what="the connected accounts" />
+    ) : (
+      <div className="flex flex-wrap gap-2">
+        {SUPPORTED_PLATFORMS.map((platform, i) => (
+          <form key={platform} action={connectAccount}>
+            <input type="hidden" name="platform" value={platform} />
+            <Button type="submit" variant={i === 0 ? variant : "secondary"}>
+              Connect {name(platform)}
+            </Button>
+          </form>
+        ))}
+      </div>
+    );
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="accounts-heading">
@@ -100,7 +105,7 @@ export async function AccountsCard({
                     </span>
                   )}
                 </span>
-                {account.status !== "active" && (
+                {account.status !== "active" && mayConnect && (
                   <form action={connectAccount}>
                     <input type="hidden" name="platform" value={account.platform} />
                     <Button type="submit" variant="primary">

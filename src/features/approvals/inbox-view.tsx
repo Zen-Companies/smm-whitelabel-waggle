@@ -4,7 +4,8 @@ import { Avatar } from "@/components/app/avatar";
 import { clockTime, shortTime } from "@/components/app/time";
 import { BrandSetup } from "@/features/accounts";
 import { MarkItemRead } from "@/features/alerts";
-import { getCurrentTenant } from "@/features/tenants";
+import { can } from "@/features/orgs";
+import { getCurrentTenant, RoleGate } from "@/features/tenants";
 import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -344,7 +345,7 @@ export async function InboxView({
   const conversation = selected
     ? await loadConversation(supabase, tenant.id, selected.itemId)
     : null;
-  const footer = !selected ? null : selected.status === "awaiting_approval" ? (
+  const actionFooter = !selected ? null : selected.status === "awaiting_approval" ? (
     <ApprovalCard
       key={selected.itemId}
       entry={selected}
@@ -355,6 +356,12 @@ export async function InboxView({
     <SpamCard key={selected.itemId} entry={selected} />
   ) : held ? (
     <HeldCard key={selected.itemId} entry={selected} reason={reason} />
+  ) : null;
+  // T55: viewers read the conversation; the decision controls show disabled, with a note.
+  const footer = !selected ? null : actionFooter ? (
+    <RoleGate allowed={can(tenant.role, "replies.approve")} role={tenant.role} what="the replies">
+      {actionFooter}
+    </RoleGate>
   ) : selected.kind === "comment" &&
     (selected.hiddenOnPlatformAt ||
       (selected.category === "spam" &&

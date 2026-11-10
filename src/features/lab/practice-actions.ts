@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { getCurrentTenant } from "@/features/tenants";
+import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { CATEGORIES } from "@/lib/classifier/types";
 import type { Json } from "@/lib/supabase/database.types";
@@ -31,7 +31,8 @@ const trySchema = z.object({
 export async function tryMessage(_prev: PracticeState, formData: FormData): Promise<PracticeState> {
   const parsed = trySchema.safeParse({ kind: formData.get("kind"), text: formData.get("text") });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
   const db = getServiceClient();
   const left = await practiceTriesLeft(db, tenant.id);
   if (left <= 0) return { error: "No tries left today. More tomorrow.", triesLeft: 0 };
@@ -79,7 +80,8 @@ export type RecentMessagesState = {
  * next to what happened then. One try each; read-only on the inbox (see recent-messages.ts).
  */
 export async function runRecentMessages(): Promise<RecentMessagesState> {
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
   const db = getServiceClient();
   const left = await practiceTriesLeft(db, tenant.id);
   if (left <= 0) return { error: "No tries left today. More tomorrow.", triesLeft: 0 };
@@ -114,7 +116,8 @@ export async function saveCorrection(
     category: formData.get("category"),
   });
   if (!parsed.success) return { error: "Pick what this message is." };
-  const tenant = await getCurrentTenant();
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
   const { error } = await getServiceClient().from("lab_cases").insert({
     tenant_id: tenant.id,
     set_name: "Owner checks",

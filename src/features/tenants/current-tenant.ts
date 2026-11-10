@@ -2,7 +2,14 @@ import "server-only";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
-import { isOrgRole, listMyOrgs, ORG_COOKIE, type OrgRole } from "@/features/orgs";
+import {
+  can,
+  isOrgRole,
+  listMyOrgs,
+  ORG_COOKIE,
+  type Ability,
+  type OrgRole,
+} from "@/features/orgs";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { BRAND_COOKIE, pickOpenBrand } from "./brand-pick";
 import { closedBrandFor } from "./closed";
@@ -68,3 +75,15 @@ export const getCurrentTenant = cache(async (): Promise<CurrentTenant> => {
     role: member.role,
   };
 });
+
+/** What a Server Action answers when the user's role can't do it (T55). */
+export const NOT_ALLOWED = "Your role here can't do that. Ask an Owner or Admin.";
+
+/**
+ * The open brand, if the user's role there allows `ability` (T55); else null. Every Server
+ * Action that changes something calls this: an action is reachable without its button.
+ */
+export async function getTenantFor(ability: Ability): Promise<CurrentTenant | null> {
+  const tenant = await getCurrentTenant();
+  return can(tenant.role, ability) ? tenant : null;
+}

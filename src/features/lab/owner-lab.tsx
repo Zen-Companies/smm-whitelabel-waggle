@@ -2,7 +2,8 @@ import { Check } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ReadinessCard } from "@/features/approvals";
-import { getCurrentTenant } from "@/features/tenants";
+import { can } from "@/features/orgs";
+import { getCurrentTenant, RoleGate } from "@/features/tenants";
 import { getServiceClient } from "@/lib/supabase/service";
 import { PracticeBox } from "./practice-box";
 import { loadPracticePage } from "./practice-data";
@@ -66,12 +67,18 @@ export async function OwnerLab() {
     <div className="flex flex-col gap-5">
       {!setupComplete(page.setup) && <SetupChecklist steps={page.setup} />}
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,420px)]">
-        <PracticeBox
-          triesLeft={page.triesLeft}
-          examples={page.examples}
-          examplesFromTopics={page.examplesFromTopics}
-          recentTries={page.recentTries}
-        />
+        <RoleGate
+          allowed={can(tenant.role, "brand.settings")}
+          role={tenant.role}
+          what="the practice box"
+        >
+          <PracticeBox
+            triesLeft={page.triesLeft}
+            examples={page.examples}
+            examplesFromTopics={page.examplesFromTopics}
+            recentTries={page.recentTries}
+          />
+        </RoleGate>
         <Suspense fallback={<div className="skeleton h-72" />}>
           <ReadinessCard />
         </Suspense>
