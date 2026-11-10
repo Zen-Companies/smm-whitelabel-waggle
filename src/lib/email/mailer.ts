@@ -2,7 +2,8 @@ import { z } from "zod";
 
 // Owner emails (PRD F11/F12) go through Resend's REST API: POST https://api.resend.com/emails
 // { from, to, subject, text, html } with an Idempotency-Key (24 h) → { id }.
-// Without RESEND_API_KEY + ALERT_FROM_EMAIL, and always under Vitest, alerts are logged instead.
+// Without RESEND_API_KEY + ALERT_FROM_EMAIL, and always under Vitest, alerts are logged instead
+// (or, locally with MAILPIT_URL, caught by Mailpit).
 
 export interface Email {
   to: string[];
@@ -77,7 +78,56 @@ export const logMailer: Mailer = {
   },
 };
 
+const mailpitSentSchema = z.object({ ID: z.string().min(1) });
+
+/**
+ * Local development only: Mailpit (bundled with `supabase start`, http://127.0.0.1:55324)
+ * catches the email through its send API, `POST /api/v1/send`, so invites and alerts can be
+ * opened and clicked in its inbox. Nothing leaves the machine.
+ */
+export function createMailpitMailer(opts: {
+  url: string;
+  from: string;
+  fetch?: typeof fetch;
+}): Mailer {
+  const doFetch = opts.fetch ?? fetch;
+  return {
+    async send(email, options) {
+      const res = await doFetch(`${opts.url.replace(/\/$/, "")}/api/v1/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          From: { Email: opts.from },
+          To: email.to.map((Email) => ({ Email })),
+          Subject: email.subject,
+          Text: email.text,
+          HTML: email.html,
+          Headers: { "X-Idempotency-Key": email.idempotencyKey },
+        }),
+        signal: options?.signal ?? AbortSignal.timeout(10_000),
+      });
+      if (!res.ok) throw new MailerError(`Mailpit send failed (${res.status})`, res.status);
+      const parsed = mailpitSentSchema.safeParse(await res.json().catch(() => null));
+      if (!parsed.success) throw new MailerError("Mailpit send: unexpected response shape");
+      return { providerId: parsed.data.ID, mode: "sent" };
+    },
+  };
+}
+
+/**
+ * Resend when it's configured; else Mailpit when MAILPIT_URL is set (local only, never on a
+ * Vercel deployment); else log. Always log under Vitest.
+ */
 export function getMailer(env: Record<string, string | undefined> = process.env): Mailer {
-  if (env.VITEST || !env.RESEND_API_KEY || !env.ALERT_FROM_EMAIL) return logMailer;
-  return createResendMailer({ apiKey: env.RESEND_API_KEY, from: env.ALERT_FROM_EMAIL });
+  if (env.VITEST) return logMailer;
+  if (env.RESEND_API_KEY && env.ALERT_FROM_EMAIL) {
+    return createResendMailer({ apiKey: env.RESEND_API_KEY, from: env.ALERT_FROM_EMAIL });
+  }
+  if (env.MAILPIT_URL && !env.VERCEL) {
+    return createMailpitMailer({
+      url: env.MAILPIT_URL,
+      from: env.ALERT_FROM_EMAIL || "waggle@localhost",
+    });
+  }
+  return logMailer;
 }

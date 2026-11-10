@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { createResendMailer, getMailer, logMailer, MailerError } from "./mailer";
+import {
+  createMailpitMailer,
+  createResendMailer,
+  getMailer,
+  logMailer,
+  MailerError,
+} from "./mailer";
 
 const email = {
   to: ["owner@example.com"],
@@ -53,5 +59,30 @@ describe("Resend mailer", () => {
     await expect(logMailer.send(email)).resolves.toEqual({ providerId: null, mode: "logged" });
     expect(info.mock.calls[0][0]).not.toContain("owner@example.com");
     info.mockRestore();
+  });
+});
+
+describe("Mailpit mailer (local)", () => {
+  it("posts to Mailpit's send API and returns its message id", async () => {
+    const fetch = vi.fn(async () => Response.json({ ID: "mp_1" }));
+    const mailer = createMailpitMailer({
+      url: "http://127.0.0.1:55324/",
+      from: "w@localhost",
+      fetch,
+    });
+    await expect(mailer.send(email)).resolves.toEqual({ providerId: "mp_1", mode: "sent" });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("http://127.0.0.1:55324/api/v1/send");
+    expect(JSON.parse(init.body as string)).toMatchObject({
+      From: { Email: "w@localhost" },
+      To: [{ Email: "owner@example.com" }],
+      Subject: "A message needs you",
+    });
+  });
+
+  it("is used only without Resend, off Vercel and outside tests", () => {
+    expect(getMailer({ MAILPIT_URL: "http://127.0.0.1:55324" })).not.toBe(logMailer);
+    expect(getMailer({ MAILPIT_URL: "http://127.0.0.1:55324", VERCEL: "1" })).toBe(logMailer);
+    expect(getMailer({ MAILPIT_URL: "http://127.0.0.1:55324", VITEST: "1" })).toBe(logMailer);
   });
 });
