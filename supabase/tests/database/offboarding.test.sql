@@ -24,6 +24,8 @@ select is(
        'post_metrics', 'posts', 'analytics_snapshots', 'kb_suggestions', 'kb_entries',
        'lab_runs', 'lab_cases', 'autonomy_settings', 'feature_flags', 'mcp_calls',
        'social_accounts', 'tenant_members',
+       -- deleted by the tenants_forget_purged trigger when purge_tenant sets purged_at
+       'organization_member_brands',
        -- kept: costs and the audit trail
        'ai_usage', 'audit_log')),
   null,

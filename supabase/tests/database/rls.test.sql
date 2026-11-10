@@ -81,8 +81,10 @@ select is_empty(
      where t.table_schema = 'public' and t.table_type = 'BASE TABLE'
        -- mcp_grants belongs to a login and lists several brands (tenant_ids); staff tables belong to
        -- Zen Companies people, not a brand. Both are server-only (oauth_block.test.sql, staff.test.sql).
+       -- organization tables sit above brands (organizations.test.sql covers their RLS).
        and t.table_name not in ('tenants', 'webhook_events', 'platform_state', 'mcp_grants',
-                                'staff_members', 'staff_role_permissions')
+                                'staff_members', 'staff_role_permissions', 'organizations',
+                                'organization_members', 'organization_invites', 'organization_audit')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

@@ -1,10 +1,4 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[]
+export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type Database = {
   graphql_public: {
@@ -16,12 +10,7 @@ export type Database = {
     }
     Functions: {
       graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
+        Args: { extensions?: Json; operationName?: string; query?: string; variables?: Json }
         Returns: Json
       }
     }
@@ -48,6 +37,7 @@ export type Database = {
           source: string
           tenant_id: string
         }
+        ComputedFields: never
         Insert: {
           cost_usd?: number
           created_at?: string
@@ -109,6 +99,7 @@ export type Database = {
           status: string
           tenant_id: string
         }
+        ComputedFields: never
         Insert: {
           attempts?: number
           created_at?: string
@@ -182,6 +173,7 @@ export type Database = {
           synced_at: string
           tenant_id: string
         }
+        ComputedFields: never
         Insert: {
           data: Json
           id?: string
@@ -216,6 +208,7 @@ export type Database = {
           item_id: string | null
           tenant_id: string
         }
+        ComputedFields: never
         Insert: {
           action: string
           actor: string
@@ -258,6 +251,7 @@ export type Database = {
           mode: string
           tenant_id: string
         }
+        ComputedFields: never
         Insert: {
           category: string
           created_at?: string
@@ -292,6 +286,7 @@ export type Database = {
           tenant_id: string
           zernio_conversation_id: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           id?: string
@@ -345,15 +340,16 @@ export type Database = {
           model: string | null
           needs_human: boolean
           needs_human_reason: string | null
-          reply_via: string
           nudged_at: string | null
           owner_written: boolean
+          reply_via: string
           send_attempted_at: string | null
           sent_at: string | null
           status: string
           tenant_id: string
           zernio_reply_id: string | null
         }
+        ComputedFields: never
         Insert: {
           body: string
           created_at?: string
@@ -367,9 +363,9 @@ export type Database = {
           model?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
-          reply_via?: string
           nudged_at?: string | null
           owner_written?: boolean
+          reply_via?: string
           send_attempted_at?: string | null
           sent_at?: string | null
           status?: string
@@ -389,9 +385,9 @@ export type Database = {
           model?: string | null
           needs_human?: boolean
           needs_human_reason?: string | null
-          reply_via?: string
           nudged_at?: string | null
           owner_written?: boolean
+          reply_via?: string
           send_attempted_at?: string | null
           sent_at?: string | null
           status?: string
@@ -424,6 +420,7 @@ export type Database = {
           updated_at: string
           updated_by: string | null
         }
+        ComputedFields: never
         Insert: {
           enabled: boolean
           id?: string
@@ -440,7 +437,15 @@ export type Database = {
           updated_at?: string
           updated_by?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "feature_flags_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       inbound_items: {
         Row: {
@@ -465,11 +470,12 @@ export type Database = {
           status: string
           tenant_id: string
           text: string
-          zernio_review_id: string | null
           zernio_comment_id: string | null
           zernio_message_id: string | null
           zernio_post_id: string | null
+          zernio_review_id: string | null
         }
+        ComputedFields: never
         Insert: {
           attempts?: number
           author_name?: string | null
@@ -492,10 +498,10 @@ export type Database = {
           status?: string
           tenant_id: string
           text: string
-          zernio_review_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null
+          zernio_review_id?: string | null
         }
         Update: {
           attempts?: number
@@ -519,10 +525,10 @@ export type Database = {
           status?: string
           tenant_id?: string
           text?: string
-          zernio_review_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null
+          zernio_review_id?: string | null
         }
         Relationships: [
           {
@@ -558,6 +564,7 @@ export type Database = {
           title: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           content: string
           created_at?: string
@@ -598,6 +605,7 @@ export type Database = {
           tenant_id: string
           title: string
         }
+        ComputedFields: never
         Insert: {
           content?: string
           created_at?: string
@@ -649,6 +657,7 @@ export type Database = {
           tenant_id: string
           text: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           created_by?: string | null
@@ -692,6 +701,7 @@ export type Database = {
           tenant_id: string
           text: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           created_by?: string | null
@@ -732,6 +742,7 @@ export type Database = {
           request: string | null
           tenant_id: string
         }
+        ComputedFields: never
         Insert: {
           contact?: string | null
           created_at?: string
@@ -783,6 +794,7 @@ export type Database = {
           tool: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           args?: Json
           at?: string
@@ -813,7 +825,15 @@ export type Database = {
           tool?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "mcp_calls_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mcp_grants: {
         Row: {
@@ -825,6 +845,7 @@ export type Database = {
           updated_at: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           client_id: string
           client_name?: string
@@ -860,6 +881,7 @@ export type Database = {
           tenant_id: string
           updated_at: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           dedupe_key: string
@@ -912,12 +934,213 @@ export type Database = {
           },
         ]
       }
+      organization_audit: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          details: Json
+          id: string
+          organization_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          action: string
+          actor: string
+          created_at?: string
+          details?: Json
+          id?: string
+          organization_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          details?: Json
+          id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_audit_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_invites: {
+        Row: {
+          accepted_at: string | null
+          accepted_by: string | null
+          all_brands: boolean
+          cancelled_at: string | null
+          created_at: string
+          declined_at: string | null
+          email: string
+          expires_at: string
+          id: string
+          invited_by: string | null
+          organization_id: string
+          role: string
+          tenant_ids: string[]
+          token_hash: string
+        }
+        ComputedFields: never
+        Insert: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          all_brands?: boolean
+          cancelled_at?: string | null
+          created_at?: string
+          declined_at?: string | null
+          email: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          organization_id: string
+          role: string
+          tenant_ids?: string[]
+          token_hash: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_by?: string | null
+          all_brands?: boolean
+          cancelled_at?: string | null
+          created_at?: string
+          declined_at?: string | null
+          email?: string
+          expires_at?: string
+          id?: string
+          invited_by?: string | null
+          organization_id?: string
+          role?: string
+          tenant_ids?: string[]
+          token_hash?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_invites_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_member_brands: {
+        Row: {
+          organization_id: string
+          tenant_id: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          organization_id: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          organization_id?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_member_brands_organization_id_user_id_fkey"
+            columns: ["organization_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "organization_members"
+            referencedColumns: ["organization_id", "user_id"]
+          },
+          {
+            foreignKeyName: "organization_member_brands_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_members: {
+        Row: {
+          all_brands: boolean
+          created_at: string
+          invited_by: string | null
+          organization_id: string
+          role: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          all_brands?: boolean
+          created_at?: string
+          invited_by?: string | null
+          organization_id: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          all_brands?: boolean
+          created_at?: string
+          invited_by?: string | null
+          organization_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          personal_of: string | null
+          picture_path: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          personal_of?: string | null
+          picture_path?: string | null
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          personal_of?: string | null
+          picture_path?: string | null
+        }
+        Relationships: []
+      }
       platform_state: {
         Row: {
           key: string
           updated_at: string
           value: Json
         }
+        ComputedFields: never
         Insert: {
           key: string
           updated_at?: string
@@ -957,6 +1180,7 @@ export type Database = {
           views: number
           zernio_post_id: string | null
         }
+        ComputedFields: never
         Insert: {
           caption?: string
           clicks?: number
@@ -1038,6 +1262,7 @@ export type Database = {
           tenant_id: string
           zernio_post_id: string | null
         }
+        ComputedFields: never
         Insert: {
           attempts?: number
           content: string
@@ -1097,6 +1322,7 @@ export type Database = {
           username: string | null
           zernio_account_id: string
         }
+        ComputedFields: never
         Insert: {
           backfill_from?: string | null
           created_at?: string
@@ -1138,6 +1364,7 @@ export type Database = {
           role: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           added_by?: string | null
           created_at?: string
@@ -1157,6 +1384,7 @@ export type Database = {
           permission: string
           role: string
         }
+        ComputedFields: never
         Insert: {
           permission: string
           role: string
@@ -1175,6 +1403,7 @@ export type Database = {
           tenant_id: string
           user_id: string
         }
+        ComputedFields: never
         Insert: {
           created_at?: string
           id?: string
@@ -1201,10 +1430,10 @@ export type Database = {
       }
       tenants: {
         Row: {
-          analytics_synced_at: string | null
-          analytics_full_at: string | null
-          analytics_audience_at: string | null
           ai_monthly_cap_usd: number | null
+          analytics_audience_at: string | null
+          analytics_full_at: string | null
+          analytics_synced_at: string | null
           auto_hide_spam: boolean
           business_profile: string
           business_profile_updated_at: string | null
@@ -1218,6 +1447,7 @@ export type Database = {
           offboard_issue: string | null
           offboarded_at: string | null
           offboarded_by: string | null
+          organization_id: string | null
           purge_after: string | null
           purge_tried_at: string | null
           purged_at: string | null
@@ -1226,11 +1456,12 @@ export type Database = {
           subscription_status: string
           zernio_profile_id: string | null
         }
+        ComputedFields: never
         Insert: {
-          analytics_synced_at?: string | null
-          analytics_full_at?: string | null
-          analytics_audience_at?: string | null
           ai_monthly_cap_usd?: number | null
+          analytics_audience_at?: string | null
+          analytics_full_at?: string | null
+          analytics_synced_at?: string | null
           auto_hide_spam?: boolean
           business_profile?: string
           business_profile_updated_at?: string | null
@@ -1244,6 +1475,7 @@ export type Database = {
           offboard_issue?: string | null
           offboarded_at?: string | null
           offboarded_by?: string | null
+          organization_id?: string | null
           purge_after?: string | null
           purge_tried_at?: string | null
           purged_at?: string | null
@@ -1253,10 +1485,10 @@ export type Database = {
           zernio_profile_id?: string | null
         }
         Update: {
-          analytics_synced_at?: string | null
-          analytics_full_at?: string | null
-          analytics_audience_at?: string | null
           ai_monthly_cap_usd?: number | null
+          analytics_audience_at?: string | null
+          analytics_full_at?: string | null
+          analytics_synced_at?: string | null
           auto_hide_spam?: boolean
           business_profile?: string
           business_profile_updated_at?: string | null
@@ -1270,6 +1502,7 @@ export type Database = {
           offboard_issue?: string | null
           offboarded_at?: string | null
           offboarded_by?: string | null
+          organization_id?: string | null
           purge_after?: string | null
           purge_tried_at?: string | null
           purged_at?: string | null
@@ -1278,7 +1511,15 @@ export type Database = {
           subscription_status?: string
           zernio_profile_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "tenants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       webhook_events: {
         Row: {
@@ -1290,6 +1531,7 @@ export type Database = {
           received_at: string
           source: string
         }
+        ComputedFields: never
         Insert: {
           error?: string | null
           event_type: string
@@ -1315,6 +1557,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invite: {
+        Args: { p_token_hash: string; p_user: string }
+        Returns: {
+          organization_id: string
+          status: string
+        }[]
+      }
       ai_spend_since: {
         Args: { p_since: string; p_tenant_id?: string }
         Returns: {
@@ -1322,17 +1571,7 @@ export type Database = {
           tenant_id: string
         }[]
       }
-      user_emails: {
-        Args: { p_ids: string[] }
-        Returns: {
-          email: string
-          id: string
-        }[]
-      }
-      user_id_by_email: {
-        Args: { p_email: string }
-        Returns: string
-      }
+      cancel_invite: { Args: { p_actor: string; p_invite: string }; Returns: boolean }
       claim_items: {
         Args: { p_limit: number; p_per_tenant?: number; p_statuses?: string[] }
         Returns: {
@@ -1345,6 +1584,7 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      close_organization: { Args: { p_actor: string; p_org: string }; Returns: number }
       cost_by_item: {
         Args: { p_limit?: number; p_since: string }
         Returns: {
@@ -1379,6 +1619,14 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      create_brand_in_org: {
+        Args: { p_actor: string; p_name: string; p_org: string }
+        Returns: {
+          created: boolean
+          tenant_id: string
+        }[]
+      }
+      create_organization: { Args: { p_name: string; p_user: string }; Returns: string }
       create_owner_tenant: {
         Args: { p_name: string; p_user_id: string }
         Returns: {
@@ -1386,31 +1634,77 @@ export type Database = {
           tenant_id: string
         }[]
       }
+      create_personal_org: { Args: { p_user: string }; Returns: string }
+      decline_invite: { Args: { p_token_hash: string; p_user: string }; Returns: string }
       enqueue_draft_nudges: { Args: { p_older_than: string }; Returns: number }
-      offboard_tenant: {
-        Args: { p_actor: string; p_tenant_id: string }
-        Returns: string | null
+      invite_by_token: {
+        Args: { p_token_hash: string }
+        Returns: {
+          all_brands: boolean
+          email: string
+          expires_at: string
+          invite_id: string
+          invited_by: string
+          organization_id: string
+          organization_name: string
+          role: string
+          status: string
+          tenant_ids: string[]
+        }[]
       }
-      purge_tenant: {
-        Args: { p_tenant_id: string }
-        Returns: boolean
-      }
-      restore_tenant: {
-        Args: { p_actor: string; p_tenant_id: string }
-        Returns: boolean
-      }
-      match_kb_entries: {
+      invite_member: {
         Args: {
-          p_limit?: number
-          p_query_embedding: string
-          p_tenant_id: string
+          p_actor: string
+          p_all_brands: boolean
+          p_email: string
+          p_org: string
+          p_role: string
+          p_tenant_ids: string[]
+          p_token_hash: string
         }
+        Returns: {
+          invite_id: string
+          status: string
+        }[]
+      }
+      leave_organization: { Args: { p_org: string; p_user: string }; Returns: undefined }
+      match_kb_entries: {
+        Args: { p_limit?: number; p_query_embedding: string; p_tenant_id: string }
         Returns: {
           content: string
           id: string
           similarity: number
           title: string
         }[]
+      }
+      offboard_tenant: { Args: { p_actor: string; p_tenant_id: string }; Returns: string }
+      purge_tenant: { Args: { p_tenant_id: string }; Returns: boolean }
+      remove_member: {
+        Args: { p_actor: string; p_org: string; p_user: string }
+        Returns: undefined
+      }
+      rename_organization: {
+        Args: { p_actor: string; p_name: string; p_org: string }
+        Returns: undefined
+      }
+      resend_invite: {
+        Args: { p_actor: string; p_invite: string; p_token_hash: string }
+        Returns: boolean
+      }
+      restore_tenant: { Args: { p_actor: string; p_tenant_id: string }; Returns: boolean }
+      set_member_brands: {
+        Args: {
+          p_actor: string
+          p_all_brands: boolean
+          p_org: string
+          p_tenant_ids: string[]
+          p_user: string
+        }
+        Returns: undefined
+      }
+      set_member_role: {
+        Args: { p_actor: string; p_org: string; p_role: string; p_user: string }
+        Returns: undefined
       }
       transition_account_items: {
         Args: {
@@ -1450,6 +1744,14 @@ export type Database = {
           previous_zernio_account_id: string
         }[]
       }
+      user_emails: {
+        Args: { p_ids: string[] }
+        Returns: {
+          email: string
+          id: string
+        }[]
+      }
+      user_id_by_email: { Args: { p_email: string }; Returns: string }
     }
     Enums: {
       [_ in never]: never
@@ -1468,25 +1770,21 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -1495,16 +1793,13 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
@@ -1520,16 +1815,13 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+    keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaTableNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
@@ -1545,16 +1837,13 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+    keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = DefaultSchemaEnumNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
@@ -1562,16 +1851,13 @@ export type Enums<
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
+    : never) = never,
+> = PublicCompositeTypeNameOrOptions extends { schema: keyof DatabaseWithoutInternals }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
     ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
@@ -1585,4 +1871,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

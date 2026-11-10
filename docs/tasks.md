@@ -231,6 +231,19 @@ Approved 2026-11-06 from the design v3 "Analytics" row (Overview, Posts, Audienc
 - [ ] **T52. Analytics: Waggle's work** (from Waggle's own tables: messages in, replies by Waggle vs you, time to first reply, leads, time saved at an estimated 2 minutes a reply, what came in, most asked topics, where Waggle needed you). No "won" count: leads have no outcome yet.
       _Status (2026-11-06):_ built to the approved design v3 "Analytics" artboards; "Answered by Waggle" = sent with `decided_by` null (same as the inbox's `by=auto`); most asked from `kb_entry_ids` on sent replies; reasons from audit-log escalations. Checked locally with `pnpm analytics:seed` (no Zernio calls). **Open:** real data after deploy.
 
+## Phase 8: Organizations and teams
+
+Decided and approved 2026-11-10 (access-model page + design v3 row "Organizations"). Plan and role matrix: `docs/orgs/PLAN.md`. Replaces T47's "one bill per brand": the organization owns the bill.
+
+- [ ] **T53. Organizations data model**: organizations, members (four roles, "only these brands"), invites by email; `tenants.organization_id`; `tenant_members` kept as the effective access list, rebuilt by one sync function; backfill one personal organization per existing owner.
+      _Done when:_ pgTAP covers RLS and every function (last owner, brand limits, invite expiry and email match), and an integration test shows a member limited to one brand never reads another brand's items.
+      _Status (2026-11-10):_ migrations `20261110120000_organizations` (+ `…120100` OAuth block). Direct inserts into `tenant_members` (seed, tests, scripts) become organization membership through a trigger, so old paths keep working; `create_brand` now adds to the personal organization. pgTAP `organizations.test.sql` (33), integration `organizations.test.ts` (4), all existing suites pass. Local backfill: every brand got its owner's personal organization. Not pushed.
+- [ ] **T54. Sign-up with a personal organization, and the Organization / Brand switcher**.
+- [ ] **T55. Roles enforced**: abilities matrix; every Server Action and write policy checks the role; UI hides what a role can't do; Settings split into Organization and Brand.
+- [ ] **T56. Team page and invites**: invite panel, invite email, join page for an email with no login, invite states.
+- [ ] **T57. Organization settings and pictures**: rename, picture, billing counts (Owner only), leave, close, only-owner rule; brand picture from a connected account, an upload or initials.
+- [ ] **T58. AI assistants by role**: MCP tools follow the member's role (viewer read only).
+
 ## Next (held, after Phase 6)
 
 From the same review, agreed 2026-11-05 to hold until Phase 6 is done:
