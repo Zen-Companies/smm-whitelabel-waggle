@@ -8,7 +8,7 @@ import {
 import type { SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
-import { logMailer, type Mailer } from "./mailer";
+import { logMailer, type Mailer } from "@/lib/email/mailer";
 
 // T19, job route side: while Zernio is paused, tell the operator once (never the owners), and
 // probe Zernio at most every 5 minutes; the first successful call ends the pause and sending

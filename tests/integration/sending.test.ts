@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { POST } from "@/app/api/webhooks/zernio/route";
 import { handlePlatformPause } from "@/features/alerts/platform";
-import type { Email, Mailer } from "@/features/alerts/mailer";
+import type { Email, Mailer } from "@/lib/email/mailer";
 import { approveDraft } from "@/features/approvals/decisions";
 import { createSendStep } from "@/features/approvals/send-step";
 import { processDueItems } from "@/features/inbox/processor";

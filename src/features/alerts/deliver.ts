@@ -3,7 +3,7 @@ import { writeAudit } from "@/lib/audit";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { composeAlert, type AlertContent } from "./compose";
-import type { Mailer } from "./mailer";
+import type { Mailer } from "@/lib/email/mailer";
 
 // Sends queued alerts (the `alerts` outbox, filled by DB triggers and the nudge sweep). Runs in
 // the job route; webhooks never send (rule 3). Each alert is one email to the tenant's owners.

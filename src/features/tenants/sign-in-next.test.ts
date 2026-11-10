@@ -10,3 +10,11 @@ it("sign-in goes back to a consent page only, else Settings", () => {
   expect(signInNext("/oauth/consent?authorization_id=a&x=//evil")).toBe("/settings");
   expect(signInNext(null)).toBe("/settings");
 });
+
+it("sign-in goes back to an invite link", () => {
+  expect(signInNext("/invite/abcdefghijklmnopqrstuvwxyz012345")).toBe(
+    "/invite/abcdefghijklmnopqrstuvwxyz012345",
+  );
+  expect(signInNext("/invite/short")).toBe("/settings");
+  expect(signInNext("/invite/abcdefghijklmnopqrstuvwxyz012345/../x")).toBe("/settings");
+});

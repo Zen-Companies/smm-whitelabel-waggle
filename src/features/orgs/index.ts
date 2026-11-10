@@ -17,3 +17,6 @@ export { createOrganization, switchOrg } from "./actions";
 export type { CreateOrgState } from "./actions";
 export { OrgMenu } from "./org-menu";
 export { CreateOrgForm } from "./create-org-form";
+export { TeamSection } from "./team-view";
+export { InviteView } from "./invite-view";
+export { respondToInvite } from "./join-actions";

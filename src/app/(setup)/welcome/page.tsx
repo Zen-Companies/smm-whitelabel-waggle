@@ -2,15 +2,38 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { buttonVariants } from "@/components/ui/button";
-import { can, ROLE_LABEL } from "@/features/orgs";
+import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
 import { AddBrandForm, getOpenOrg } from "@/features/tenants";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 
 export const metadata = { title: "Welcome" };
 
 function firstName(meta: Record<string, unknown> | undefined, email: string | undefined): string {
   const full = typeof meta?.full_name === "string" ? meta.full_name.trim() : "";
   return full.split(/\s+/)[0] || email?.split("@")[0] || "there";
+}
+
+/** Open invites to this login's email, with who sent them (T56, design OrgSignup). */
+async function loadInvites(userId: string) {
+  const db = getServiceClient();
+  const { data } = await db.rpc("invites_for_user", { p_user: userId });
+  return Promise.all(
+    (data ?? []).map(async (i) => {
+      const inviter = i.invited_by
+        ? (await db.auth.admin.getUserById(i.invited_by)).data.user
+        : null;
+      const full = inviter?.user_metadata?.full_name;
+      return {
+        id: i.invite_id,
+        orgName: i.organization_name,
+        role: isOrgRole(i.role) ? ROLE_LABEL[i.role] : "Member",
+        scope: i.all_brands ? "all brands" : `only ${i.brand_names.join(", ")}`,
+        inviter:
+          typeof full === "string" && full.trim() ? full.trim() : (inviter?.email ?? "Someone"),
+      };
+    }),
+  );
 }
 
 async function Content() {
@@ -25,6 +48,7 @@ async function Content() {
   if ((count ?? 0) > 0) redirect("/inbox");
 
   const mayAdd = can(org.role, "brands.add");
+  const invites = await loadInvites(user.id);
   return (
     <>
       <div className="flex flex-col gap-1.5">
@@ -43,6 +67,59 @@ async function Content() {
           )}
         </p>
       </div>
+
+      {invites.length > 0 && (
+        <section
+          aria-labelledby="invites-heading"
+          className="border-honey bg-honey-tint/60 flex flex-col gap-3 rounded-xl border p-5"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="invites-heading" className="text-base font-semibold">
+              {invites.length === 1 ? "An invite is" : `${invites.length} invites are`} waiting for
+              you
+            </h2>
+            <span className="text-honey-text text-xs">Sent to {user.email}</span>
+          </div>
+          {invites.map((i) => (
+            <div
+              key={i.id}
+              className="border-line bg-surface flex flex-wrap items-center gap-3 rounded-lg border p-3"
+            >
+              <span
+                aria-hidden
+                className="bg-honey-tint text-honey-text inline-flex size-9 shrink-0 items-center justify-center rounded-md text-xs font-bold"
+              >
+                {initialsOf(i.orgName)}
+              </span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <b className="font-semibold">{i.orgName}</b>
+                <span className="text-ink-2 text-sm">
+                  {i.inviter} invited you as {i.role} · {i.scope}
+                </span>
+              </span>
+              <form action={respondToInvite} className="flex gap-2">
+                <input type="hidden" name="inviteId" value={i.id} />
+                <button
+                  type="submit"
+                  name="intent"
+                  value="join"
+                  className={buttonVariants({ variant: "primary" })}
+                >
+                  Join
+                </button>
+                <button
+                  type="submit"
+                  name="intent"
+                  value="decline"
+                  className={buttonVariants({ variant: "secondary" })}
+                >
+                  Decline
+                </button>
+              </form>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section aria-labelledby="first-brand" className="card flex flex-col gap-4 p-5 md:p-6">
         <h2 id="first-brand" className="text-base font-semibold">

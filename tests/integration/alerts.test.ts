@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deliverPendingAlerts } from "@/features/alerts/deliver";
-import { logMailer, type Email, type Mailer } from "@/features/alerts/mailer";
+import { logMailer, type Email, type Mailer } from "@/lib/email/mailer";
 import { enqueueDraftNudges } from "@/features/alerts/nudges";
 import { escalateClosingDmWindows } from "@/features/approvals/sweeps";
 import { transitionItem } from "@/features/inbox/status";

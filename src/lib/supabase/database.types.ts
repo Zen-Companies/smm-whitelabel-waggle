@@ -1564,6 +1564,13 @@ export type Database = {
           status: string
         }[]
       }
+      accept_invite_by_id: {
+        Args: { p_invite: string; p_user: string }
+        Returns: {
+          organization_id: string
+          status: string
+        }[]
+      }
       ai_spend_since: {
         Args: { p_since: string; p_tenant_id?: string }
         Returns: {
@@ -1636,6 +1643,8 @@ export type Database = {
       }
       create_personal_org: { Args: { p_user: string }; Returns: string }
       decline_invite: { Args: { p_token_hash: string; p_user: string }; Returns: string }
+      decline_invite_by_id: { Args: { p_invite: string; p_user: string }; Returns: string }
+      email_has_login: { Args: { p_email: string }; Returns: boolean }
       enqueue_draft_nudges: { Args: { p_older_than: string }; Returns: number }
       invite_by_token: {
         Args: { p_token_hash: string }
@@ -1667,6 +1676,19 @@ export type Database = {
           status: string
         }[]
       }
+      invites_for_user: {
+        Args: { p_user: string }
+        Returns: {
+          all_brands: boolean
+          brand_names: string[]
+          expires_at: string
+          invite_id: string
+          invited_by: string
+          organization_id: string
+          organization_name: string
+          role: string
+        }[]
+      }
       leave_organization: { Args: { p_org: string; p_user: string }; Returns: undefined }
       match_kb_entries: {
         Args: { p_limit?: number; p_query_embedding: string; p_tenant_id: string }
@@ -1678,6 +1700,19 @@ export type Database = {
         }[]
       }
       offboard_tenant: { Args: { p_actor: string; p_tenant_id: string }; Returns: string }
+      organization_team: {
+        Args: { p_org: string }
+        Returns: {
+          all_brands: boolean
+          email: string
+          full_name: string
+          joined_at: string
+          last_sign_in_at: string
+          role: string
+          tenant_ids: string[]
+          user_id: string
+        }[]
+      }
       purge_tenant: { Args: { p_tenant_id: string }; Returns: boolean }
       remove_member: {
         Args: { p_actor: string; p_org: string; p_user: string }
