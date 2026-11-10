@@ -134,7 +134,8 @@ async function Content() {
             <AddBrandForm
               orgId={org.id}
               orgName={org.name}
-              cancelHref={null}
+              cancelHref="/orgs/settings?section=team"
+              cancelLabel="Skip for now"
               submitLabel="Add your first brand"
               autoFocus={false}
             />
@@ -145,14 +146,6 @@ async function Content() {
           </p>
         )}
       </section>
-
-      <p className="text-ink-2 text-sm">
-        Not ready to add a brand?{" "}
-        <Link href="/orgs/settings?section=team" className="text-ink font-medium">
-          Skip for now
-        </Link>{" "}
-        and set up your team first. You can add a brand any time from here.
-      </p>
 
       <div className="flex flex-col gap-2">
         <Link

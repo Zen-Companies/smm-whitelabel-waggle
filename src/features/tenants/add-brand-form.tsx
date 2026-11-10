@@ -15,12 +15,15 @@ export function AddBrandForm({
   orgId,
   orgName,
   cancelHref = "/inbox",
+  cancelLabel = "Cancel",
   submitLabel = "Add brand",
   autoFocus = true,
 }: {
   orgId: string;
   orgName: string;
   cancelHref?: string | null;
+  /** /welcome: "Skip for now", an underlined link beside the button. */
+  cancelLabel?: string;
   submitLabel?: string;
   autoFocus?: boolean;
 }) {
@@ -74,8 +77,14 @@ export function AddBrandForm({
           {pending ? "Adding…" : submitLabel}
         </Button>
         {cancelHref && (
-          <Link href={cancelHref} className={buttonVariants({ variant: "quiet" })}>
-            Cancel
+          <Link
+            href={cancelHref}
+            className={buttonVariants({
+              variant: "quiet",
+              className: cancelLabel === "Cancel" ? undefined : "underline underline-offset-4",
+            })}
+          >
+            {cancelLabel}
           </Link>
         )}
       </div>
