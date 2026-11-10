@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* The marketing site is its own app; keep its classes out of this bundle. */
+@source not "../../landing";
+
 /* Design system: docs/design.md (Waggle Paper, v3). Components use these tokens, never raw hex. */
 
 @theme inline {

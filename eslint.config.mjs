@@ -19,6 +19,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The marketing site is its own app with its own config.
+    "landing/**",
   ]),
 ]);
 
