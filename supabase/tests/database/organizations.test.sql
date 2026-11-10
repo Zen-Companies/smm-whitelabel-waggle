@@ -3,7 +3,7 @@
 -- admins, and RLS on the new tables. Rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(33);
+select plan(34);
 
 insert into auth.users (id, email, raw_user_meta_data) values
   ('a0000000-0000-4000-8000-000000000001', 'ana@test.local', '{"full_name": "Ana Reyes"}'),
@@ -143,6 +143,12 @@ reset role;
 -- Closing offboards every brand
 select is(public.close_organization((select v from ids where k = 'org'), 'a0000000-0000-4000-8000-000000000001'),
   4, 'closing offboards the open brands');
+
+select throws_ok(
+  $$ select public.close_organization(
+       (select id from public.organizations where personal_of = 'a0000000-0000-4000-8000-000000000001'),
+       'a0000000-0000-4000-8000-000000000001') $$,
+  'P0001', 'personal', 'a personal organization can''t be closed');
 
 select * from finish();
 rollback;

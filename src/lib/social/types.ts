@@ -87,6 +87,12 @@ export interface ProviderUsage {
   byProfile: { profileId: string; totalUsd: number }[];
 }
 
+/** A connected account's picture on its platform (T57). The link may expire: copy it. */
+export interface AccountPicture {
+  accountId: string;
+  pictureUrl: string | null;
+}
+
 export interface AccountHealth {
   accountId: string;
   platform: string;
@@ -232,6 +238,11 @@ export interface SocialProvider {
     } & CallOptions,
   ): Promise<ProviderCommentReply[]>;
   getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
+  /**
+   * T57: each connected account's profile picture (`GET /v1/accounts?profileId=`,
+   * `SocialAccount.profilePicture`, null when the platform gives none).
+   */
+  listAccountPictures(input: { profileId: string }): Promise<AccountPicture[]>;
   /**
    * Offboarding (T21): removes an account from Zernio (`DELETE /v1/accounts/{accountId}`; a
    * 1-hour grace period keeps it restorable on Zernio's side). An account already gone (404)

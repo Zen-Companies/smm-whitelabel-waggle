@@ -24,16 +24,26 @@ const ROLE: Record<OrgSummary["role"], string> = {
   viewer: "Viewer",
 };
 
-/** A brand's avatar: its initials on a tinted square (design v3 "Brands"). */
+/** A brand's avatar (T57): its picture, else its initials, on a circle (brands are circles). */
 export function BrandAvatar({ brand, size = 32 }: { brand: BrandSummary; size?: 26 | 28 | 32 }) {
+  const dim =
+    size === 32 ? "size-8 text-xs" : size === 28 ? "size-7 text-[11px]" : "size-[26px] text-[11px]";
+  if (brand.pictureUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- our own storage, 512 px squares
+      <img
+        src={brand.pictureUrl}
+        alt=""
+        className={cn("shrink-0 rounded-full object-cover", dim)}
+      />
+    );
+  }
   return (
     <span
       aria-hidden
       className={cn(
-        "inline-flex shrink-0 items-center justify-center font-bold",
-        size === 32 ? "size-8 rounded-md text-xs" : "rounded-[6px] text-[11px]",
-        size === 26 && "size-[26px]",
-        size === 28 && "size-7",
+        "inline-flex shrink-0 items-center justify-center rounded-full font-bold",
+        dim,
         TINT[brand.tint],
       )}
     >
@@ -42,17 +52,24 @@ export function BrandAvatar({ brand, size = 32 }: { brand: BrandSummary; size?: 
   );
 }
 
-/** An organization's avatar: rounded square, initials until it has a picture (T57). */
-export function OrgAvatar({ name, size = 32 }: { name: string; size?: 26 | 32 }) {
+/** An organization's avatar (T57): its picture, else initials, on a rounded square. */
+export function OrgAvatar({ org, size = 32 }: { org: OrgSummary; size?: 26 | 32 }) {
+  const dim = size === 26 ? "size-[26px] rounded-[6px] text-[11px]" : "size-8 rounded-md text-xs";
+  if (org.pictureUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- our own storage, 512 px squares
+      <img src={org.pictureUrl} alt="" className={cn("shrink-0 object-cover", dim)} />
+    );
+  }
   return (
     <span
       aria-hidden
       className={cn(
         "bg-subtle text-ink-2 inline-flex shrink-0 items-center justify-center font-bold",
-        size === 26 ? "size-[26px] rounded-[6px] text-[11px]" : "size-8 rounded-md text-xs",
+        dim,
       )}
     >
-      {initialsOf(name)}
+      {initialsOf(org.name)}
     </span>
   );
 }
@@ -145,7 +162,8 @@ export function BrandMenu({
         disabled={pending}
         className="border-line-strong bg-surface hover:bg-subtle data-[popup-open]:bg-subtle inline-flex min-h-10 max-w-[22rem] items-center gap-2 rounded-md border py-1 pr-2.5 pl-1.5 text-sm transition-colors duration-150 disabled:opacity-60"
       >
-        <BrandAvatar brand={current} size={26} />
+        {currentOrg && !simple && <OrgAvatar org={currentOrg} size={26} />}
+        {(!currentOrg || simple) && <BrandAvatar brand={current} size={26} />}
         {currentOrg && !simple && (
           <>
             <span className="text-ink-3 hidden max-w-36 truncate sm:inline">{currentOrg.name}</span>
@@ -154,6 +172,7 @@ export function BrandMenu({
             </span>
           </>
         )}
+        {currentOrg && !simple && <BrandAvatar brand={current} size={26} />}
         <span className="truncate font-semibold">{current.name}</span>
         <span className="relative inline-flex">
           <ChevronDown className="text-ink-2 size-3.5" strokeWidth={2} aria-hidden />
@@ -184,7 +203,7 @@ export function BrandMenu({
                       aria-current={org.id === currentOrgId || undefined}
                       className={cn(ITEM, isViewed && "bg-subtle")}
                     >
-                      <OrgAvatar name={org.name} />
+                      <OrgAvatar org={org} />
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="truncate font-semibold">{org.name}</span>
                         <span className="text-ink-3 truncate text-xs">

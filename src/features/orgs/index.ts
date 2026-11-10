@@ -20,3 +20,4 @@ export { CreateOrgForm } from "./create-org-form";
 export { TeamSection } from "./team-view";
 export { InviteView } from "./invite-view";
 export { respondToInvite } from "./join-actions";
+export { OrgBillingSection, OrgGeneralSection } from "./org-settings-view";

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
   AccountHealth,
+  AccountPicture,
   CreatePostInput,
   ProviderComment,
   ProviderCommentReply,
@@ -275,6 +276,11 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   async getAccountsHealth(): Promise<AccountHealth[]> {
+    return [];
+  }
+
+  /** No pictures in mock mode: brands show initials. */
+  async listAccountPictures(): Promise<AccountPicture[]> {
     return [];
   }
 

@@ -541,6 +541,25 @@ describe("ZernioSocialProvider", () => {
     expect(captured[0].url.searchParams.get("profileId")).toBe("prof_1");
   });
 
+  it("listAccountPictures reads profilePicture per account (null when missing)", async () => {
+    respond = () =>
+      json({
+        hasAnalyticsAccess: false,
+        accounts: [
+          { _id: "acc_1", platform: "instagram", profilePicture: "https://cdn.example.com/p.jpg" },
+          { _id: "acc_2", platform: "facebook", profilePicture: null },
+          { _id: "acc_3", platform: "facebook" },
+        ],
+      });
+    await expect(provider.listAccountPictures({ profileId: "prof_1" })).resolves.toEqual([
+      { accountId: "acc_1", pictureUrl: "https://cdn.example.com/p.jpg" },
+      { accountId: "acc_2", pictureUrl: null },
+      { accountId: "acc_3", pictureUrl: null },
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts");
+    expect(captured[0].url.searchParams.get("profileId")).toBe("prof_1");
+  });
+
   describe("errors", () => {
     const send = () =>
       provider.sendDm({

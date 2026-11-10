@@ -4,15 +4,19 @@ import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
 import { AutonomyCard } from "@/features/approvals";
 import { AssistantsCard } from "@/features/mcp";
-import { listMyOrgs, TeamSection } from "@/features/orgs";
+import { listMyOrgs, OrgBillingSection, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { BusinessSettings, getCurrentTenant } from "@/features/tenants";
 import { cn } from "cn";
 
 export const metadata = { title: "Settings" };
 
 // Design v2: sections, not one long scroll. T54–T57 (design v3 "Organizations"): two groups,
-// the organization's (team, and later general and billing) and the open brand's.
-const ORG_SECTIONS = [{ key: "team", label: "Team" }] as const;
+// the organization's (general, team, billing) and the open brand's.
+const ORG_SECTIONS = [
+  { key: "general", label: "General" },
+  { key: "team", label: "Team" },
+  { key: "billing", label: "Billing" },
+] as const;
 const BRAND_SECTIONS = [
   { key: "accounts", label: "Accounts" },
   { key: "replies", label: "Replies" },
@@ -72,7 +76,9 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         ))}
       </nav>
       <div className="min-w-0 flex-1">
+        {section === "general" && <OrgGeneralSection orgId={tenant.organizationId} />}
         {section === "team" && <TeamSection orgId={tenant.organizationId} />}
+        {section === "billing" && <OrgBillingSection orgId={tenant.organizationId} />}
         {section === "accounts" && <AccountsCard searchParams={searchParams} />}
         {section === "replies" && <AutonomyCard />}
         {section === "notifications" && <NotificationSettings />}

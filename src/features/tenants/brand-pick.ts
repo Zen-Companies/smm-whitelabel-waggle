@@ -19,8 +19,7 @@ export function pickBrand<T extends { id: string }>(
 }
 
 export type OpenBrand<T> =
-  | { brand: T; emptyOrgId?: undefined }
-  | { brand: null; emptyOrgId: string | null };
+  { brand: T; emptyOrgId?: undefined } | { brand: null; emptyOrgId: string | null };
 
 /**
  * The open brand when the user belongs to organizations (T54). The organization cookie, if it is

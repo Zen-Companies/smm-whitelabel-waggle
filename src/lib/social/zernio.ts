@@ -12,6 +12,7 @@ import {
 import {
   SocialProviderError,
   type AccountHealth,
+  type AccountPicture,
   type CreatePostInput,
   type ProviderCommentReply,
   type ProviderMessage,
@@ -111,6 +112,15 @@ const healthSchema = z.object({
       needsReconnect: z.boolean().optional(),
       canPost: z.boolean().optional(),
       issues: z.array(z.string()).optional(),
+    }),
+  ),
+});
+
+const accountPicturesSchema = z.object({
+  accounts: z.array(
+    z.object({
+      _id: z.string().min(1),
+      profilePicture: z.string().url().nullish(),
     }),
   ),
 });
@@ -770,6 +780,18 @@ export class ZernioSocialProvider implements SocialProvider {
         needsReconnect: a.needsReconnect ?? false,
         canPost: a.canPost ?? false,
         issues: a.issues ?? [],
+      }));
+    });
+  }
+
+  async listAccountPictures(input: { profileId: string }): Promise<AccountPicture[]> {
+    return call("listAccountPictures", async (withFetch) => {
+      const { data } = await this.zernio.accounts.listAccounts(
+        withFetch({ query: { profileId: input.profileId } }),
+      );
+      return parse(accountPicturesSchema, data, "listAccountPictures").accounts.map((a) => ({
+        accountId: a._id,
+        pictureUrl: a.profilePicture ?? null,
       }));
     });
   }

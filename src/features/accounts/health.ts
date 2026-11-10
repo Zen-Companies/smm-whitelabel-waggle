@@ -6,6 +6,7 @@ import { isSocialPlatform, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { handleAccountConnected, handleAccountDisconnected } from "./events";
+import { syncAccountPictures } from "./pictures";
 
 // T16 (docs/tdd.md §7.2): an hourly check with Zernio's account health endpoint catches a
 // disconnect whose webhook never arrived, and a comment backfill fills the inbox after a
@@ -88,6 +89,16 @@ export async function checkAccountsHealth(
         });
         summary.recovered += 1;
       }
+    }
+    // T57: keep copies of the accounts' pictures (a brand can use one as its picture).
+    try {
+      await syncAccountPictures(
+        deps,
+        { id: tenant.id, zernioProfileId: tenant.zernio_profile_id! },
+        now,
+      );
+    } catch (err) {
+      Sentry.captureException(err, { extra: { tenantId: tenant.id } });
     }
   }
   return summary;

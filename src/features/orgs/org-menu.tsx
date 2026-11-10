@@ -13,16 +13,21 @@ import type { OrgSummary } from "./org-pick";
 const ITEM =
   "data-[highlighted]:bg-subtle flex min-h-11 cursor-default items-center gap-2.5 rounded-lg p-2.5 outline-none";
 
-function Avatar({ name, size }: { name: string; size: 26 | 32 }) {
+function Avatar({ org, size }: { org: OrgSummary; size: 26 | 32 }) {
+  const dim = size === 26 ? "size-[26px] rounded-[6px] text-[11px]" : "size-8 rounded-md text-xs";
+  if (org.pictureUrl) {
+    // eslint-disable-next-line @next/next/no-img-element -- our own storage, 512 px squares
+    return <img src={org.pictureUrl} alt="" className={cn("shrink-0 object-cover", dim)} />;
+  }
   return (
     <span
       aria-hidden
       className={cn(
         "bg-subtle text-ink-2 inline-flex shrink-0 items-center justify-center font-bold",
-        size === 26 ? "size-[26px] rounded-[6px] text-[11px]" : "size-8 rounded-md text-xs",
+        dim,
       )}
     >
-      {initialsOf(name)}
+      {initialsOf(org.name)}
     </span>
   );
 }
@@ -49,7 +54,7 @@ export function OrgMenu({ orgs, currentId }: { orgs: OrgSummary[]; currentId: st
         disabled={pending}
         className="border-line-strong bg-surface hover:bg-subtle data-[popup-open]:bg-subtle inline-flex min-h-10 max-w-72 items-center gap-2 rounded-md border py-1 pr-2.5 pl-1.5 text-sm transition-colors duration-150 disabled:opacity-60"
       >
-        <Avatar name={current.name} size={26} />
+        <Avatar org={current} size={26} />
         <span className="truncate font-semibold">{current.name}</span>
         <ChevronDown className="text-ink-2 size-3.5" strokeWidth={2} aria-hidden />
       </Menu.Trigger>
@@ -67,7 +72,7 @@ export function OrgMenu({ orgs, currentId }: { orgs: OrgSummary[]; currentId: st
                   aria-current={org.id === current.id || undefined}
                   className={cn(ITEM, org.id === current.id && "bg-subtle")}
                 >
-                  <Avatar name={org.name} size={32} />
+                  <Avatar org={org} size={32} />
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-semibold">{org.name}</span>
                     <span className="text-ink-3 text-xs">{ROLE_LABEL[org.role]}</span>

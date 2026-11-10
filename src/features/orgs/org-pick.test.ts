@@ -7,6 +7,7 @@ const org = (id: string, personal = false): OrgSummary => ({
   personal,
   role: "owner",
   allBrands: true,
+  pictureUrl: null,
 });
 
 describe("chooseOpenOrg", () => {

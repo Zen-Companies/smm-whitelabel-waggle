@@ -1314,6 +1314,9 @@ export type Database = {
           backfill_from: string | null
           created_at: string
           id: string
+          picture_checked_at: string | null
+          picture_path: string | null
+          picture_url: string | null
           platform: string
           released_at: string | null
           reviews_polled_at: string | null
@@ -1327,6 +1330,9 @@ export type Database = {
           backfill_from?: string | null
           created_at?: string
           id?: string
+          picture_checked_at?: string | null
+          picture_path?: string | null
+          picture_url?: string | null
           platform: string
           released_at?: string | null
           reviews_polled_at?: string | null
@@ -1339,6 +1345,9 @@ export type Database = {
           backfill_from?: string | null
           created_at?: string
           id?: string
+          picture_checked_at?: string | null
+          picture_path?: string | null
+          picture_url?: string | null
           platform?: string
           released_at?: string | null
           reviews_polled_at?: string | null
@@ -1448,6 +1457,9 @@ export type Database = {
           offboarded_at: string | null
           offboarded_by: string | null
           organization_id: string | null
+          picture_account_id: string | null
+          picture_path: string | null
+          picture_source: string
           purge_after: string | null
           purge_tried_at: string | null
           purged_at: string | null
@@ -1476,6 +1488,9 @@ export type Database = {
           offboarded_at?: string | null
           offboarded_by?: string | null
           organization_id?: string | null
+          picture_account_id?: string | null
+          picture_path?: string | null
+          picture_source?: string
           purge_after?: string | null
           purge_tried_at?: string | null
           purged_at?: string | null
@@ -1503,6 +1518,9 @@ export type Database = {
           offboarded_at?: string | null
           offboarded_by?: string | null
           organization_id?: string | null
+          picture_account_id?: string | null
+          picture_path?: string | null
+          picture_source?: string
           purge_after?: string | null
           purge_tried_at?: string | null
           purged_at?: string | null

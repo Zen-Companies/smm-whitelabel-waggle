@@ -36,7 +36,10 @@ describe("pickOpenBrand", () => {
     expect(pickOpenBrand(brands, orgs, "b", "someone-elses")).toEqual({ brand: brands[1] });
   });
   it("is empty with no brands at all", () => {
-    expect(pickOpenBrand([], orgs, undefined, undefined)).toEqual({ brand: null, emptyOrgId: null });
+    expect(pickOpenBrand([], orgs, undefined, undefined)).toEqual({
+      brand: null,
+      emptyOrgId: null,
+    });
   });
 });
 

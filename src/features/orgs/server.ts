@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { cache } from "react";
+import { pictureUrl } from "@/lib/pictures";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { isOrgRole } from "./abilities";
@@ -17,7 +18,7 @@ export const listMyOrgs = cache(async (): Promise<OrgSummary[]> => {
   const supabase = await createServerSupabase();
   const { data } = await supabase
     .from("organization_members")
-    .select("role, all_brands, organizations (id, name, personal_of, created_at)")
+    .select("role, all_brands, organizations (id, name, personal_of, created_at, picture_path)")
     .eq("user_id", user.id);
   return (data ?? [])
     .flatMap((m) => {
@@ -30,6 +31,7 @@ export const listMyOrgs = cache(async (): Promise<OrgSummary[]> => {
           personal: o.personal_of === user.id,
           role: m.role,
           allBrands: m.all_brands,
+          pictureUrl: pictureUrl(o.picture_path),
           createdAt: o.created_at,
         },
       ];
@@ -43,6 +45,7 @@ export const listMyOrgs = cache(async (): Promise<OrgSummary[]> => {
       personal: org.personal,
       role: org.role,
       allBrands: org.allBrands,
+      pictureUrl: org.pictureUrl,
     }));
 });
 

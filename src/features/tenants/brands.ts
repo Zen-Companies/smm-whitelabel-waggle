@@ -7,7 +7,9 @@ import {
   setOrgCookie,
   type OrgSummary,
 } from "@/features/orgs";
+import { pictureUrl } from "@/lib/pictures";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { brandPicturePath } from "./brand-picture";
 import {
   BRAND_COOKIE,
   BRAND_COOKIE_MAX_AGE,
@@ -21,6 +23,8 @@ export interface BrandSummary {
   id: string;
   name: string;
   organizationId: string | null;
+  /** T57: the brand's picture (account copy or upload), else null for initials. */
+  pictureUrl: string | null;
   initials: string;
   tint: (typeof BRAND_TINTS)[number];
   accounts: { platform: string; username: string | null }[];
@@ -36,7 +40,9 @@ export async function listBrands(needsYouStatuses: readonly string[]): Promise<B
   const supabase = await createServerSupabase();
   const { data } = await supabase
     .from("tenants")
-    .select("id, name, organization_id, social_accounts(platform, username, status)")
+    .select(
+      "id, name, organization_id, picture_source, picture_path, picture_account_id, social_accounts(id, platform, username, status, picture_path)",
+    )
     .order("created_at")
     .order("id");
   const tenants = data ?? [];
@@ -54,6 +60,7 @@ export async function listBrands(needsYouStatuses: readonly string[]): Promise<B
     id: t.id,
     name: t.name,
     organizationId: t.organization_id,
+    pictureUrl: pictureUrl(brandPicturePath(t, t.social_accounts ?? [])),
     initials: brandInitials(t.name),
     tint: brandTint(t.id),
     accounts: (t.social_accounts ?? [])

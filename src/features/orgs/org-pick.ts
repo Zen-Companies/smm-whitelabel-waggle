@@ -11,6 +11,8 @@ export interface OrgSummary {
   role: OrgRole;
   /** false: the user sees only some of its brands ("only these brands"). */
   allBrands: boolean;
+  /** T57: the organization's picture, else null for initials. */
+  pictureUrl: string | null;
 }
 
 /**
