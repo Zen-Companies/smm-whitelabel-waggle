@@ -7,15 +7,15 @@ import { getSocialProvider } from "@/lib/social";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { BRAND_NAME_MAX, sectionPath } from "./brand-pick";
-import { isUsersBrand, setBrandCookie } from "./brands";
+import { can, listMyOrgs } from "@/features/orgs";
+import { getOpenOrg, openBrand } from "./brands";
 import { ensureZernioProfile } from "./setup";
 
 /** Brand menu (T47): open another brand on the same section of the app. */
 export async function switchBrand(formData: FormData): Promise<void> {
   const tenantId = z.uuid().safeParse(formData.get("tenantId"));
   const back = sectionPath(String(formData.get("returnTo") ?? ""));
-  if (!tenantId.success || !(await isUsersBrand(tenantId.data))) redirect(back);
-  await setBrandCookie(tenantId.data);
+  if (tenantId.success) await openBrand(tenantId.data);
   redirect(back);
 }
 
@@ -28,8 +28,8 @@ const nameSchema = z
   .max(BRAND_NAME_MAX, `Keep the name under ${BRAND_NAME_MAX} characters.`);
 
 /**
- * Add a brand (T47): a new tenant owned by the user, with its own Zernio profile, then open it.
- * The same name as one of the user's brands is refused in place (design v3 "Brands").
+ * Add a brand (T47, T54): a new tenant in the open organization (owners and admins), with its
+ * own Zernio profile, then open it. The same name as a brand there is refused in place.
  */
 export async function addBrand(_prev: AddBrandState, formData: FormData): Promise<AddBrandState> {
   const raw = String(formData.get("name") ?? "");
@@ -37,9 +37,27 @@ export async function addBrand(_prev: AddBrandState, formData: FormData): Promis
   if (!parsed.success) return { error: parsed.error.issues[0].message, name: raw };
   const name = parsed.data;
 
-  const user = await getCurrentUser();
+  // The organization named by the form (switcher, /welcome), if it is one of the user's; else
+  // the open one.
+  const formOrg = z.uuid().safeParse(formData.get("orgId"));
+  const [user, org] = await Promise.all([
+    getCurrentUser(),
+    formOrg.success
+      ? listMyOrgs().then((orgs) => orgs.find((o) => o.id === formOrg.data) ?? null)
+      : getOpenOrg(),
+  ]);
+  if (!org || !can(org.role, "brands.add")) {
+    return {
+      error: `Only Owners and Admins of ${org?.name ?? "this organization"} can add brands.`,
+      name: raw,
+    };
+  }
   const db = getServiceClient();
-  const { data, error } = await db.rpc("create_brand", { p_user_id: user.id, p_name: name });
+  const { data, error } = await db.rpc("create_brand_in_org", {
+    p_org: org.id,
+    p_actor: user.id,
+    p_name: name,
+  });
   if (error || !data?.[0]) {
     Sentry.captureException(error ?? new Error("create_brand returned nothing"));
     return { error: "Couldn't add the brand. Try again in a moment.", name: raw };
@@ -52,7 +70,7 @@ export async function addBrand(_prev: AddBrandState, formData: FormData): Promis
       .eq("id", tenantId)
       .maybeSingle();
     return {
-      error: `You already have a brand called ${existing?.name ?? name}. Pick it from the brand menu, or use a different name.`,
+      error: `${org.name} already has a brand called ${existing?.name ?? name}. Pick it from the brand menu, or use a different name.`,
       name: raw,
     };
   }
@@ -63,6 +81,6 @@ export async function addBrand(_prev: AddBrandState, formData: FormData): Promis
   } catch (e) {
     Sentry.captureException(e, { extra: { tenantId } });
   }
-  await setBrandCookie(tenantId);
+  await openBrand(tenantId);
   redirect("/inbox");
 }

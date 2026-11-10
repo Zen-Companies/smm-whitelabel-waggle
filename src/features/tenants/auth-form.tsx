@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
+import { PASSWORD_MIN } from "./password";
 
 export function AuthForm({ mode, next }: { mode: "signup" | "login"; next?: string }) {
   const [state, formAction, pending] = useActionState<AuthFormState, FormData>(
@@ -16,10 +17,10 @@ export function AuthForm({ mode, next }: { mode: "signup" | "login"; next?: stri
   return (
     <div className="card w-full max-w-md p-6 md:p-8">
       <div className="mb-6 flex flex-col gap-2">
-        <h1 className="display-title">{isSignup ? "Set up Waggle" : "Welcome back"}</h1>
+        <h1 className="display-title">{isSignup ? "Create your Waggle login" : "Welcome back"}</h1>
         <p className="text-ink-2">
           {isSignup
-            ? "It answers your Instagram and Facebook messages from your business info, and checks with you first."
+            ? "Just you for now. You'll add your business, or join a team, next."
             : "Sign in to see what's waiting for you."}
         </p>
       </div>
@@ -27,10 +28,10 @@ export function AuthForm({ mode, next }: { mode: "signup" | "login"; next?: stri
         {next && <input type="hidden" name="next" value={next} />}
         {isSignup && (
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="businessName" className="text-sm font-medium">
-              Business name
+            <label htmlFor="fullName" className="text-sm font-medium">
+              Your name
             </label>
-            <Input id="businessName" name="businessName" required maxLength={100} />
+            <Input id="fullName" name="fullName" autoComplete="name" required maxLength={100} />
           </div>
         )}
         <div className="flex flex-col gap-1.5">
@@ -48,10 +49,16 @@ export function AuthForm({ mode, next }: { mode: "signup" | "login"; next?: stri
             name="password"
             type="password"
             autoComplete={isSignup ? "new-password" : "current-password"}
-            minLength={isSignup ? 8 : undefined}
+            minLength={isSignup ? PASSWORD_MIN : undefined}
             aria-invalid={state.error ? true : undefined}
+            aria-describedby={isSignup ? "password-hint" : undefined}
             required
           />
+          {isSignup && (
+            <p id="password-hint" className="text-ink-3 text-xs">
+              At least {PASSWORD_MIN} characters.
+            </p>
+          )}
           {state.error && (
             <p role="alert" className="text-danger text-sm">
               {state.error}
@@ -64,7 +71,7 @@ export function AuthForm({ mode, next }: { mode: "signup" | "login"; next?: stri
           </p>
         )}
         <Button type="submit" variant="primary" disabled={pending} className="w-full">
-          {pending ? "Please wait…" : isSignup ? "Create account" : "Sign in"}
+          {pending ? "Please wait…" : isSignup ? "Create login" : "Sign in"}
         </Button>
         <p className="text-ink-2 text-center text-sm">
           {isSignup ? (

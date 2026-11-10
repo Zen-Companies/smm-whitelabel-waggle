@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { brandInitials, brandTint, pickBrand, sectionPath } from "./brand-pick";
+import { brandInitials, brandTint, pickBrand, pickOpenBrand, sectionPath } from "./brand-pick";
 
 describe("pickBrand", () => {
   const brands = [{ id: "a" }, { id: "b" }];
@@ -12,6 +12,31 @@ describe("pickBrand", () => {
   });
   it("is null with no brands", () => {
     expect(pickBrand([], "a")).toBeNull();
+  });
+});
+
+describe("pickOpenBrand", () => {
+  const brands = [
+    { id: "a", organization_id: "o1" },
+    { id: "b", organization_id: "o1" },
+    { id: "c", organization_id: "o2" },
+  ];
+  const orgs = ["o1", "o2", "o3"];
+  it("keeps the brand cookie without an organization cookie", () => {
+    expect(pickOpenBrand(brands, orgs, "c", undefined)).toEqual({ brand: brands[2] });
+  });
+  it("narrows to the open organization", () => {
+    expect(pickOpenBrand(brands, orgs, "a", "o2")).toEqual({ brand: brands[2] });
+    expect(pickOpenBrand(brands, orgs, "b", "o1")).toEqual({ brand: brands[1] });
+  });
+  it("opens an organization with no brands empty", () => {
+    expect(pickOpenBrand(brands, orgs, "a", "o3")).toEqual({ brand: null, emptyOrgId: "o3" });
+  });
+  it("ignores an organization the user isn't in", () => {
+    expect(pickOpenBrand(brands, orgs, "b", "someone-elses")).toEqual({ brand: brands[1] });
+  });
+  it("is empty with no brands at all", () => {
+    expect(pickOpenBrand([], orgs, undefined, undefined)).toEqual({ brand: null, emptyOrgId: null });
   });
 });
 

@@ -8,13 +8,26 @@ import { addBrand, type AddBrandState } from "./brand-actions";
 import { BRAND_NAME_MAX } from "./brand-pick";
 
 /**
- * Add a brand (T47, design v3 "Brands"): the name, then Waggle opens the new brand. A name the
- * user already has is refused under the field; no toasts (design.md §4).
+ * Add a brand (T47, T54): the name, then Waggle opens the new brand. It goes into `orgId`'s
+ * organization. A name already used there is refused under the field; no toasts (design.md §4).
  */
-export function AddBrandForm() {
+export function AddBrandForm({
+  orgId,
+  orgName,
+  cancelHref = "/inbox",
+  submitLabel = "Add brand",
+  autoFocus = true,
+}: {
+  orgId: string;
+  orgName: string;
+  cancelHref?: string | null;
+  submitLabel?: string;
+  autoFocus?: boolean;
+}) {
   const [state, action, pending] = useActionState<AddBrandState, FormData>(addBrand, {});
   return (
     <form action={action} className="flex flex-col gap-5">
+      <input type="hidden" name="orgId" value={orgId} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="brand-name" className="font-semibold">
           Brand name
@@ -27,7 +40,7 @@ export function AddBrandForm() {
           required
           maxLength={BRAND_NAME_MAX}
           autoComplete="organization"
-          autoFocus
+          autoFocus={autoFocus}
           aria-invalid={state.error ? true : undefined}
           aria-describedby={state.error ? "brand-name-error brand-name-hint" : "brand-name-hint"}
           className="field"
@@ -49,21 +62,22 @@ export function AddBrandForm() {
           aria-hidden
         />
         <span className="flex flex-col gap-0.5">
-          <b className="font-semibold">Billed on its own</b>
+          <b className="font-semibold">On {orgName}&apos;s bill</b>
           <span className="text-ink-2">
-            Each brand has its own plan and its own bill. You&apos;ll choose a plan for it after you
-            connect its first account.
+            One bill covers all of {orgName}&apos;s brands. Its Owner manages it.
           </span>
         </span>
       </div>
 
       <div className="flex items-center gap-2">
         <Button type="submit" variant="primary" disabled={pending} data-busy={pending || undefined}>
-          {pending ? "Adding…" : "Add brand"}
+          {pending ? "Adding…" : submitLabel}
         </Button>
-        <Link href="/inbox" className={buttonVariants({ variant: "quiet" })}>
-          Cancel
-        </Link>
+        {cancelHref && (
+          <Link href={cancelHref} className={buttonVariants({ variant: "quiet" })}>
+            Cancel
+          </Link>
+        )}
       </div>
     </form>
   );

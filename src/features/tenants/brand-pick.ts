@@ -18,6 +18,28 @@ export function pickBrand<T extends { id: string }>(
   return brands.find((b) => b.id === cookieValue) ?? brands[0] ?? null;
 }
 
+export type OpenBrand<T> =
+  | { brand: T; emptyOrgId?: undefined }
+  | { brand: null; emptyOrgId: string | null };
+
+/**
+ * The open brand when the user belongs to organizations (T54). The organization cookie, if it is
+ * one of the user's, narrows the choice to that organization's brands; an organization with none
+ * of the user's brands opens empty (the caller sends them to "Add your first brand"). Otherwise
+ * the brand cookie decides, as before.
+ */
+export function pickOpenBrand<T extends { id: string; organization_id: string | null }>(
+  brands: readonly T[],
+  memberOrgIds: readonly string[],
+  brandCookie: string | undefined,
+  orgCookie: string | undefined,
+): OpenBrand<T> {
+  const org = orgCookie && memberOrgIds.includes(orgCookie) ? orgCookie : null;
+  const candidates = org ? brands.filter((b) => b.organization_id === org) : brands;
+  const brand = pickBrand(candidates, brandCookie);
+  return brand ? { brand } : { brand: null, emptyOrgId: org };
+}
+
 /**
  * Where to land after switching brand: the same section of the app ("/posts/abc" → "/posts"),
  * because a page for one brand's item, post or entry doesn't exist in the other. Anything that

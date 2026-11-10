@@ -3,8 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { setupTenantForUser } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 
-// Target of the signup confirmation email (emailRedirectTo). Verifies the link, then finishes
-// tenant setup in case the signup request didn't.
+// Target of the signup confirmation email (emailRedirectTo). Verifies the link, then makes the
+// personal organization in case the signup request didn't (T54).
 //
 // Redirects go to the address the link was opened on. Behind a tunnel (ngrok) the dev server sees
 // itself as https://localhost:3000, so request.url would send the browser to a dead address; the
@@ -27,5 +27,5 @@ export async function GET(request: NextRequest) {
   if (error || !data.user) return fail;
 
   await setupTenantForUser(data.user);
-  return NextResponse.redirect(siteUrl(request, "/settings"));
+  return NextResponse.redirect(siteUrl(request, "/welcome"));
 }
