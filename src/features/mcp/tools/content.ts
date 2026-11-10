@@ -146,6 +146,7 @@ export const createPostTool = defineTool({
   description:
     "Publishes a text post now, or schedules it (at least 5 minutes ahead), on one or more of the brand's connected accounts (account_id from list_brands). Only post wording the user approved; never invent prices, offers or promises. Images aren't supported here yet: the owner can add them in Waggle.",
   access: "act",
+  ability: "posts.write",
   annotations: PUBLIC_ACTION,
   wraps: "publishing.createPost",
   input: z.object({
@@ -199,6 +200,7 @@ export const cancelPostTool = defineTool({
   description:
     "Cancels a post that is scheduled or queued (post_id from list_posts). Published posts can't be cancelled.",
   access: "act",
+  ability: "posts.write",
   annotations: { ...PUBLIC_ACTION, destructiveHint: true, idempotentHint: true },
   wraps: "publishing.cancelScheduledPost",
   input: z.object({ brand_id: brandId, post_id: z.uuid() }),

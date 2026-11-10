@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Ability } from "@/features/orgs";
 import { ToolError, type ToolContext } from "../context";
 
 // One tool = one entry in the registry (docs/mcp/PLAN.md §5.1): the MCP server, input checks and
@@ -21,6 +22,8 @@ export interface McpTool {
   /** Written for the model: when to use it, what it returns, how it relates to other tools. */
   description: string;
   access: ToolAccess;
+  /** T58: the role ability an "act" tool needs in the brand (viewers' assistants only read). */
+  ability?: Ability;
   annotations: ToolAnnotations;
   input: z.ZodObject;
   output: z.ZodObject;
@@ -34,6 +37,7 @@ export function defineTool<I extends z.ZodObject, O extends z.ZodObject>(def: {
   title: string;
   description: string;
   access: ToolAccess;
+  ability?: Ability;
   annotations: ToolAnnotations;
   input: I;
   output: O;
@@ -51,7 +55,7 @@ export function defineTool<I extends z.ZodObject, O extends z.ZodObject>(def: {
           `${issue.path.join(".") || "input"}: ${issue.message}`,
         );
       }
-      return def.run(ctx, parsed.data);
+      return def.run(def.ability ? { ...ctx, requires: def.ability } : ctx, parsed.data);
     },
   };
 }

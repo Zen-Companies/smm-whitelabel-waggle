@@ -3,7 +3,7 @@ import { resolveBrand, type ToolContext } from "./context";
 
 // A stand-in for the two lookups: tenant_members rows [tenant_id, user_id], and the brands with
 // AI assistants switched on (feature_flags).
-function fakeDb(members: [string, string][], on: string[]) {
+function fakeDb(members: [string, string][], on: string[], role = "owner") {
   return {
     from: (table: string) => {
       const f: Record<string, string> = {};
@@ -25,7 +25,7 @@ function fakeDb(members: [string, string][], on: string[]) {
         }),
         maybeSingle: async () => ({
           data: members.some(([t, u]) => t === f.tenant_id && u === f.user_id)
-            ? { tenant_id: f.tenant_id }
+            ? { tenant_id: f.tenant_id, role }
             : null,
         }),
       };
@@ -74,5 +74,22 @@ describe("resolveBrand", () => {
       code: "brand_not_allowed",
       message: "AI assistants aren't turned on for this brand yet.",
     });
+  });
+
+  it("lets an act tool through only when the role can do it (T58)", async () => {
+    const as = (role: string, requires: ToolContext["requires"]) =>
+      ({
+        ...ctx(["b1"], [["b1", "u1"]]),
+        db: fakeDb([["b1", "u1"]], ["b1"], role),
+        requires,
+      }) as unknown as ToolContext;
+    await expect(resolveBrand(as("member", "replies.approve"), "b1")).resolves.toBe("b1");
+    await expect(resolveBrand(as("viewer", "replies.approve"), "b1")).rejects.toMatchObject({
+      code: "role_not_allowed",
+    });
+    await expect(resolveBrand(as("viewer", "posts.write"), "b1")).rejects.toMatchObject({
+      code: "role_not_allowed",
+    });
+    await expect(resolveBrand(as("viewer", undefined), "b1")).resolves.toBe("b1");
   });
 });

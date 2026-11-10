@@ -71,3 +71,10 @@ describe("MCP tool registry", () => {
     }
   });
 });
+
+it("every act tool names the role ability it needs (T58)", () => {
+  for (const t of TOOLS) {
+    if (t.access === "act") expect(t.ability, t.name).toBeDefined();
+    else expect(t.ability, t.name).toBeUndefined();
+  }
+});

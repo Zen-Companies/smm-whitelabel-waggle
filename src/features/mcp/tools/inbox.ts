@@ -297,6 +297,7 @@ export const approveReply = defineTool({
   description:
     "Sends Waggle's draft reply, or the owner's edited wording, to the customer on Instagram or Facebook. Use after get_conversation, only when the user has said to send it. Waggle's rules are checked again at send time. The reply can be stopped with undo_reply for about 8 seconds.",
   access: "act",
+  ability: "replies.approve",
   annotations: PUBLIC_ACTION,
   wraps: "approvals.approveDraft",
   input: z.object({
@@ -328,6 +329,7 @@ export const writeReply = defineTool({
   description:
     "Sends a reply in the owner's own words: to a message waiting for approval (instead of Waggle's draft) or to one Waggle handed to the owner (a complaint, an unclear message). Only use wording the user approved. Use facts from search_knowledge; never invent prices, availability or promises. DMs can only be answered within 24 hours of the customer's last message. Can be stopped with undo_reply for about 8 seconds.",
   access: "act",
+  ability: "replies.approve",
   annotations: PUBLIC_ACTION,
   wraps: "approvals.writeOwnerReply",
   input: z.object({
@@ -358,6 +360,7 @@ export const undoReply = defineTool({
   description:
     "Stops a reply from approve_reply or write_reply if it hasn't started going out (about 8 seconds). The message goes back to waiting for approval.",
   access: "act",
+  ability: "replies.approve",
   annotations: LOCAL_ACTION,
   wraps: "approvals.undoApproval",
   input: z.object({ brand_id: brandId, item_id: itemId, draft_id: z.uuid() }),
@@ -385,6 +388,7 @@ export const resolveItem = defineTool({
   description:
     "Closes a message without sending anything. reject_draft: don't send Waggle's draft (message waiting for approval). mark_handled: the owner dealt with it outside Waggle (a handed-over or failed message). not_spam: Waggle wrongly marked it spam; it stays in For you to be answered.",
   access: "act",
+  ability: "replies.approve",
   annotations: LOCAL_ACTION,
   wraps: "approvals.rejectDraft, approvals.markHandled, approvals.markNotSpam",
   input: z.object({
@@ -417,6 +421,7 @@ export const hideComment = defineTool({
   description:
     "Hides a comment on its Instagram or Facebook post (hidden: true), for spam or abuse, or shows it again (hidden: false). Comments only. Hidden comments stay visible to the commenter and their friends, as Meta does it.",
   access: "act",
+  ability: "replies.approve",
   annotations: PUBLIC_ACTION,
   wraps: "approvals.hideSpamComment, approvals.unhideComment",
   input: z.object({ brand_id: brandId, item_id: itemId, hidden: z.boolean() }),
