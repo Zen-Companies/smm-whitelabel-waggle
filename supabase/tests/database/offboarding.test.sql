@@ -27,7 +27,9 @@ select is(
        -- deleted by the tenants_forget_purged trigger when purge_tenant sets purged_at
        'organization_member_brands',
        -- kept: costs and the audit trail
-       'ai_usage', 'audit_log')),
+       'ai_usage', 'audit_log',
+       -- kept: feedback stays with the person (its tenant_id is set null if the brand row goes)
+       'feedback')),
   null,
   'every tenant table is deleted by purge_tenant or kept on purpose'
 );

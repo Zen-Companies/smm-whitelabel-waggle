@@ -539,6 +539,95 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          contact_ok: boolean
+          created_at: string
+          follow_up: string
+          id: string
+          kind: string
+          message: string
+          organization_id: string | null
+          page: string
+          rating: string | null
+          reason: string
+          sent_to_ghl_at: string | null
+          tenant_id: string | null
+          type: string | null
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          contact_ok?: boolean
+          created_at?: string
+          follow_up?: string
+          id?: string
+          kind: string
+          message?: string
+          organization_id?: string | null
+          page: string
+          rating?: string | null
+          reason?: string
+          sent_to_ghl_at?: string | null
+          tenant_id?: string | null
+          type?: string | null
+          user_id: string
+        }
+        Update: {
+          contact_ok?: boolean
+          created_at?: string
+          follow_up?: string
+          id?: string
+          kind?: string
+          message?: string
+          organization_id?: string | null
+          page?: string
+          rating?: string | null
+          reason?: string
+          sent_to_ghl_at?: string | null
+          tenant_id?: string | null
+          type?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback_nudges: {
+        Row: {
+          key: string
+          outcome: string | null
+          shown_at: string
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          key: string
+          outcome?: string | null
+          shown_at?: string
+          user_id: string
+        }
+        Update: {
+          key?: string
+          outcome?: string | null
+          shown_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       inbound_items: {
         Row: {
           attempts: number

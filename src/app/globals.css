@@ -502,3 +502,37 @@
     display: initial;
   }
 }
+
+/* Help & feedback (design v3 "Beta access and feedback"): the bee flies a small figure-8 around
+   the Feedback button twice, then rests on it; hovering the button sends it round again. */
+.feedback-bee {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 24px;
+  height: 16px;
+  margin: -8px 0 0 -12px;
+  offset-path: path("M50 4 C 86 -18, 118 30, 86 32 C 56 34, 30 -20, -2 6 C -26 26, 22 40, 50 4");
+  offset-rotate: auto;
+  animation: bee-along 3s linear 2 forwards;
+  pointer-events: none;
+}
+@keyframes feedback-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.feedback-pop {
+  animation: feedback-pop 0.25s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .feedback-bee,
+  .feedback-pop {
+    animation: none;
+  }
+}

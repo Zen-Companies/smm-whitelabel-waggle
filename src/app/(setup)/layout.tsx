@@ -2,12 +2,18 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
+import { Feedback } from "@/features/feedback";
 import { listMyOrgs, OrgMenu } from "@/features/orgs";
 import { getOpenOrg, signOut } from "@/features/tenants";
 
 async function Switcher() {
   const [orgs, open] = await Promise.all([listMyOrgs(), getOpenOrg()]);
   return <OrgMenu orgs={orgs} currentId={open?.id ?? null} />;
+}
+
+async function SetupFeedback() {
+  const open = await getOpenOrg();
+  return <Feedback orgId={open?.id ?? null} tenantId={null} />;
 }
 
 // Pages with no brand open (T54, design v3 "Organizations", OrgSignup): the wordmark, the
@@ -20,6 +26,9 @@ export default function SetupLayout({ children }: LayoutProps<"/">) {
           <Link href="/welcome" className="flex min-h-14 items-center" aria-label="Waggle">
             <Brand />
           </Link>
+          <span className="bg-honey-tint text-honey-text rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide">
+            BETA
+          </span>
           <Suspense fallback={<div className="skeleton h-10 w-48 rounded-md" />}>
             <Switcher />
           </Suspense>
@@ -36,6 +45,9 @@ export default function SetupLayout({ children }: LayoutProps<"/">) {
         </div>
       </header>
       {children}
+      <Suspense fallback={null}>
+        <SetupFeedback />
+      </Suspense>
     </div>
   );
 }

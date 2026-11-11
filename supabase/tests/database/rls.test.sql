@@ -85,7 +85,8 @@ select is_empty(
        and t.table_name not in ('tenants', 'webhook_events', 'platform_state', 'mcp_grants',
                                 'staff_members', 'staff_role_permissions', 'organizations',
                                 'organization_members', 'organization_invites', 'organization_audit',
-                                'beta_codes', 'beta_access', 'beta_attempts')
+                                'beta_codes', 'beta_access', 'beta_attempts',
+                                'feedback_nudges')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

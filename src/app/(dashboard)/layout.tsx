@@ -2,7 +2,13 @@ import { Suspense } from "react";
 import { AccountBanner } from "@/features/accounts";
 import { Bell } from "@/features/alerts";
 import { NEEDS_OWNER } from "@/features/approvals";
-import { AppHeader } from "@/features/tenants";
+import { Feedback } from "@/features/feedback";
+import { AppHeader, getCurrentTenant } from "@/features/tenants";
+
+async function DashboardFeedback() {
+  const tenant = await getCurrentTenant();
+  return <Feedback orgId={tenant.organizationId} tenantId={tenant.id} />;
+}
 
 // App shell (docs/design.md §8): the top bar, then content centered up to ~1240px with 32px
 // gutters (16 on phones). Each page sets its own width inside.
@@ -18,6 +24,9 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
         </div>
       </Suspense>
       {children}
+      <Suspense fallback={null}>
+        <DashboardFeedback />
+      </Suspense>
     </div>
   );
 }

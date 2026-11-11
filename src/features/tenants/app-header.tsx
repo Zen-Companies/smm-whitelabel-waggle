@@ -57,8 +57,11 @@ export async function AppHeader({
   return (
     <header className="border-line bg-page sticky top-0 z-40 border-b">
       <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-6 px-4 md:flex-nowrap md:px-8">
-        <Link href="/inbox" className="flex min-h-14 items-center" aria-label="Waggle, inbox">
+        <Link href="/inbox" className="flex min-h-14 items-center gap-2" aria-label="Waggle, inbox">
           <Brand />
+          <span className="bg-honey-tint text-honey-text rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide">
+            BETA
+          </span>
         </Link>
         <div className="flex min-h-14 items-center">
           <BrandMenu
