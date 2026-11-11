@@ -16,6 +16,8 @@ export const PERMISSIONS = [
   "staff.manage",
   /** Offboard and restore brands (T21, admins only). */
   "brands.manage",
+  /** Create and turn off beta codes, see who joined (admins only). */
+  "beta.manage",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

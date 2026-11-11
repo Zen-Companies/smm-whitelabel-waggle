@@ -3,6 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { requireBeta } from "@/features/beta";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { ORG_NAME_MAX } from "./copy";
@@ -25,6 +26,7 @@ export async function createOrganization(
   const parsed = nameSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.issues[0].message, name: raw };
   const user = await getCurrentUser();
+  await requireBeta();
   const { data, error } = await getServiceClient().rpc("create_organization", {
     p_user: user.id,
     p_name: parsed.data,

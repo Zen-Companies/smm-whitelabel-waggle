@@ -36,7 +36,7 @@ async function loadInvites(userId: string) {
   );
 }
 
-async function Content() {
+async function Content({ beta }: { beta: boolean }) {
   const [user, org] = await Promise.all([getCurrentUser(), getOpenOrg()]);
   if (!org) redirect("/login");
   // An organization with a brand of the user's opens on that brand.
@@ -51,6 +51,12 @@ async function Content() {
   const invites = await loadInvites(user.id);
   return (
     <>
+      {beta && (
+        <p role="status" className="banner">
+          You&apos;re in the beta. Thanks for trying Waggle early: tell us anything with the
+          Feedback button on every page.
+        </p>
+      )}
       <div className="flex flex-col gap-1.5">
         <h1 className="page-title">Welcome, {firstName(user.user_metadata, user.email)}</h1>
         <p className="text-ink-2 text-[15px]">
@@ -164,11 +170,16 @@ async function Content() {
 
 // T54 (design v3 "Organizations", OrgSignup): the first screen after sign-up, and the page for
 // an organization with no brands yet.
-export default function WelcomePage() {
+async function WithParams({ searchParams }: PageProps<"/welcome">) {
+  const { beta } = await searchParams;
+  return <Content beta={beta === "1"} />;
+}
+
+export default function WelcomePage(props: PageProps<"/welcome">) {
   return (
     <main className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-10 md:px-8 md:py-12">
       <Suspense fallback={<div className="skeleton h-64 rounded-xl" />}>
-        <Content />
+        <WithParams {...props} />
       </Suspense>
     </main>
   );

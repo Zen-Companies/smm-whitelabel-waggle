@@ -10,6 +10,7 @@ import {
   type Ability,
   type OrgRole,
 } from "@/features/orgs";
+import { requireBeta } from "@/features/beta";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { BRAND_COOKIE, pickOpenBrand } from "./brand-pick";
 import { closedBrandFor } from "./closed";
@@ -33,6 +34,7 @@ export interface CurrentTenant {
  */
 export const getCurrentTenant = cache(async (): Promise<CurrentTenant> => {
   const user = await getCurrentUser();
+  await requireBeta();
   const supabase = await createServerSupabase();
   const [{ data }, orgs, store] = await Promise.all([
     supabase

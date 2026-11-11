@@ -10,6 +10,7 @@ export const STAFF_PAGES = [
   { href: "/admin/staff", label: "Staff", permission: "staff.manage" },
   { href: "/admin/switches", label: "Switches", permission: "flags.manage" },
   { href: "/admin/brands", label: "Brands", permission: "brands.manage" },
+  { href: "/admin/beta", label: "Beta codes", permission: "beta.manage" },
 ] as const satisfies readonly { href: string; label: string; permission: Permission }[];
 
 export type StaffPage = (typeof STAFF_PAGES)[number];
@@ -32,6 +33,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "flags.manage": "Turn features on or off",
   "staff.manage": "Add or remove staff",
   "brands.manage": "Offboard or restore brands",
+  "beta.manage": "Create beta codes and see who joined",
 };
 
 export const ROLE_LABELS: Record<StaffRole, string> = {

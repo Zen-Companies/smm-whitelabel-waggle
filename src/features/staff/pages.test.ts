@@ -10,7 +10,7 @@ it("a role sees only the tabs it may open, in order", () => {
     "MCP tools",
     "MCP activity",
   ]);
-  expect(staffPagesFor(set(...PERMISSIONS))).toHaveLength(7);
+  expect(staffPagesFor(set(...PERMISSIONS))).toHaveLength(8);
 });
 
 it("the top bar's Staff link goes to the first page, or nowhere for owners", () => {

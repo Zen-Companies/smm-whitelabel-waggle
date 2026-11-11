@@ -1,5 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { redirect } from "next/navigation";
+import { requireBeta } from "@/features/beta";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -61,6 +62,8 @@ export async function ConsentScreen({ authorizationId }: { authorizationId: stri
     const next = `/oauth/consent?authorization_id=${authorizationId}`;
     redirect(`/login?next=${encodeURIComponent(next)}`);
   }
+  // The beta gate applies here too: no beta access, no brands to share.
+  await requireBeta();
   const { data: details, error } =
     await supabase.auth.oauth.getAuthorizationDetails(authorizationId);
   if (error || !details) {

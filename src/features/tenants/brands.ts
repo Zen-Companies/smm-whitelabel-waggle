@@ -8,6 +8,7 @@ import {
   type OrgSummary,
 } from "@/features/orgs";
 import { pictureUrl } from "@/lib/pictures";
+import { requireBeta } from "@/features/beta";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { brandPicturePath } from "./brand-picture";
 import {
@@ -104,6 +105,7 @@ export async function openBrand(tenantId: string): Promise<boolean> {
  * (/welcome): the organization cookie's, else the open brand's, else their personal one.
  */
 export async function getOpenOrg(): Promise<OrgSummary | null> {
+  await requireBeta();
   const [orgs, store] = await Promise.all([listMyOrgs(), cookies()]);
   const orgCookie = store.get(ORG_COOKIE)?.value;
   let brandOrg: string | null = null;

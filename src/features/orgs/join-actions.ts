@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { announceBetaJoin } from "@/features/beta";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { acceptInviteAndOpen } from "./join";
@@ -117,6 +118,7 @@ export async function respondToInvite(formData: FormData): Promise<void> {
     (result.status === "joined" || result.status === "already_member")
   ) {
     await setOrgCookie(result.organization_id);
+    await announceBetaJoin(db, user.id);
     redirect("/inbox");
   }
   redirect("/welcome");

@@ -1,4 +1,5 @@
 import "server-only";
+import { announceBetaJoin } from "@/features/beta";
 import { getServiceClient } from "@/lib/supabase/service";
 import { ensurePersonalOrg, setOrgCookie } from "./server";
 import { hashInviteToken } from "./team";
@@ -24,6 +25,8 @@ export async function acceptInviteAndOpen(token: string, userId: string): Promis
     (result.status === "joined" || result.status === "already_member")
   ) {
     await setOrgCookie(result.organization_id);
+    // Joining a team by invite is beta access too (database trigger); GHL hears about it once.
+    await announceBetaJoin(db, userId);
     return true;
   }
   return false;

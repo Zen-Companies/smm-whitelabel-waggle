@@ -274,6 +274,98 @@ export type Database = {
           },
         ]
       }
+      beta_access: {
+        Row: {
+          announced_at: string | null
+          code_id: string | null
+          invited_by: string | null
+          joined_at: string
+          user_id: string
+          via: string
+        }
+        ComputedFields: never
+        Insert: {
+          announced_at?: string | null
+          code_id?: string | null
+          invited_by?: string | null
+          joined_at?: string
+          user_id: string
+          via: string
+        }
+        Update: {
+          announced_at?: string | null
+          code_id?: string | null
+          invited_by?: string | null
+          joined_at?: string
+          user_id?: string
+          via?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "beta_access_code_id_fkey"
+            columns: ["code_id"]
+            isOneToOne: false
+            referencedRelation: "beta_codes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      beta_attempts: {
+        Row: {
+          at: string
+          id: number
+          user_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          at?: string
+          id?: never
+          user_id: string
+        }
+        Update: {
+          at?: string
+          id?: never
+          user_id?: string
+        }
+        Relationships: []
+      }
+      beta_codes: {
+        Row: {
+          active: boolean
+          code: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          label: string
+          max_uses: number | null
+          uses: number
+        }
+        ComputedFields: never
+        Insert: {
+          active?: boolean
+          code: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label?: string
+          max_uses?: number | null
+          uses?: number
+        }
+        Update: {
+          active?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          label?: string
+          max_uses?: number | null
+          uses?: number
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           created_at: string
@@ -1742,6 +1834,7 @@ export type Database = {
       }
       prepare_login_deletion: { Args: { p_user: string }; Returns: boolean }
       purge_tenant: { Args: { p_tenant_id: string }; Returns: boolean }
+      redeem_beta_code: { Args: { p_code: string; p_user: string }; Returns: string }
       remove_member: {
         Args: { p_actor: string; p_org: string; p_user: string }
         Returns: undefined
