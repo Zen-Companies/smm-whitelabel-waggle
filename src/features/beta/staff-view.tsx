@@ -6,6 +6,7 @@ import { EditCodeForm, NewCodeForm } from "./staff-forms";
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString("en-PH", {
+    timeZone: "Asia/Manila",
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -123,6 +124,7 @@ export async function BetaCodesView() {
                     <td className={`${TD} text-ink-2`}>
                       {c.expires_at
                         ? new Date(c.expires_at).toLocaleDateString("en-PH", {
+                            timeZone: "Asia/Manila",
                             month: "short",
                             day: "numeric",
                           })

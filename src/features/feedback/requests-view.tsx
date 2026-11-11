@@ -36,6 +36,7 @@ export async function RequestsView() {
                 )}
                 <span className="meta">
                   {new Date(n.created_at).toLocaleString("en-PH", {
+                    timeZone: "Asia/Manila",
                     month: "short",
                     day: "numeric",
                     hour: "numeric",

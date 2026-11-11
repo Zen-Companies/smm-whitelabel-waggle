@@ -516,6 +516,8 @@
   offset-rotate: auto;
   animation: bee-along 3s linear 2 forwards;
   pointer-events: none;
+  /* Lands on the button's top edge, above it. */
+  z-index: 1;
 }
 @keyframes feedback-pop {
   from {

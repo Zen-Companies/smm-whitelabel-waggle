@@ -239,7 +239,15 @@ export function FeedbackWidget({
             </p>
           )}
 
-          <form ref={form} action={action} className="flex flex-col gap-3">
+          <form
+            ref={form}
+            action={(fd) => {
+              // The type picked is part of this note; the next one starts without it.
+              setType(null);
+              action(fd);
+            }}
+            className="flex flex-col gap-3"
+          >
             <input type="hidden" name="path" value={pathname} />
             {orgId && <input type="hidden" name="orgId" value={orgId} />}
             {tenantId && <input type="hidden" name="tenantId" value={tenantId} />}
