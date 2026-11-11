@@ -23,3 +23,4 @@ export type { BrandSummary } from "./brands";
 export { AddBrandForm } from "./add-brand-form";
 export { ClosedBrandView } from "./closed-view";
 export { ReadOnlyNote, RoleGate } from "./role-gate";
+export { ForgotPasswordForm, NewPasswordForm } from "./password-forms";

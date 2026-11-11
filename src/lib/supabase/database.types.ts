@@ -1662,6 +1662,7 @@ export type Database = {
       create_personal_org: { Args: { p_user: string }; Returns: string }
       decline_invite: { Args: { p_token_hash: string; p_user: string }; Returns: string }
       decline_invite_by_id: { Args: { p_invite: string; p_user: string }; Returns: string }
+      disconnect_google: { Args: { p_user: string }; Returns: boolean }
       email_has_login: { Args: { p_email: string }; Returns: boolean }
       enqueue_draft_nudges: { Args: { p_older_than: string }; Returns: number }
       invite_by_token: {
@@ -1708,6 +1709,14 @@ export type Database = {
         }[]
       }
       leave_organization: { Args: { p_org: string; p_user: string }; Returns: undefined }
+      login_deletion_blockers: {
+        Args: { p_user: string }
+        Returns: {
+          organization_id: string
+          organization_name: string
+        }[]
+      }
+      login_has_password: { Args: { p_user: string }; Returns: boolean }
       match_kb_entries: {
         Args: { p_limit?: number; p_query_embedding: string; p_tenant_id: string }
         Returns: {
@@ -1731,6 +1740,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      prepare_login_deletion: { Args: { p_user: string }; Returns: boolean }
       purge_tenant: { Args: { p_tenant_id: string }; Returns: boolean }
       remove_member: {
         Args: { p_actor: string; p_org: string; p_user: string }

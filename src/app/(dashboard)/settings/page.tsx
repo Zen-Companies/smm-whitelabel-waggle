@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { AccountSection } from "@/features/account";
 import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
 import { AutonomyCard } from "@/features/approvals";
@@ -25,8 +26,12 @@ const BRAND_SECTIONS = [
   // MCP (docs/mcp/PLAN.md §4.2): per login, not per brand.
   { key: "ai-assistants", label: "AI assistants" },
 ] as const;
-type Section = (typeof ORG_SECTIONS)[number]["key"] | (typeof BRAND_SECTIONS)[number]["key"];
-const ALL: readonly Section[] = [...ORG_SECTIONS, ...BRAND_SECTIONS].map((s) => s.key);
+type Section =
+  "account" | (typeof ORG_SECTIONS)[number]["key"] | (typeof BRAND_SECTIONS)[number]["key"];
+const ALL: readonly Section[] = [
+  "account",
+  ...[...ORG_SECTIONS, ...BRAND_SECTIONS].map((s) => s.key),
+];
 
 function NavLink({
   href,
@@ -59,7 +64,11 @@ async function Body({ searchParams }: PageProps<"/settings">) {
   return (
     <div className="flex flex-col gap-6 md:flex-row md:items-start">
       <nav aria-label="Settings sections" className="flex flex-col gap-0.5 md:w-56 md:shrink-0">
-        <span className="text-ink-4 truncate px-3 pt-1 pb-1 text-xs">
+        <span className="text-ink-4 truncate px-3 pt-1 pb-1 text-xs">You</span>
+        <NavLink href="/settings?section=account" active={section === "account"}>
+          Account
+        </NavLink>
+        <span className="text-ink-4 truncate px-3 pt-4 pb-1 text-xs">
           Organization · {org?.name}
         </span>
         {ORG_SECTIONS.map((s) => (
@@ -76,6 +85,11 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         ))}
       </nav>
       <div className="min-w-0 flex-1">
+        {section === "account" && (
+          <AccountSection
+            emailNotice={typeof params.email === "string" ? params.email : undefined}
+          />
+        )}
         {section === "general" && <OrgGeneralSection orgId={tenant.organizationId} />}
         {section === "team" && <TeamSection orgId={tenant.organizationId} />}
         {section === "billing" && <OrgBillingSection orgId={tenant.organizationId} />}

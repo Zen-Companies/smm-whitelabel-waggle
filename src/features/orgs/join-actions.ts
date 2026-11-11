@@ -4,29 +4,16 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
+import { acceptInviteAndOpen } from "./join";
 import { ensurePersonalOrg, setOrgCookie } from "./server";
 import { hashInviteToken } from "./team";
 
 const tokenSchema = z.string().regex(/^[A-Za-z0-9_-]{20,100}$/);
 const page = (token: string) => `/invite/${token}`;
 
-/** Accepts as the signed-in login, opens the organization, then its first brand (or /welcome). */
+/** Accepts as the signed-in login and opens the organization's first brand, else `fallback`. */
 async function acceptAndOpen(token: string, userId: string, fallback: string): Promise<never> {
-  const db = getServiceClient();
-  await ensurePersonalOrg(db, userId);
-  const { data } = await db.rpc("accept_invite", {
-    p_token_hash: hashInviteToken(token),
-    p_user: userId,
-  });
-  const result = data?.[0];
-  if (
-    result?.organization_id &&
-    (result.status === "joined" || result.status === "already_member")
-  ) {
-    await setOrgCookie(result.organization_id);
-    redirect("/inbox");
-  }
-  redirect(fallback);
+  redirect((await acceptInviteAndOpen(token, userId)) ? "/inbox" : fallback);
 }
 
 /** "Join" on the invite page (signed in with the invited email). */

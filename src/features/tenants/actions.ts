@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { signInNext } from "./sign-in-next";
+import { signInNext } from "@/features/auth";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit";

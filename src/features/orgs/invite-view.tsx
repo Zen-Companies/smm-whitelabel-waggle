@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GoogleButton, OrDivider } from "@/features/auth";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -38,6 +39,7 @@ const home = (
  * state is a full page with one clear way out; no pop-ups, no toasts.
  */
 export async function InviteView({ token, declined }: { token: string; declined: boolean }) {
+  const invitePath = `/invite/${token}`;
   const db = getServiceClient();
   const { data } = await db.rpc("invite_by_token", { p_token_hash: hashInviteToken(token) });
   const invite = data?.[0];
@@ -157,6 +159,7 @@ export async function InviteView({ token, declined }: { token: string; declined:
             You&apos;re signed in as {user.email}, but the invite was sent to {invite.email}. Sign
             out and sign in (or create a login) with that address.
           </p>
+          <GoogleButton label="Use another Google account" next={invitePath} hint={invite.email} />
         </Card>
       );
     }
@@ -193,15 +196,16 @@ export async function InviteView({ token, declined }: { token: string; declined:
         title={`Join ${org}`}
         actions={
           <Link
-            href={`/login?next=${encodeURIComponent(`/invite/${token}`)}`}
-            className={buttonVariants({ variant: "primary" })}
+            href={`/login?next=${encodeURIComponent(invitePath)}`}
+            className={buttonVariants({ variant: "secondary" })}
           >
-            Sign in to join
+            Sign in with email
           </Link>
         }
       >
         {orgRow}
         <p>{invite.email} already has a Waggle login. Sign in with it, then join.</p>
+        <GoogleButton next={invitePath} hint={invite.email} />
       </Card>
     );
   }
@@ -209,6 +213,12 @@ export async function InviteView({ token, declined }: { token: string; declined:
     <section className="flex flex-col gap-6">
       {orgRow}
       <h1 className="page-title">Create your login to join</h1>
+      <GoogleButton
+        label={`Continue with Google as ${invite.email}`}
+        next={invitePath}
+        hint={invite.email}
+      />
+      <OrDivider />
       <JoinSignUpForm token={token} email={invite.email} />
       <p className="meta">
         You&apos;ll also get your own organization, empty and free, for any business of your own

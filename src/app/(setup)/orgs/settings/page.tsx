@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { AccountSection } from "@/features/account";
 import { OrgBillingSection, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { getOpenOrg } from "@/features/tenants";
 import { cn } from "cn";
@@ -8,6 +9,7 @@ import { cn } from "cn";
 export const metadata = { title: "Organization settings" };
 
 const SECTIONS = [
+  { key: "account", label: "Account" },
   { key: "general", label: "General" },
   { key: "team", label: "Team" },
   { key: "billing", label: "Billing" },
@@ -45,6 +47,7 @@ async function Body({ searchParams }: PageProps<"/orgs/settings">) {
         </Link>
       </nav>
       <div className="min-w-0 flex-1">
+        {section === "account" && <AccountSection />}
         {section === "general" && <OrgGeneralSection orgId={org.id} />}
         {section === "team" && <TeamSection orgId={org.id} />}
         {section === "billing" && <OrgBillingSection orgId={org.id} />}

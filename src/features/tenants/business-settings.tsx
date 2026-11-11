@@ -1,7 +1,5 @@
-import { Button } from "@/components/ui/button";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
-import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
-import { signOut } from "./actions";
+import { createServerSupabase } from "@/lib/supabase/server";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "./current-tenant";
 import { RoleGate } from "./role-gate";
@@ -11,9 +9,9 @@ import { brandInitials } from "./brand-pick";
 import { brandPicturePath } from "./brand-picture";
 import { BrandPictureForm } from "./brand-picture-form";
 
-/** Business and account (Settings). */
+/** The brand's business settings (Settings → Business). The login's own settings: Account. */
 export async function BusinessSettings() {
-  const [tenant, user] = await Promise.all([getCurrentTenant(), getCurrentUser()]);
+  const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
   const [{ data }, { data: accounts }] = await Promise.all([
     supabase
@@ -77,16 +75,10 @@ export async function BusinessSettings() {
       <div className="card flex flex-wrap items-center justify-between gap-3 px-5 py-4">
         <div className="flex flex-col">
           <span className="font-medium">{tenant.name}</span>
-          <span className="meta">
-            {user.email}
-            {tenant.zernioProfileId ? "" : " · finishing setup: connect an account to complete it"}
-          </span>
+          {!tenant.zernioProfileId && (
+            <span className="meta">Finishing setup: connect an account to complete it.</span>
+          )}
         </div>
-        <form action={signOut}>
-          <Button type="submit" variant="secondary">
-            Sign out
-          </Button>
-        </form>
       </div>
       <RoleGate
         allowed={can(tenant.role, "brand.settings")}
