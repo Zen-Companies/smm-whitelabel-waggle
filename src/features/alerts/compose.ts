@@ -1,6 +1,8 @@
 // The owner emails (pure). Escalation emails carry who and why plus a link, never the customer's
 // message (it stays in the app); lead emails carry the lead's details, which are the point.
 
+import { platformLabel } from "@/lib/social/platforms";
+
 export type AlertContent =
   | {
       kind: "escalation";
@@ -31,8 +33,7 @@ export interface ComposedEmail {
   html: string;
 }
 
-const PLATFORM: Record<string, string> = { instagram: "Instagram", facebook: "Facebook" };
-const platformName = (p: string) => PLATFORM[p] ?? p;
+const platformName = platformLabel;
 const where = (platform: string, kind: "comment" | "dm" | "review") =>
   `${platformName(platform)} ${kind === "dm" ? "DM" : kind}`;
 

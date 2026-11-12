@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { writeAudit } from "@/lib/audit";
+import { platformLabel } from "@/lib/social/platforms";
 import {
   getPlatformPause,
   PLATFORM_PAUSE_RETRY_SECONDS,
@@ -62,7 +63,7 @@ export async function publishPost(
   const { data: post, error } = await db
     .from("posts")
     .select(
-      "id, tenant_id, content, media, target_account_ids, scheduled_for, status, idempotency_key, attempts",
+      "id, tenant_id, content, media, target_account_ids, scheduled_for, status, idempotency_key, attempts, tiktok_consent_at",
     )
     .eq("id", postId)
     .single();
@@ -105,7 +106,9 @@ export async function publishPost(
     return fail("Pick at least one connected account.", { reason: "no_accounts" });
   }
   if (down.length) {
-    const names = down.map((a) => `${a.platform} @${a.username ?? "account"}`).join(", ");
+    const names = down
+      .map((a) => `${platformLabel(a.platform)} @${a.username ?? "account"}`)
+      .join(", ");
     return fail(`${names} is disconnected. Reconnect it in Settings, then try again.`, {
       reason: "account_inactive",
     });
@@ -125,6 +128,7 @@ export async function publishPost(
       // A time already in the past (e.g. retried after a pause) publishes now.
       publishAt: scheduledFor && scheduledFor > now ? scheduledFor : null,
       idempotencyKey: post.idempotency_key,
+      tiktokConsent: post.tiktok_consent_at !== null,
     });
     const status = STATUS[result.status] ?? "publishing";
     await db

@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { markHandledAction, replyPubliclyAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
+import { platformLabel } from "@/lib/social/platforms";
 
 /** Reasons that mean a reply was ready but couldn't go out (danger box, §4 "Couldn't send"). */
 const COULD_NOT_SEND: Record<string, string> = {
@@ -122,7 +123,7 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
   const failed = reason ? COULD_NOT_SEND[reason] : undefined;
   const reply =
     entry.draft && !entry.draft.needsHuman ? (entry.draft.editedBody ?? entry.draft.body) : null;
-  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  const platform = platformLabel(entry.platform);
   const unsure = !failed && !!reason && UNSURE.has(reason);
   const guess = lookedLike(reason, entry);
   const openHref = openOnPlatformHref(entry);

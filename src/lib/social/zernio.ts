@@ -17,7 +17,9 @@ import {
   type ProviderCommentReply,
   type ProviderMessage,
   type ProviderPostStatus,
+  type PostValidation,
   type ProviderUsage,
+  type SocialPlatform,
   type SocialProvider,
 } from "./types";
 
@@ -27,6 +29,24 @@ const DEFAULT_TIMEOUT_MS = 60_000;
 const profileSchema = z.object({ profile: z.object({ _id: z.string().min(1) }) });
 const profileConflictSchema = z.object({ existingProfileId: z.string().min(1) });
 const connectSchema = z.object({ authUrl: z.url() });
+const validationSchema = z.object({
+  valid: z.boolean().optional(),
+  errors: z
+    .array(z.object({ platform: z.string().optional(), error: z.string().optional() }))
+    .optional(),
+  warnings: z
+    .array(z.object({ platform: z.string().optional(), warning: z.string().optional() }))
+    .optional(),
+});
+const creatorInfoSchema = z.object({
+  privacyLevels: z.array(z.object({ value: z.string().optional() })).optional(),
+});
+
+/** TikTok's public level when the account offers it (Business-app accounts post videos public only). */
+export function pickTikTokPrivacy(levels: (string | undefined)[]): string | null {
+  const values = levels.filter((v): v is string => !!v);
+  return values.find((v) => v === "PUBLIC_TO_EVERYONE") ?? values[0] ?? null;
+}
 const postSchema = z.object({
   post: z.object({
     _id: z.string().min(1),
@@ -258,11 +278,7 @@ export class ZernioSocialProvider implements SocialProvider {
     }
   }
 
-  async getConnectUrl(input: {
-    platform: "instagram" | "facebook";
-    profileId: string;
-    redirectUrl: string;
-  }) {
+  async getConnectUrl(input: { platform: SocialPlatform; profileId: string; redirectUrl: string }) {
     return call("getConnectUrl", async (withFetch) => {
       const { data } = await this.zernio.connect.getConnectUrl(
         withFetch({
@@ -283,7 +299,7 @@ export class ZernioSocialProvider implements SocialProvider {
           body: {
             content: input.content,
             mediaItems: input.mediaUrls?.map((url) => ({ url })),
-            platforms: input.targets.map((t) => ({ platform: t.platform, accountId: t.accountId })),
+            platforms: await this.postTargets(input),
             ...(input.publishAt
               ? { scheduledFor: input.publishAt.toISOString() }
               : { publishNow: true }),
@@ -293,6 +309,75 @@ export class ZernioSocialProvider implements SocialProvider {
       );
       const { post } = parse(postSchema, data, "createPost");
       return { providerPostId: post._id, status: post.status };
+    });
+  }
+
+  /**
+   * Targets for createPost. TikTok needs the owner's consent and a privacy level from the
+   * account's creator info on every post; without consent the TikTok target is refused here.
+   */
+  private async postTargets(input: CreatePostInput) {
+    return Promise.all(
+      input.targets.map(async (t) => {
+        if (t.platform !== "tiktok") return { platform: t.platform, accountId: t.accountId };
+        if (!input.tiktokConsent) {
+          throw new SocialProviderError("TikTok needs the owner's consent for this post", {
+            code: "TIKTOK_CONSENT_REQUIRED",
+            ambiguous: false,
+          });
+        }
+        const { data } = await this.zernio.accounts.getTikTokCreatorInfo({
+          path: { accountId: t.accountId },
+          query: { mediaType: "photo" },
+        });
+        const privacyLevel = pickTikTokPrivacy(
+          (parse(creatorInfoSchema, data, "getTikTokCreatorInfo").privacyLevels ?? []).map(
+            (l) => l.value,
+          ),
+        );
+        return {
+          platform: t.platform,
+          accountId: t.accountId,
+          platformSpecificData: {
+            ...(privacyLevel ? { privacyLevel } : {}),
+            contentPreviewConfirmed: true,
+            expressConsentGiven: true,
+          },
+        };
+      }),
+    );
+  }
+
+  async validatePost(
+    input: Omit<CreatePostInput, "publishAt" | "idempotencyKey"> & { signal?: AbortSignal },
+  ): Promise<PostValidation> {
+    return call("validatePost", async (withFetch) => {
+      const { data } = await this.zernio.validate.validatePost(
+        withFetch({
+          signal: input.signal,
+          body: {
+            content: input.content,
+            mediaItems: input.mediaUrls?.map((url) => ({ url })),
+            platforms: input.targets.map((t) => ({
+              platform: t.platform as "instagram",
+              accountId: t.accountId,
+            })),
+          },
+        }),
+      );
+      const v = parse(validationSchema, data, "validatePost");
+      const errors = (v.errors ?? []).map((e) => ({
+        platform: e.platform ?? "",
+        message: e.error ?? "Not accepted.",
+      }));
+      return {
+        valid: v.valid ?? errors.length === 0,
+        errors,
+        warnings: (v.warnings ?? []).map((w) => ({
+          platform: w.platform ?? "",
+          message: w.warning ?? "",
+        })),
+      };
     });
   }
 

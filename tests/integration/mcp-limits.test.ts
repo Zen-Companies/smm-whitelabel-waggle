@@ -36,7 +36,7 @@ async function brand(name: string, first: boolean) {
     .insert({
       tenant_id: tenantId,
       zernio_account_id: `acc_${randomUUID().slice(0, 8)}`,
-      platform: "instagram",
+      platform: "facebook",
     })
     .select("id")
     .single();

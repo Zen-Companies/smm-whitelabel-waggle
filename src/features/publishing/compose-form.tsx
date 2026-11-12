@@ -1,9 +1,12 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
+import { platformLabel } from "@/lib/social/platforms";
 import { composePost, type ComposeState } from "./actions";
-import { POST_IMAGE_TYPES, POST_TEXT_MAX } from "./limits";
+import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX } from "./limits";
+import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./post-rules";
 
 export interface ComposeAccount {
   id: string;
@@ -12,7 +15,7 @@ export interface ComposeAccount {
 }
 
 const OUTCOME: Record<NonNullable<ComposeState["outcome"]>, string> = {
-  published: "Posted. It shows as published as soon as Instagram/Facebook confirm.",
+  published: "Posted. It shows as published as soon as each platform confirms.",
   scheduled: "Scheduled. It's on the calendar.",
   waiting: "Saved. It goes out as soon as posting is possible again.",
   failed: "Saved, but it couldn't be posted. It's marked on the calendar.",
@@ -77,6 +80,18 @@ function ComposeFields({
   const [time, setTime] = useState(initialTime ?? "09:00");
   const [length, setLength] = useState(0);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string[]>(() => accounts.map((a) => a.id));
+  // What each ticked platform will do with this post (design v3 "Before it goes out").
+  const pickedPlatforms = [
+    ...new Set(accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform)),
+  ];
+  const checks = pickedPlatforms.map((p) =>
+    checkPlatform(p, { textLength: length, images: photo ? 1 : 0, videos: 0 }),
+  );
+  const serverProblems = state.problems ?? [];
+  const limit = textLimitFor(pickedPlatforms, POST_TEXT_MAX);
+  const imageMb =
+    Math.round(imageMaxBytesFor(pickedPlatforms, POST_IMAGE_MAX_BYTES) / 100_000) / 10;
   // Day and time are the owner's local time; send them as an absolute ISO time.
   const at = date && time ? new Date(`${date}T${time}`) : null;
   const scheduledFor = at && !Number.isNaN(at.getTime()) ? at.toISOString() : "";
@@ -103,8 +118,11 @@ function ComposeFields({
           placeholder="New on the menu: ube cheese pandesal, every morning from 7."
           className="field min-h-28 py-3"
         />
-        <p className="meta">
-          {length} / {POST_TEXT_MAX}
+        <p className={length > limit ? "text-danger text-sm" : "meta"}>
+          {length} / {limit.toLocaleString("en-US")}
+          {limit < POST_TEXT_MAX && pickedPlatforms.length > 1
+            ? " (the shortest of your picks)"
+            : ""}
         </p>
         {fieldError("content")}
       </div>
@@ -125,7 +143,9 @@ function ComposeFields({
               className="sr-only"
             />
           </label>
-          <span className="meta min-w-0 truncate">{photo ?? "JPG or PNG, up to 5 MB"}</span>
+          <span className="meta min-w-0 truncate">
+            {photo ?? `JPG or PNG, up to ${imageMb} MB`}
+          </span>
         </div>
         {fieldError("image")}
       </div>
@@ -137,12 +157,72 @@ function ComposeFields({
         )}
         {accounts.map((a) => (
           <label key={a.id} className="flex min-h-11 items-center gap-3 text-sm">
-            <input type="checkbox" name="accounts" value={a.id} defaultChecked className="size-4" />
-            {a.platform === "facebook" ? "Facebook" : "Instagram"} @{a.username ?? "account"}
+            <input
+              type="checkbox"
+              name="accounts"
+              value={a.id}
+              checked={picked.includes(a.id)}
+              onChange={(e) =>
+                setPicked((p) => (e.target.checked ? [...p, a.id] : p.filter((id) => id !== a.id)))
+              }
+              className="size-4"
+            />
+            <PlatformMark platform={a.platform} size={24} />
+            {platformLabel(a.platform)} @{a.username ?? "account"}
           </label>
         ))}
         {fieldError("accounts")}
       </fieldset>
+
+      {(checks.some((c) => c.level !== "ok") || serverProblems.length > 0) && (
+        <section
+          aria-labelledby="before-heading"
+          className="border-line flex flex-col gap-2.5 rounded-xl border p-4"
+        >
+          <h3 id="before-heading" className="text-sm font-semibold">
+            Before it goes out
+          </h3>
+          <ul className="flex flex-col gap-2.5 text-sm">
+            {checks.map((c) =>
+              c.level === "ok" ? null : (
+                <li key={c.platform} className="flex items-start gap-2.5">
+                  <PlatformMark platform={c.platform} size={22} />
+                  <span className={c.level === "blocked" ? "text-danger" : "text-ink-2"}>
+                    {c.message}
+                    {c.level === "blocked" ? " Untick it to post to the others." : ""}
+                  </span>
+                </li>
+              ),
+            )}
+            {serverProblems.map((p, i) => (
+              <li key={`${p.platform}-${i}`} role="alert" className="flex items-start gap-2.5">
+                <PlatformMark platform={p.platform} size={22} />
+                <span className="text-danger">
+                  <b className="font-semibold">{platformLabel(p.platform)}</b>: {p.message}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <span className="text-ink-3 text-xs">
+            Rules come from each platform. Waggle checks them before saving, so nothing fails later.
+          </span>
+        </section>
+      )}
+
+      {needsConsent(pickedPlatforms) && (
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            name="tiktokConsent"
+            value="yes"
+            required
+            className="mt-0.5 size-4"
+          />
+          <span>
+            I&apos;ve checked this post and agree to publish it to TikTok. It posts publicly.
+          </span>
+        </label>
+      )}
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">When</legend>
@@ -196,7 +276,11 @@ function ComposeFields({
       </fieldset>
 
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant="primary" disabled={pending || accounts.length === 0}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={pending || picked.length === 0 || checks.some((c) => c.level === "blocked")}
+        >
           {pending
             ? "Saving…"
             : when === "now"

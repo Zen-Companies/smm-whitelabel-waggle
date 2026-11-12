@@ -32,6 +32,7 @@ import { parseDir, parseMade, parseSort, parseType } from "./posts";
 import { PostsSection } from "./posts-section";
 import { ANALYTICS_PERIODS } from "./sync";
 import { WorkSection } from "./work-section";
+import { isAnalyticsLive } from "@/lib/social/platforms";
 
 // Analytics (T49-T52, design v3 "Analytics"): the brand's numbers, copied from Zernio by the
 // sync job (TDD §7.7), and Waggle's own work from our tables. Controls are links (searchParams).
@@ -77,7 +78,10 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
   // First run of a brand: nothing connected yet (T47 "Set up <brand>").
   if (accounts.length === 0) return <BrandSetup brandName={tenant.name} />;
 
-  const platforms = [...new Set(accounts.map((a) => a.platform))];
+  const connected = [...new Set(accounts.map((a) => a.platform))];
+  // Platform filters only where the analytics pages cover the platform today.
+  const platforms = connected.filter(isAnalyticsLive);
+  const notCovered = connected.filter((p) => !isAnalyticsLive(p));
   const section = parseSection(param(params, "section"));
   const period = parsePeriod(param(params, "period"));
   const platform = parsePlatform(param(params, "platform"), platforms);
@@ -213,6 +217,12 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
           ))}
         </nav>
         {asOf && <p className="meta">{asOf}</p>}
+        {notCovered.length > 0 && section !== "work" && (
+          <p className="meta">
+            Numbers for {notCovered.map(platformName).join(", ")} come in an update. Their posts
+            still count in All.
+          </p>
+        )}
       </div>
       <AccountProblems accounts={accounts} />
       {body}

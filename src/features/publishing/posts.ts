@@ -1,8 +1,11 @@
+import * as Sentry from "@sentry/nextjs";
 import { writeAudit } from "@/lib/audit";
+import { isSocialPlatform } from "@/lib/social/types";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { checkPlatform, type RuleCheck } from "./post-rules";
 import { publishPost } from "./publish";
 
 // Post creation and cancelling without a form: the Server Actions (compose card) and the MCP
@@ -25,8 +28,22 @@ export type CreatePostResult =
     }
   | {
       ok: false;
-      error: "accounts_not_owned" | "account_disconnected" | "too_soon" | "save_failed";
+      error:
+        | "accounts_not_owned"
+        | "account_disconnected"
+        | "too_soon"
+        | "save_failed"
+        | "consent_required";
+    }
+  | {
+      ok: false;
+      error: "not_accepted";
+      /** Per platform, why the post can't go there as it is (our rules, then Zernio's check). */
+      problems: { platform: string; message: string }[];
     };
+
+/** How long Zernio's check may take before the post is saved without it. */
+const VALIDATE_TIMEOUT_MS = 15_000;
 
 /**
  * Saves a post and hands it to the publisher. Only the tenant's own active accounts (Zernio
@@ -42,6 +59,8 @@ export async function createPost(
     accountIds: string[];
     scheduledFor: Date | null;
     media?: { url: string }[];
+    /** The owner confirmed TikTok's consent for this post. */
+    tiktokConsent?: boolean;
     via?: Record<string, string>;
     now?: Date;
   },
@@ -54,7 +73,7 @@ export async function createPost(
   const accountIds = [...new Set(input.accountIds)];
   const { data: owned } = await db
     .from("social_accounts")
-    .select("id, status")
+    .select("id, status, platform, zernio_account_id")
     .eq("tenant_id", input.tenantId)
     .in("id", accountIds);
   if (!accountIds.length || owned?.length !== accountIds.length) {
@@ -63,6 +82,47 @@ export async function createPost(
   if (owned.some((a) => a.status !== "active")) return { ok: false, error: "account_disconnected" };
 
   const media = input.media ?? [];
+  // Each platform's rules (photos only for now: the composer uploads images).
+  const blocked = owned
+    .map((a) =>
+      checkPlatform(a.platform, {
+        textLength: input.content.length,
+        images: media.length,
+        videos: 0,
+      }),
+    )
+    .filter((c): c is Extract<RuleCheck, { level: "blocked" }> => c.level === "blocked");
+  if (blocked.length) {
+    return {
+      ok: false,
+      error: "not_accepted",
+      problems: blocked.map((c) => ({ platform: c.platform, message: c.message })),
+    };
+  }
+  if (owned.some((a) => a.platform === "tiktok") && !input.tiktokConsent) {
+    return { ok: false, error: "consent_required" };
+  }
+  // Zernio's dry run: the platforms' real rules, which may have changed since our table. If the
+  // check itself fails (timeout, pause), the post is saved anyway and publishing reports it.
+  try {
+    const check = await deps.social().validatePost({
+      content: input.content,
+      mediaUrls: media.map((m) => m.url),
+      targets: owned.flatMap((a) =>
+        isSocialPlatform(a.platform)
+          ? [{ platform: a.platform, accountId: a.zernio_account_id }]
+          : [],
+      ),
+      signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
+    });
+    if (!check.valid && check.errors.length) {
+      return { ok: false, error: "not_accepted", problems: check.errors };
+    }
+  } catch (error) {
+    if (!isPlatformPaused(error)) {
+      Sentry.captureException(error, { extra: { tenantId: input.tenantId, step: "validatePost" } });
+    }
+  }
   const { data: post, error } = await db
     .from("posts")
     .insert({
@@ -72,6 +132,7 @@ export async function createPost(
       target_account_ids: accountIds,
       scheduled_for: input.scheduledFor?.toISOString() ?? null,
       status: "queued",
+      tiktok_consent_at: input.tiktokConsent ? now.toISOString() : null,
     })
     .select("id")
     .single();

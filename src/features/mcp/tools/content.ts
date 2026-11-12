@@ -23,6 +23,7 @@ import {
   PUBLIC_ACTION,
   READ,
 } from "./define";
+import { platformLabel } from "@/lib/social/platforms";
 
 // Business info, posts and analytics. Analytics read the copies the sync job keeps (no Zernio
 // call); creating or cancelling a post goes through publishing like the compose card.
@@ -178,12 +179,20 @@ export const createPostTool = defineTool({
       },
     );
     if (!r.ok) {
+      if (r.error === "not_accepted") {
+        throw new ToolError(
+          "invalid_input",
+          r.problems.map((p) => `${platformLabel(p.platform)}: ${p.message}`).join(" "),
+        );
+      }
       const messages = {
         accounts_not_owned: "Use account_id values of this brand from list_brands.",
         account_disconnected:
           "One of these accounts is disconnected; the owner reconnects it in Waggle.",
         too_soon: "Schedule at least 5 minutes ahead, or use publish_at: now.",
         save_failed: "The post couldn't be saved. Try again.",
+        consent_required:
+          "TikTok needs the owner's confirmation on every post; the owner posts to TikTok in Waggle.",
       } as const;
       throw new ToolError(
         r.error === "save_failed" ? "unavailable" : "invalid_input",

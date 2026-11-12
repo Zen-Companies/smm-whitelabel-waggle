@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { z } from "zod";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { isInboxLive } from "@/lib/social/platforms";
 import { isSocialPlatform, type SocialPlatform } from "@/lib/social/types";
 import { writeAudit } from "@/lib/audit";
 import { insertInboundItem } from "./items";
@@ -239,8 +240,11 @@ async function accountFor(
     : { accountId: result.accountId };
 }
 
+/** Comments and DMs only for platforms whose inbox is live (later waves add the rest). */
 function supportedAccount(account: AccountBlock) {
-  return isSocialPlatform(account.platform) ? { ...account, platform: account.platform } : null;
+  return isSocialPlatform(account.platform) && isInboxLive(account.platform)
+    ? { ...account, platform: account.platform }
+    : null;
 }
 
 async function mapComment(

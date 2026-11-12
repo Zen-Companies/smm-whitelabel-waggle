@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
+import { platformLabel } from "@/lib/social/platforms";
 
 // The in-app notification center (docs/design.md §5): rows written by DB triggers (alerts, post
 // outcomes, auto-sent batches), described here in plain words (§7).
@@ -52,7 +53,7 @@ export interface Lookups {
 }
 
 const snippet = (text: string, n = 60) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
-const platform = (p?: string) => (p === "facebook" ? "Facebook" : "Instagram");
+const platform = (p?: string) => (p ? platformLabel(p) : "Instagram");
 
 /** Pure: one row in plain words, with where it leads. */
 export function describeNotification(row: NotificationRow, l: Lookups): NotificationView {

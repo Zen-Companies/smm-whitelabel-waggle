@@ -4,6 +4,7 @@ import {
   createZernioProvider,
   isPlatformPaused,
   parseRetryAfter,
+  pickTikTokPrivacy,
   type ZernioSocialProvider,
 } from "./zernio";
 
@@ -685,5 +686,13 @@ describe("parseRetryAfter", () => {
     expect(parseRetryAfter("Thu, 29 Oct 2026 11:00:00 GMT", now)).toBe(0);
     expect(parseRetryAfter("soon", now)).toBeUndefined();
     expect(parseRetryAfter(null, now)).toBeUndefined();
+  });
+});
+
+describe("pickTikTokPrivacy", () => {
+  it("prefers public, else the first level TikTok offers", () => {
+    expect(pickTikTokPrivacy(["SELF_ONLY", "PUBLIC_TO_EVERYONE"])).toBe("PUBLIC_TO_EVERYONE");
+    expect(pickTikTokPrivacy([undefined, "FOLLOWER_OF_CREATOR"])).toBe("FOLLOWER_OF_CREATOR");
+    expect(pickTikTokPrivacy([])).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import type { InboxEntry } from "./inbox-data";
 import { responseTime } from "./inbox-data";
+import { platformLabel } from "@/lib/social/platforms";
 
 /** The icon at the start of a row's third line (design.md §1 rule 4). */
 export type RowTone = "lead" | "complaint" | "info" | "done" | "none";
@@ -16,7 +17,7 @@ export interface RowNote {
  */
 export function rowNote(entry: InboxEntry & { status: string }): RowNote {
   const lead = entry.category === "lead";
-  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  const platform = platformLabel(entry.platform);
   // T41: a comment answered in the commenter's DMs.
   const viaDm = entry.kind === "comment" && entry.draft?.replyVia === "dm";
   // T40: a comment hidden on its post, whoever hid it.

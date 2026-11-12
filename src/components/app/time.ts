@@ -1,3 +1,5 @@
+import { platformLabel } from "@/lib/social/platforms";
+
 /** "2:14 PM" today, "Yesterday", "Oct 28" this year, "Oct 28, 2025" otherwise. */
 export function shortTime(iso: string, now = new Date()): string {
   const d = new Date(iso);
@@ -16,8 +18,7 @@ export function shortTime(iso: string, now = new Date()): string {
 export const clockTime = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
-export const platformName = (p: string | null | undefined) =>
-  p === "facebook" ? "Facebook" : "Instagram";
+export const platformName = (p: string | null | undefined) => (p ? platformLabel(p) : "Instagram");
 
 /** Day separator in a thread: "Today", "Yesterday", "Oct 28". */
 export function dayLabel(iso: string, now = new Date()): string {

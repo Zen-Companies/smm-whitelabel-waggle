@@ -1,4 +1,5 @@
 import { SocialProviderError } from "@/lib/social/types";
+import { platformLabel } from "@/lib/social/platforms";
 
 // T21 offboarding: pure pieces of the staff Brands page and the clean-up (unit tested).
 
@@ -33,8 +34,7 @@ export function nameMatches(typed: string, name: string): boolean {
   return norm(typed) !== "" && norm(typed) === norm(name);
 }
 
-const PLATFORM_LABELS: Record<string, string> = { instagram: "Instagram", facebook: "Facebook" };
-export const platformLabel = (p: string) => PLATFORM_LABELS[p] ?? p;
+export { platformLabel };
 
 /** Why a Zernio removal failed, in words an admin can act on. */
 export function describeFailure(error: unknown): string {

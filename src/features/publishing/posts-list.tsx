@@ -2,6 +2,7 @@ import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Loader } from "lu
 import { createServerSupabase } from "@/lib/supabase/server";
 import { needsNewTime } from "./calendar";
 import { CancelPostButton, RetryPostForm } from "./post-actions";
+import { platformLabel } from "@/lib/social/platforms";
 
 // Posts (PRD F3): one post with its status and actions, and the List view. Read through RLS.
 
@@ -140,12 +141,7 @@ export function Post({
 export const accountNames = (
   accounts: { id: string; platform: string; username: string | null }[],
 ) =>
-  new Map(
-    accounts.map((a) => [
-      a.id,
-      `${a.platform === "facebook" ? "Facebook" : "Instagram"} @${a.username ?? "account"}`,
-    ]),
-  );
+  new Map(accounts.map((a) => [a.id, `${platformLabel(a.platform)} @${a.username ?? "account"}`]));
 
 export async function loadPosts(tenantId: string) {
   const supabase = await createServerSupabase();

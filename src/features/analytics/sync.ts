@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import type { Json } from "@/lib/supabase/database.types";
 import { getPlatformPause } from "@/lib/social/platform-pause";
 import type { ProviderPostMetrics } from "@/lib/social/analytics-types";
+import { isAnalyticsLive } from "@/lib/social/platforms";
 import { SocialProviderError, type SocialPlatform, type SocialProvider } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
 
@@ -148,7 +149,13 @@ async function syncTenant(
     .select("id, platform, zernio_account_id, username")
     .eq("tenant_id", tenant.id)
     .eq("status", "active");
-  const platforms = [...new Set((accounts ?? []).map((a) => a.platform as SocialPlatform))];
+  // Per-platform views only where the analytics pages cover the platform (the "all" view and
+  // post numbers include every platform).
+  const platforms = [
+    ...new Set(
+      (accounts ?? []).map((a) => a.platform).filter((p) => isAnalyticsLive(p)) as SocialPlatform[],
+    ),
+  ];
 
   const save = async (key: string, data: unknown) => {
     const { error } = await db
@@ -205,6 +212,7 @@ async function syncTenant(
     });
     await save(BEST_TIME_KEY, { slots: await social.getBestTimeToPost({ profileId }) });
     for (const account of accounts ?? []) {
+      if (!isAnalyticsLive(account.platform)) continue;
       const platform = account.platform as SocialPlatform;
       // Meta refuses breakdowns under 100 followers: that's a normal state, kept as a reason.
       const demographics = await social

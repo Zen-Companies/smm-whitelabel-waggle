@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { connectAccount } from "./actions";
 import { disconnectedDetails } from "./banner-copy";
+import { platformLabel } from "@/lib/social/platforms";
 
 /**
  * Account-wide problems (docs/design.md §4): one amber banner at the top of every page that stays
@@ -46,7 +47,7 @@ export async function AccountBanner() {
         .limit(1)
         .maybeSingle(),
     ]);
-    const platform = down.platform === "facebook" ? "Facebook" : "Instagram";
+    const platform = platformLabel(down.platform);
     const details = disconnectedDetails({
       username: down.username,
       waiting: waiting ?? 0,

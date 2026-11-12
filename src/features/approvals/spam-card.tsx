@@ -5,9 +5,9 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { hideSpamAction, notSpamAction, unhideAction, type SpamFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
+import { platformLabel } from "@/lib/social/platforms";
 
-const platformName = (entry: Pick<InboxEntry, "platform">) =>
-  entry.platform === "facebook" ? "Facebook" : "Instagram";
+const platformName = (entry: Pick<InboxEntry, "platform">) => platformLabel(entry.platform);
 
 /** The "already gone" note, shown in place after a hide (design v3, T40). */
 function GoneNote({ platform }: { platform: string }) {

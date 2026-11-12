@@ -11,6 +11,7 @@ import { privateReplyClosesAt, privateReplyLeft } from "./private-reply";
 import { decideDraft, undoApprovalAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
 import { REPLY_MAX } from "./limits";
+import { platformLabel } from "@/lib/social/platforms";
 
 // Recently approved replies live outside the card: approving moves the item out of the list
 // (Realtime refresh), which unmounts the card, but the Sent row must stay for the undo window.
@@ -193,7 +194,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
   if (state.approved) return null;
   const left =
     entry.kind === "comment" ? (via === "dm" ? dmLeft : null) : windowLeft(entry.dmWindowClosesAt);
-  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  const platform = platformLabel(entry.platform);
   const sending = pending && intent === "approve";
 
   return (

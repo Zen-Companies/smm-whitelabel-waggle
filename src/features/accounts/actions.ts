@@ -6,14 +6,21 @@ import { z } from "zod";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
+import { isConnectable } from "@/lib/social/platforms";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 
-const connectSchema = z.object({ platform: z.enum(["instagram", "facebook"]) });
+const connectSchema = z.object({
+  platform: z.string().refine(isConnectable, "Not a platform Waggle connects yet."),
+});
 
 /** Starts Zernio's connect flow; Zernio sends the browser back to /settings afterwards. */
 export async function connectAccount(formData: FormData): Promise<void> {
-  const { platform } = connectSchema.parse(Object.fromEntries(formData));
+  const parsed = connectSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success || !isConnectable(parsed.data.platform)) {
+    redirect("/settings?connect_error=unavailable");
+  }
+  const platform = parsed.data.platform;
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) redirect("/settings?connect_error=not_allowed");
   const db = getServiceClient();

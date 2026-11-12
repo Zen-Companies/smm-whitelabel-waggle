@@ -687,3 +687,10 @@ Decisions (2026-11-09): only our admins offboard (staff permission `brands.manag
 - **Hard delete** (`purgeDueBrands` in the minute job, at most 2 per run, retried hourly on failure): accounts still on Zernio, then `DELETE /v1/profiles/{id}`, then `purge_tenant` deletes every tenant table except `ai_usage` and `audit_log` (audit details lose `groundingIssues` and `note`), removes the brand from `mcp_grants`, blanks business info and the profile id, and sets `purged_at`. The tenant row stays for costs. `audit_log`/`ai_usage` item links became `on delete set null (item_id)` so they survive. A pgTAP test fails if a new tenant table isn't listed in `purge_tenant` or kept on purpose.
 - Not covered: `webhook_events` payloads have no tenant id and are not deleted with the brand.
 
+## 21. All platforms (T59, wave 1, 2026-11-12)
+
+- **One table** (`src/lib/social/platforms.ts`): Zernio's platform ids are what `social_accounts.platform` stores (`twitter` is X, `googlebusiness` is Google Business). Screens, connect, the composer, the inbox gate and analytics read from it.
+- **Two layers of post checks.** The table's rules give the composer its hints and refuse what clearly can't go (Instagram/TikTok without media, YouTube without video, text over a limit). Zernio's dry run (`validatePost`) is the last check before saving, so a rule that changes upstream is still caught. A failed dry run (timeout, pause) doesn't block saving.
+- **TikTok** needs consent on every post: `posts.tiktok_consent_at`, sent as `contentPreviewConfirmed`/`expressConsentGiven` with a privacy level picked from the account's creator info (public when offered).
+- **Live flags.** `inboxLive` keeps comment/DM ingest and backfill on Instagram/Facebook until the inbox waves; `analyticsLive` keeps per-platform analytics views there too ("Numbers for X come in an update"; their posts still count in All).
+

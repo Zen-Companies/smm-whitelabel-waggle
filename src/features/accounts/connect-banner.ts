@@ -2,12 +2,13 @@
 // `error` (+ optional `error_message`) and `platform` on failure; on success only our own
 // `connecting` param is there, and the account arrives a moment later via account.connected.
 
+import { isPlatformId, platformLabel } from "@/lib/social/platforms";
+
 export interface ConnectBanner {
   tone: "info" | "error";
   text: string;
 }
 
-const PLATFORM_NAMES: Record<string, string> = { instagram: "Instagram", facebook: "Facebook" };
 const MAX_MESSAGE = 300;
 
 type Params = Record<string, string | string[] | undefined>;
@@ -16,7 +17,7 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 
 export function connectBanner(params: Params): ConnectBanner | null {
   const platformKey = first(params.platform) ?? first(params.connecting) ?? "";
-  const platform = PLATFORM_NAMES[platformKey] ?? "the account";
+  const platform = isPlatformId(platformKey) ? platformLabel(platformKey) : "the account";
 
   // Our Zernio plan has no room for another profile (402): ours to fix, not the owner's.
   if (first(params.connect_error) === "plan_limit") {

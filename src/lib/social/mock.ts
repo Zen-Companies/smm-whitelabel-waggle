@@ -11,10 +11,12 @@ import type {
   ProviderMessage,
   ProviderReview,
   ProviderPostStatus,
+  PostValidation,
   ProviderUsage,
   SocialPlatform,
   SocialProvider,
 } from "./types";
+import { platformLabel, platformOf } from "./platforms";
 import { SocialProviderError } from "./types";
 import {
   MOCK_BEST_TIMES,
@@ -63,6 +65,24 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   /** Sends the browser straight back to the app; no account is connected. */
+  /** Zernio's dry run, from the registry's rules (the real one checks more). */
+  async validatePost(
+    input: Omit<CreatePostInput, "publishAt" | "idempotencyKey">,
+  ): Promise<PostValidation> {
+    const media = input.mediaUrls?.length ?? 0;
+    const errors: PostValidation["errors"] = [];
+    for (const t of input.targets) {
+      const rules = platformOf(t.platform)?.post;
+      const name = platformLabel(t.platform);
+      if (!rules) errors.push({ platform: t.platform, message: `${name} does not support posts.` });
+      else if (rules.mediaRequired && media === 0)
+        errors.push({ platform: t.platform, message: `${name} requires media.` });
+      else if (input.content.length > rules.textMax)
+        errors.push({ platform: t.platform, message: `${name} text is too long.` });
+    }
+    return { valid: errors.length === 0, errors, warnings: [] };
+  }
+
   async getConnectUrl(input: { platform: SocialPlatform; profileId: string; redirectUrl: string }) {
     const url = new URL(input.redirectUrl);
     url.searchParams.set("mock_connect", "1");

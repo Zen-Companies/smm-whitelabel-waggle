@@ -12,6 +12,7 @@ import {
   postsCsv,
   sortPosts,
 } from "./posts";
+import { isAnalyticsLive } from "@/lib/social/platforms";
 
 /** "Download CSV" (T50): the Posts table as shown (same period, platform, filters and order). */
 export async function postsCsvResponse(params: URLSearchParams): Promise<Response> {
@@ -22,7 +23,7 @@ export async function postsCsvResponse(params: URLSearchParams): Promise<Respons
   const period = parsePeriod(get("period"));
   const platform = parsePlatform(
     get("platform"),
-    accounts.map((a) => a.platform),
+    accounts.map((a) => a.platform).filter(isAnalyticsLive),
   );
   const w = windowFor(period, new Date());
   const posts = await loadPostMetrics(supabase, tenant.id, { from: w.from, to: w.to, platform });

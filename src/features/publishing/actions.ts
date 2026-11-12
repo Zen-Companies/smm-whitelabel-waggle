@@ -11,6 +11,7 @@ import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import { getServiceClient } from "@/lib/supabase/service";
 import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX } from "./limits";
+import { imageMaxBytesFor } from "./post-rules";
 import { publishPost } from "./publish";
 import { cancelScheduledPost, createPost } from "./posts";
 
@@ -21,6 +22,8 @@ export interface ComposeState {
   /** Set when the post was saved: the form resets and the new post shows in the list. */
   savedAt?: number;
   outcome?: "published" | "scheduled" | "waiting" | "failed";
+  /** Platforms that won't take the post as it is, with why (shown in "Before it goes out"). */
+  problems?: { platform: string; message: string }[];
 }
 
 const composeSchema = z.object({
@@ -65,8 +68,21 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     if (!(POST_IMAGE_TYPES as readonly string[]).includes(image.type)) {
       return { error: "Use a JPG, PNG or WebP image.", field: "image" };
     }
-    if (image.size > POST_IMAGE_MAX_BYTES) {
-      return { error: "Use an image under 5 MB.", field: "image" };
+    // The strictest size among the picked platforms (Bluesky takes 1 MB).
+    const { data: picked } = await db
+      .from("social_accounts")
+      .select("platform")
+      .eq("tenant_id", tenant.id)
+      .in("id", accounts);
+    const maxBytes = imageMaxBytesFor(
+      (picked ?? []).map((a) => a.platform),
+      POST_IMAGE_MAX_BYTES,
+    );
+    if (image.size > maxBytes) {
+      return {
+        error: `Use an image under ${Math.round(maxBytes / 100_000) / 10} MB.`,
+        field: "image",
+      };
     }
     try {
       const { publicUrl } = await getSocialProvider().uploadMedia({
@@ -98,9 +114,20 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
       accountIds: accounts,
       scheduledFor,
       media,
+      tiktokConsent: formData.get("tiktokConsent") === "yes",
     },
   );
   if (!result.ok) {
+    if (result.error === "not_accepted") {
+      return {
+        problems: result.problems,
+        error: "Some platforms won't take this post as it is.",
+        field: "accounts",
+      };
+    }
+    if (result.error === "consent_required") {
+      return { error: "Tick the TikTok confirmation to post there.", field: "accounts" };
+    }
     if (result.error === "accounts_not_owned") {
       return { error: "Pick your connected accounts only.", field: "accounts" };
     }

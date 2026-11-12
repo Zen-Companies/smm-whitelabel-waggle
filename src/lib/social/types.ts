@@ -8,11 +8,18 @@ import type {
   ProviderPostMetrics,
 } from "./analytics-types";
 
-export const SOCIAL_PLATFORMS = ["instagram", "facebook"] as const;
-export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
+import { isPlatformId, PLATFORM_IDS, type PlatformId } from "./platforms";
 
-export function isSocialPlatform(platform: string): platform is SocialPlatform {
-  return (SOCIAL_PLATFORMS as readonly string[]).includes(platform);
+/** Every platform Zernio offers (src/lib/social/platforms.ts has what each one allows). */
+export const SOCIAL_PLATFORMS = PLATFORM_IDS;
+export type SocialPlatform = PlatformId;
+export const isSocialPlatform = isPlatformId;
+
+/** Zernio's dry run of a post (`POST /v1/tools/validate/post`): per-platform problems. */
+export interface PostValidation {
+  valid: boolean;
+  errors: { platform: string; message: string }[];
+  warnings: { platform: string; message: string }[];
 }
 
 export interface CreatePostInput {
@@ -23,6 +30,11 @@ export interface CreatePostInput {
   /** null publishes now. */
   publishAt: Date | null;
   idempotencyKey: string;
+  /**
+   * TikTok: the owner ticked "I've checked this post and agree to publish it" (TikTok requires it
+   * on every post). Without it a TikTok target is refused.
+   */
+  tiktokConsent?: boolean;
 }
 
 export type ProviderPostStatus =
@@ -119,6 +131,13 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }>;
+  /**
+   * Checks a post against each platform's real rules without publishing
+   * (`POST /v1/tools/validate/post`, same body as createPost). The composer's last check.
+   */
+  validatePost(
+    input: Omit<CreatePostInput, "publishAt" | "idempotencyKey"> & CallOptions,
+  ): Promise<PostValidation>;
   /**
    * Uploads one image for a post: `POST /v1/media/presign` then a PUT of the bytes to the
    * returned `uploadUrl`. Returns the public URL to pass in `CreatePostInput.mediaUrls`.

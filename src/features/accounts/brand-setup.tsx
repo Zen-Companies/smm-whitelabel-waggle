@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { platformLabel } from "@/lib/social/platforms";
 import { connectAccount } from "./actions";
-import { SUPPORTED_PLATFORMS } from "./events";
 
-const PLATFORM_NAMES: Record<string, string> = { instagram: "Instagram", facebook: "Facebook" };
+/** The two most brands start with; every other platform is on Settings → Accounts. */
+const FIRST_PLATFORMS = ["instagram", "facebook"] as const;
 
 function Step({ n, done, children }: { n: number; done?: boolean; children: React.ReactNode }) {
   return (
@@ -41,18 +42,21 @@ export function BrandSetup({ brandName }: { brandName: string }) {
           <span className="flex flex-col gap-0.5">
             <b className="text-[15px] font-semibold">Connect its accounts</b>
             <span className="text-ink-2">
-              Log in as {brandName} on Instagram or Facebook, not as one of your other brands.
+              Log in as {brandName}, not as one of your other brands.
             </span>
           </span>
-          <span className="flex flex-wrap gap-2">
-            {SUPPORTED_PLATFORMS.map((platform, i) => (
+          <span className="flex flex-wrap items-center gap-2">
+            {FIRST_PLATFORMS.map((platform, i) => (
               <form key={platform} action={connectAccount}>
                 <input type="hidden" name="platform" value={platform} />
                 <Button type="submit" variant={i === 0 ? "primary" : "secondary"}>
-                  Connect {PLATFORM_NAMES[platform] ?? platform}
+                  Connect {platformLabel(platform)}
                 </Button>
               </form>
             ))}
+            <Link href="/settings?section=accounts" className="text-sm font-medium">
+              TikTok, Google, YouTube and more
+            </Link>
           </span>
         </Step>
         <Step n={2}>

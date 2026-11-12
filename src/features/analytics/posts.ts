@@ -1,5 +1,6 @@
 import type { PostTimelinePoint } from "@/lib/social/analytics-types";
 import { formatName, shortDate } from "./format";
+import { platformLabel } from "@/lib/social/platforms";
 
 // Posts (T50): filtering, sorting, the CSV and a post's first 14 days. Pure.
 
@@ -99,8 +100,6 @@ export function bestPosts(posts: PostMetricRow[], count = 5): PostMetricRow[] {
     .sort((a, b) => interactions(b) - interactions(a) || b.reach - a.reach)
     .slice(0, count);
 }
-
-const platformLabel = (p: string) => (p === "facebook" ? "Facebook" : "Instagram");
 
 /** "Reel · Instagram · Oct 26 · made in Waggle" */
 export function postMeta(p: PostMetricRow): string {

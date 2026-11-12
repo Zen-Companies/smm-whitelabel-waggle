@@ -35,6 +35,7 @@ import {
 } from "./inbox-data";
 import { InboxLive } from "./inbox-live";
 import { rowNote, type RowTone } from "./row-note";
+import { platformLabel } from "@/lib/social/platforms";
 
 // Inbox (design.md v3 Paper): a headline ("4 things need you"), then list | conversation with the
 // reply composer | side panel on desktop; list → conversation on phones. Rows follow the ten rules:
@@ -154,7 +155,7 @@ function NextPostNote({ post }: { post: NextPost }) {
 
 /** T41: a comment answered in DM (design v3 "Reply in DM"): sent, or checking after a retry. */
 function DmReplyFooter({ entry }: { entry: InboxEntry & { status: string } }) {
-  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  const platform = platformLabel(entry.platform);
   if (entry.status === "sending" && entry.attempts > 0) {
     return (
       <p
@@ -194,7 +195,7 @@ function DmReplyFooter({ entry }: { entry: InboxEntry & { status: string } }) {
 /** T42: a review's reply went up on the Page (design v3 "Facebook Page reviews"). */
 function ReviewReplyFooter({ entry }: { entry: InboxEntry & { status: string } }) {
   if (entry.status !== "sent") return <SentFooter entry={entry} />;
-  const platform = entry.platform === "facebook" ? "Facebook" : "Instagram";
+  const platform = platformLabel(entry.platform);
   const who = entry.authorName ? `${entry.authorName}'s` : "the";
   return (
     <p

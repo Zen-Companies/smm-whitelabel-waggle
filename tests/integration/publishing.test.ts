@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { POST } from "@/app/api/webhooks/zernio/route";
 import { signZernioBody } from "@/features/inbox/signature";
 import { settleMockPosts } from "@/features/publishing/mock-settle";
+import { createPost } from "@/features/publishing/posts";
 import { publishPost, publishQueuedPosts } from "@/features/publishing/publish";
 import { MockSocialProvider } from "@/lib/social/mock";
 import {
@@ -299,9 +300,48 @@ describe("publishing (T14)", () => {
     const post = await queuedPost({ targets: [accountId, other!.id] });
     expect(await publishPost(deps(), post.id)).toMatchObject({ outcome: "failed" });
     expect((await postRow(post.id)).last_error).toContain(
-      "facebook @postingcafe.fb is disconnected",
+      "Facebook @postingcafe.fb is disconnected",
     );
     expect(social.calls).toEqual([]);
+  });
+
+  it("platform rules: a text-only post to Instagram is refused before anything is saved", async () => {
+    const before = social.posts.size;
+    const r = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "No photo this time",
+      accountIds: [accountId],
+      scheduledFor: null,
+    });
+    expect(r).toEqual({
+      ok: false,
+      error: "not_accepted",
+      problems: [{ platform: "instagram", message: "Instagram needs a photo or video." }],
+    });
+    expect(social.posts.size).toBe(before);
+  });
+
+  it("Zernio's check refuses what our rules let through, with its own reason", async () => {
+    const original = social.validatePost.bind(social);
+    social.validatePost = async () => ({
+      valid: false,
+      errors: [{ platform: "instagram", message: "Aspect ratio not supported." }],
+      warnings: [],
+    });
+    try {
+      const r = await createPost(deps(), {
+        tenantId,
+        userId: randomUUID(),
+        content: "With a photo",
+        accountIds: [accountId],
+        scheduledFor: null,
+        media: [{ url: "https://example.com/a.jpg" }],
+      });
+      expect(r).toMatchObject({ ok: false, error: "not_accepted" });
+    } finally {
+      social.validatePost = original;
+    }
   });
 
   it("another tenant's account can't be a target (DB trigger)", async () => {

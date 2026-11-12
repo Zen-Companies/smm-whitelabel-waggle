@@ -249,6 +249,16 @@ Decided and approved 2026-11-10 (access-model page + design v3 row "Organization
 - [ ] **T58. AI assistants by role**: MCP tools follow the member's role (viewer read only).
       _Status (2026-11-10):_ every "act" tool names its ability (`replies.approve` for approve/write/undo/resolve/hide, `posts.write` for create/cancel post); `resolveBrand` checks it against the user's role in that brand and answers `role_not_allowed` (viewers' assistants only read). Unit tests in `context.test.ts` and `registry.test.ts`.
 
+## Phase 9: All Zernio platforms
+
+Plan: `docs/platforms/PLAN.md`; research `docs/platforms/RESEARCH.md`; designs approved 2026-11-12 (canvas pages "Waiting for approval" → Platforms, and "Platform limits").
+
+- [ ] **T59. Wave 1: platform table, connect, posting** for every platform Zernio offers.
+      _Status (2026-11-12):_ `src/lib/social/platforms.ts` (one entry per platform: label, mark, kind, connect method, post rules, inbox abilities, `inboxLive`, `analyticsLive`). Migrations `20261112150000_all_platforms` (platform checks widened; pgTAP `platforms.test.sql`) and `…150100_post_consent` (`posts.tiktok_consent_at`). Settings → Accounts: tiles grouped Answers messages / Posting only / Coming soon; OAuth platforms connect through Zernio, Bluesky/Telegram/WhatsApp/Discord show "Coming soon" until their setup steps are built. Composer: per-platform "Before it goes out" (`features/publishing/post-rules.ts`), counter = shortest limit of the picks, strictest image size, TikTok consent tick; `createPost` refuses blocked platforms, then runs Zernio's `POST /v1/tools/validate/post` (`SocialProvider.validatePost`) and shows its reasons in place; if the check itself fails the post is saved and publishing reports it. Inbox, backfill and per-platform analytics stay on Instagram/Facebook (`inboxLive`/`analyticsLive`). Labels everywhere come from the table. Not yet: video upload (YouTube needs it), Pinterest board choice (Zernio uses the first board), setup steps, live test with a real non-Meta account.
+- [ ] **T60. Wave 1b: setup steps**: Bluesky app password (`POST /v1/connect/bluesky/credentials`), Telegram bot code, WhatsApp hosted signup, Discord channel.
+- [ ] **T61. Inbox wave 1**: Google reviews, Threads comments, TikTok comments and DM replies (10 in 48 h).
+- [ ] **T62. Inbox wave 2**: YouTube, LinkedIn, Bluesky, X (cost decision first).
+
 ## Next (held, after Phase 6)
 
 From the same review, agreed 2026-11-05 to hold until Phase 6 is done:

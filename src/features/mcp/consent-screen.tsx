@@ -10,6 +10,7 @@ import { mcpBrandsOn, mcpOnGlobally } from "./flags";
 import { ConsentForm } from "./consent-form";
 import { loadUserBrands } from "./grants";
 import { assistantName, redirectAllowed, redirectAllowlist } from "./redirects";
+import { platformLabel } from "@/lib/social/platforms";
 
 // /oauth/consent (design v3 "AI assistants · Connect" + its states). Supabase sends the user here
 // with an authorization_id after an AI assistant starts signing in.
@@ -136,10 +137,7 @@ export async function ConsentScreen({ authorizationId }: { authorizationId: stri
   const accountsOf = (tenantId: string) => {
     const list = (accounts ?? [])
       .filter((a) => a.tenant_id === tenantId)
-      .map(
-        (a) =>
-          `${a.platform === "facebook" ? "Facebook" : "Instagram"}${a.username ? ` @${a.username}` : ""}`,
-      );
+      .map((a) => `${platformLabel(a.platform)}${a.username ? ` @${a.username}` : ""}`);
     return list.length ? list.join(" · ") : "No accounts connected yet";
   };
 

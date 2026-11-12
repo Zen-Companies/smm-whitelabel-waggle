@@ -1441,6 +1441,7 @@ export type Database = {
           status: string
           target_account_ids: string[]
           tenant_id: string
+          tiktok_consent_at: string | null
           zernio_post_id: string | null
         }
         ComputedFields: never
@@ -1460,6 +1461,7 @@ export type Database = {
           status?: string
           target_account_ids?: string[]
           tenant_id: string
+          tiktok_consent_at?: string | null
           zernio_post_id?: string | null
         }
         Update: {
@@ -1478,6 +1480,7 @@ export type Database = {
           status?: string
           target_account_ids?: string[]
           tenant_id?: string
+          tiktok_consent_at?: string | null
           zernio_post_id?: string | null
         }
         Relationships: [

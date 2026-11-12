@@ -8,9 +8,8 @@ import {
   setBrandPictureSource,
   type PictureSourceState,
 } from "./brand-picture-actions";
+import { platformLabel } from "@/lib/social/platforms";
 import type { PictureSource } from "./brand-picture";
-
-const PLATFORM: Record<string, string> = { instagram: "Instagram", facebook: "Facebook" };
 
 /**
  * Business → Brand picture (T57, design OrgPictures): a connected account's picture (it follows
@@ -63,7 +62,7 @@ export function BrandPictureForm({
               >
                 {withPictures.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {PLATFORM[a.platform] ?? a.platform}
+                    {platformLabel(a.platform)}
                     {a.username ? ` @${a.username}` : ""}
                   </option>
                 ))}

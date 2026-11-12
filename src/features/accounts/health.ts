@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { insertInboundItem } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { getPlatformPause, recordPlatformPause } from "@/lib/social/platform-pause";
+import { INBOX_LIVE } from "@/lib/social/platforms";
 import { isSocialPlatform, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -122,6 +123,7 @@ export async function backfillComments(
     .from("social_accounts")
     .select("id, tenant_id, zernio_account_id, backfill_from")
     .eq("status", "active")
+    .in("platform", INBOX_LIVE)
     .not("backfill_from", "is", null)
     .limit(opts.limit ?? 3);
   if (opts.tenantId) query = query.eq("tenant_id", opts.tenantId);
@@ -186,6 +188,7 @@ export async function requestBackfillForAll(db: ServiceClient, since: Date): Pro
     .from("social_accounts")
     .update({ backfill_from: since.toISOString() })
     .eq("status", "active")
+    .in("platform", INBOX_LIVE)
     .is("backfill_from", null);
   if (error) throw new Error(`requesting backfill failed: ${error.message}`);
 }
