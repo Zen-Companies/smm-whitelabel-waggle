@@ -92,3 +92,24 @@ describe("nextStatus", () => {
     for (const status of ITEM_STATUSES) expect(() => nextStatus(status, "fail")).not.toThrow();
   });
 });
+
+describe("answered on the platform (T65)", () => {
+  it("moves anything Waggle hasn't sent to handled", () => {
+    for (const from of [
+      "new",
+      "classified",
+      "drafted",
+      "awaiting_approval",
+      "escalated",
+      "failed",
+      "paused",
+    ] as const) {
+      expect(nextStatus(from, "answered_elsewhere")).toBe("handled");
+    }
+  });
+  it("never touches a reply Waggle is sending or sent", () => {
+    expect(nextStatus("sending", "answered_elsewhere")).toBeNull();
+    expect(nextStatus("sent", "answered_elsewhere")).toBeNull();
+    expect(nextStatus("handled", "answered_elsewhere")).toBeNull();
+  });
+});

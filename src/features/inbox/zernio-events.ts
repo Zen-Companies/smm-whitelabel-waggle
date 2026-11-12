@@ -118,6 +118,16 @@ export const reviewEventSchema = z.object({
   account: accountBlock,
 });
 
+/**
+ * review.updated (T65): a Google review changed. With `hasReply` it now has a reply, which is ours
+ * (Zernio fires it after our own reply too) or the owner's, written in Google itself.
+ */
+export const reviewUpdatedSchema = z.object({
+  event: z.literal("review.updated"),
+  review: z.object({ id: z.string().min(1), hasReply: z.boolean().optional() }),
+  account: accountBlock,
+});
+
 export const accountConnectedSchema = z.object({
   event: z.literal("account.connected"),
   account: z.object({

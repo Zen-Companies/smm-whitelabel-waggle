@@ -61,16 +61,28 @@ export type StatusEvent =
   /** the platform reported a sent reply as undelivered (message.failed) */
   | "delivery_failed"
   /** the owner dealt with an escalated or failed item themselves */
-  | "handle";
+  | "handle"
+  /**
+   * T65: the owner answered on the platform itself (a Google review replied to in Google) before
+   * Waggle sent anything: the waiting draft is dropped
+   */
+  | "answered_elsewhere";
 
 const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> = {
-  new: { classified: "classified", pause: "paused", escalate: "escalated", fail: "failed" },
+  new: {
+    classified: "classified",
+    pause: "paused",
+    escalate: "escalated",
+    fail: "failed",
+    answered_elsewhere: "handled",
+  },
   classified: {
     drafted: "drafted",
     ignore: "ignored",
     escalate: "escalated",
     pause: "paused",
     fail: "failed",
+    answered_elsewhere: "handled",
   },
   drafted: {
     await_approval: "awaiting_approval",
@@ -79,22 +91,33 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
     ignore: "ignored",
     pause: "paused",
     fail: "failed",
+    answered_elsewhere: "handled",
   },
-  awaiting_approval: { send: "sending", reject: "rejected", escalate: "escalated" },
+  awaiting_approval: {
+    send: "sending",
+    reject: "rejected",
+    escalate: "escalated",
+    answered_elsewhere: "handled",
+  },
   sending: {
     sent: "sent",
     escalate: "escalated",
     fail: "failed",
     await_approval: "awaiting_approval",
   },
-  paused: { resume: "new" },
+  paused: { resume: "new", answered_elsewhere: "handled" },
   sent: { delivery_failed: "failed" },
   rejected: {},
   ignored: {},
   // T41: "Reply publicly" after a comment's DM couldn't go out: the draft waits for approval again.
   // MCP Q1: the owner answers a handed-over message with their own words (`send`).
-  escalated: { handle: "handled", await_approval: "awaiting_approval", send: "sending" },
-  failed: { handle: "handled" },
+  escalated: {
+    handle: "handled",
+    await_approval: "awaiting_approval",
+    send: "sending",
+    answered_elsewhere: "handled",
+  },
+  failed: { handle: "handled", answered_elsewhere: "handled" },
   handled: {},
 };
 

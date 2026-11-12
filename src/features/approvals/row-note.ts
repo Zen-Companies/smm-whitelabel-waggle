@@ -52,6 +52,10 @@ export function rowNote(entry: InboxEntry & { status: string }): RowNote {
       text: rec ? `${rec} · ${next}` : next,
     };
   }
+  // T65: the owner answered on the platform before Waggle sent anything.
+  if (entry.status === "handled" && entry.answeredOnPlatformAt) {
+    return { tone: "done", text: `You replied on ${platform}` };
+  }
   switch (entry.status) {
     case "awaiting_approval":
       return lead

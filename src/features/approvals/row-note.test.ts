@@ -148,3 +148,18 @@ describe("rowNote: Google reviews (T61)", () => {
     ).toEqual({ tone: "none", label: "Review", text: "★★★★★ · for you to answer" });
   });
 });
+
+describe("rowNote: replied on the platform (T65)", () => {
+  it("says the owner replied on Google", () => {
+    expect(
+      rowNote(
+        entry({
+          kind: "review",
+          platform: "googlebusiness",
+          status: "handled",
+          answeredOnPlatformAt: "2026-11-12T10:00:00Z",
+        }),
+      ),
+    ).toEqual({ tone: "done", text: "You replied on Google Business" });
+  });
+});

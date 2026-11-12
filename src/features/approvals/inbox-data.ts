@@ -43,6 +43,8 @@ export interface InboxEntry {
   reviewRecommends: boolean | null;
   /** Google reviews (T61): 1–5 stars; null otherwise. */
   reviewRating?: number | null;
+  /** T65: the owner answered on the platform itself (Google), so Waggle's draft wasn't sent. */
+  answeredOnPlatformAt?: string | null;
 }
 
 export interface InboxData {
@@ -324,7 +326,7 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, " +
+      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, " +
         "social_accounts (platform), conversations (last_customer_message_at)",
     )
     .eq("tenant_id", tenantId);
@@ -350,6 +352,7 @@ export async function loadEntries(
     review_recommends: boolean | null;
     review_rating: number | null;
     conversation_id: string | null;
+    answered_on_platform_at: string | null;
     social_accounts: { platform: string } | null;
     conversations: { last_customer_message_at: string | null } | null;
   }[];
@@ -411,6 +414,7 @@ export async function loadEntries(
       hiddenOnPlatformAt: r.hidden_on_platform_at,
       reviewRecommends: r.review_recommends,
       reviewRating: r.review_rating,
+      answeredOnPlatformAt: r.answered_on_platform_at,
       dmWindowClosesAt:
         r.kind === "dm"
           ? (dmWindowClosesAt(platform, last ? new Date(last) : null)?.toISOString() ?? null)

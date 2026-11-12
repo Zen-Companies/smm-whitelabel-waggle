@@ -16,6 +16,7 @@ import {
   messageFailedSchema,
   postEventSchema,
   reviewEventSchema,
+  reviewUpdatedSchema,
   zernioAccountIdOf,
   type ZernioEnvelope,
 } from "./zernio-events";
@@ -161,6 +162,7 @@ async function mapEvent(
     "comment.received": (t) => mapComment(deps, t.tenantId, payload),
     "message.received": (t) => mapMessage(deps, t.tenantId, payload),
     "review.new": (t) => mapReview(deps, t.tenantId, payload),
+    "review.updated": (t) => mapReviewUpdated(deps.db, t.tenantId, payload),
     "post.published": (t) => mapPost(deps.db, t.tenantId, payload),
     "post.partial": (t) => mapPost(deps.db, t.tenantId, payload),
     "post.failed": (t) => mapPost(deps.db, t.tenantId, payload),
@@ -327,6 +329,67 @@ async function mapReview(
     rating: e.review.rating ?? null,
   });
   return { outcome: "processed", detail: created ? "item_created" : "item_exists" };
+}
+
+/** Statuses where Waggle hasn't sent (or started sending) a reply: an owner's reply wins. */
+const NOT_ANSWERED = [
+  "new",
+  "classified",
+  "drafted",
+  "awaiting_approval",
+  "escalated",
+  "failed",
+  "paused",
+] as const;
+
+/**
+ * T65: a review got a reply. If Waggle hasn't sent one (or isn't sending one), the owner wrote it
+ * in Google: the waiting draft is dropped so approving it can't replace theirs.
+ */
+async function mapReviewUpdated(
+  db: ServiceClient,
+  tenantId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(reviewUpdatedSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (!e.review.hasReply) return skipped("no_reply");
+  const { data: item } = await db
+    .from("inbound_items")
+    .select("id, status")
+    .eq("tenant_id", tenantId)
+    .eq("kind", "review")
+    .eq("zernio_review_id", e.review.id)
+    .maybeSingle();
+  if (!item) return skipped("unknown_review");
+  const from = NOT_ANSWERED.find((s) => s === item.status);
+  // Sending, sent, handled, ignored, rejected: the reply is ours, or nothing waits on it.
+  if (!from) return skipped("already_answered");
+
+  const { applied } = await transitionItem(db, {
+    itemId: item.id,
+    from,
+    event: "answered_elsewhere",
+    details: { platform: "googlebusiness" },
+  });
+  if (!applied) return skipped("item_moved");
+  await db
+    .from("inbound_items")
+    .update({ answered_on_platform_at: new Date().toISOString() })
+    .eq("id", item.id);
+  await db
+    .from("drafts")
+    .update({ status: "rejected" })
+    .eq("item_id", item.id)
+    .eq("status", "pending");
+  await writeAudit(db, {
+    tenantId,
+    itemId: item.id,
+    action: "answered_on_platform",
+    actor: "system",
+    details: { platform: "googlebusiness", previousStatus: item.status },
+  });
+  return { outcome: "processed", detail: "answered_on_platform" };
 }
 
 async function mapMessage(

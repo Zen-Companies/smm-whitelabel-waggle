@@ -630,6 +630,7 @@ export type Database = {
       }
       inbound_items: {
         Row: {
+          answered_on_platform_at: string | null
           attempts: number
           author_name: string | null
           category: string | null
@@ -659,6 +660,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          answered_on_platform_at?: string | null
           attempts?: number
           author_name?: string | null
           category?: string | null
@@ -687,6 +689,7 @@ export type Database = {
           zernio_review_id?: string | null
         }
         Update: {
+          answered_on_platform_at?: string | null
           attempts?: number
           author_name?: string | null
           category?: string | null

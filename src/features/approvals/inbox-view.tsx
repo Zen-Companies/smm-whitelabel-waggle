@@ -230,14 +230,18 @@ function SentFooter({ entry }: { entry: InboxEntry & { status: string } }) {
       {entry.status !== "sending" ? (
         <>
           <CircleCheck
-            className={entry.status === "sent" ? "text-success" : "text-ink-3"}
+            className={
+              entry.status === "sent" || entry.answeredOnPlatformAt ? "text-success" : "text-ink-3"
+            }
             strokeWidth={1.75}
             aria-hidden
           />
-          {done[entry.status] ??
-            `${entry.draft && !entry.draft.decidedByOwner ? "Answered on its own" : "Answered"}${
-              entry.draft?.sentAt ? ` · ${clockTime(entry.draft.sentAt)}` : ""
-            }`}
+          {entry.status === "handled" && entry.answeredOnPlatformAt
+            ? `You replied on ${platformLabel(entry.platform)} yourself, so Waggle's draft wasn't sent.`
+            : (done[entry.status] ??
+              `${entry.draft && !entry.draft.decidedByOwner ? "Answered on its own" : "Answered"}${
+                entry.draft?.sentAt ? ` · ${clockTime(entry.draft.sentAt)}` : ""
+              }`)}
         </>
       ) : (
         <>

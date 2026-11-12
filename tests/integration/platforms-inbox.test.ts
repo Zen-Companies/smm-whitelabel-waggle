@@ -187,6 +187,82 @@ describe("Google reviews (review.new)", () => {
   });
 });
 
+describe("Google reviews answered in Google itself (review.updated, T65)", () => {
+  const google = () => account("googlebusiness", "Harbour Bean Café");
+  const newReview = (acc: ReturnType<typeof account>) => ({
+    event: "review.new",
+    review: {
+      id: `accounts/1/locations/2/reviews/${short()}`,
+      platform: "googlebusiness",
+      rating: 2,
+      text: "Slow service.",
+      reviewer: { name: "Maria S." },
+      createdAt: new Date().toISOString(),
+      hasReply: false,
+    },
+    account: acc,
+  });
+  const updated = (acc: ReturnType<typeof account>, id: string, hasReply = true) => ({
+    event: "review.updated",
+    review: { id, platform: "googlebusiness", hasReply },
+    account: acc,
+  });
+  const itemFor = async (reviewId: string) =>
+    (
+      await db
+        .from("inbound_items")
+        .select("id, status, answered_on_platform_at")
+        .eq("zernio_review_id", reviewId)
+        .single()
+    ).data!;
+
+  it("drops Waggle's waiting draft when the owner replied in Google", async () => {
+    const acc = google();
+    const review = newReview(acc);
+    await deliver(review);
+    const item = await itemFor(review.review.id);
+    await db.from("inbound_items").update({ status: "awaiting_approval" }).eq("id", item.id);
+    const { data: draft } = await db
+      .from("drafts")
+      .insert({ tenant_id: tenantId, item_id: item.id, body: "Sorry, Maria!", status: "pending" })
+      .select("id")
+      .single();
+
+    const res = await deliver(updated(acc, review.review.id));
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "answered_on_platform" });
+    const after = await itemFor(review.review.id);
+    expect(after.status).toBe("handled");
+    expect(after.answered_on_platform_at).not.toBeNull();
+    const { data: d } = await db.from("drafts").select("status").eq("id", draft!.id).single();
+    expect(d?.status).toBe("rejected");
+  });
+
+  it("leaves a review alone when the reply is Waggle's own (sending or sent)", async () => {
+    const acc = google();
+    const review = newReview(acc);
+    await deliver(review);
+    const item = await itemFor(review.review.id);
+    await db.from("inbound_items").update({ status: "sent" }).eq("id", item.id);
+    const res = await deliver(updated(acc, review.review.id));
+    expect(await res.json()).toEqual({ outcome: "skipped", reason: "already_answered" });
+    expect((await itemFor(review.review.id)).status).toBe("sent");
+  });
+
+  it("ignores an update without a reply, and reviews it doesn't know", async () => {
+    const acc = google();
+    const review = newReview(acc);
+    await deliver(review);
+    expect(await (await deliver(updated(acc, review.review.id, false))).json()).toEqual({
+      outcome: "skipped",
+      reason: "no_reply",
+    });
+    expect(await (await deliver(updated(acc, "accounts/9/reviews/none"))).json()).toEqual({
+      outcome: "skipped",
+      reason: "unknown_review",
+    });
+  });
+});
+
 describe("TikTok DM reply count", () => {
   it("counts the replies sent since the customer's last message", async () => {
     const acc = account("tiktok", "harbourbean");
