@@ -81,7 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: https://waggle-wheat.vercel.app
+      url: https://app.gowaggle.ai
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
@@ -98,8 +98,8 @@ jobs:
       - name: Smoke check
         run: |
           for p in / /login; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" https://waggle-wheat.vercel.app$p)
+            code=$(curl -s -o /dev/null -w "%{http_code}" https://app.gowaggle.ai$p)
             echo "$p $code"; [ "$code" = 200 ] || exit 1
           done
-          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://waggle-wheat.vercel.app/api/jobs/process)
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://app.gowaggle.ai/api/jobs/process)
           echo "job route $code (401 expected without the secret)"; [ "$code" = 401 ] || exit 1
