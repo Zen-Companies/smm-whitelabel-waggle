@@ -1,5 +1,6 @@
 import { can } from "@/features/orgs";
 import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
+import { platformOf } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ComposeForm } from "./compose-form";
 
@@ -42,14 +43,17 @@ export async function ComposeCard({
       {can(tenant.role, "posts.write") ? (
         <ComposeForm
           key={`${day ?? "any"}-${time ?? ""}`}
-          accounts={(accounts ?? []).map((a) => ({
-            id: a.id,
-            platform: a.platform,
-            username: a.username,
-            pinterestBoard: a.pinterest_board_id
-              ? { id: a.pinterest_board_id, name: a.pinterest_board_name ?? "your board" }
-              : null,
-          }))}
+          // WhatsApp (and anything else without a feed) can't take posts.
+          accounts={(accounts ?? [])
+            .filter((a) => platformOf(a.platform)?.post)
+            .map((a) => ({
+              id: a.id,
+              platform: a.platform,
+              username: a.username,
+              pinterestBoard: a.pinterest_board_id
+                ? { id: a.pinterest_board_id, name: a.pinterest_board_name ?? "your board" }
+                : null,
+            }))}
           day={day}
           time={time}
         />

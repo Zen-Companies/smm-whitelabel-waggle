@@ -19,6 +19,7 @@ import {
   rejectDraft,
   REPLY_MAX,
   undoApproval,
+  writeTemplateReply,
   type DecisionResult,
 } from "./decisions";
 import { sendApprovedReplyAfterUndoWindow } from "./send-now";
@@ -323,4 +324,38 @@ export async function setRepliesPaused(
   revalidatePath("/settings");
   revalidatePath("/inbox");
   return {};
+}
+
+const TEMPLATE_ERRORS: Record<string, string> = {
+  not_found: "This message is gone. Reload the page.",
+  already_decided: "This message was already dealt with.",
+  not_whatsapp: "Templates are for WhatsApp chats only.",
+  template_not_ready: "That template isn't approved by Meta (any more). Pick another.",
+  needs_more: "That template needs more details than a name. Send it from WhatsApp instead.",
+};
+
+/** T67: restart a WhatsApp chat after the 24-hour window with an approved template. */
+export async function sendTemplateAction(
+  _prev: DecisionFormState,
+  formData: FormData,
+): Promise<DecisionFormState> {
+  const parsed = z
+    .object({ itemId: z.uuid(), templateId: z.string().min(1).max(100) })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Pick a template." };
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const db = getServiceClient();
+  let result;
+  try {
+    result = await writeTemplateReply(
+      { db, social: getSocialProvider() },
+      { tenantId: tenant.id, userId: tenant.userId, ...parsed.data },
+    );
+  } catch {
+    return { error: "Couldn't reach WhatsApp just now. Try again in a minute." };
+  }
+  if (!result.ok) return { error: TEMPLATE_ERRORS[result.error] };
+  after(() => sendApprovedReplyAfterUndoWindow(db, parsed.data.itemId));
+  return { approved: { at: new Date().toISOString() } };
 }

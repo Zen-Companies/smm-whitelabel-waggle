@@ -1,5 +1,6 @@
 import Zernio, { RateLimitError, ZernioApiError } from "@zernio/node";
 import { z } from "zod";
+import { bodyOf, variableCount } from "./whatsapp-templates";
 import {
   toBestTimes,
   toDashboard,
@@ -13,6 +14,7 @@ import {
   SocialProviderError,
   type TelegramConnectStatus,
   isVideoUrl,
+  type WhatsAppTemplate,
   type AccountHealth,
   type AccountPicture,
   type CreatePostInput,
@@ -192,6 +194,24 @@ const telegramStatusSchema = z.object({
 
 const pinterestBoardsSchema = z.object({
   boards: z.array(z.object({ id: z.string().optional(), name: z.string().nullish() })).nullish(),
+});
+
+const waTemplatesSchema = z.object({
+  templates: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        name: z.string().optional(),
+        status: z.string().optional(),
+        category: z.string().optional(),
+        language: z.string().optional(),
+        components: z.array(z.unknown()).optional(),
+      }),
+    )
+    .nullish(),
+});
+const waCreatedSchema = z.object({
+  template: z.object({ id: z.string().min(1), status: z.string().optional() }),
 });
 
 function parse<T>(schema: z.ZodType<T>, data: unknown, operation: string): T {
@@ -825,11 +845,70 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async listWhatsAppTemplates(input: { accountId: string; signal?: AbortSignal }) {
+    return call("listWhatsAppTemplates", async (withFetch) => {
+      const { data } = await this.zernio.whatsapp.getWhatsAppTemplates(
+        withFetch({ signal: input.signal, query: { accountId: input.accountId } }),
+      );
+      return (parse(waTemplatesSchema, data, "listWhatsAppTemplates").templates ?? []).flatMap(
+        (t): WhatsAppTemplate[] => {
+          if (!t.id || !t.name) return [];
+          const body = bodyOf(t.components);
+          return [
+            {
+              id: t.id,
+              name: t.name,
+              language: t.language ?? "en",
+              status: t.status ?? "PENDING",
+              category: t.category ?? "UTILITY",
+              body,
+              variables: variableCount(body),
+            },
+          ];
+        },
+      );
+    });
+  }
+
+  async createWhatsAppTemplate(input: {
+    accountId: string;
+    name: string;
+    category: "UTILITY" | "MARKETING";
+    language: string;
+    body: string;
+    examples: string[];
+    signal?: AbortSignal;
+  }) {
+    return call("createWhatsAppTemplate", async (withFetch) => {
+      const { data } = await this.zernio.whatsapp.createWhatsAppTemplate(
+        withFetch({
+          signal: input.signal,
+          body: {
+            accountId: input.accountId,
+            name: input.name,
+            category: input.category,
+            language: input.language,
+            components: [
+              {
+                type: "body",
+                text: input.body,
+                ...(input.examples.length ? { example: { body_text: [input.examples] } } : {}),
+              } as never,
+            ],
+          },
+        }),
+      );
+      const { template } = parse(waCreatedSchema, data, "createWhatsAppTemplate");
+      return { id: template.id, status: template.status ?? "PENDING" };
+    });
+  }
+
   async sendDm(input: {
     accountId: string;
     conversationId: string;
     message: string;
     idempotencyKey: string;
+    template?: { name: string; language: string; params: string[] };
     signal?: AbortSignal;
   }) {
     return call("sendDm", async (withFetch) => {
@@ -837,7 +916,30 @@ export class ZernioSocialProvider implements SocialProvider {
         withFetch({
           signal: input.signal,
           path: { conversationId: input.conversationId },
-          body: { accountId: input.accountId, message: input.message },
+          body: input.template
+            ? {
+                accountId: input.accountId,
+                template: {
+                  elements: [
+                    {
+                      name: input.template.name,
+                      language: input.template.language,
+                      components: input.template.params.length
+                        ? [
+                            {
+                              type: "body",
+                              parameters: input.template.params.map((text) => ({
+                                type: "text",
+                                text,
+                              })),
+                            },
+                          ]
+                        : [],
+                    },
+                  ],
+                },
+              }
+            : { accountId: input.accountId, message: input.message },
           headers: { "Idempotency-Key": input.idempotencyKey },
         }),
       );

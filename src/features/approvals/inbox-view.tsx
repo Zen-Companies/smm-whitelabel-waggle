@@ -8,6 +8,7 @@ import { can } from "@/features/orgs";
 import { getCurrentTenant, RoleGate } from "@/features/tenants";
 import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
 import { allowanceNotice } from "./allowance-notice";
@@ -17,6 +18,8 @@ import { loadConversation } from "./conversation-data";
 import { ContextPanel, ConversationPane } from "./conversation-pane";
 import { HeldCard } from "./held-card";
 import { SpamCard, SpamCommentFooter } from "./spam-card";
+import { loadTemplateChoices, whatsappWindowClosed } from "./whatsapp-window";
+import { WhatsAppWindowCard } from "./whatsapp-window-card";
 import {
   countInboxTabs,
   heldReason,
@@ -350,6 +353,11 @@ export async function InboxView({
   const conversation = selected
     ? await loadConversation(supabase, tenant.id, selected.itemId)
     : null;
+  // T67: a WhatsApp chat past its 24 hours can only be restarted with an approved template.
+  const waWindow =
+    selected && whatsappWindowClosed(selected)
+      ? await loadTemplateChoices(supabase, getSocialProvider(), selected)
+      : null;
   const actionFooter = !selected ? null : selected.status === "awaiting_approval" ? (
     <ApprovalCard
       key={selected.itemId}
@@ -363,6 +371,13 @@ export async function InboxView({
     inboxRules(selected.platform).hide ? (
     // T40: a spam comment comes to the owner to hide; it's never answered.
     <SpamCard key={selected.itemId} entry={selected} />
+  ) : waWindow ? (
+    <WhatsAppWindowCard
+      key={selected.itemId}
+      entry={selected}
+      templates={waWindow.templates}
+      loadError={waWindow.loadError}
+    />
   ) : held ? (
     <HeldCard key={selected.itemId} entry={selected} reason={reason} />
   ) : null;

@@ -438,6 +438,7 @@ export type Database = {
           send_attempted_at: string | null
           sent_at: string | null
           status: string
+          template: Json | null
           tenant_id: string
           zernio_reply_id: string | null
         }
@@ -461,6 +462,7 @@ export type Database = {
           send_attempted_at?: string | null
           sent_at?: string | null
           status?: string
+          template?: Json | null
           tenant_id: string
           zernio_reply_id?: string | null
         }
@@ -483,6 +485,7 @@ export type Database = {
           send_attempted_at?: string | null
           sent_at?: string | null
           status?: string
+          template?: Json | null
           tenant_id?: string
           zernio_reply_id?: string | null
         }

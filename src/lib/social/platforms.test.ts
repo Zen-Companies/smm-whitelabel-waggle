@@ -22,14 +22,15 @@ describe("platform registry", () => {
     expect(CONNECTABLE).toContain("googlebusiness");
     expect(isConnectable("bluesky")).toBe(false);
     expect(isConnectable("snapchat")).toBe(false);
-    expect(isConnectable("whatsapp")).toBe(false);
+    // WhatsApp: Zernio hosts Meta's sign-up (T67).
+    expect(isConnectable("whatsapp")).toBe(true);
   });
 
   it("connects Bluesky with an app password typed in Waggle", () => {
     expect(PASSWORD_CONNECT).toEqual(["bluesky"]);
   });
 
-  it("answers on Meta, Google, TikTok, Threads, YouTube, LinkedIn and Bluesky (not X yet)", () => {
+  it("answers on Meta, Google, TikTok, Threads, YouTube, LinkedIn, Bluesky, WhatsApp (not X yet)", () => {
     expect(PLATFORM_IDS.filter(isInboxLive)).toEqual([
       "instagram",
       "facebook",
@@ -39,6 +40,7 @@ describe("platform registry", () => {
       "youtube",
       "linkedin",
       "bluesky",
+      "whatsapp",
     ]);
     expect(isInboxLive("twitter")).toBe(false);
   });
@@ -62,8 +64,9 @@ describe("platform registry", () => {
     expect(COMMENTS_LIVE).toContain("youtube");
   });
 
-  it("sets up Bluesky and Telegram in Waggle", () => {
-    expect(SETUP_IN_WAGGLE).toEqual(["bluesky", "telegram"]);
+  it("sets up Bluesky, WhatsApp and Telegram with a card in Waggle", () => {
+    expect(SETUP_IN_WAGGLE).toEqual(["bluesky", "whatsapp", "telegram"]);
+    expect(inboxRules("whatsapp").dmWindow).toEqual({ hours: 24, maxReplies: null });
   });
 
   it("never marks a platform as live in the inbox when Zernio has no inbox for it", () => {

@@ -5,6 +5,7 @@ import type { ServiceClient } from "@/lib/supabase/service";
 import { setCommentHidden } from "./hide-spam";
 import type { ReplyVia } from "./private-reply";
 import { REPLY_MAX } from "./limits";
+import { renderTemplate } from "@/lib/social/whatsapp-templates";
 
 // Owner decisions on a waiting draft (PRD F8, docs/tdd.md §7.3). The Server Actions resolve the
 // signed-in owner's tenant; everything here is scoped to that tenant id, so a draft or item id
@@ -475,6 +476,113 @@ export async function writeOwnerReply(
       draftId: draft.id,
       ...(input.via ? { via: input.via } : {}),
     },
+  });
+  return { ok: true, draftId: draft.id };
+}
+
+export type TemplateReplyResult =
+  | { ok: true; draftId: string }
+  | {
+      ok: false;
+      error: "not_found" | "already_decided" | "not_whatsapp" | "template_not_ready" | "needs_more";
+    };
+
+/** "Ana Reyes" → "Ana"; a phone number or nothing → "there" ("Hi there"). */
+export function firstName(name: string | null): string {
+  const first = (name ?? "").trim().split(/\s+/)[0] ?? "";
+  return /^[\p{L}][\p{L}'-]*$/u.test(first) ? first : "there";
+}
+
+/**
+ * T67 (design v3 "WhatsApp · window and templates"): after the 24-hour window, the owner restarts
+ * the chat with an approved template. It becomes an owner-written draft carrying the template,
+ * sent by the same send step: policy() allows a template past the window, nothing else.
+ * Only templates with no placeholder or one (the customer's first name).
+ */
+export async function writeTemplateReply(
+  deps: { db: ServiceClient; social: SocialProvider },
+  input: { tenantId: string; userId: string; itemId: string; templateId: string },
+): Promise<TemplateReplyResult> {
+  const { db } = deps;
+  const { data } = await db
+    .from("inbound_items")
+    .select("id, status, kind, author_name, social_accounts!inner (platform, zernio_account_id)")
+    .eq("id", input.itemId)
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle();
+  const item = data as unknown as {
+    id: string;
+    status: string;
+    kind: string;
+    author_name: string | null;
+    social_accounts: { platform: string; zernio_account_id: string };
+  } | null;
+  if (!item) return { ok: false, error: "not_found" };
+  if (item.kind !== "dm" || item.social_accounts.platform !== "whatsapp") {
+    return { ok: false, error: "not_whatsapp" };
+  }
+  if (item.status !== "escalated" && item.status !== "awaiting_approval") {
+    return { ok: false, error: "already_decided" };
+  }
+
+  const templates = await deps.social.listWhatsAppTemplates({
+    accountId: item.social_accounts.zernio_account_id,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const template = templates.find((t) => t.id === input.templateId && t.status === "APPROVED");
+  if (!template) return { ok: false, error: "template_not_ready" };
+  if (template.variables > 1) return { ok: false, error: "needs_more" };
+  const params = template.variables === 1 ? [firstName(item.author_name)] : [];
+
+  // A suggested reply waiting for approval is replaced by the template.
+  if (item.status === "awaiting_approval") {
+    await db
+      .from("drafts")
+      .update({ status: "rejected" })
+      .eq("item_id", item.id)
+      .in("status", ["pending", "approved"]);
+  }
+  const now = new Date();
+  const { data: draft, error } = await db
+    .from("drafts")
+    .insert({
+      tenant_id: input.tenantId,
+      item_id: item.id,
+      body: renderTemplate(template.body, params) || template.name,
+      status: "approved",
+      owner_written: true,
+      needs_human: false,
+      reply_via: "public",
+      template: { name: template.name, language: template.language, params },
+      decided_by: input.userId,
+      decided_at: now.toISOString(),
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`template reply: saving the draft failed: ${error.message}`);
+
+  const { applied } = await transitionItem(db, {
+    itemId: item.id,
+    from: item.status as "escalated" | "awaiting_approval",
+    event: "send",
+    details: { draftId: draft.id, decidedBy: input.userId, template: template.name },
+  });
+  if (!applied) {
+    await db.from("drafts").update({ status: "rejected" }).eq("id", draft.id);
+    return { ok: false, error: "already_decided" };
+  }
+  // Held for the undo window, like an approval.
+  await db
+    .from("inbound_items")
+    .update({ next_run_at: new Date(now.getTime() + UNDO_WINDOW_MS).toISOString() })
+    .eq("id", item.id)
+    .eq("status", "sending");
+  await writeAudit(db, {
+    tenantId: input.tenantId,
+    itemId: item.id,
+    action: "template_reply_written",
+    actor: input.userId,
+    details: { draftId: draft.id, template: template.name, language: template.language },
   });
   return { ok: true, draftId: draft.id };
 }

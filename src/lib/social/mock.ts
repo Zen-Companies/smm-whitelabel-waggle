@@ -18,6 +18,7 @@ import type {
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
 import { SocialProviderError } from "./types";
+import type { WhatsAppTemplate } from "./whatsapp-templates";
 import {
   MOCK_BEST_TIMES,
   mockDashboard,
@@ -144,6 +145,63 @@ export class MockSocialProvider implements SocialProvider {
     const status: ProviderPostStatus = input.publishAt ? "scheduled" : "publishing";
     if (!this.posts.has(providerPostId)) this.posts.set(providerPostId, { ...input, status });
     return { providerPostId, status };
+  }
+
+  /** Templates per WhatsApp account; two approved ones to start with (local demos). */
+  private waTemplates = new Map<string, WhatsAppTemplate[]>();
+
+  async listWhatsAppTemplates(input: { accountId: string }) {
+    if (!this.waTemplates.has(input.accountId)) {
+      this.waTemplates.set(input.accountId, [
+        {
+          id: idFrom("wat", input.accountId, "follow_up"),
+          name: "follow_up",
+          language: "en",
+          status: "APPROVED",
+          category: "UTILITY",
+          body: "Hi {{1}}, thanks for your message! We're open again today. Reply here and we'll help you right away.",
+          variables: 1,
+        },
+        {
+          id: idFrom("wat", input.accountId, "weekend_promo"),
+          name: "weekend_promo",
+          language: "en",
+          status: "PENDING",
+          category: "MARKETING",
+          body: "This weekend only: 2-for-1 pastries before 10 AM.",
+          variables: 0,
+        },
+      ]);
+    }
+    return this.waTemplates.get(input.accountId)!;
+  }
+
+  async createWhatsAppTemplate(input: {
+    accountId: string;
+    name: string;
+    category: "UTILITY" | "MARKETING";
+    language: string;
+    body: string;
+    examples: string[];
+  }) {
+    const list = await this.listWhatsAppTemplates(input);
+    if (list.some((t) => t.name === input.name && t.language === input.language)) {
+      throw new SocialProviderError("Zernio createWhatsAppTemplate failed (400)", {
+        status: 400,
+        ambiguous: false,
+      });
+    }
+    const id = idFrom("wat", input.accountId, input.name);
+    list.push({
+      id,
+      name: input.name,
+      language: input.language,
+      status: "PENDING",
+      category: input.category,
+      body: input.body,
+      variables: input.examples.length,
+    });
+    return { id, status: "PENDING" };
   }
 
   /** Four boards for every Pinterest account (local demos). */

@@ -35,3 +35,9 @@ describe("accountLines (T66)", () => {
     expect(accountLines("discord")).toEqual({ does: "Posting only", note: null });
   });
 });
+
+describe("accountLines: WhatsApp (T67)", () => {
+  it("answers DMs", () => {
+    expect(accountLines("whatsapp")).toEqual({ does: "Answers DMs", note: null });
+  });
+});

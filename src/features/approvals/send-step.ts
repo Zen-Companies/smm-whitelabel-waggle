@@ -35,6 +35,21 @@ const RATE_LIMIT_FALLBACK_SECONDS = 60;
 /** A reconciled DM must be no older than the first attempt (minus clock skew). */
 const RECONCILE_SKEW_MS = 5 * 60 * 1000;
 
+export interface WaTemplateRef {
+  name: string;
+  language: string;
+  params: string[];
+}
+
+/** A draft's stored template, read defensively (free-form JSON in the row). */
+export function templateRef(value: unknown): WaTemplateRef | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as { name?: unknown; language?: unknown; params?: unknown };
+  if (typeof v.name !== "string" || typeof v.language !== "string") return null;
+  const params = Array.isArray(v.params) ? v.params.filter((p) => typeof p === "string") : [];
+  return { name: v.name, language: v.language, params };
+}
+
 interface SendContext {
   tenantId: string;
   kind: "comment" | "dm" | "review";
@@ -58,6 +73,8 @@ interface SendContext {
     zernioReplyId: string | null;
     /** T41: a comment answered in the commenter's DMs. */
     replyVia: ReplyVia;
+    /** T67: a WhatsApp template (the only DM allowed after the 24-hour window). */
+    template: WaTemplateRef | null;
   } | null;
 }
 
@@ -112,7 +129,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
       .from("drafts")
       .select(
         "id, body, edited_body, status, needs_human, decided_by, idempotency_key, " +
-          "send_attempted_at, zernio_reply_id, reply_via, owner_written",
+          "send_attempted_at, zernio_reply_id, reply_via, owner_written, template",
       )
       .eq("item_id", itemId)
       .in("status", ["approved", "sent"])
@@ -132,6 +149,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     zernio_reply_id: string | null;
     reply_via: string;
     owner_written: boolean;
+    template: unknown;
   } | null;
 
   const last = row.conversations?.last_customer_message_at ?? null;
@@ -189,6 +207,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
             inboxRules(row.social_accounts.platform).privateReply
               ? "dm"
               : "public",
+          template: row.kind === "dm" ? templateRef(d.template) : null,
         }
       : null,
   };
@@ -263,6 +282,7 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
         needsHuman: draft.needsHuman,
         approvedByOwner: draft.approvedByOwner,
         writtenByOwner: draft.writtenByOwner,
+        template: !!draft.template,
       },
       now,
     });
@@ -465,6 +485,7 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
                   conversationId: c.conversation!.zernioConversationId,
                   message: draft.message,
                   idempotencyKey: draft.idempotencyKey,
+                  ...(draft.template ? { template: draft.template } : {}),
                   signal: ctx.callSignal(),
                 })
               ).providerMessageId;

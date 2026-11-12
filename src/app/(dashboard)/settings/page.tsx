@@ -7,6 +7,8 @@ import { AutonomyCard } from "@/features/approvals";
 import { AssistantsCard } from "@/features/mcp";
 import { listMyOrgs, OrgBillingSection, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { BusinessSettings, getCurrentTenant } from "@/features/tenants";
+import { whatsappAccount, WhatsAppTemplatesSection } from "@/features/whatsapp";
+import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
 
 export const metadata = { title: "Settings" };
@@ -25,6 +27,8 @@ const BRAND_SECTIONS = [
   { key: "business", label: "Business" },
   // MCP (docs/mcp/PLAN.md §4.2): per login, not per brand.
   { key: "ai-assistants", label: "AI assistants" },
+  // T67: only listed while the brand has WhatsApp connected.
+  { key: "whatsapp", label: "WhatsApp templates" },
 ] as const;
 type Section =
   "account" | (typeof ORG_SECTIONS)[number]["key"] | (typeof BRAND_SECTIONS)[number]["key"];
@@ -61,6 +65,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
   const section: Section = ALL.find((s) => s === params.section) ?? "accounts";
   const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
   const org = orgs.find((o) => o.id === tenant.organizationId);
+  const hasWhatsApp = !!(await whatsappAccount(getServiceClient(), tenant.id));
   return (
     <div className="flex flex-col gap-6 md:flex-row md:items-start">
       <nav aria-label="Settings sections" className="flex flex-col gap-0.5 md:w-56 md:shrink-0">
@@ -77,7 +82,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
           </NavLink>
         ))}
         <span className="text-ink-4 truncate px-3 pt-4 pb-1 text-xs">Brand · {tenant.name}</span>
-        {BRAND_SECTIONS.map((s) => (
+        {BRAND_SECTIONS.filter((s) => s.key !== "whatsapp" || hasWhatsApp).map((s) => (
           <NavLink key={s.key} href={`/settings?section=${s.key}`} active={s.key === section}>
             {s.label}
             {s.key === "accounts" && <ConnectedCount />}
@@ -98,6 +103,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         {section === "notifications" && <NotificationSettings />}
         {section === "business" && <BusinessSettings />}
         {section === "ai-assistants" && <AssistantsCard />}
+        {section === "whatsapp" && <WhatsAppTemplatesSection />}
       </div>
     </div>
   );

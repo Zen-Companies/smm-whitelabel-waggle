@@ -87,6 +87,7 @@ const DM_INBOX: Record<string, string> = {
   facebook: "https://www.facebook.com/messages/",
   tiktok: "https://www.tiktok.com/messages",
   bluesky: "https://bsky.app/messages",
+  whatsapp: "https://web.whatsapp.com/",
 };
 
 /** Where to answer it yourself: the post for a comment, the platform's inbox for a DM. */

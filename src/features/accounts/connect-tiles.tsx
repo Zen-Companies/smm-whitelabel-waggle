@@ -1,7 +1,7 @@
 import { PlatformMark } from "@/components/app/platform-mark";
 import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { PLATFORM_IDS, PLATFORMS, type Platform } from "@/lib/social/platforms";
+import { hasSetupCard, PLATFORM_IDS, PLATFORMS, type Platform } from "@/lib/social/platforms";
 import { connectAccount } from "./actions";
 
 /**
@@ -9,8 +9,9 @@ import { connectAccount } from "./actions";
  * (setup steps not built yet, or not available upstream).
  */
 function availability(p: Platform): "connect" | "form" | "soon" {
+  // A card in Waggle first: Bluesky's password, Telegram's code, WhatsApp's "what to know".
+  if (hasSetupCard(p.id)) return "form";
   if (p.connect === "oauth") return "connect";
-  if (p.connect === "password" || p.connect === "code") return "form";
   return "soon";
 }
 

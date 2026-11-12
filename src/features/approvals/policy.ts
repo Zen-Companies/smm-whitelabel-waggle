@@ -36,7 +36,13 @@ export interface PolicyInput {
    * approved it in the inbox (checked again at send time, T12). `writtenByOwner`: the owner wrote
    * the reply themselves, for a message handed to them (MCP Q1).
    */
-  draft: { needsHuman: boolean; approvedByOwner?: boolean; writtenByOwner?: boolean } | null;
+  draft: {
+    needsHuman: boolean;
+    approvedByOwner?: boolean;
+    writtenByOwner?: boolean;
+    /** T67: a WhatsApp template the owner chose; allowed after the 24-hour window. */
+    template?: boolean;
+  } | null;
   tenant: {
     subscriptionStatus: SubscriptionStatus;
     confidenceThreshold: number;
@@ -164,7 +170,8 @@ export function policy(input: PolicyInput): PolicyDecision {
       return { decision: "pause", reason: "tenant_inactive" };
     }
     if (input.account.status !== "active") return { decision: "pause", reason: "account_inactive" };
-    const blocked = input.item.kind === "dm" ? dmBlocked(input) : null;
+    // A WhatsApp template is what WhatsApp allows once the window has closed.
+    const blocked = input.item.kind === "dm" && !input.draft.template ? dmBlocked(input) : null;
     if (blocked) return { decision: "escalate", reason: blocked };
     return { decision: "send", reason: "owner_approved" };
   }

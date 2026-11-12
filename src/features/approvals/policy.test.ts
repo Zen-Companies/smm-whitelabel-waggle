@@ -393,3 +393,33 @@ describe("per-platform rules (T61/T62)", () => {
     });
   });
 });
+
+describe("WhatsApp templates (T67)", () => {
+  const HOUR = 60 * 60 * 1000;
+  const wa = { status: "active" as const, platform: "whatsapp" };
+  const owner = { needsHuman: false, approvedByOwner: true, writtenByOwner: true };
+
+  it("a template the owner chose goes out after the 24-hour window", () => {
+    expect(run({ ...dm(30 * HOUR), account: wa, draft: { ...owner, template: true } })).toEqual({
+      decision: "send",
+      reason: "owner_approved",
+    });
+  });
+
+  it("free text after the window still doesn't", () => {
+    expect(run({ ...dm(30 * HOUR), account: wa, draft: owner })).toEqual({
+      decision: "escalate",
+      reason: "dm_window_closed",
+    });
+  });
+
+  it("a template never skips the hard limits (paying, account up)", () => {
+    expect(
+      run({
+        ...dm(30 * HOUR),
+        account: { status: "disconnected", platform: "whatsapp" },
+        draft: { ...owner, template: true },
+      }).decision,
+    ).toBe("pause");
+  });
+});

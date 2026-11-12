@@ -130,6 +130,8 @@ export type TelegramConnectStatus =
   | { status: "expired" }
   | { status: "connected"; accountId: string | null; username: string | null };
 
+import type { WhatsAppTemplate } from "./whatsapp-templates";
+
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
 export interface SocialProvider {
   /** A 409 for the same externalId returns the existing profile with `alreadyExisted: true`. */
@@ -277,14 +279,34 @@ export interface SocialProvider {
       idempotencyKey: string;
     } & CallOptions,
   ): Promise<{ providerReplyId: string }>;
+  /**
+   * `template` (WhatsApp, T67): send an approved template instead of free text, the only kind
+   * WhatsApp allows 24 hours after the customer's last message. `message` is then the rendered
+   * text, for our records only.
+   */
   sendDm(
     input: {
       accountId: string;
       conversationId: string;
       message: string;
       idempotencyKey: string;
+      template?: { name: string; language: string; params: string[] };
     } & CallOptions,
   ): Promise<{ providerMessageId: string }>;
+  /** A WhatsApp account's templates, read live from Meta (`GET /v1/whatsapp/templates`). */
+  listWhatsAppTemplates(input: { accountId: string } & CallOptions): Promise<WhatsAppTemplate[]>;
+  /** A new template, sent to Meta for review (`POST /v1/whatsapp/templates`). */
+  createWhatsAppTemplate(
+    input: {
+      accountId: string;
+      name: string;
+      category: "UTILITY" | "MARKETING";
+      language: string;
+      body: string;
+      /** One example per {{n}}, for Meta's reviewers. */
+      examples: string[];
+    } & CallOptions,
+  ): Promise<{ id: string; status: string }>;
   /** Newest first. Used to reconcile an ambiguous send before retrying (rule 7). */
   listConversationMessages(
     input: {
@@ -362,3 +384,4 @@ export class SocialProviderError extends Error {
     this.name = "SocialProviderError";
   }
 }
+export type { WhatsAppTemplate } from "./whatsapp-templates";

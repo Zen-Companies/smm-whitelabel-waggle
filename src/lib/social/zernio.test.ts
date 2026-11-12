@@ -265,6 +265,87 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("WhatsApp: lists templates with their body and placeholders (T67)", async () => {
+    respond = () =>
+      json({
+        success: true,
+        templates: [
+          {
+            id: "t1",
+            name: "follow_up",
+            status: "APPROVED",
+            category: "UTILITY",
+            language: "en",
+            components: [{ type: "BODY", text: "Hi {{1}}, thanks!" }],
+          },
+          { name: "no_id" },
+        ],
+      });
+    await expect(provider.listWhatsAppTemplates({ accountId: "acc_wa" })).resolves.toEqual([
+      {
+        id: "t1",
+        name: "follow_up",
+        language: "en",
+        status: "APPROVED",
+        category: "UTILITY",
+        body: "Hi {{1}}, thanks!",
+        variables: 1,
+      },
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/whatsapp/templates");
+    expect(captured[0].url.searchParams.get("accountId")).toBe("acc_wa");
+  });
+
+  it("WhatsApp: a new template goes to Meta with an example per placeholder (T67)", async () => {
+    respond = () => json({ success: true, template: { id: "t2", status: "PENDING" } });
+    await expect(
+      provider.createWhatsAppTemplate({
+        accountId: "acc_wa",
+        name: "order_ready",
+        category: "UTILITY",
+        language: "en",
+        body: "Hi {{1}}, your order is ready.",
+        examples: ["Ana"],
+      }),
+    ).resolves.toEqual({ id: "t2", status: "PENDING" });
+    expect(captured[0].body).toEqual({
+      accountId: "acc_wa",
+      name: "order_ready",
+      category: "UTILITY",
+      language: "en",
+      components: [
+        {
+          type: "body",
+          text: "Hi {{1}}, your order is ready.",
+          example: { body_text: [["Ana"]] },
+        },
+      ],
+    });
+  });
+
+  it("WhatsApp: sendDm with a template sends Meta's template shape, not text (T67)", async () => {
+    respond = () => json({ success: true, data: { messageId: "wamid.1", conversationId: "c1" } });
+    await provider.sendDm({
+      accountId: "acc_wa",
+      conversationId: "c1",
+      message: "Hi Ana, thanks!",
+      idempotencyKey: "k-wa",
+      template: { name: "follow_up", language: "en", params: ["Ana"] },
+    });
+    expect(captured[0].body).toEqual({
+      accountId: "acc_wa",
+      template: {
+        elements: [
+          {
+            name: "follow_up",
+            language: "en",
+            components: [{ type: "body", parameters: [{ type: "text", text: "Ana" }] }],
+          },
+        ],
+      },
+    });
+  });
+
   it("connectBluesky reports a refused app password as a 401", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/users"

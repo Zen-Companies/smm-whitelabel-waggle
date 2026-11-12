@@ -50,6 +50,8 @@ export function fakeZernio() {
     connectBluesky: notImplemented,
     presignMedia: notImplemented,
     listPinterestBoards: notImplemented,
+    listWhatsAppTemplates: notImplemented,
+    createWhatsAppTemplate: notImplemented,
     startTelegramConnect: notImplemented,
     checkTelegramConnect: notImplemented,
     createPost: notImplemented,

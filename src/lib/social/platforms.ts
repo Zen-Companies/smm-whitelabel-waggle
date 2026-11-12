@@ -237,12 +237,12 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     label: "WhatsApp",
     mark: { text: "WA", bg: "#DCFCE7", fg: "#166534" },
     kind: "answers",
-    connect: "setup",
+    connect: "oauth",
     line: "Answers chats within 24 hours",
     needs: "Needs a Meta Business account",
     post: null,
     inbox: { comments: false, dms: true, reviews: false },
-    inboxLive: false,
+    inboxLive: true,
     analyticsLive: false,
   },
   telegram: {
@@ -341,10 +341,16 @@ export function isConnectable(id: string): id is PlatformId {
 /** Platforms that connect with a handle and an app password typed in Waggle (Bluesky). */
 export const PASSWORD_CONNECT = PLATFORM_IDS.filter((id) => PLATFORMS[id].connect === "password");
 
-/** Platforms with a setup card in Waggle (Bluesky's password, Telegram's code). */
+/**
+ * Platforms with a setup card in Waggle: Bluesky's password, Telegram's code, and WhatsApp's
+ * "what to know" card before Meta's own sign-up (design v3 "Platforms · Setup steps").
+ */
 export const SETUP_IN_WAGGLE = PLATFORM_IDS.filter(
-  (id) => PLATFORMS[id].connect === "password" || PLATFORMS[id].connect === "code",
+  (id) =>
+    PLATFORMS[id].connect === "password" || PLATFORMS[id].connect === "code" || id === "whatsapp",
 );
+export const hasSetupCard = (id: string): boolean =>
+  (SETUP_IN_WAGGLE as readonly string[]).includes(id);
 
 /** Platforms whose comments, DMs or reviews Waggle stores and answers today. */
 export const INBOX_LIVE = PLATFORM_IDS.filter((id) => PLATFORMS[id].inboxLive);
@@ -415,6 +421,8 @@ const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
   linkedin: { commentsPolled: true, replyMax: 1250 },
   bluesky: { commentsPolled: true, replyMax: 300 },
   twitter: { hide: true, replyMax: 280 },
+  // T67: free replies for 24 hours after the customer's last message, then only a template.
+  whatsapp: { dmWindow: { hours: 24, maxReplies: null }, replyMax: 4096 },
 };
 
 export function inboxRules(platform: string): InboxRules {
