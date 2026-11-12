@@ -55,10 +55,11 @@ export interface Platform {
    */
   kind: "answers" | "posts" | "soon";
   /**
-   * How it connects. oauth: Zernio's hosted sign-in. setup: a step in Waggle first (Bluesky app
-   * password, Telegram bot code, WhatsApp signup, Discord channel), built in a later wave.
+   * How it connects. oauth: Zernio's hosted sign-in. password: handle + app password typed in
+   * Waggle (Bluesky). setup: a step in Waggle not built yet (Telegram bot code, WhatsApp signup,
+   * Discord channel).
    */
-  connect: "oauth" | "setup" | "none";
+  connect: "oauth" | "password" | "setup" | "none";
   /** One line on the Connect tile: what Waggle does there. */
   line: string;
   /** A requirement shown under the line, or null. */
@@ -195,7 +196,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     label: "Bluesky",
     mark: { text: "B", bg: "#E0F2FE", fg: "#0369A1" },
     kind: "answers",
-    connect: "setup",
+    connect: "password",
     line: "Answers comments and DMs",
     needs: "Needs an app password",
     post: rules({ textMax: 300, maxImages: 4, imageMaxBytes: 1_000_000 }),
@@ -325,6 +326,9 @@ export const CONNECTABLE = PLATFORM_IDS.filter((id) => PLATFORMS[id].connect ===
 export function isConnectable(id: string): id is PlatformId {
   return (CONNECTABLE as readonly string[]).includes(id);
 }
+
+/** Platforms that connect with a handle and an app password typed in Waggle (Bluesky). */
+export const PASSWORD_CONNECT = PLATFORM_IDS.filter((id) => PLATFORMS[id].connect === "password");
 
 /** Platforms whose comments, DMs or reviews Waggle stores and answers today. */
 export const INBOX_LIVE = PLATFORM_IDS.filter((id) => PLATFORMS[id].inboxLive);

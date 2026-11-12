@@ -13,6 +13,13 @@ describe("connectBanner", () => {
     });
   });
 
+  it("confirms a setup step finished in Waggle, account already listed", () => {
+    expect(connectBanner({ connected: "bluesky" })).toEqual({
+      tone: "info",
+      text: "Bluesky connected.",
+    });
+  });
+
   it("shows Zernio's error message, capped", () => {
     const banner = connectBanner({
       connecting: "facebook",

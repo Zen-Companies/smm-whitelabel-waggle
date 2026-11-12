@@ -7,6 +7,7 @@ import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { platformLabel as name } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { connectAccount } from "./actions";
+import { BlueskySetup } from "./bluesky-setup";
 import { connectBanner } from "./connect-banner";
 import { ConnectTiles } from "./connect-tiles";
 
@@ -17,7 +18,8 @@ export async function AccountsCard({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const tenant = await getCurrentTenant();
-  const banner = connectBanner(await searchParams);
+  const params = await searchParams;
+  const banner = connectBanner(params);
   const supabase = await createServerSupabase();
   const { data: accounts } = await supabase
     .from("social_accounts")
@@ -28,10 +30,15 @@ export async function AccountsCard({
   const mayConnect = can(tenant.role, "accounts.manage");
 
   const connected = [...new Set((accounts ?? []).map((a) => a.platform))];
+  // A setup step opened from its tile (?setup=bluesky), shown above the tiles.
+  const setup = mayConnect && params.setup === "bluesky" ? <BlueskySetup /> : null;
   const tiles = !mayConnect ? (
     <ReadOnlyNote role={tenant.role} what="the connected accounts" />
   ) : (
-    <ConnectTiles exclude={connected} />
+    <>
+      {setup}
+      <ConnectTiles exclude={connected} />
+    </>
   );
 
   return (

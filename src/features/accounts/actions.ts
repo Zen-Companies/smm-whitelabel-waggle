@@ -9,6 +9,7 @@ import { getSocialProvider } from "@/lib/social";
 import { isConnectable } from "@/lib/social/platforms";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
+import { blueskyErrorText, blueskyInputSchema, connectBlueskyFor } from "./bluesky";
 
 const connectSchema = z.object({
   platform: z.string().refine(isConnectable, "Not a platform Waggle connects yet."),
@@ -55,4 +56,53 @@ export async function connectAccount(formData: FormData): Promise<void> {
     );
   }
   redirect(authUrl);
+}
+
+export interface BlueskyState {
+  error?: string;
+}
+
+/**
+ * Settings → Accounts → Connect Bluesky (T60): handle + app password, sent to Zernio and never
+ * kept. On success the owner lands back on Accounts with the new account listed.
+ */
+export async function connectBluesky(
+  _prev: BlueskyState,
+  formData: FormData,
+): Promise<BlueskyState> {
+  const parsed = blueskyInputSchema.safeParse({
+    identifier: formData.get("identifier") ?? "",
+    appPassword: formData.get("appPassword") ?? "",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Check both fields." };
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: "Only Owners and Admins can connect accounts." };
+  const db = getServiceClient();
+
+  let result;
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    result = await connectBlueskyFor(
+      { db, social: getSocialProvider() },
+      { tenantId: tenant.id, actor: tenant.userId, profileId, ...parsed.data },
+    );
+  } catch (error) {
+    // Error names only: the form data holds the app password.
+    console.error(
+      `connect bluesky failed for tenant ${tenant.id}:`,
+      error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 500) : "unknown error",
+    );
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, platform: "bluesky" } });
+    return { error: blueskyErrorText("unavailable") };
+  }
+  if (!result.ok) {
+    if (result.error === "plan_limit") {
+      Sentry.captureMessage("Zernio plan limit on Bluesky connect", {
+        extra: { tenantId: tenant.id },
+      });
+    }
+    return { error: blueskyErrorText(result.error) };
+  }
+  // Without an account in Zernio's answer, the webhook lists it a moment later.
+  redirect(`/settings?section=accounts&${result.username ? "connected" : "connecting"}=bluesky`);
 }

@@ -114,6 +114,45 @@ describe("ZernioSocialProvider", () => {
     expect(req.url.searchParams.get("redirect_url")).toBe("https://app.test/settings");
   });
 
+  it("connectBluesky sends the app password with state {userId}-{profileId}", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/users"
+        ? json({ currentUserId: "user_9", users: [] })
+        : json({ message: "ok", account: { _id: "acc_bs", username: "cafe.bsky.social" } });
+
+    await expect(
+      provider.connectBluesky({
+        profileId: "prof_1",
+        identifier: "cafe.bsky.social",
+        appPassword: "abcd-efgh-ijkl-mnop",
+      }),
+    ).resolves.toEqual({ account: { accountId: "acc_bs", username: "cafe.bsky.social" } });
+
+    const [users, connect] = captured;
+    expect(users.url.pathname).toBe("/api/v1/users");
+    expect(connect.method).toBe("POST");
+    expect(connect.url.pathname).toBe("/api/v1/connect/bluesky/credentials");
+    expect(connect.body).toEqual({
+      identifier: "cafe.bsky.social",
+      appPassword: "abcd-efgh-ijkl-mnop",
+      state: "user_9-prof_1",
+    });
+
+    // The user id is looked up once.
+    await provider.connectBluesky({ profileId: "prof_2", identifier: "x", appPassword: "y" });
+    expect(captured.filter((r) => r.url.pathname === "/api/v1/users")).toHaveLength(1);
+  });
+
+  it("connectBluesky reports a refused app password as a 401", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/users"
+        ? json({ currentUserId: "user_9" })
+        : json({ error: "Invalid identifier or password" }, 401);
+    await expect(
+      provider.connectBluesky({ profileId: "prof_1", identifier: "a", appPassword: "b" }),
+    ).rejects.toMatchObject({ details: { status: 401, ambiguous: false } });
+  });
+
   it("createPost schedules with scheduledFor, mediaItems and Idempotency-Key", async () => {
     respond = () => json({ post: { _id: "post_1", status: "scheduled" } }, 201);
 

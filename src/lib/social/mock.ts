@@ -89,6 +89,20 @@ export class MockSocialProvider implements SocialProvider {
     return { authUrl: url.toString() };
   }
 
+  /** "wrong-pass" is refused like Zernio refuses a bad app password (401). */
+  async connectBluesky(input: { profileId: string; identifier: string; appPassword: string }) {
+    if (input.appPassword === "wrong-pass") {
+      throw new SocialProviderError("Zernio connectBluesky failed (401)", {
+        status: 401,
+        ambiguous: false,
+      });
+    }
+    const username = input.identifier.replace(/^@/, "");
+    return {
+      account: { accountId: idFrom("mock_bluesky", `${input.profileId}:${username}`), username },
+    };
+  }
+
   async createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }> {

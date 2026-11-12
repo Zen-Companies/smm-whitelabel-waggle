@@ -16,7 +16,8 @@ type Params = Record<string, string | string[] | undefined>;
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 export function connectBanner(params: Params): ConnectBanner | null {
-  const platformKey = first(params.platform) ?? first(params.connecting) ?? "";
+  const platformKey =
+    first(params.platform) ?? first(params.connecting) ?? first(params.connected) ?? "";
   const platform = isPlatformId(platformKey) ? platformLabel(platformKey) : "the account";
 
   // Our Zernio plan has no room for another profile (402): ours to fix, not the owner's.
@@ -49,6 +50,10 @@ export function connectBanner(params: Params): ConnectBanner | null {
     };
   }
 
+  // A setup step in Waggle (Bluesky) finished: the account is already listed.
+  if (first(params.connected)) {
+    return { tone: "info", text: `${platform} connected.` };
+  }
   if (first(params.connecting)) {
     return { tone: "info", text: `${platform} connected. It will appear here shortly.` };
   }

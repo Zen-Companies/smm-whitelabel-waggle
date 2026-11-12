@@ -128,6 +128,15 @@ export interface SocialProvider {
     profileId: string;
     redirectUrl: string;
   }): Promise<{ authUrl: string }>;
+  /**
+   * Bluesky (T60): connects with the handle and an app password typed in Waggle
+   * (`POST /v1/connect/bluesky/credentials`; state `{userId}-{profileId}`, userId is
+   * `currentUserId` from `GET /v1/users`). Returns the account when Zernio includes it in the
+   * response; account.connected follows by webhook either way. The password is never stored.
+   */
+  connectBluesky(
+    input: { profileId: string; identifier: string; appPassword: string } & CallOptions,
+  ): Promise<{ account: { accountId: string; username: string | null } | null }>;
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }>;

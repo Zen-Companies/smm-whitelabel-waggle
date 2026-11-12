@@ -3,6 +3,7 @@ import {
   CONNECTABLE,
   isConnectable,
   isInboxLive,
+  PASSWORD_CONNECT,
   PLATFORM_IDS,
   PLATFORMS,
   platformLabel,
@@ -19,6 +20,10 @@ describe("platform registry", () => {
     expect(isConnectable("bluesky")).toBe(false);
     expect(isConnectable("snapchat")).toBe(false);
     expect(isConnectable("whatsapp")).toBe(false);
+  });
+
+  it("connects Bluesky with an app password typed in Waggle", () => {
+    expect(PASSWORD_CONNECT).toEqual(["bluesky"]);
   });
 
   it("keeps the inbox to Instagram and Facebook until later waves", () => {

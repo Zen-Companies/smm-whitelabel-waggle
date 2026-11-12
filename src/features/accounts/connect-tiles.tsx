@@ -1,11 +1,17 @@
 import { PlatformMark } from "@/components/app/platform-mark";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { PLATFORM_IDS, PLATFORMS, type Platform } from "@/lib/social/platforms";
 import { connectAccount } from "./actions";
 
-/** Where a tile's platform stands today: connect now, or later (setup steps or upstream). */
-function availability(p: Platform): "connect" | "soon" {
-  return p.connect === "oauth" ? "connect" : "soon";
+/**
+ * Where a tile's platform stands today: Zernio's sign-in, a form in Waggle (Bluesky), or later
+ * (setup steps not built yet, or not available upstream).
+ */
+function availability(p: Platform): "connect" | "form" | "soon" {
+  if (p.connect === "oauth") return "connect";
+  if (p.connect === "password") return "form";
+  return "soon";
 }
 
 /** The tile's lines: what Waggle does there, honest about inbox waves not shipped yet. */
@@ -26,7 +32,15 @@ function Tile({ p }: { p: Platform }) {
         <span className="text-ink-2 text-[13px]">{line}</span>
         {note && <span className="text-ink-3 text-xs">{note}</span>}
       </span>
-      {availability(p) === "connect" ? (
+      {availability(p) === "form" ? (
+        <Link
+          href={`/settings?section=accounts&setup=${p.id}#setup`}
+          className={buttonVariants({ variant: "secondary" })}
+          aria-label={`Connect ${p.label}`}
+        >
+          Connect
+        </Link>
+      ) : availability(p) === "connect" ? (
         <form action={connectAccount}>
           <input type="hidden" name="platform" value={p.id} />
           <Button type="submit" variant="secondary" aria-label={`Connect ${p.label}`}>
@@ -73,12 +87,12 @@ function Group({
 
 /**
  * Every Zernio platform as a tile (design v3 "Platforms · Connect accounts"), grouped: Waggle
- * answers messages here / posting only / coming soon. Platforms that need a setup step in
- * Waggle (Bluesky, Telegram, WhatsApp, Discord) show as coming soon until that step is built.
+ * answers messages here / posting only / coming soon. Bluesky opens its form in place; the other
+ * setup steps (Telegram, WhatsApp, Discord) show as coming soon until they're built.
  */
 export function ConnectTiles({ exclude = [] }: { exclude?: string[] }) {
   const all = PLATFORM_IDS.map((id) => PLATFORMS[id]).filter((p) => !exclude.includes(p.id));
-  const ready = all.filter((p) => availability(p) === "connect");
+  const ready = all.filter((p) => availability(p) !== "soon");
   const soon = all.filter((p) => availability(p) === "soon");
   return (
     <div className="flex flex-col gap-6">

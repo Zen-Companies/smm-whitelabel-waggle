@@ -161,6 +161,19 @@ const reviewsSchema = z.object({
 });
 const reviewReplySchema = z.object({ reply: z.object({ id: z.string().min(1) }) });
 
+const usersSchema = z.object({ currentUserId: z.string().min(1) });
+// The SDK types the account as SocialAccount (`_id`); the docs for other credential connects
+// name it `accountId`. Accept either; without one, account.connected brings it by webhook.
+const credentialsConnectSchema = z.object({
+  account: z
+    .object({
+      _id: z.string().min(1).optional(),
+      accountId: z.string().min(1).optional(),
+      username: z.string().nullish(),
+    })
+    .nullish(),
+});
+
 function parse<T>(schema: z.ZodType<T>, data: unknown, operation: string): T {
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
@@ -287,6 +300,41 @@ export class ZernioSocialProvider implements SocialProvider {
         }),
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
+    });
+  }
+
+  /** Zernio's own user id for the credentials connect state; it never changes, so it's kept. */
+  private currentUserId: string | null = null;
+
+  async connectBluesky(input: {
+    profileId: string;
+    identifier: string;
+    appPassword: string;
+    signal?: AbortSignal;
+  }) {
+    if (!this.currentUserId) {
+      this.currentUserId = await call("listUsers", async (withFetch) => {
+        const { data } = await this.zernio.users.listUsers(withFetch({ signal: input.signal }));
+        return parse(usersSchema, data, "listUsers").currentUserId;
+      });
+    }
+    const userId = this.currentUserId;
+    return call("connectBluesky", async (withFetch) => {
+      const { data } = await this.zernio.connect.bluesky.connectBlueskyCredentials(
+        withFetch({
+          signal: input.signal,
+          body: {
+            identifier: input.identifier,
+            appPassword: input.appPassword,
+            state: `${userId}-${input.profileId}`,
+          },
+        }),
+      );
+      const { account } = parse(credentialsConnectSchema, data, "connectBluesky");
+      const accountId = account?._id ?? account?.accountId;
+      return {
+        account: accountId ? { accountId, username: account?.username ?? null } : null,
+      };
     });
   }
 

@@ -47,6 +47,7 @@ export function fakeZernio() {
       return { profileId: id, alreadyExisted: false };
     },
     getConnectUrl: notImplemented,
+    connectBluesky: notImplemented,
     createPost: notImplemented,
     validatePost: notImplemented,
     replyToComment: notImplemented,
