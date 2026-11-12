@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CategoryLabel } from "@/components/app/category-label";
 import { clockTime, dayLabel, platformName, shortTime } from "@/components/app/time";
 import type { ConversationContext, ThreadMessage } from "./conversation-data";
+import { inboxRules } from "@/lib/social/platforms";
 import type { InboxEntry } from "./inbox-data";
 
 // Paper (design.md §4): the conversation sits on the page, no box. A header line, the thread
@@ -45,6 +46,21 @@ export function ConversationPane({
           {entry.reviewRecommends ? "Recommends your Page" : "Doesn't recommend your Page"}
         </p>
       )}
+      {entry.kind === "review" && entry.reviewRating ? (
+        <p
+          className={
+            entry.reviewRating <= 2
+              ? "text-danger pt-4 text-[13px] font-medium"
+              : "text-ink-2 pt-4 text-[13px] font-medium"
+          }
+        >
+          <span aria-hidden>
+            {"★".repeat(entry.reviewRating)}
+            {"☆".repeat(5 - entry.reviewRating)}{" "}
+          </span>
+          {entry.reviewRating}-star review
+        </p>
+      ) : null}
       <ol className="flex flex-1 flex-col gap-2 py-5" aria-label="Messages">
         {thread.map((m, i) => {
           const day = dayLabel(m.at);
@@ -78,6 +94,13 @@ export function ConversationPane({
           );
         })}
       </ol>
+      {entry.kind === "comment" && inboxRules(entry.platform).commentsPolled && (
+        // T66: YouTube, LinkedIn and Bluesky comments reach Waggle by polling.
+        <p className="text-ink-2 mb-3 text-[13px]">
+          {platformName(entry.platform)} comments reach Waggle every few minutes, so this one may
+          have arrived a little after it was written.
+        </p>
+      )}
       {footer}
     </section>
   );

@@ -6,6 +6,7 @@ import { can } from "@/features/orgs";
 import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { platformLabel as name } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { accountLines } from "./account-lines";
 import { connectAccount } from "./actions";
 import { BlueskySetup } from "./bluesky-setup";
 import { TelegramSetup } from "./telegram-setup";
@@ -24,7 +25,7 @@ export async function AccountsCard({
   const supabase = await createServerSupabase();
   const { data: accounts } = await supabase
     .from("social_accounts")
-    .select("id, platform, username, status")
+    .select("id, platform, username, status, pinterest_board_name")
     .eq("tenant_id", tenant.id)
     .order("created_at");
   const down = (accounts ?? []).find((a) => a.status !== "active");
@@ -89,13 +90,25 @@ export async function AccountsCard({
                 key={account.id}
                 className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
               >
-                <span className="flex items-center gap-3">
+                <span className="flex min-w-0 flex-1 items-center gap-3">
                   <PlatformMark platform={account.platform} size={36} />
-                  <span className="flex flex-col">
+                  <span className="flex min-w-0 flex-col">
                     <span className="font-medium">
                       {name(account.platform)}
                       {account.username ? ` @${account.username}` : ""}
                     </span>
+                    {(() => {
+                      // T66: what Waggle does here, and a gray line only when it differs.
+                      const lines = accountLines(account.platform, {
+                        pinterestBoardName: account.pinterest_board_name,
+                      });
+                      return (
+                        <>
+                          <span className="text-ink-2 text-[13px]">{lines.does}</span>
+                          {lines.note && <span className="text-ink-3 text-xs">{lines.note}</span>}
+                        </>
+                      );
+                    })()}
                     {account.status === "active" ? (
                       <span className="text-ink-2 inline-flex items-center gap-1.5 text-sm">
                         <CircleCheck
