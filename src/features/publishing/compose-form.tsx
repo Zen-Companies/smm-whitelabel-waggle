@@ -5,8 +5,9 @@ import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
 import { platformLabel } from "@/lib/social/platforms";
 import { composePost, type ComposeState } from "./actions";
-import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX } from "./limits";
+import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MAX } from "./limits";
 import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./post-rules";
+import { VideoField, type VideoState } from "./video-field";
 
 export interface ComposeAccount {
   id: string;
@@ -32,7 +33,8 @@ const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 /**
- * Compose a post: text, optional photo, accounts, now or on a day and time (PRD F3, design v2).
+ * Compose a post: text, an optional photo or video (T63), accounts, now or on a day and time
+ * (PRD F3, design v2).
  * `day` (YYYY-MM-DD) comes from clicking a day on the calendar and preselects Schedule; `time`
  * (HH:MM) from an Analytics best time.
  */
@@ -80,13 +82,20 @@ function ComposeFields({
   const [time, setTime] = useState(initialTime ?? "09:00");
   const [length, setLength] = useState(0);
   const [photo, setPhoto] = useState<string | null>(null);
+  const [video, setVideo] = useState<VideoState>({ step: "none" });
+  const hasVideo = video.step === "ready" || video.step === "uploading";
   const [picked, setPicked] = useState<string[]>(() => accounts.map((a) => a.id));
   // What each ticked platform will do with this post (design v3 "Before it goes out").
   const pickedPlatforms = [
     ...new Set(accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform)),
   ];
   const checks = pickedPlatforms.map((p) =>
-    checkPlatform(p, { textLength: length, images: photo ? 1 : 0, videos: 0 }),
+    checkPlatform(p, {
+      textLength: length,
+      images: photo && !hasVideo ? 1 : 0,
+      videos: hasVideo ? 1 : 0,
+      videoSeconds: hasVideo ? video.seconds : null,
+    }),
   );
   const serverProblems = state.problems ?? [];
   const limit = textLimitFor(pickedPlatforms, POST_TEXT_MAX);
@@ -128,27 +137,52 @@ function ComposeFields({
       </div>
 
       <div className="flex flex-col gap-2">
-        <div className="flex items-center gap-3">
-          <label
-            htmlFor="post-image"
-            className="border-line-strong text-ink-3 hover:bg-subtle flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed text-center text-xs has-[:focus-visible]:outline-2"
-          >
-            {photo ? "Change photo" : "Add photo"}
-            <input
-              id="post-image"
-              name="image"
-              type="file"
-              accept={POST_IMAGE_TYPES.join(",")}
-              onChange={(e) => setPhoto(e.target.files?.[0]?.name ?? null)}
-              className="sr-only"
-            />
-          </label>
-          <span className="meta min-w-0 truncate">
-            {photo ?? `JPG or PNG, up to ${imageMb} MB`}
-          </span>
+        <div className="flex flex-wrap items-start gap-3">
+          {!hasVideo && (
+            <label
+              htmlFor="post-image"
+              className="border-line-strong text-ink-3 hover:bg-subtle flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed text-center text-xs has-[:focus-visible]:outline-2"
+            >
+              {photo ? "Change photo" : "Add photo"}
+              <input
+                id="post-image"
+                name="image"
+                type="file"
+                accept={POST_IMAGE_TYPES.join(",")}
+                onChange={(e) => setPhoto(e.target.files?.[0]?.name ?? null)}
+                className="sr-only"
+              />
+            </label>
+          )}
+          {/* A post carries a photo or a video, not both (TikTok and others refuse the mix). */}
+          {!photo && <VideoField video={video} onChange={setVideo} disabled={pending} />}
+          {!hasVideo && (
+            <span className="meta min-w-0 self-center truncate">
+              {photo ?? `A photo (JPG or PNG, up to ${imageMb} MB) or a video`}
+            </span>
+          )}
         </div>
         {fieldError("image")}
       </div>
+
+      {pickedPlatforms.includes("youtube") && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="post-youtube-title" className="text-sm font-medium">
+            YouTube title
+          </label>
+          <input
+            id="post-youtube-title"
+            name="youtubeTitle"
+            maxLength={YOUTUBE_TITLE_MAX}
+            placeholder="Without one, YouTube uses the first line of your text"
+            className="field"
+          />
+          <span className="meta">
+            {YOUTUBE_TITLE_MAX} characters max; your text becomes the description.
+          </span>
+          {fieldError("youtubeTitle")}
+        </div>
+      )}
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Post to</legend>
@@ -279,7 +313,12 @@ function ComposeFields({
         <Button
           type="submit"
           variant="primary"
-          disabled={pending || picked.length === 0 || checks.some((c) => c.level === "blocked")}
+          disabled={
+            pending ||
+            video.step === "uploading" ||
+            picked.length === 0 ||
+            checks.some((c) => c.level === "blocked")
+          }
         >
           {pending
             ? "Saving…"

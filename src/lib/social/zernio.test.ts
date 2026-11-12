@@ -191,6 +191,55 @@ describe("ZernioSocialProvider", () => {
     expect(captured[1].url.searchParams.get("code")).toBe("ZRN-ABC123");
   });
 
+  it("presignMedia asks for an upload link with the file's size (T63)", async () => {
+    respond = () =>
+      json({
+        uploadUrl: "https://bucket.r2.cloudflarestorage.com/temp/1_video.mp4?X-Amz-Signature=x",
+        publicUrl: "https://media.zernio.com/temp/1_video.mp4",
+        key: "temp/1_video.mp4",
+        expiresIn: 3600,
+      });
+    await expect(
+      provider.presignMedia({ filename: "video.mp4", contentType: "video/mp4", size: 48_000_000 }),
+    ).resolves.toEqual({
+      uploadUrl: "https://bucket.r2.cloudflarestorage.com/temp/1_video.mp4?X-Amz-Signature=x",
+      publicUrl: "https://media.zernio.com/temp/1_video.mp4",
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/media/presign");
+    expect(captured[0].body).toEqual({
+      filename: "video.mp4",
+      contentType: "video/mp4",
+      size: 48_000_000,
+    });
+  });
+
+  it("createPost sends YouTube's title and asks TikTok for its video options (T63)", async () => {
+    respond = (req) =>
+      req.url.pathname.includes("tiktok")
+        ? json({ privacyLevels: [{ value: "PUBLIC_TO_EVERYONE" }] })
+        : json({ post: { _id: "post_v", status: "scheduled" } }, 201);
+    await provider.createPost({
+      content: "Ube cheesecake is back",
+      mediaUrls: ["https://media.zernio.com/temp/1_video.mp4"],
+      targets: [
+        { platform: "youtube", accountId: "acc_yt" },
+        { platform: "tiktok", accountId: "acc_tt" },
+      ],
+      publishAt: new Date("2026-11-20T09:00:00Z"),
+      idempotencyKey: "k-video",
+      tiktokConsent: true,
+      youtubeTitle: "Ube cheesecake is back",
+    });
+    const creator = captured.find((r) => r.url.pathname.includes("tiktok"))!;
+    expect(creator.url.searchParams.get("mediaType")).toBe("video");
+    const post = captured.find((r) => r.url.pathname === "/api/v1/posts")!;
+    expect((post.body as { platforms: unknown[] }).platforms).toContainEqual({
+      platform: "youtube",
+      accountId: "acc_yt",
+      platformSpecificData: { title: "Ube cheesecake is back" },
+    });
+  });
+
   it("connectBluesky reports a refused app password as a 401", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/users"

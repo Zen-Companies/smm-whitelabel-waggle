@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { writeAudit } from "@/lib/audit";
-import { isSocialPlatform } from "@/lib/social/types";
+import { isSocialPlatform, isVideoUrl } from "@/lib/social/types";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
@@ -58,9 +58,12 @@ export async function createPost(
     content: string;
     accountIds: string[];
     scheduledFor: Date | null;
-    media?: { url: string }[];
+    /** Photos and videos already uploaded to Zernio (`seconds`: a video's length, when known). */
+    media?: { url: string; seconds?: number | null }[];
     /** The owner confirmed TikTok's consent for this post. */
     tiktokConsent?: boolean;
+    /** YouTube's title; without it Zernio uses the caption's first line. */
+    youtubeTitle?: string;
     via?: Record<string, string>;
     now?: Date;
   },
@@ -81,14 +84,15 @@ export async function createPost(
   }
   if (owned.some((a) => a.status !== "active")) return { ok: false, error: "account_disconnected" };
 
-  const media = input.media ?? [];
-  // Each platform's rules (photos only for now: the composer uploads images).
+  const media = (input.media ?? []).map((m) => ({ url: m.url, seconds: m.seconds ?? null }));
+  const videos = media.filter((m) => isVideoUrl(m.url));
   const blocked = owned
     .map((a) =>
       checkPlatform(a.platform, {
         textLength: input.content.length,
-        images: media.length,
-        videos: 0,
+        images: media.length - videos.length,
+        videos: videos.length,
+        videoSeconds: videos[0]?.seconds ?? null,
       }),
     )
     .filter((c): c is Extract<RuleCheck, { level: "blocked" }> => c.level === "blocked");
@@ -108,6 +112,7 @@ export async function createPost(
     const check = await deps.social().validatePost({
       content: input.content,
       mediaUrls: media.map((m) => m.url),
+      youtubeTitle: input.youtubeTitle,
       targets: owned.flatMap((a) =>
         isSocialPlatform(a.platform)
           ? [{ platform: a.platform, accountId: a.zernio_account_id }]
@@ -133,6 +138,7 @@ export async function createPost(
       scheduled_for: input.scheduledFor?.toISOString() ?? null,
       status: "queued",
       tiktok_consent_at: input.tiktokConsent ? now.toISOString() : null,
+      platform_options: input.youtubeTitle ? { youtube: { title: input.youtubeTitle } } : {},
     })
     .select("id")
     .single();
@@ -145,7 +151,8 @@ export async function createPost(
       postId: post.id,
       scheduled: !!input.scheduledFor,
       accounts: accountIds.length,
-      image: media.length > 0,
+      image: media.length > videos.length,
+      video: videos.length > 0,
       ...(input.via ? { via: input.via } : {}),
     },
   });

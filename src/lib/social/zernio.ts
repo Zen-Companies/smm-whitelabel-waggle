@@ -12,6 +12,7 @@ import {
 import {
   SocialProviderError,
   type TelegramConnectStatus,
+  isVideoUrl,
   type AccountHealth,
   type AccountPicture,
   type CreatePostInput,
@@ -409,6 +410,13 @@ export class ZernioSocialProvider implements SocialProvider {
   private async postTargets(input: CreatePostInput) {
     return Promise.all(
       input.targets.map(async (t) => {
+        if (t.platform === "youtube" && input.youtubeTitle) {
+          return {
+            platform: t.platform,
+            accountId: t.accountId,
+            platformSpecificData: { title: input.youtubeTitle },
+          };
+        }
         if (t.platform !== "tiktok") return { platform: t.platform, accountId: t.accountId };
         if (!input.tiktokConsent) {
           throw new SocialProviderError("TikTok needs the owner's consent for this post", {
@@ -418,7 +426,8 @@ export class ZernioSocialProvider implements SocialProvider {
         }
         const { data } = await this.zernio.accounts.getTikTokCreatorInfo({
           path: { accountId: t.accountId },
-          query: { mediaType: "photo" },
+          // A video post has its own privacy options on TikTok.
+          query: { mediaType: (input.mediaUrls ?? []).some(isVideoUrl) ? "video" : "photo" },
         });
         const privacyLevel = pickTikTokPrivacy(
           (parse(creatorInfoSchema, data, "getTikTokCreatorInfo").privacyLevels ?? []).map(
@@ -471,24 +480,39 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
-  async uploadMedia(input: {
+  async presignMedia(input: {
     filename: string;
     contentType: string;
-    bytes: Uint8Array;
+    size: number;
     signal?: AbortSignal;
-  }): Promise<{ publicUrl: string }> {
-    const { uploadUrl, publicUrl } = await call("uploadMedia", async (withFetch) => {
+  }): Promise<{ uploadUrl: string; publicUrl: string }> {
+    return call("presignMedia", async (withFetch) => {
       const { data } = await this.zernio.media.getMediaPresignedUrl(
         withFetch({
           signal: input.signal,
           body: {
             filename: input.filename,
             contentType: input.contentType as never,
-            size: input.bytes.byteLength,
+            size: input.size,
           },
         }),
       );
-      return parse(presignSchema, data, "uploadMedia");
+      const { uploadUrl, publicUrl } = parse(presignSchema, data, "presignMedia");
+      return { uploadUrl, publicUrl };
+    });
+  }
+
+  async uploadMedia(input: {
+    filename: string;
+    contentType: string;
+    bytes: Uint8Array;
+    signal?: AbortSignal;
+  }): Promise<{ publicUrl: string }> {
+    const { uploadUrl, publicUrl } = await this.presignMedia({
+      filename: input.filename,
+      contentType: input.contentType,
+      size: input.bytes.byteLength,
+      signal: input.signal,
     });
     // The upload URL is pre-signed storage, not the Zernio API: a plain PUT.
     const res = await fetch(uploadUrl, {

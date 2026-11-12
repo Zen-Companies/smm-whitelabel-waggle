@@ -6,19 +6,20 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
-import { getSocialProvider } from "@/lib/social";
+import { getSocialProvider, resolveSocialProviderMode } from "@/lib/social";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import { getServiceClient } from "@/lib/supabase/service";
-import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX } from "./limits";
+import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MAX } from "./limits";
 import { imageMaxBytesFor } from "./post-rules";
 import { publishPost } from "./publish";
 import { cancelScheduledPost, createPost } from "./posts";
+import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./video";
 
 export interface ComposeState {
   error?: string;
   /** Field the error belongs to (design.md §4: errors stay where they happened). */
-  field?: "content" | "accounts" | "when" | "image";
+  field?: "content" | "accounts" | "when" | "image" | "youtubeTitle";
   /** Set when the post was saved: the form resets and the new post shows in the list. */
   savedAt?: number;
   outcome?: "published" | "scheduled" | "waiting" | "failed";
@@ -32,6 +33,14 @@ const composeSchema = z.object({
   when: z.enum(["now", "later"]),
   // The browser sends the chosen local time as ISO (with its offset).
   scheduledFor: z.string().optional(),
+  youtubeTitle: z
+    .string()
+    .trim()
+    .max(YOUTUBE_TITLE_MAX, `YouTube titles are ${YOUTUBE_TITLE_MAX} characters at most.`)
+    .optional(),
+  // T63: a video the browser already uploaded to Zernio, and its length if the browser read it.
+  video: z.string().optional(),
+  videoSeconds: z.coerce.number().positive().max(86_400).optional().catch(undefined),
 });
 
 export async function composePost(_prev: ComposeState, formData: FormData): Promise<ComposeState> {
@@ -40,10 +49,17 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     accounts: formData.getAll("accounts"),
     when: formData.get("when"),
     scheduledFor: formData.get("scheduledFor") || undefined,
+    youtubeTitle: formData.get("youtubeTitle") || undefined,
+    video: formData.get("video") || undefined,
+    videoSeconds: formData.get("videoSeconds") || undefined,
   });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
-    return { error: issue.message, field: issue.path[0] === "accounts" ? "accounts" : "content" };
+    const field = issue.path[0];
+    return {
+      error: issue.message,
+      field: field === "accounts" || field === "youtubeTitle" ? field : "content",
+    };
   }
   const { content, accounts, when } = parsed.data;
   let scheduledFor: Date | null = null;
@@ -62,9 +78,15 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
   if (!tenant) return { error: NOT_ALLOWED };
   const db = getServiceClient();
   // Optional image: uploaded through Zernio's presign flow before the post is created.
-  const media: { url: string }[] = [];
+  const media: { url: string; seconds?: number | null }[] = [];
   const image = formData.get("image");
-  if (image instanceof File && image.size > 0) {
+  if (parsed.data.video) {
+    const mock = resolveSocialProviderMode(process.env) === "mock";
+    if (!isUploadedVideoUrl(parsed.data.video, { mock, appUrl: process.env.APP_URL })) {
+      return { error: "Upload the video again.", field: "image" };
+    }
+    media.push({ url: parsed.data.video, seconds: parsed.data.videoSeconds ?? null });
+  } else if (image instanceof File && image.size > 0) {
     if (!(POST_IMAGE_TYPES as readonly string[]).includes(image.type)) {
       return { error: "Use a JPG, PNG or WebP image.", field: "image" };
     }
@@ -115,6 +137,7 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
       scheduledFor,
       media,
       tiktokConsent: formData.get("tiktokConsent") === "yes",
+      youtubeTitle: parsed.data.youtubeTitle || undefined,
     },
   );
   if (!result.ok) {
@@ -232,4 +255,39 @@ export async function retryPost(
   const result = await publishPost({ db, social: getSocialProvider }, parsed.data.postId);
   revalidatePath("/posts");
   return result.outcome === "failed" ? { error: result.error } : {};
+}
+
+const videoMetaSchema = z.object({
+  type: z.string(),
+  size: z.number().int().nonnegative(),
+});
+
+/**
+ * T63: an upload link for one video. The browser PUTs the file straight to Zernio's storage
+ * (it allows any origin), so a video never passes through our server.
+ */
+export async function prepareVideoUpload(
+  meta: z.infer<typeof videoMetaSchema>,
+): Promise<{ uploadUrl: string; publicUrl: string } | { error: string }> {
+  const parsed = videoMetaSchema.safeParse(meta);
+  if (!parsed.success) return { error: "Pick the video again." };
+  const problem = videoProblem(parsed.data);
+  if (problem || !isVideoType(parsed.data.type)) return { error: problem ?? "Use an MP4 video." };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  try {
+    return await getSocialProvider().presignMedia({
+      filename: videoFilename(parsed.data.type),
+      contentType: parsed.data.type,
+      size: parsed.data.size,
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (error) {
+    if (isPlatformPaused(error)) {
+      await recordPlatformPause(getServiceClient());
+      return { error: "Posting is paused on our side right now. Try again later." };
+    }
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "presignVideo" } });
+    return { error: "The video couldn't be uploaded. Try again." };
+  }
 }

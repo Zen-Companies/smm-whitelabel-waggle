@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./post-rules";
 
-const draft = (d: Partial<{ textLength: number; images: number; videos: number }> = {}) => ({
+const draft = (
+  d: Partial<{
+    textLength: number;
+    images: number;
+    videos: number;
+    videoSeconds: number | null;
+  }> = {},
+) => ({
   textLength: 40,
   images: 0,
   videos: 0,
@@ -74,5 +81,31 @@ describe("limits across platforms", () => {
   it("asks for consent only with TikTok", () => {
     expect(needsConsent(["instagram"])).toBe(false);
     expect(needsConsent(["instagram", "tiktok"])).toBe(true);
+  });
+});
+
+describe("videos (T63)", () => {
+  it("lets YouTube take a video", () => {
+    expect(checkPlatform("youtube", draft({ videos: 1, videoSeconds: 80 })).level).not.toBe(
+      "blocked",
+    );
+  });
+
+  it("blocks a video longer than the platform takes, and says how long it is", () => {
+    expect(checkPlatform("bluesky", draft({ videos: 1, videoSeconds: 80 }))).toEqual({
+      platform: "bluesky",
+      level: "blocked",
+      message: "Bluesky takes videos up to 60 seconds; this one is 1:20.",
+    });
+    expect(checkPlatform("tiktok", draft({ videos: 1, videoSeconds: 11 * 60 }))).toMatchObject({
+      message: "TikTok takes videos up to 10 minutes; this one is 11:00.",
+    });
+    expect(checkPlatform("instagram", draft({ videos: 1, videoSeconds: 80 })).level).toBe("ok");
+  });
+
+  it("doesn't block when the length is unknown (Zernio's check still runs)", () => {
+    expect(checkPlatform("bluesky", draft({ videos: 1, videoSeconds: null })).level).not.toBe(
+      "blocked",
+    );
   });
 });

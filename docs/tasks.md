@@ -263,6 +263,13 @@ Plan: `docs/platforms/PLAN.md`; research `docs/platforms/RESEARCH.md`; designs a
 - [ ] **T62. Inbox wave 2**: YouTube, LinkedIn, Bluesky, X (cost decision first).
       _Status (2026-11-12):_ YouTube, LinkedIn and Bluesky comments and Bluesky DMs are on (no hide there: spam is left out). **X stays off** until the per-call cost is decided (comments must be pulled, not pushed; DM read $0.010, send $0.015). Bluesky replies use Zernio's defaults for `parentCid`/`rootUri` (VERIFY in the live test).
 
+- [x] **T63. Video upload** (design approved 2026-11-12, canvas "Next to build" · NextComposerMedia).
+      _Built 2026-11-12:_ the browser uploads the video straight to Zernio's storage (`SocialProvider.presignMedia`, then a PUT with progress; Zernio's R2 storage allows any origin, checked with one real presign call on 12 Nov), so videos never pass through our server (Vercel's 4.5 MB body limit). Our cap 1 GB; MP4, MOV, WebM, M4V. The compose action only accepts a video URL on `media.zernio.com` (or the mock's own route). A post has a photo or a video. Length checks per platform (`videoMaxSeconds`: Instagram 15 min, TikTok 10, Threads 5, Bluesky 60 s) from the length the browser reads. YouTube title field when YouTube is ticked, kept in `posts.platform_options` (migration `20261112190000_post_platform_options`) so scheduled and retried posts carry it. TikTok asks for its video options (`mediaType=video`). Not yet: a live test with a real YouTube/TikTok account.
+- [ ] **T64. Pinterest board choice** (approved; same board): list the account's boards, pick in place, remember per account, send `boardId`.
+- [ ] **T65. Replies made on Google** (approved; NextInboxNotes): `review.updated` with a reply → drop the waiting draft, move to Answered.
+- [ ] **T66. Account lines and slower-comments note** (approved; NextAccountBadges, NextInboxNotes).
+- [ ] **T67. WhatsApp** (approved; NextWhatsApp): connect, 24 h window, templates (send, list, new), Meta charges note.
+
 ## Next (held, after Phase 6)
 
 From the same review, agreed 2026-11-05 to hold until Phase 6 is done:

@@ -63,7 +63,7 @@ export async function publishPost(
   const { data: post, error } = await db
     .from("posts")
     .select(
-      "id, tenant_id, content, media, target_account_ids, scheduled_for, status, idempotency_key, attempts, tiktok_consent_at",
+      "id, tenant_id, content, media, target_account_ids, scheduled_for, status, idempotency_key, attempts, tiktok_consent_at, platform_options",
     )
     .eq("id", postId)
     .single();
@@ -129,6 +129,7 @@ export async function publishPost(
       publishAt: scheduledFor && scheduledFor > now ? scheduledFor : null,
       idempotencyKey: post.idempotency_key,
       tiktokConsent: post.tiktok_consent_at !== null,
+      youtubeTitle: platformOptions(post.platform_options).youtube?.title,
     });
     const status = STATUS[result.status] ?? "publishing";
     await db
@@ -206,4 +207,13 @@ export async function publishQueuedPosts(
     if (r.outcome === "retry_later" && r.reason === "zernio_paused") break;
   }
   return summary;
+}
+
+/** The post's per-platform choices (T63), read defensively: it's free-form JSON in the row. */
+function platformOptions(value: unknown): { youtube?: { title?: string } } {
+  if (!value || typeof value !== "object") return {};
+  const youtube = (value as { youtube?: unknown }).youtube;
+  const title =
+    youtube && typeof youtube === "object" ? (youtube as { title?: unknown }).title : undefined;
+  return typeof title === "string" && title ? { youtube: { title } } : {};
 }

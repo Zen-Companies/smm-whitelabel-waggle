@@ -39,6 +39,8 @@ export interface PostRules {
   extraImagesDropped: boolean;
   /** Needs the owner's consent tick before each post (TikTok). */
   consentRequired: boolean;
+  /** Longest video the platform takes, in seconds; null when we don't check (Zernio's call will). */
+  videoMaxSeconds: number | null;
   /** A short "before it goes out" note, shown when this platform is ticked. */
   note: string | null;
 }
@@ -83,6 +85,7 @@ const rules = (r: Partial<PostRules> & Pick<PostRules, "textMax">): PostRules =>
   imageMaxBytes: 5 * MB,
   extraImagesDropped: false,
   consentRequired: false,
+  videoMaxSeconds: null,
   note: null,
   ...r,
 });
@@ -96,7 +99,13 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     connect: "oauth",
     line: "Answers comments and DMs",
     needs: "Business or Creator account",
-    post: rules({ textMax: 2200, mediaRequired: true, maxImages: 20, imageMaxBytes: 8 * MB }),
+    post: rules({
+      videoMaxSeconds: 900,
+      textMax: 2200,
+      mediaRequired: true,
+      maxImages: 20,
+      imageMaxBytes: 8 * MB,
+    }),
     inbox: { comments: true, dms: true, reviews: false },
     inboxLive: true,
     analyticsLive: true,
@@ -141,6 +150,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     line: "Answers comments and replies to DMs",
     needs: "Business account; DMs not in the EU or UK",
     post: rules({
+      videoMaxSeconds: 600,
       textMax: 2200,
       mediaRequired: true,
       maxImages: 35,
@@ -160,7 +170,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     connect: "oauth",
     line: "Answers comments",
     needs: "Instagram Business or Creator account",
-    post: rules({ textMax: 500, maxImages: 20, imageMaxBytes: 8 * MB }),
+    post: rules({ videoMaxSeconds: 300, textMax: 500, maxImages: 20, imageMaxBytes: 8 * MB }),
     inbox: { comments: true, dms: false, reviews: false },
     inboxLive: true,
     analyticsLive: false,
@@ -199,7 +209,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     connect: "password",
     line: "Answers comments and DMs",
     needs: "Needs an app password",
-    post: rules({ textMax: 300, maxImages: 4, imageMaxBytes: 1_000_000 }),
+    post: rules({ videoMaxSeconds: 60, textMax: 300, maxImages: 4, imageMaxBytes: 1_000_000 }),
     inbox: { comments: true, dms: true, reviews: false },
     inboxLive: true,
     analyticsLive: false,
@@ -213,6 +223,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     line: "Answers mentions and DMs",
     needs: "Each X call costs extra",
     post: rules({
+      videoMaxSeconds: 140,
       textMax: 280,
       maxImages: 4,
       note: "A post with a link costs more to send.",

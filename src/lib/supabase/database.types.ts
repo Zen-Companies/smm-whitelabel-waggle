@@ -1437,6 +1437,7 @@ export type Database = {
           idempotency_key: string
           last_error: string | null
           media: Json
+          platform_options: Json
           next_attempt_at: string | null
           platform_results: Json
           published_at: string | null
@@ -1457,6 +1458,7 @@ export type Database = {
           idempotency_key?: string
           last_error?: string | null
           media?: Json
+          platform_options?: Json
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null
@@ -1476,6 +1478,7 @@ export type Database = {
           idempotency_key?: string
           last_error?: string | null
           media?: Json
+          platform_options?: Json
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null

@@ -322,6 +322,74 @@ describe("publishing (T14)", () => {
     expect(social.posts.size).toBe(before);
   });
 
+  it("a video post to YouTube keeps its title for publishing, now or later (T63)", async () => {
+    const { data: yt } = await db
+      .from("social_accounts")
+      .insert({
+        tenant_id: tenantId,
+        zernio_account_id: `acc_yt_${randomUUID().slice(0, 8)}`,
+        platform: "youtube",
+        username: "postingcafe.yt",
+      })
+      .select("id")
+      .single();
+    const video = "https://media.zernio.com/temp/1_video.mp4";
+    const r = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Ube cheesecake is back. Only 20 slices a day",
+      accountIds: [yt!.id],
+      scheduledFor: new Date(Date.now() + 60 * 60 * 1000),
+      media: [{ url: video, seconds: 80 }],
+      youtubeTitle: "Ube cheesecake is back",
+    });
+    expect(r).toMatchObject({ ok: true, outcome: "scheduled" });
+    const { data: row } = await db
+      .from("posts")
+      .select("media, platform_options")
+      .eq("id", (r as { postId: string }).postId)
+      .single();
+    expect(row).toEqual({
+      media: [{ url: video, seconds: 80 }],
+      platform_options: { youtube: { title: "Ube cheesecake is back" } },
+    });
+    expect(social.calls.at(-1)).toMatchObject({
+      mediaUrls: [video],
+      youtubeTitle: "Ube cheesecake is back",
+    });
+  });
+
+  it("a video too long for Bluesky is refused before anything is saved (T63)", async () => {
+    const { data: bs } = await db
+      .from("social_accounts")
+      .insert({
+        tenant_id: tenantId,
+        zernio_account_id: `acc_bs_${randomUUID().slice(0, 8)}`,
+        platform: "bluesky",
+        username: "postingcafe.bsky.social",
+      })
+      .select("id")
+      .single();
+    const r = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Behind the counter",
+      accountIds: [bs!.id],
+      scheduledFor: null,
+      media: [{ url: "https://media.zernio.com/temp/2_video.mp4", seconds: 80 }],
+    });
+    expect(r).toEqual({
+      ok: false,
+      error: "not_accepted",
+      problems: [
+        {
+          platform: "bluesky",
+          message: "Bluesky takes videos up to 60 seconds; this one is 1:20.",
+        },
+      ],
+    });
+  });
+
   it("Zernio's check refuses what our rules let through, with its own reason", async () => {
     const original = social.validatePost.bind(social);
     social.validatePost = async () => ({

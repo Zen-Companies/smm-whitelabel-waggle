@@ -4,6 +4,14 @@ export interface DraftShape {
   textLength: number;
   images: number;
   videos: number;
+  /** The video's length, when there is one and the browser could read it. */
+  videoSeconds?: number | null;
+}
+
+/** "1:20" */
+export function clockLength(seconds: number): string {
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
 export type RuleCheck =
@@ -29,6 +37,15 @@ export function checkPlatform(platform: string, draft: DraftShape): RuleCheck {
   }
   if (draft.images > 0 && rules.maxImages === 0) {
     return { platform, level: "blocked", message: `${name} doesn't take photos.` };
+  }
+  const max = rules.videoMaxSeconds;
+  if (draft.videos > 0 && max && draft.videoSeconds && draft.videoSeconds > max) {
+    const limit = max < 120 ? `${max} seconds` : `${Math.round(max / 60)} minutes`;
+    return {
+      platform,
+      level: "blocked",
+      message: `${name} takes videos up to ${limit}; this one is ${clockLength(draft.videoSeconds)}.`,
+    };
   }
   if (draft.textLength > rules.textMax) {
     return {

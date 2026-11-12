@@ -52,6 +52,10 @@ const MEDIA_EXT: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+  "video/webm": "webm",
+  "video/x-m4v": "m4v",
 };
 
 export class MockSocialProvider implements SocialProvider {
@@ -140,6 +144,15 @@ export class MockSocialProvider implements SocialProvider {
     const status: ProviderPostStatus = input.publishAt ? "scheduled" : "publishing";
     if (!this.posts.has(providerPostId)) this.posts.set(providerPostId, { ...input, status });
     return { providerPostId, status };
+  }
+
+  /** The browser PUTs to our own mock route, which stores the file like uploadMedia does. */
+  async presignMedia(input: { filename: string; contentType: string; size: number }) {
+    const ext = MEDIA_EXT[input.contentType] ?? "bin";
+    const hash = idFrom("m", input.filename, String(input.size), String(Date.now())).slice(2);
+    const name = `${hash}.${ext}`;
+    const url = `${this.appUrl}/api/mock-media/${name}`;
+    return { uploadUrl: url, publicUrl: url };
   }
 
   async uploadMedia(input: { filename: string; contentType: string; bytes: Uint8Array }) {

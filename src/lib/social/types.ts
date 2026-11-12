@@ -35,7 +35,13 @@ export interface CreatePostInput {
    * on every post). Without it a TikTok target is refused.
    */
   tiktokConsent?: boolean;
+  /** YouTube's video title (100 max); without it Zernio uses the caption's first line. */
+  youtubeTitle?: string;
 }
+
+/** A video (or other file) is a video when its URL ends like one; Zernio reads the same. */
+export const isVideoUrl = (url: string): boolean =>
+  /\.(mp4|mov|webm|m4v|mpeg|avi)(\?|$)/i.test(url);
 
 export type ProviderPostStatus =
   | "draft"
@@ -167,6 +173,14 @@ export interface SocialProvider {
    * Uploads one image for a post: `POST /v1/media/presign` then a PUT of the bytes to the
    * returned `uploadUrl`. Returns the public URL to pass in `CreatePostInput.mediaUrls`.
    */
+  /**
+   * A presigned upload for the browser to PUT a file to (videos: too big for our server). The
+   * storage allows any origin (checked 12 Nov 2026). `uploadUrl` lasts 1 hour; the file at
+   * `publicUrl` 7 days until a post uses it.
+   */
+  presignMedia(
+    input: { filename: string; contentType: string; size: number } & CallOptions,
+  ): Promise<{ uploadUrl: string; publicUrl: string }>;
   uploadMedia(
     input: {
       filename: string;
