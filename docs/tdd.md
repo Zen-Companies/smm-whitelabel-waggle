@@ -153,7 +153,7 @@ Added in the UI pass: `escalated → handled` and `failed → handled` (`handle`
    - `account.connected` / `account.disconnected` → upsert `social_accounts`; on disconnect set its open items to `paused` and enqueue an alert.
 4. Return 200. Target well under 5 seconds; Zernio retries up to 7 times on failure.
 
-Subscribe only to: `comment.received`, `message.received`, `message.failed`, `post.published`, `post.partial`, `post.failed`, `post.cancelled` (T14), `account.connected`, `account.disconnected`.
+Subscribe only to: `comment.received`, `message.received`, `message.failed`, `post.published`, `post.partial`, `post.failed`, `post.cancelled` (T14), `account.connected`, `account.disconnected`, `review.new` (T61, Google reviews).
 
 Confirmed (T2, docs.zernio.com/webhooks and the `@zernio/node` 0.2.1369 types `WebhookPayloadComment` / `WebhookPayloadMessage`):
 
@@ -694,3 +694,5 @@ Decisions (2026-11-09): only our admins offboard (staff permission `brands.manag
 - **TikTok** needs consent on every post: `posts.tiktok_consent_at`, sent as `contentPreviewConfirmed`/`expressConsentGiven` with a privacy level picked from the account's creator info (public when offered).
 - **Live flags.** `inboxLive` keeps comment/DM ingest and backfill on Instagram/Facebook until the inbox waves; `analyticsLive` keeps per-platform analytics views there too ("Numbers for X come in an update"; their posts still count in All).
 - **Credential connects (T60).** Bluesky has no hosted sign-in: Waggle posts the handle and app password to `POST /v1/connect/bluesky/credentials` with state `{userId}-{profileId}` (`currentUserId` from `GET /v1/users`). The password is passed through, never kept or logged. The account is recorded from the response with the same idempotent upsert the `account.connected` webhook uses, so the owner sees it at once and the webhook changes nothing.
+- **Code connect (Telegram, T60).** The owner sends a code to Zernio's bot in their channel; the card polls `PATCH /v1/connect/telegram?code=`. A code is public once posted, so a "connected" answer is recorded only if the account appears in `GET /v1/accounts?profileId=` for the brand's own profile.
+- **Inbox rules per platform (T61/T62).** `inboxRules(platform)` is the one place for hide, private reply, DM window and cap, reply length and reply listing. `policy()` takes the account's platform and `dmRepliesSinceCustomer`; with no platform it keeps Meta's 24 h. The send step sends a "reply in DM" publicly where private replies don't exist, and doesn't look for an uncertain comment reply where Zernio can't list replies (the resend reuses the idempotency key). Webhooks: `comment.received` and `message.received` map for every live platform; `review.new` maps Google reviews. Own replies: Zernio sets `author.isOwnAccount` only for Meta (inferred for TikTok), so a comment from the account's own handle, or whose id is a `drafts.zernio_reply_id`, is skipped.

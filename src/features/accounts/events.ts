@@ -1,6 +1,6 @@
 import { pauseAccountItems, resumeAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
-import { isInboxLive } from "@/lib/social/platforms";
+import { hasLiveComments } from "@/lib/social/platforms";
 import { isSocialPlatform, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
 
@@ -35,7 +35,7 @@ export async function handleAccountConnected(
   if (outcome !== "existing" || row.previous_status !== "active") {
     // T16: pull comments that arrived while the account was away (or before it was connected).
     // Only where Waggle's inbox covers the platform today.
-    if (isInboxLive(input.platform)) {
+    if (hasLiveComments(input.platform)) {
       await db
         .from("social_accounts")
         .update({ backfill_from: new Date(Date.now() - BACKFILL_WINDOW_MS).toISOString() })

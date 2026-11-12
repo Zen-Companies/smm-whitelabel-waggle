@@ -8,6 +8,12 @@ describe("defaultReplyVia (T41)", () => {
     expect(defaultReplyVia("dm", "lead")).toBe("public");
     expect(defaultReplyVia("comment", null)).toBe("public");
   });
+
+  it("answers in DM only where the platform allows it (Meta)", () => {
+    expect(defaultReplyVia("comment", "lead", "instagram")).toBe("dm");
+    expect(defaultReplyVia("comment", "lead", "tiktok")).toBe("public");
+    expect(defaultReplyVia("comment", "lead", "threads")).toBe("public");
+  });
 });
 
 describe("the 7-day private reply window", () => {

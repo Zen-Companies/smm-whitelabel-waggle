@@ -65,6 +65,7 @@ export const HANDED_OVER_WORDS: Record<string, string> = {
   unclear: "Not sure what they meant",
   low_confidence: "Not sure what they meant",
   dm_window_closed: "DM window closed first",
+  dm_reply_limit: "DM reply limit reached",
   dm_window_closing: "DM window about to close",
   mode_off: "Replies are off for that kind",
   ai_cap_reached: "AI allowance used up",

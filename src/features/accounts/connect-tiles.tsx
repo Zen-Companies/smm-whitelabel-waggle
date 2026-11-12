@@ -10,7 +10,7 @@ import { connectAccount } from "./actions";
  */
 function availability(p: Platform): "connect" | "form" | "soon" {
   if (p.connect === "oauth") return "connect";
-  if (p.connect === "password") return "form";
+  if (p.connect === "password" || p.connect === "code") return "form";
   return "soon";
 }
 
@@ -87,8 +87,8 @@ function Group({
 
 /**
  * Every Zernio platform as a tile (design v3 "Platforms · Connect accounts"), grouped: Waggle
- * answers messages here / posting only / coming soon. Bluesky opens its form in place; the other
- * setup steps (Telegram, WhatsApp, Discord) show as coming soon until they're built.
+ * answers messages here / posting only / coming soon. Bluesky and Telegram open their setup card
+ * in place; WhatsApp and Discord show as coming soon until theirs are built.
  */
 export function ConnectTiles({ exclude = [] }: { exclude?: string[] }) {
   const all = PLATFORM_IDS.map((id) => PLATFORMS[id]).filter((p) => !exclude.includes(p.id));

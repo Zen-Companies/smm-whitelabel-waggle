@@ -82,6 +82,8 @@ export interface ProviderReview {
   reviewerName: string | null;
   /** Facebook: true = recommends, false = doesn't recommend, null = not given. */
   recommends: boolean | null;
+  /** Google: 1–5 stars; null elsewhere. */
+  rating?: number | null;
   text: string;
   createdAt: string;
   hasReply: boolean;
@@ -115,6 +117,11 @@ export interface AccountHealth {
   issues: string[];
 }
 
+export type TelegramConnectStatus =
+  | { status: "pending" }
+  | { status: "expired" }
+  | { status: "connected"; accountId: string | null; username: string | null };
+
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
 export interface SocialProvider {
   /** A 409 for the same externalId returns the existing profile with `alreadyExisted: true`. */
@@ -137,6 +144,15 @@ export interface SocialProvider {
   connectBluesky(
     input: { profileId: string; identifier: string; appPassword: string } & CallOptions,
   ): Promise<{ account: { accountId: string; username: string | null } | null }>;
+  /**
+   * Telegram (T60): an access code for Zernio's bot (`GET /v1/connect/telegram`), valid 15
+   * minutes. The owner makes the bot an admin of their channel or group and sends it the code.
+   */
+  startTelegramConnect(
+    input: { profileId: string } & CallOptions,
+  ): Promise<{ code: string; expiresAt: string; botUsername: string }>;
+  /** Whether the code has been sent yet (`PATCH /v1/connect/telegram?code=`). */
+  checkTelegramConnect(input: { code: string } & CallOptions): Promise<TelegramConnectStatus>;
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus }>;
@@ -195,11 +211,12 @@ export interface SocialProvider {
     } & CallOptions,
   ): Promise<{ providerMessageId: string }>;
   /**
-   * A Page's reviews, newest first (`GET /v1/inbox/reviews?platform=facebook&accountId=…`, T42).
-   * Facebook sends no review webhooks, so the job polls this. Zernio caches each listing ~60 s.
+   * An account's reviews, newest first (`GET /v1/inbox/reviews?platform=…&accountId=…`).
+   * Facebook (T42) sends no review webhooks, so the job polls this; Google (T61) uses it to check
+   * an uncertain reply. `platform` defaults to facebook. Zernio caches each listing ~60 s.
    */
   listReviews(
-    input: { accountId: string; limit?: number } & CallOptions,
+    input: { accountId: string; platform?: string; limit?: number } & CallOptions,
   ): Promise<ProviderReview[]>;
   // Analytics reads (T48). Called by the sync job only; pages read the stored copies.
   /** `GET /v1/analytics/dashboard` for one window, with the previous window to compare. */

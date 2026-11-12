@@ -89,6 +89,36 @@ export class MockSocialProvider implements SocialProvider {
     return { authUrl: url.toString() };
   }
 
+  /** Telegram codes: "connected" on the second check (the owner sent it), else pending. */
+  private telegramChecks = new Map<string, number>();
+  private telegramCodes = new Map<string, string>();
+  /** Accounts the mock connected itself (Telegram), per profile, for listAccountPictures. */
+  private profileAccounts = new Map<string, string[]>();
+
+  async startTelegramConnect(input: { profileId: string }) {
+    const code = `ZRN-${idFrom("tg", input.profileId, String(Date.now())).slice(-6).toUpperCase()}`;
+    this.telegramCodes.set(code, input.profileId);
+    return {
+      code,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+      botUsername: "LateScheduleBot",
+    };
+  }
+
+  async checkTelegramConnect(input: { code: string }) {
+    if (input.code === "ZRN-EXPIRED") return { status: "expired" as const };
+    const checks = (this.telegramChecks.get(input.code) ?? 0) + 1;
+    this.telegramChecks.set(input.code, checks);
+    if (checks < 2) return { status: "pending" as const };
+    const accountId = idFrom("mock_telegram", input.code);
+    const profileId = this.telegramCodes.get(input.code);
+    if (profileId) {
+      const list = this.profileAccounts.get(profileId) ?? [];
+      if (!list.includes(accountId)) this.profileAccounts.set(profileId, [...list, accountId]);
+    }
+    return { status: "connected" as const, accountId, username: "Harbour Bean Channel" };
+  }
+
   /** "wrong-pass" is refused like Zernio refuses a bad app password (401). */
   async connectBluesky(input: { profileId: string; identifier: string; appPassword: string }) {
     if (input.appPassword === "wrong-pass") {
@@ -314,8 +344,11 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   /** No pictures in mock mode: brands show initials. */
-  async listAccountPictures(): Promise<AccountPicture[]> {
-    return [];
+  async listAccountPictures(input: { profileId: string }): Promise<AccountPicture[]> {
+    return (this.profileAccounts.get(input.profileId) ?? []).map((accountId) => ({
+      accountId,
+      pictureUrl: null,
+    }));
   }
 
   private record(

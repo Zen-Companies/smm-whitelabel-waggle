@@ -133,3 +133,18 @@ describe("rowNote: Facebook reviews (T42)", () => {
     );
   });
 });
+
+describe("rowNote: Google reviews (T61)", () => {
+  it("shows the stars, and a low rating reads as a complaint", () => {
+    expect(
+      rowNote(
+        entry({ kind: "review", platform: "googlebusiness", reviewRating: 2, draft: draft() }),
+      ),
+    ).toEqual({ tone: "complaint", label: "Review", text: "★★☆☆☆ · reply ready" });
+    expect(
+      rowNote(
+        entry({ kind: "review", platform: "googlebusiness", reviewRating: 5, status: "escalated" }),
+      ),
+    ).toEqual({ tone: "none", label: "Review", text: "★★★★★ · for you to answer" });
+  });
+});

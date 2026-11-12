@@ -24,17 +24,21 @@ export function rowNote(entry: InboxEntry & { status: string }): RowNote {
   if (entry.hiddenOnPlatformAt && (entry.status === "ignored" || entry.status === "handled")) {
     return { tone: "none", text: `Hidden on ${platform}` };
   }
-  // T42: a Facebook review says so, with whether they recommend the business.
+  // T42: a review says so, with whether they recommend the business (Facebook) or its stars.
   if (
     entry.kind === "review" &&
     (entry.status === "awaiting_approval" || entry.status === "escalated")
   ) {
+    // T61: a Google review shows its stars instead.
+    const rating = entry.reviewRating ?? null;
     const rec =
-      entry.reviewRecommends === false
-        ? "doesn't recommend"
-        : entry.reviewRecommends === true
-          ? "recommends"
-          : null;
+      rating !== null
+        ? `${"★".repeat(rating)}${"☆".repeat(5 - rating)}`
+        : entry.reviewRecommends === false
+          ? "doesn't recommend"
+          : entry.reviewRecommends === true
+            ? "recommends"
+            : null;
     const next =
       entry.status === "awaiting_approval"
         ? "reply ready"
@@ -42,7 +46,8 @@ export function rowNote(entry: InboxEntry & { status: string }): RowNote {
           ? "not in your business info"
           : "for you to answer";
     return {
-      tone: entry.reviewRecommends === false ? "complaint" : "none",
+      tone:
+        entry.reviewRecommends === false || (rating !== null && rating <= 2) ? "complaint" : "none",
       label: "Review",
       text: rec ? `${rec} · ${next}` : next,
     };

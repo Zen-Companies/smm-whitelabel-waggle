@@ -1,12 +1,32 @@
 // The policy check (docs/tdd.md §11): pure, no I/O. No reply is sent without passing it
 // (CLAUDE.md rule 6).
 
+import { inboxRules } from "@/lib/social/platforms";
+
 export type Category = "faq" | "lead" | "complaint" | "spam" | "unclear";
 export type AutonomyMode = "off" | "approve" | "auto";
 export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled";
 
 /** Meta only allows replying to a DM within 24 hours of the customer's last message. */
 export const DM_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A platform's DM rules (T61): Meta 24 h; TikTok 48 h and 10 replies; Bluesky none (null).
+ * Without a platform (older callers), Meta's.
+ */
+export function dmWindowFor(
+  platform: string | undefined,
+): { ms: number; maxReplies: number | null } | null {
+  if (!platform) return { ms: DM_REPLY_WINDOW_MS, maxReplies: null };
+  const w = inboxRules(platform).dmWindow;
+  return w ? { ms: w.hours * 60 * 60 * 1000, maxReplies: w.maxReplies } : null;
+}
+
+/** When a DM's reply window closes; null when the platform has none or nothing is known. */
+export function dmWindowClosesAt(platform: string | undefined, last: Date | null): Date | null {
+  const w = dmWindowFor(platform);
+  return w && last ? new Date(last.getTime() + w.ms) : null;
+}
 
 export interface PolicyInput {
   item: { kind: "comment" | "dm" | "review" };
@@ -25,10 +45,13 @@ export interface PolicyInput {
     /** "Hide spam comments for me" (T40): spam comments are hidden on the platform. */
     autoHideSpam?: boolean;
   };
-  account: { status: "active" | "disconnected" | "error" };
+  /** `platform`: the account's (T61); decides the DM window and whether spam can be hidden. */
+  account: { status: "active" | "disconnected" | "error"; platform?: string };
   autonomyMode: AutonomyMode;
-  /** DMs: the customer's last message, which opens the 24-hour window. */
+  /** DMs: the customer's last message, which opens the reply window. */
   lastCustomerMessageAt: Date | null;
+  /** DMs on a platform with a reply cap (TikTok): replies sent since that message. */
+  dmRepliesSinceCustomer?: number;
   now: Date;
 }
 
@@ -42,6 +65,7 @@ export type PolicyReason =
   | "needs_human"
   | "low_confidence"
   | "dm_window_closed"
+  | "dm_reply_limit"
   | "approval_required"
   | "auto_send"
   | "owner_approved"
@@ -64,6 +88,7 @@ export type PolicyDecision =
         | "needs_human"
         | "low_confidence"
         | "dm_window_closed"
+        | "dm_reply_limit"
         | "ai_cap_reached";
     }
   | { decision: "approve"; reason: "approval_required" | "replies_paused" | "review_public" }
@@ -71,9 +96,21 @@ export type PolicyDecision =
 
 const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
 
-function dmWindowOpen(input: Pick<PolicyInput, "lastCustomerMessageAt" | "now">): boolean {
+type DmInput = Pick<
+  PolicyInput,
+  "account" | "lastCustomerMessageAt" | "dmRepliesSinceCustomer" | "now"
+>;
+
+/** Why a DM reply can't go out now, or null when it can. */
+function dmBlocked(input: DmInput): "dm_window_closed" | "dm_reply_limit" | null {
+  const w = dmWindowFor(input.account.platform);
+  if (!w) return null;
   const last = input.lastCustomerMessageAt;
-  return !!last && input.now.getTime() - last.getTime() < DM_REPLY_WINDOW_MS;
+  if (!last || input.now.getTime() - last.getTime() >= w.ms) return "dm_window_closed";
+  if (w.maxReplies !== null && (input.dmRepliesSinceCustomer ?? 0) >= w.maxReplies) {
+    return "dm_reply_limit";
+  }
+  return null;
 }
 
 /**
@@ -95,8 +132,12 @@ export function triage(
   // on the post, so it is hidden (auto-hide on) or comes to the owner to hide (T40).
   const { category, confidence } = input.classification;
   if (category === "spam") {
-    // DMs and reviews can't be hidden: dropped.
+    // DMs and reviews can't be hidden: dropped. So are comments where the platform can't hide
+    // them (LinkedIn, Bluesky, YouTube): nothing the owner could do from Waggle.
     if (input.item.kind !== "comment") return { decision: "ignore", reason: "spam" };
+    if (input.account.platform && !inboxRules(input.account.platform).hide) {
+      return { decision: "ignore", reason: "spam" };
+    }
     // Hidden for the owner only when Waggle is sure (the same threshold as replies).
     return input.tenant.autoHideSpam && confidence >= input.tenant.confidenceThreshold
       ? { decision: "hide", reason: "spam" }
@@ -123,9 +164,8 @@ export function policy(input: PolicyInput): PolicyDecision {
       return { decision: "pause", reason: "tenant_inactive" };
     }
     if (input.account.status !== "active") return { decision: "pause", reason: "account_inactive" };
-    if (input.item.kind === "dm" && !dmWindowOpen(input)) {
-      return { decision: "escalate", reason: "dm_window_closed" };
-    }
+    const blocked = input.item.kind === "dm" ? dmBlocked(input) : null;
+    if (blocked) return { decision: "escalate", reason: blocked };
     return { decision: "send", reason: "owner_approved" };
   }
 
@@ -136,10 +176,9 @@ export function policy(input: PolicyInput): PolicyDecision {
   if (!input.draft || input.draft.needsHuman)
     return { decision: "escalate", reason: "needs_human" };
 
-  // 5. A DM reply must go out inside Meta's 24-hour window.
-  if (input.item.kind === "dm" && !dmWindowOpen(input)) {
-    return { decision: "escalate", reason: "dm_window_closed" };
-  }
+  // 5. A DM reply must go out inside the platform's window (Meta 24 h; TikTok 48 h, 10 replies).
+  const blocked = input.item.kind === "dm" ? dmBlocked(input) : null;
+  if (blocked) return { decision: "escalate", reason: blocked };
 
   // A review's reply stays public on the Page (T42): never sent on its own, whatever the mode.
   if (input.item.kind === "review") {

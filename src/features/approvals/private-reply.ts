@@ -1,3 +1,4 @@
+import { inboxRules } from "@/lib/social/platforms";
 // T41: answering a comment in the commenter's DMs (Zernio private reply, Instagram/Facebook).
 // Pure rules here; the send step and the approval card use them.
 
@@ -14,7 +15,10 @@ export const PRIVATE_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 export function defaultReplyVia(
   kind: "comment" | "dm" | "review",
   category: string | null,
+  platform?: string,
 ): ReplyVia {
+  // Private replies exist on Instagram and Facebook only (T61): elsewhere a lead gets a public one.
+  if (platform && !inboxRules(platform).privateReply) return "public";
   return kind === "comment" && category === "lead" ? "dm" : "public";
 }
 

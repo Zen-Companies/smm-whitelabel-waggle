@@ -8,8 +8,10 @@ import {
   recordPlatformPause,
 } from "@/lib/social/platform-pause";
 import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
+import { inboxRules } from "@/lib/social/platforms";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { dmRepliesSince } from "./dm-replies";
 import { privateReplyClosesAt, type ReplyVia } from "./private-reply";
 import {
   policy,
@@ -41,7 +43,7 @@ interface SendContext {
   zernioPostId: string | null;
   /** T42: the review a reply goes under. */
   zernioReviewId: string | null;
-  account: { zernioAccountId: string; status: PolicyInput["account"]["status"] };
+  account: { zernioAccountId: string; status: PolicyInput["account"]["status"]; platform: string };
   conversation: { zernioConversationId: string; lastCustomerMessageAt: string | null } | null;
   input: Omit<PolicyInput, "draft" | "now">;
   draft: {
@@ -64,8 +66,8 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     .from("inbound_items")
     .select(
       "tenant_id, kind, received_at, category, confidence, zernio_comment_id, zernio_post_id, " +
-        "zernio_review_id, " +
-        "social_accounts!inner (zernio_account_id, status), " +
+        "zernio_review_id, conversation_id, " +
+        "social_accounts!inner (zernio_account_id, status, platform), " +
         "tenants!inner (subscription_status, confidence_threshold, replies_paused), " +
         "conversations (zernio_conversation_id, last_customer_message_at)",
     )
@@ -81,7 +83,12 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     zernio_comment_id: string | null;
     zernio_post_id: string | null;
     zernio_review_id: string | null;
-    social_accounts: { zernio_account_id: string; status: PolicyInput["account"]["status"] };
+    conversation_id: string | null;
+    social_accounts: {
+      zernio_account_id: string;
+      status: PolicyInput["account"]["status"];
+      platform: string;
+    };
     tenants: {
       subscription_status: SubscriptionStatus;
       confidence_threshold: number;
@@ -128,6 +135,11 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
   } | null;
 
   const last = row.conversations?.last_customer_message_at ?? null;
+  const dmRepliesSinceCustomer = await dmRepliesSince(db, {
+    platform: row.social_accounts.platform,
+    conversationId: row.conversation_id,
+    since: last,
+  });
   return {
     tenantId: row.tenant_id,
     kind: row.kind,
@@ -138,6 +150,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     account: {
       zernioAccountId: row.social_accounts.zernio_account_id,
       status: row.social_accounts.status,
+      platform: row.social_accounts.platform,
     },
     conversation: row.conversations
       ? {
@@ -153,9 +166,10 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
         confidenceThreshold: Number(row.tenants.confidence_threshold),
         repliesPaused: row.tenants.replies_paused,
       },
-      account: { status: row.social_accounts.status },
+      account: { status: row.social_accounts.status, platform: row.social_accounts.platform },
       autonomyMode: (setting?.mode as AutonomyMode | undefined) ?? "off",
       lastCustomerMessageAt: last ? new Date(last) : null,
+      dmRepliesSinceCustomer,
     },
     draft: d
       ? {
@@ -168,7 +182,13 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
           idempotencyKey: d.idempotency_key,
           sendAttemptedAt: d.send_attempted_at,
           zernioReplyId: d.zernio_reply_id,
-          replyVia: row.kind === "comment" && d.reply_via === "dm" ? "dm" : "public",
+          // Private replies are Meta-only: elsewhere the reply goes under the comment (T61).
+          replyVia:
+            row.kind === "comment" &&
+            d.reply_via === "dm" &&
+            inboxRules(row.social_accounts.platform).privateReply
+              ? "dm"
+              : "public",
         }
       : null,
   };
@@ -187,11 +207,17 @@ async function findDelivered(
   const wanted = normalize(message);
   if (c.kind === "review") {
     // A review has at most one reply from the Page: if it has one now, ours went through.
-    const reviews = await social.listReviews({ accountId: c.account.zernioAccountId, signal });
+    const reviews = await social.listReviews({
+      accountId: c.account.zernioAccountId,
+      platform: c.account.platform,
+      signal,
+    });
     const review = reviews.find((r) => r.id === c.zernioReviewId);
     return review?.hasReply ? `review_reply:${c.zernioReviewId}` : null;
   }
   if (c.kind === "comment") {
+    // Not every platform lists a comment's replies: inconclusive, and the resend reuses the key.
+    if (!inboxRules(c.account.platform).listsReplies) return null;
     const replies = await social.listCommentReplies({
       accountId: c.account.zernioAccountId,
       postId: c.zernioPostId!,

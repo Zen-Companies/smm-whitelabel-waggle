@@ -143,6 +143,54 @@ describe("ZernioSocialProvider", () => {
     expect(captured.filter((r) => r.url.pathname === "/api/v1/users")).toHaveLength(1);
   });
 
+  it("listReviews asks for Google reviews and keeps their stars (T61)", async () => {
+    respond = () =>
+      json({
+        data: [
+          {
+            id: "accounts/1/locations/2/reviews/3",
+            rating: 2,
+            text: "Slow",
+            created: "2026-11-12T01:00:00Z",
+          },
+        ],
+      });
+    const [review] = await provider.listReviews({ accountId: "acc_g", platform: "googlebusiness" });
+    expect(captured[0].url.searchParams.get("platform")).toBe("googlebusiness");
+    expect(review).toMatchObject({ id: "accounts/1/locations/2/reviews/3", rating: 2 });
+  });
+
+  it("Telegram: a code for the bot, then its status", async () => {
+    respond = (req) =>
+      req.method === "GET"
+        ? json({
+            code: "ZRN-ABC123",
+            expiresAt: "2026-11-12T10:15:00Z",
+            expiresIn: 900,
+            botUsername: "LateScheduleBot",
+          })
+        : json({
+            status: "connected",
+            chatTitle: "Harbour Bean",
+            account: { _id: "acc_tg", platform: "telegram", username: "harbourbean" },
+          });
+    await expect(provider.startTelegramConnect({ profileId: "prof_1" })).resolves.toEqual({
+      code: "ZRN-ABC123",
+      expiresAt: "2026-11-12T10:15:00Z",
+      botUsername: "LateScheduleBot",
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/connect/telegram");
+    expect(captured[0].url.searchParams.get("profileId")).toBe("prof_1");
+
+    await expect(provider.checkTelegramConnect({ code: "ZRN-ABC123" })).resolves.toEqual({
+      status: "connected",
+      accountId: "acc_tg",
+      username: "harbourbean",
+    });
+    expect(captured[1].method).toBe("PATCH");
+    expect(captured[1].url.searchParams.get("code")).toBe("ZRN-ABC123");
+  });
+
   it("connectBluesky reports a refused app password as a 401", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/users"
@@ -335,6 +383,7 @@ describe("ZernioSocialProvider", () => {
         reviewerName: "Lara V",
         recommends: false,
         text: "Waited 40 minutes.",
+        rating: null,
         createdAt: "2026-11-05T10:12:00Z",
         hasReply: false,
         reviewUrl: "https://www.facebook.com/r/1",
@@ -344,6 +393,7 @@ describe("ZernioSocialProvider", () => {
         reviewerName: "Ben",
         recommends: true,
         text: "Great!",
+        rating: null,
         createdAt: "2026-11-05T09:40:00Z",
         hasReply: true,
         reviewUrl: null,

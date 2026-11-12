@@ -119,3 +119,30 @@ describe("toDraftResult", () => {
     ).toThrow();
   });
 });
+
+describe("draft prompt 2026-11-12.1 (all platforms, T61)", () => {
+  it("names the platform and a short platform's reply length", async () => {
+    const { draftSystemPromptAllPlatforms, draftUserPromptAllPlatforms } =
+      await import("./prompts");
+    expect(draftSystemPromptAllPlatforms("Cafe")).toContain("on social media");
+    const tiktok = draftUserPromptAllPlatforms({
+      kind: "comment",
+      category: "faq",
+      text: "open late?",
+      facts: [],
+      platform: "tiktok",
+    });
+    expect(tiktok).toContain("Channel: public comment on TikTok. At most 150 characters.");
+    const google = draftUserPromptAllPlatforms({
+      kind: "review",
+      category: "complaint",
+      text: "slow",
+      facts: [],
+      platform: "googlebusiness",
+    });
+    expect(google).toContain(
+      "Channel: public reply to a review of the business on Google Business",
+    );
+    expect(google).not.toContain("At most");
+  });
+});

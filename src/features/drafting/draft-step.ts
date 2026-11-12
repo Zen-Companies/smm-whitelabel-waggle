@@ -87,19 +87,20 @@ export function createDraftStep(deps: {
 
     const { data: row, error } = await db
       .from("inbound_items")
-      .select("text, kind, category, tenants!inner (name)")
+      .select("text, kind, category, tenants!inner (name), social_accounts!inner (platform)")
       .eq("id", item.id)
       .single();
     if (error) throw new Error(`draft: item lookup failed: ${error.message}`);
-    const { text, kind, category, tenants } = row as unknown as {
+    const { text, kind, category, tenants, social_accounts } = row as unknown as {
       text: string;
       kind: "comment" | "dm" | "review";
       category: string;
       tenants: { name: string };
+      social_accounts: { platform: string };
     };
 
     // T41: a lead's comment is answered in DM, so the reply is written as a direct message.
-    const replyVia = defaultReplyVia(kind, category);
+    const replyVia = defaultReplyVia(kind, category, social_accounts.platform);
 
     // T30: earlier messages of a DM thread, so a short follow-up keeps its meaning.
     const history = await loadThreadHistory(db, item.id);
@@ -113,6 +114,7 @@ export function createDraftStep(deps: {
         category,
         text,
         history,
+        platform: social_accounts.platform,
         signal: ctx.callSignal,
       },
     );

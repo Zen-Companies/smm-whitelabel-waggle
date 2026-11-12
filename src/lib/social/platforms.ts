@@ -56,10 +56,10 @@ export interface Platform {
   kind: "answers" | "posts" | "soon";
   /**
    * How it connects. oauth: Zernio's hosted sign-in. password: handle + app password typed in
-   * Waggle (Bluesky). setup: a step in Waggle not built yet (Telegram bot code, WhatsApp signup,
-   * Discord channel).
+   * Waggle (Bluesky). code: a code sent to Zernio's bot (Telegram). setup: a step in Waggle not
+   * built yet (WhatsApp signup, Discord channel).
    */
-  connect: "oauth" | "password" | "setup" | "none";
+  connect: "oauth" | "password" | "code" | "setup" | "none";
   /** One line on the Connect tile: what Waggle does there. */
   line: string;
   /** A requirement shown under the line, or null. */
@@ -129,7 +129,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
       note: "Shows only the first photo.",
     }),
     inbox: { comments: false, dms: false, reviews: true },
-    inboxLive: false,
+    inboxLive: true,
     analyticsLive: false,
   },
   tiktok: {
@@ -149,7 +149,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
       note: "Posts publicly. You confirm TikTok's content check before it goes out.",
     }),
     inbox: { comments: true, dms: true, reviews: false },
-    inboxLive: false,
+    inboxLive: true,
     analyticsLive: false,
   },
   threads: {
@@ -162,7 +162,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     needs: "Instagram Business or Creator account",
     post: rules({ textMax: 500, maxImages: 20, imageMaxBytes: 8 * MB }),
     inbox: { comments: true, dms: false, reviews: false },
-    inboxLive: false,
+    inboxLive: true,
     analyticsLive: false,
   },
   youtube: {
@@ -175,7 +175,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     needs: "Video posts only",
     post: rules({ textMax: 5000, mediaRequired: true, videoOnly: true, maxImages: 0 }),
     inbox: { comments: true, dms: false, reviews: false },
-    inboxLive: false,
+    inboxLive: true,
     analyticsLive: false,
   },
   linkedin: {
@@ -188,7 +188,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     needs: "Comments on company pages only",
     post: rules({ textMax: 3000, maxImages: 20, imageMaxBytes: 8 * MB }),
     inbox: { comments: true, dms: false, reviews: false },
-    inboxLive: false,
+    inboxLive: true,
     analyticsLive: false,
   },
   bluesky: {
@@ -201,7 +201,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     needs: "Needs an app password",
     post: rules({ textMax: 300, maxImages: 4, imageMaxBytes: 1_000_000 }),
     inbox: { comments: true, dms: true, reviews: false },
-    inboxLive: false,
+    inboxLive: true,
     analyticsLive: false,
   },
   twitter: {
@@ -239,7 +239,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     label: "Telegram",
     mark: { text: "TG", bg: "#E0F2FE", fg: "#075985" },
     kind: "answers",
-    connect: "setup",
+    connect: "code",
     line: "Answers your group or channel",
     needs: "Add our bot as an admin",
     // 4,096 for text; a photo's caption allows 1,024 (Zernio's check catches that one).
@@ -330,10 +330,83 @@ export function isConnectable(id: string): id is PlatformId {
 /** Platforms that connect with a handle and an app password typed in Waggle (Bluesky). */
 export const PASSWORD_CONNECT = PLATFORM_IDS.filter((id) => PLATFORMS[id].connect === "password");
 
+/** Platforms with a setup card in Waggle (Bluesky's password, Telegram's code). */
+export const SETUP_IN_WAGGLE = PLATFORM_IDS.filter(
+  (id) => PLATFORMS[id].connect === "password" || PLATFORMS[id].connect === "code",
+);
+
 /** Platforms whose comments, DMs or reviews Waggle stores and answers today. */
 export const INBOX_LIVE = PLATFORM_IDS.filter((id) => PLATFORMS[id].inboxLive);
 export const isInboxLive = (id: string): boolean => platformOf(id)?.inboxLive ?? false;
 
+/** Live platforms with comments: the ones a reconnect backfill reads (T16). */
+export const COMMENTS_LIVE = INBOX_LIVE.filter((id) => PLATFORMS[id].inbox.comments);
+export const hasLiveComments = (id: string): boolean =>
+  (COMMENTS_LIVE as readonly string[]).includes(id);
+
 /** Platforms Waggle's analytics pages cover today. */
 export const ANALYTICS_LIVE = PLATFORM_IDS.filter((id) => PLATFORMS[id].analyticsLive);
 export const isAnalyticsLive = (id: string): boolean => platformOf(id)?.analyticsLive ?? false;
+
+/**
+ * How the inbox behaves on a platform (T61/T62). Read by policy(), the send step, drafting and
+ * the inbox screens. Source: Zernio docs (docs/platforms/RESEARCH.md), 12 Nov 2026.
+ */
+export interface InboxRules {
+  /** Spam comments can be hidden on the post. Elsewhere spam is just left out of the inbox. */
+  hide: boolean;
+  /** A comment can be answered in the commenter's DMs (Meta's private reply). */
+  privateReply: boolean;
+  /**
+   * DMs: replies are allowed this long after the customer's last message, at most `maxReplies`
+   * of them (null: no cap). null: no window at all.
+   */
+  dmWindow: { hours: number; maxReplies: number | null } | null;
+  /** Comments reach Zernio by polling, so they can arrive some minutes late. */
+  commentsPolled: boolean;
+  /** Longest reply the platform takes, in characters; null when it's far above any reply. */
+  replyMax: number | null;
+  /** Zernio can list a comment's replies (used to check an uncertain send went through). */
+  listsReplies: boolean;
+}
+
+const NO_INBOX: InboxRules = {
+  hide: false,
+  privateReply: false,
+  dmWindow: null,
+  commentsPolled: false,
+  replyMax: null,
+  listsReplies: false,
+};
+const META: InboxRules = {
+  hide: true,
+  privateReply: true,
+  dmWindow: { hours: 24, maxReplies: null },
+  commentsPolled: false,
+  replyMax: null,
+  listsReplies: true,
+};
+
+// Hide: Threads, TikTok, X (Zernio /products/comments). Listing a comment's replies: Meta and
+// TikTok only. Reply lengths are each platform's own comment limits (Zernio documents none).
+const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
+  instagram: META,
+  facebook: META,
+  googlebusiness: { replyMax: 4096 },
+  tiktok: {
+    hide: true,
+    dmWindow: { hours: 48, maxReplies: 10 },
+    replyMax: 150,
+    listsReplies: true,
+  },
+  threads: { hide: true, replyMax: 500 },
+  youtube: { commentsPolled: true, replyMax: 10000 },
+  linkedin: { commentsPolled: true, replyMax: 1250 },
+  bluesky: { commentsPolled: true, replyMax: 300 },
+  twitter: { hide: true, replyMax: 280 },
+};
+
+export function inboxRules(platform: string): InboxRules {
+  const rules = isPlatformId(platform) ? INBOX_RULES[platform] : undefined;
+  return { ...NO_INBOX, ...rules };
+}

@@ -52,9 +52,10 @@ const HANDED: Record<string, string> = {
   mode_off: "replies are off for this kind",
   ai_cap_reached: "this month's AI allowance is used",
   dm_window_closed: "reply window closed",
+  dm_reply_limit: "reply limit reached",
   dm_window_closing: "reply window closing",
   account_inactive: "account disconnected",
-  send_rejected: "Instagram/Facebook refused it",
+  send_rejected: "the platform refused it",
   retries_exhausted: "couldn't be sent",
 };
 

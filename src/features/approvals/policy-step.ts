@@ -1,6 +1,7 @@
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { dmRepliesSince } from "./dm-replies";
 import {
   policy,
   type AutonomyMode,
@@ -30,7 +31,7 @@ export async function loadPolicyInput(
     .from("inbound_items")
     .select(
       "id, tenant_id, kind, category, confidence, conversation_id, " +
-        "social_accounts!inner (status), tenants!inner (subscription_status, confidence_threshold, replies_paused, auto_hide_spam)",
+        "social_accounts!inner (status, platform), tenants!inner (subscription_status, confidence_threshold, replies_paused, auto_hide_spam)",
     )
     .eq("id", itemId)
     .single();
@@ -41,7 +42,7 @@ export async function loadPolicyInput(
     category: Category | null;
     confidence: number | null;
     conversation_id: string | null;
-    social_accounts: { status: PolicyInput["account"]["status"] };
+    social_accounts: { status: PolicyInput["account"]["status"]; platform: string };
     tenants: {
       subscription_status: SubscriptionStatus;
       confidence_threshold: number;
@@ -76,6 +77,13 @@ export async function loadPolicyInput(
       : Promise.resolve(null),
   ]);
 
+  const last = conversation?.last_customer_message_at ?? null;
+  const dmRepliesSinceCustomer = await dmRepliesSince(db, {
+    platform: row.social_accounts.platform,
+    conversationId: row.conversation_id,
+    since: last,
+  });
+
   return {
     draftId: draft?.id ?? null,
     input: {
@@ -91,9 +99,8 @@ export async function loadPolicyInput(
       account: row.social_accounts,
       // A missing row means the default for a new category: the safest mode.
       autonomyMode: (setting?.mode as AutonomyMode | undefined) ?? "off",
-      lastCustomerMessageAt: conversation?.last_customer_message_at
-        ? new Date(conversation.last_customer_message_at)
-        : null,
+      lastCustomerMessageAt: last ? new Date(last) : null,
+      dmRepliesSinceCustomer,
       now,
     },
   };

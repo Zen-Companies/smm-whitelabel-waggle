@@ -100,6 +100,24 @@ export const postEventSchema = z.object({
   }),
 });
 
+/**
+ * review.new (T61): a Google Business review, real time. `review.id` is Google's full name
+ * (accounts/…/locations/…/reviews/…). Text can be empty (stars only).
+ */
+export const reviewEventSchema = z.object({
+  event: z.literal("review.new"),
+  review: z.object({
+    id: z.string().min(1),
+    platform: z.string(),
+    rating: z.number().int().min(1).max(5).nullish().catch(null),
+    text: z.string().nullish(),
+    reviewer: z.object({ name: z.string().nullish() }).nullish(),
+    createdAt: z.string(),
+    hasReply: z.boolean().optional(),
+  }),
+  account: accountBlock,
+});
+
 export const accountConnectedSchema = z.object({
   event: z.literal("account.connected"),
   account: z.object({

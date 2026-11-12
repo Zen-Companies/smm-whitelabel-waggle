@@ -15,6 +15,7 @@ import {
   messageEventSchema,
   messageFailedSchema,
   postEventSchema,
+  reviewEventSchema,
   zernioAccountIdOf,
   type ZernioEnvelope,
 } from "./zernio-events";
@@ -159,6 +160,7 @@ async function mapEvent(
   > = {
     "comment.received": (t) => mapComment(deps, t.tenantId, payload),
     "message.received": (t) => mapMessage(deps, t.tenantId, payload),
+    "review.new": (t) => mapReview(deps, t.tenantId, payload),
     "post.published": (t) => mapPost(deps.db, t.tenantId, payload),
     "post.partial": (t) => mapPost(deps.db, t.tenantId, payload),
     "post.failed": (t) => mapPost(deps.db, t.tenantId, payload),
@@ -254,13 +256,16 @@ async function mapComment(
 ): Promise<IngestResult> {
   const e = parse(commentEventSchema, payload);
   if (!e) return rejected("invalid_payload");
-  // Meta re-delivers our own replies as comments.
+  // Meta re-delivers our own replies as comments. Zernio only flags them on Meta (and TikTok,
+  // inferred), so also skip the account's own handle and any comment that is a reply we sent.
   if (e.comment.author.isOwnAccount) return skipped("own_account");
+  if (sameHandle(e.comment.author.username, e.account.username)) return skipped("own_account");
   const account = supportedAccount(e.account);
   if (!account) return skipped("unsupported_platform");
 
   const resolved = await accountFor(deps, tenantId, account);
   if ("rejected" in resolved) return rejected(resolved.rejected);
+  if (await isOurReply(deps.db, tenantId, e.comment.id)) return skipped("own_reply");
 
   const { created } = await insertInboundItem(deps.db, {
     kind: "comment",
@@ -273,6 +278,53 @@ async function mapComment(
     authorName: e.comment.author.username ?? e.comment.author.name ?? null,
     text: e.comment.text,
     receivedAt: e.comment.createdAt,
+  });
+  return { outcome: "processed", detail: created ? "item_created" : "item_exists" };
+}
+
+/** Pure: the commenter is the connected account itself ("@cafe" vs "cafe", any case). */
+export function sameHandle(author: string | undefined, account: string): boolean {
+  const norm = (s: string) => s.trim().replace(/^@/, "").toLowerCase();
+  return !!author && norm(author) !== "" && norm(author) === norm(account);
+}
+
+/** A comment Waggle posted itself (its id is what our reply call returned). */
+async function isOurReply(db: ServiceClient, tenantId: string, commentId: string) {
+  const { data, error } = await db
+    .from("drafts")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .eq("zernio_reply_id", commentId)
+    .limit(1);
+  if (error) throw new Error(`own reply lookup failed: ${error.message}`);
+  return data.length > 0;
+}
+
+/** T61: a new Google review. Ones already answered need nothing. */
+async function mapReview(
+  deps: IngestDeps,
+  tenantId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(reviewEventSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (e.review.hasReply) return skipped("already_replied");
+  const account = supportedAccount(e.account);
+  if (!account) return skipped("unsupported_platform");
+
+  const resolved = await accountFor(deps, tenantId, account);
+  if ("rejected" in resolved) return rejected(resolved.rejected);
+
+  const { created } = await insertInboundItem(deps.db, {
+    kind: "review",
+    tenantId,
+    socialAccountId: resolved.accountId,
+    zernioReviewId: e.review.id,
+    authorName: e.review.reviewer?.name ?? null,
+    text: e.review.text ?? "",
+    receivedAt: e.review.createdAt,
+    recommends: null,
+    rating: e.review.rating ?? null,
   });
   return { outcome: "processed", detail: created ? "item_created" : "item_exists" };
 }

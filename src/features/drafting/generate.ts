@@ -1,3 +1,4 @@
+import { inboxRules, platformLabel } from "@/lib/social/platforms";
 import { retrieveKbEntries, type KbMatch } from "@/features/knowledge-base";
 import type { LlmClient } from "@/lib/llm/client";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -48,6 +49,8 @@ export async function generateDraft(
     promptVersion?: DraftPromptVersion;
     /** Earlier messages of the DM thread, oldest first (T30). */
     history?: ThreadMessage[];
+    /** The account's platform (T61): named in the prompt, and its reply length is enforced. */
+    platform?: string;
   },
 ): Promise<GeneratedDraft> {
   const prompts = DRAFT_PROMPTS[input.promptVersion ?? DRAFT_PROMPT_VERSION];
@@ -69,6 +72,7 @@ export async function generateDraft(
       text: input.text,
       facts,
       history: input.history,
+      platform: input.platform,
     }),
     signal: input.signal?.(),
   });
@@ -76,9 +80,15 @@ export async function generateDraft(
 
   // Rule 8: an amount or contact the facts don't contain goes to the owner, not out.
   const issues = groundingIssues(result.reply, facts);
-  const needsHuman = result.needsHuman || issues.length > 0;
+  // Longer than the platform takes: the owner shortens it (it would be refused when sent).
+  const max = input.platform ? inboxRules(input.platform).replyMax : null;
+  const tooLong =
+    max && result.reply.length > max
+      ? `too long for ${platformLabel(input.platform!)} (${max} characters max)`
+      : null;
+  const needsHuman = result.needsHuman || issues.length > 0 || !!tooLong;
   const needsHumanReason = needsHuman
-    ? [result.reason, ...issues].filter(Boolean).join("; ").slice(0, 300) || "not covered"
+    ? [result.reason, ...issues, tooLong].filter(Boolean).join("; ").slice(0, 300) || "not covered"
     : null;
   return { result, facts, model, issues, needsHuman, needsHumanReason };
 }

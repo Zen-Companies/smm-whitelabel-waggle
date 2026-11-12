@@ -10,11 +10,12 @@ export type NewInboundItem = {
 } & (
   | { kind: "comment"; zernioCommentId: string; zernioPostId: string; permalink?: string | null }
   | { kind: "dm"; zernioMessageId: string; conversationId: string }
-  /** T42: a Facebook Page review, found by polling (no webhook). */
+  /** T42: a Facebook Page review (polled); T61: a Google review (webhook), with its stars. */
   | {
       kind: "review";
       zernioReviewId: string;
       recommends: boolean | null;
+      rating?: number | null;
       permalink?: string | null;
     }
 );
@@ -103,6 +104,7 @@ async function insertReview(
         }),
         zernio_review_id: item.zernioReviewId,
         review_recommends: item.recommends,
+        review_rating: item.rating ?? null,
         permalink: item.permalink ?? null,
       },
       { onConflict: "social_account_id,zernio_review_id", ignoreDuplicates: true },

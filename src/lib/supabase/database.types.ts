@@ -647,6 +647,7 @@ export type Database = {
           permalink: string | null
           received_at: string
           review_recommends: boolean | null
+          review_rating: number | null
           social_account_id: string
           status: string
           tenant_id: string
@@ -675,6 +676,7 @@ export type Database = {
           permalink?: string | null
           received_at: string
           review_recommends?: boolean | null
+          review_rating?: number | null
           social_account_id: string
           status?: string
           tenant_id: string
@@ -702,6 +704,7 @@ export type Database = {
           permalink?: string | null
           received_at?: string
           review_recommends?: boolean | null
+          review_rating?: number | null
           social_account_id?: string
           status?: string
           tenant_id?: string

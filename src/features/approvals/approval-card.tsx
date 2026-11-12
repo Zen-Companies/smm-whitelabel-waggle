@@ -11,7 +11,7 @@ import { privateReplyClosesAt, privateReplyLeft } from "./private-reply";
 import { decideDraft, undoApprovalAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
 import { REPLY_MAX } from "./limits";
-import { platformLabel } from "@/lib/social/platforms";
+import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Recently approved replies live outside the card: approving moves the item out of the list
 // (Realtime refresh), which unmounts the card, but the Sent row must stay for the undo window.
@@ -195,7 +195,9 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
   const left =
     entry.kind === "comment" ? (via === "dm" ? dmLeft : null) : windowLeft(entry.dmWindowClosesAt);
   const platform = platformLabel(entry.platform);
+  const rules = inboxRules(entry.platform);
   const sending = pending && intent === "approve";
+  const google = entry.platform === "googlebusiness";
 
   return (
     <form
@@ -210,7 +212,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
     >
       <input type="hidden" name="itemId" value={entry.itemId} />
       <input type="hidden" name="draftId" value={draft.id} />
-      {entry.kind === "comment" && (
+      {entry.kind === "comment" && rules.privateReply && (
         <fieldset className="flex flex-col gap-2">
           <legend className="meta mb-2">Where should this reply go?</legend>
           <span
@@ -252,8 +254,18 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
       {entry.kind === "review" && (
         <p className="text-ink-2 flex items-start gap-2 text-[13px]">
           <Globe className="mt-0.5 size-3.5 shrink-0" strokeWidth={2} aria-hidden />
-          Public reply on your {platform} Page. Anyone who visits the Page will see it, so Waggle
-          never sends these on its own.
+          {google
+            ? "Public reply on Google. Anyone who finds your business will see it, so Waggle never sends these on its own. Google keeps one reply per review: sending again replaces this one."
+            : `Public reply on your ${platform} Page. Anyone who visits the Page will see it, so Waggle never sends these on its own.`}
+        </p>
+      )}
+      {entry.kind === "dm" && entry.dmRepliesLeft != null && (
+        <p className="text-ink-2 text-[13px]">
+          {platform} DMs: replies only, up to {rules.dmWindow?.maxReplies} within{" "}
+          {rules.dmWindow?.hours} hours of the customer&apos;s last message.{" "}
+          {entry.dmRepliesLeft === 1 ? "1 reply" : `${entry.dmRepliesLeft} replies`} left in this
+          chat
+          {entry.dmWindowClosesAt ? ` · window ends ${clockTime(entry.dmWindowClosesAt)}` : ""}.
         </p>
       )}
       <label htmlFor={`reply-${entry.itemId}`} className="meta">
@@ -271,7 +283,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
           onKeyDown={(e) => {
             if (e.key === "Escape") setEditing(false);
           }}
-          maxLength={REPLY_MAX}
+          maxLength={Math.min(REPLY_MAX, rules.replyMax ?? REPLY_MAX)}
           rows={4}
           className="field"
         />
@@ -304,7 +316,11 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
               Sending
             </>
           ) : entry.kind === "review" ? (
-            "Post reply"
+            google ? (
+              "Reply on Google"
+            ) : (
+              "Post reply"
+            )
           ) : via === "dm" && entry.kind === "comment" ? (
             "Send in DM"
           ) : (

@@ -8,6 +8,7 @@ import { platformLabel as name } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { connectAccount } from "./actions";
 import { BlueskySetup } from "./bluesky-setup";
+import { TelegramSetup } from "./telegram-setup";
 import { connectBanner } from "./connect-banner";
 import { ConnectTiles } from "./connect-tiles";
 
@@ -31,7 +32,11 @@ export async function AccountsCard({
 
   const connected = [...new Set((accounts ?? []).map((a) => a.platform))];
   // A setup step opened from its tile (?setup=bluesky), shown above the tiles.
-  const setup = mayConnect && params.setup === "bluesky" ? <BlueskySetup /> : null;
+  const setup = !mayConnect ? null : params.setup === "bluesky" ? (
+    <BlueskySetup />
+  ) : params.setup === "telegram" ? (
+    <TelegramSetup />
+  ) : null;
   const tiles = !mayConnect ? (
     <ReadOnlyNote role={tenant.role} what="the connected accounts" />
   ) : (

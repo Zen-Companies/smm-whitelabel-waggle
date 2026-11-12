@@ -336,3 +336,60 @@ describe("the owner's own reply to a message handed to them (MCP Q1)", () => {
     ).toEqual({ decision: "escalate", reason: "complaint" });
   });
 });
+
+describe("per-platform rules (T61/T62)", () => {
+  const HOUR = 60 * 60 * 1000;
+  const approved = { needsHuman: false, approvedByOwner: true };
+  const on = (platform: string) => ({ status: "active" as const, platform });
+
+  it("TikTok DMs: 48 hours after the customer's last message", () => {
+    expect(run({ ...dm(30 * HOUR), account: on("tiktok"), draft: approved }).decision).toBe("send");
+    expect(run({ ...dm(49 * HOUR), account: on("tiktok"), draft: approved })).toEqual({
+      decision: "escalate",
+      reason: "dm_window_closed",
+    });
+  });
+
+  it("TikTok DMs: at most 10 replies until the customer writes again", () => {
+    const at = (n: number) =>
+      run({ ...dm(HOUR), account: on("tiktok"), draft: approved, dmRepliesSinceCustomer: n });
+    expect(at(9).decision).toBe("send");
+    expect(at(10)).toEqual({ decision: "escalate", reason: "dm_reply_limit" });
+  });
+
+  it("the cap also applies to a reply the owner wrote", () => {
+    expect(
+      run({
+        ...dm(HOUR),
+        account: on("tiktok"),
+        draft: { ...approved, writtenByOwner: true },
+        dmRepliesSinceCustomer: 10,
+      }),
+    ).toEqual({ decision: "escalate", reason: "dm_reply_limit" });
+  });
+
+  it("Bluesky DMs have no window", () => {
+    expect(run({ ...dm(30 * 24 * HOUR), account: on("bluesky"), draft: approved }).decision).toBe(
+      "send",
+    );
+  });
+
+  it("Instagram keeps Meta's 24 hours", () => {
+    expect(run({ ...dm(25 * HOUR), account: on("instagram"), draft: approved })).toEqual({
+      decision: "escalate",
+      reason: "dm_window_closed",
+    });
+  });
+
+  it("spam on a platform that can't hide comments is left out, not handed to the owner", () => {
+    const spam = { category: "spam" as const, confidence: 0.99 };
+    expect(triage({ ...base, classification: spam, account: on("linkedin") })).toEqual({
+      decision: "ignore",
+      reason: "spam",
+    });
+    expect(triage({ ...base, classification: spam, account: on("threads") })).toEqual({
+      decision: "escalate",
+      reason: "spam",
+    });
+  });
+});

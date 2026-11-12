@@ -1,6 +1,6 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { DM_REPLY_WINDOW_MS } from "./policy";
+import { dmWindowClosesAt, dmWindowFor } from "./policy";
 import { type ActivityEntry, mergeActivity } from "./today-activity";
 
 // What the approval inbox shows (PRD F8). Read with the owner's client, so RLS scopes it.
@@ -31,14 +31,18 @@ export interface InboxEntry {
   } | null;
   /** Failed send attempts so far (a retry is checking whether the last one went through). */
   attempts: number;
-  /** DMs: when Meta's 24-hour reply window closes (null if unknown). */
+  /** DMs: when the platform's reply window closes (null if unknown or the platform has none). */
   dmWindowClosesAt: string | null;
+  /** DMs on a platform with a reply cap (TikTok, T61): replies left in this window. */
+  dmRepliesLeft?: number | null;
   /** Comments: the post on Instagram/Facebook, for "Open in Instagram" (null if not known). */
   permalink: string | null;
   /** Comments: when it was hidden on the post (T40); null while it is visible. */
   hiddenOnPlatformAt: string | null;
   /** Reviews (T42): true = recommends, false = doesn't, null = not given or not a review. */
   reviewRecommends: boolean | null;
+  /** Google reviews (T61): 1–5 stars; null otherwise. */
+  reviewRating?: number | null;
 }
 
 export interface InboxData {
@@ -320,7 +324,7 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, " +
+      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, " +
         "social_accounts (platform), conversations (last_customer_message_at)",
     )
     .eq("tenant_id", tenantId);
@@ -344,6 +348,8 @@ export async function loadEntries(
     permalink: string | null;
     hidden_on_platform_at: string | null;
     review_recommends: boolean | null;
+    review_rating: number | null;
+    conversation_id: string | null;
     social_accounts: { platform: string } | null;
     conversations: { last_customer_message_at: string | null } | null;
   }[];
@@ -368,14 +374,17 @@ export async function loadEntries(
     : { data: [] };
   const titles = new Map((kb ?? []).map((e) => [e.id, e.title]));
 
+  const repliesSent = await countCappedReplies(supabase, rows);
+
   return rows.map((r): InboxEntry & { status: string } => {
     const d = latest.get(r.id);
     const last = r.conversations?.last_customer_message_at;
+    const platform = r.social_accounts?.platform ?? "instagram";
     return {
       status: r.status,
       itemId: r.id,
       kind: r.kind,
-      platform: r.social_accounts?.platform ?? "instagram",
+      platform,
       authorName: r.author_name,
       text: r.text,
       receivedAt: r.received_at,
@@ -401,10 +410,54 @@ export async function loadEntries(
       permalink: r.permalink,
       hiddenOnPlatformAt: r.hidden_on_platform_at,
       reviewRecommends: r.review_recommends,
+      reviewRating: r.review_rating,
       dmWindowClosesAt:
-        r.kind === "dm" && last
-          ? new Date(new Date(last).getTime() + DM_REPLY_WINDOW_MS).toISOString()
+        r.kind === "dm"
+          ? (dmWindowClosesAt(platform, last ? new Date(last) : null)?.toISOString() ?? null)
           : null,
+      dmRepliesLeft: (() => {
+        const cap = r.kind === "dm" ? dmWindowFor(platform)?.maxReplies : null;
+        if (cap == null || !r.conversation_id) return null;
+        return Math.max(0, cap - (repliesSent.get(r.conversation_id) ?? 0));
+      })(),
     };
   });
+}
+
+/**
+ * Replies sent since the customer's last message, per conversation, for DMs on a platform with a
+ * reply cap (TikTok: 10 in 48 hours). Other rows aren't counted.
+ */
+async function countCappedReplies(
+  supabase: SupabaseClient<Database>,
+  rows: {
+    kind: string;
+    conversation_id: string | null;
+    social_accounts: { platform: string } | null;
+    conversations: { last_customer_message_at: string | null } | null;
+  }[],
+): Promise<Map<string, number>> {
+  const since = new Map<string, string>();
+  for (const r of rows) {
+    const last = r.conversations?.last_customer_message_at;
+    if (r.kind !== "dm" || !r.conversation_id || !last) continue;
+    if (dmWindowFor(r.social_accounts?.platform ?? "instagram")?.maxReplies == null) continue;
+    since.set(r.conversation_id, last);
+  }
+  const counts = new Map<string, number>();
+  if (since.size === 0) return counts;
+  const { data } = await supabase
+    .from("drafts")
+    .select("sent_at, inbound_items!inner (conversation_id)")
+    .eq("status", "sent")
+    .in("inbound_items.conversation_id", [...since.keys()]);
+  for (const d of (data ?? []) as unknown as {
+    sent_at: string | null;
+    inbound_items: { conversation_id: string | null };
+  }[]) {
+    const id = d.inbound_items.conversation_id;
+    if (!id || !d.sent_at || d.sent_at < since.get(id)!) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
 }

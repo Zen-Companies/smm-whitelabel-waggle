@@ -17,7 +17,7 @@ export const PROMISES: { text: string; enforcedBy: string }[] = [
     enforcedBy: "draft prompt rule 3 + grounding check for contact details",
   },
   {
-    text: "Reply to a DM after Instagram's 24-hour window.",
+    text: "Reply to a DM after the platform's reply window (Instagram and Facebook 24 hours, TikTok 48 hours and 10 replies).",
     enforcedBy: "policy() step 5, checked again when sending (send-step.ts)",
   },
   {

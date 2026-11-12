@@ -10,6 +10,12 @@ import { isConnectable } from "@/lib/social/platforms";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { blueskyErrorText, blueskyInputSchema, connectBlueskyFor } from "./bluesky";
+import {
+  checkTelegramFor,
+  startTelegramFor,
+  type TelegramCheck,
+  type TelegramCode,
+} from "./telegram";
 
 const connectSchema = z.object({
   platform: z.string().refine(isConnectable, "Not a platform Waggle connects yet."),
@@ -105,4 +111,48 @@ export async function connectBluesky(
   }
   // Without an account in Zernio's answer, the webhook lists it a moment later.
   redirect(`/settings?section=accounts&${result.username ? "connected" : "connecting"}=bluesky`);
+}
+
+/** Settings → Accounts → Connect Telegram (T60): a fresh code for Zernio's bot. */
+export async function startTelegram(): Promise<TelegramCode | { error: string }> {
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: "Only Owners and Admins can connect accounts." };
+  const db = getServiceClient();
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    return await startTelegramFor(
+      { db, social: getSocialProvider() },
+      { tenantId: tenant.id, actor: tenant.userId, profileId },
+    );
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, platform: "telegram" } });
+    const planLimit = error instanceof SocialProviderError && error.details.status === 402;
+    return {
+      error: planLimit
+        ? "We can't add Telegram for this brand right now: our connection limit is full. We've been alerted; please try again later."
+        : "Couldn't get a code from Telegram's connector. Please try again.",
+    };
+  }
+}
+
+const codeSchema = z.string().trim().min(4).max(40);
+
+/** Whether the owner has sent the code yet. Called every few seconds by the setup card. */
+export async function checkTelegram(code: string): Promise<TelegramCheck | { error: string }> {
+  const parsed = codeSchema.safeParse(code);
+  if (!parsed.success) return { error: "That code isn't valid. Get a new one." };
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: "Only Owners and Admins can connect accounts." };
+  const db = getServiceClient();
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    return await checkTelegramFor(
+      { db, social: getSocialProvider() },
+      { tenantId: tenant.id, profileId, code: parsed.data },
+    );
+  } catch (error) {
+    // Tried again on the next check; reported so a stuck connector is noticed.
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, platform: "telegram" } });
+    return { status: "pending" };
+  }
 }

@@ -11,6 +11,7 @@ import {
 } from "./analytics-map";
 import {
   SocialProviderError,
+  type TelegramConnectStatus,
   type AccountHealth,
   type AccountPicture,
   type CreatePostInput,
@@ -152,6 +153,7 @@ const reviewsSchema = z.object({
       id: z.string().min(1),
       reviewer: z.object({ name: z.string().nullish() }).nullish(),
       recommendationType: z.string().nullish(),
+      rating: z.number().int().min(1).max(5).nullish().catch(null),
       text: z.string().nullish(),
       created: z.string(),
       hasReply: z.boolean().optional(),
@@ -171,6 +173,19 @@ const credentialsConnectSchema = z.object({
       accountId: z.string().min(1).optional(),
       username: z.string().nullish(),
     })
+    .nullish(),
+});
+
+const telegramCodeSchema = z.object({
+  code: z.string().min(1),
+  expiresAt: z.string().min(1),
+  botUsername: z.string().min(1).catch("LateScheduleBot"),
+});
+const telegramStatusSchema = z.object({
+  status: z.enum(["pending", "connected", "expired"]),
+  chatTitle: z.string().nullish(),
+  account: z
+    .object({ _id: z.string().min(1).optional(), username: z.string().nullish() })
     .nullish(),
 });
 
@@ -334,6 +349,33 @@ export class ZernioSocialProvider implements SocialProvider {
       const accountId = account?._id ?? account?.accountId;
       return {
         account: accountId ? { accountId, username: account?.username ?? null } : null,
+      };
+    });
+  }
+
+  async startTelegramConnect(input: { profileId: string; signal?: AbortSignal }) {
+    return call("startTelegramConnect", async (withFetch) => {
+      const { data } = await this.zernio.connect.telegram.getTelegramConnectStatus(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      return parse(telegramCodeSchema, data, "startTelegramConnect");
+    });
+  }
+
+  async checkTelegramConnect(input: {
+    code: string;
+    signal?: AbortSignal;
+  }): Promise<TelegramConnectStatus> {
+    return call("checkTelegramConnect", async (withFetch) => {
+      const { data } = await this.zernio.connect.telegram.completeTelegramConnect(
+        withFetch({ signal: input.signal, query: { code: input.code } }),
+      );
+      const parsed = parse(telegramStatusSchema, data, "checkTelegramConnect");
+      if (parsed.status !== "connected") return { status: parsed.status };
+      return {
+        status: "connected",
+        accountId: parsed.account?._id ?? null,
+        username: parsed.account?.username ?? parsed.chatTitle ?? null,
       };
     });
   }
@@ -548,13 +590,18 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
-  async listReviews(input: { accountId: string; limit?: number; signal?: AbortSignal }) {
+  async listReviews(input: {
+    accountId: string;
+    platform?: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }) {
     return call("listReviews", async (withFetch) => {
       const { data } = await this.zernio.reviews.listInboxReviews(
         withFetch({
           signal: input.signal,
           query: {
-            platform: "facebook",
+            platform: input.platform === "googlebusiness" ? "googlebusiness" : "facebook",
             accountId: input.accountId,
             sortBy: "date",
             sortOrder: "desc",
@@ -571,6 +618,7 @@ export class ZernioSocialProvider implements SocialProvider {
             : r.recommendationType === "negative"
               ? false
               : null,
+        rating: r.rating ?? null,
         text: r.text ?? "",
         createdAt: r.created,
         hasReply: r.hasReply ?? false,

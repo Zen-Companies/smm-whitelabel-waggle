@@ -48,6 +48,8 @@ export function fakeZernio() {
     },
     getConnectUrl: notImplemented,
     connectBluesky: notImplemented,
+    startTelegramConnect: notImplemented,
+    checkTelegramConnect: notImplemented,
     createPost: notImplemented,
     validatePost: notImplemented,
     replyToComment: notImplemented,

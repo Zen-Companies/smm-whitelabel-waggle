@@ -35,7 +35,7 @@ import {
 } from "./inbox-data";
 import { InboxLive } from "./inbox-live";
 import { rowNote, type RowTone } from "./row-note";
-import { platformLabel } from "@/lib/social/platforms";
+import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Inbox (design.md v3 Paper): a headline ("4 things need you"), then list | conversation with the
 // reply composer | side panel on desktop; list → conversation on phones. Rows follow the ten rules:
@@ -352,7 +352,11 @@ export async function InboxView({
       entry={selected}
       nextHref={next ? href(tab, next.itemId) : null}
     />
-  ) : held && reason === "spam" && selected.category === "spam" && selected.kind === "comment" ? (
+  ) : held &&
+    reason === "spam" &&
+    selected.category === "spam" &&
+    selected.kind === "comment" &&
+    inboxRules(selected.platform).hide ? (
     // T40: a spam comment comes to the owner to hide; it's never answered.
     <SpamCard key={selected.itemId} entry={selected} />
   ) : held ? (
@@ -364,6 +368,7 @@ export async function InboxView({
       {actionFooter}
     </RoleGate>
   ) : selected.kind === "comment" &&
+    inboxRules(selected.platform).hide &&
     (selected.hiddenOnPlatformAt ||
       (selected.category === "spam" &&
         (selected.status === "ignored" || selected.status === "handled"))) ? (

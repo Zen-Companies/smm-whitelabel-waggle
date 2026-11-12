@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMMENTS_LIVE,
   CONNECTABLE,
+  inboxRules,
+  SETUP_IN_WAGGLE,
   isConnectable,
   isInboxLive,
   PASSWORD_CONNECT,
@@ -26,8 +29,41 @@ describe("platform registry", () => {
     expect(PASSWORD_CONNECT).toEqual(["bluesky"]);
   });
 
-  it("keeps the inbox to Instagram and Facebook until later waves", () => {
-    expect(PLATFORM_IDS.filter(isInboxLive)).toEqual(["instagram", "facebook"]);
+  it("answers on Meta, Google, TikTok, Threads, YouTube, LinkedIn and Bluesky (not X yet)", () => {
+    expect(PLATFORM_IDS.filter(isInboxLive)).toEqual([
+      "instagram",
+      "facebook",
+      "googlebusiness",
+      "tiktok",
+      "threads",
+      "youtube",
+      "linkedin",
+      "bluesky",
+    ]);
+    expect(isInboxLive("twitter")).toBe(false);
+  });
+
+  it("knows each platform's inbox rules", () => {
+    expect(inboxRules("instagram")).toMatchObject({ hide: true, privateReply: true });
+    expect(inboxRules("tiktok").dmWindow).toEqual({ hours: 48, maxReplies: 10 });
+    expect(inboxRules("bluesky")).toMatchObject({ hide: false, dmWindow: null, replyMax: 300 });
+    expect(inboxRules("linkedin").hide).toBe(false);
+    expect(inboxRules("myspace")).toMatchObject({ hide: false, privateReply: false });
+    // Only Meta and TikTok list a comment's replies.
+    expect(PLATFORM_IDS.filter((p) => inboxRules(p).listsReplies)).toEqual([
+      "instagram",
+      "facebook",
+      "tiktok",
+    ]);
+  });
+
+  it("backfills comments only where comments are live", () => {
+    expect(COMMENTS_LIVE).not.toContain("googlebusiness");
+    expect(COMMENTS_LIVE).toContain("youtube");
+  });
+
+  it("sets up Bluesky and Telegram in Waggle", () => {
+    expect(SETUP_IN_WAGGLE).toEqual(["bluesky", "telegram"]);
   });
 
   it("never marks a platform as live in the inbox when Zernio has no inbox for it", () => {

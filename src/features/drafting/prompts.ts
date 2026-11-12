@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { asMessageData } from "@/lib/llm/prompt-data";
+import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Drafting prompt (docs/tdd.md §10). Bump the version on any wording change; drafts record the
 // model, and ai_usage records cost, so versions can be compared.
-export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-10-30.1";
+export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-11-12.1";
 
 /** An earlier message in the same DM thread (T30): context for the latest one. */
 export interface ThreadMessage {
@@ -82,6 +83,40 @@ export function draftUserPromptWithHistory(input: {
   );
 }
 
+/** 2026-11-12.1: every platform Waggle answers on (T61/T62), not only Instagram and Facebook. */
+export function draftSystemPromptAllPlatforms(businessName: string): string {
+  return draftSystemPromptWithHistory(businessName).replace(
+    "customers' Instagram and Facebook comments and direct messages",
+    "customers' comments, reviews and direct messages on social media",
+  );
+}
+
+/**
+ * 2026-11-12.1: the channel names the platform, with its reply length where it is short (TikTok
+ * comments 150 characters, Bluesky 300). Rule 3's sentence limits still apply.
+ */
+export function draftUserPromptAllPlatforms(input: {
+  kind: "comment" | "dm" | "review";
+  category: string;
+  text: string;
+  facts: KbFact[];
+  history?: ThreadMessage[];
+  platform?: string;
+}): string {
+  const base = draftUserPromptWithHistory(input);
+  if (!input.platform) return base;
+  const where = platformLabel(input.platform);
+  const what =
+    input.kind === "dm"
+      ? `direct message on ${where}`
+      : input.kind === "review"
+        ? `public reply to a review of the business on ${where}`
+        : `public comment on ${where}`;
+  const max = inboxRules(input.platform).replyMax;
+  const channel = `Channel: ${what}${max && max <= 1000 ? `. At most ${max} characters.` : ""}`;
+  return base.replace(/^Channel: .*$/m, channel);
+}
+
 // Nullable rather than optional: providers' strict structured-output modes need every key.
 export const draftOutputSchema = z.object({
   reply: z.string().min(1).max(1200),
@@ -128,6 +163,8 @@ export const DRAFT_PROMPTS = {
   "2026-10-29.1": { system: draftSystemPrompt, user: draftUserPrompt },
   /** Plus earlier DM messages as context (T30). */
   "2026-10-30.1": { system: draftSystemPromptWithHistory, user: draftUserPromptWithHistory },
+  /** Every platform: the channel names it and its reply length (T61/T62). */
+  "2026-11-12.1": { system: draftSystemPromptAllPlatforms, user: draftUserPromptAllPlatforms },
 } as const;
 
 export type DraftPromptVersion = keyof typeof DRAFT_PROMPTS;

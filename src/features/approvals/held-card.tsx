@@ -5,12 +5,14 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { markHandledAction, replyPubliclyAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
-import { platformLabel } from "@/lib/social/platforms";
+import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 /** Reasons that mean a reply was ready but couldn't go out (danger box, §4 "Couldn't send"). */
 const COULD_NOT_SEND: Record<string, string> = {
-  dm_window_closed: "Instagram's 24-hour reply window has closed.",
-  send_rejected: "Instagram/Facebook didn't accept the reply.",
+  dm_window_closed: "The platform's reply window has closed.",
+  dm_reply_limit:
+    "This chat has used all the replies the platform allows until the customer writes again.",
+  send_rejected: "The platform didn't accept the reply.",
   delivery_failed: "The reply was sent but not delivered.",
   account_inactive: "The account was disconnected before the reply went out.",
   tenant_inactive: "Your subscription isn't active, so the reply wasn't sent.",
@@ -59,7 +61,7 @@ const HELD: Record<string, string> = {
   needs_human: "Your business info doesn't cover this question.",
   mode_off: "Replies are off for this kind of message.",
   ai_cap_reached: "You've used this month's AI allowance, so no reply was suggested.",
-  dm_window_closing: "The 24-hour reply window closes within the hour.",
+  dm_window_closing: "The reply window closes within the hour.",
 };
 
 /** Reasons where Waggle wasn't sure what the message is: offer to hide it as spam. */
@@ -79,14 +81,20 @@ export function lookedLike(reason: string | null, entry: Pick<InboxEntry, "categ
   return guess ? `It looked most like ${guess}.` : null;
 }
 
+/** Each platform's own DM inbox on the web. */
+const DM_INBOX: Record<string, string> = {
+  instagram: "https://www.instagram.com/direct/inbox/",
+  facebook: "https://www.facebook.com/messages/",
+  tiktok: "https://www.tiktok.com/messages",
+  bluesky: "https://bsky.app/messages",
+};
+
 /** Where to answer it yourself: the post for a comment, the platform's inbox for a DM. */
 export function openOnPlatformHref(
   entry: Pick<InboxEntry, "kind" | "platform" | "permalink">,
 ): string | null {
   if (entry.kind === "comment" || entry.kind === "review") return entry.permalink;
-  return entry.platform === "facebook"
-    ? "https://www.facebook.com/messages/"
-    : "https://www.instagram.com/direct/inbox/";
+  return DM_INBOX[entry.platform] ?? null;
 }
 
 export function heldText(reason: string | null, entry: InboxEntry): string {
@@ -124,7 +132,9 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
   const reply =
     entry.draft && !entry.draft.needsHuman ? (entry.draft.editedBody ?? entry.draft.body) : null;
   const platform = platformLabel(entry.platform);
-  const unsure = !failed && !!reason && UNSURE.has(reason);
+  // A comment can be hidden only where the platform allows it (T61: not LinkedIn, Bluesky, YouTube).
+  const canHide = entry.kind !== "comment" || inboxRules(entry.platform).hide;
+  const unsure = !failed && !!reason && UNSURE.has(reason) && canHide;
   const guess = lookedLike(reason, entry);
   const openHref = openOnPlatformHref(entry);
 
