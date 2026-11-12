@@ -13,6 +13,7 @@ import { getServiceClient } from "@/lib/supabase/service";
 import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MAX } from "./limits";
 import { imageMaxBytesFor } from "./post-rules";
 import { publishPost } from "./publish";
+import { chooseBoardFor, listBoardsFor, type PinterestBoard } from "./pinterest";
 import { cancelScheduledPost, createPost } from "./posts";
 import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./video";
 
@@ -289,5 +290,49 @@ export async function prepareVideoUpload(
     }
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "presignVideo" } });
     return { error: "The video couldn't be uploaded. Try again." };
+  }
+}
+
+/** T64: the boards of one Pinterest account, for "Change board". */
+export async function loadPinterestBoards(
+  accountId: string,
+): Promise<{ boards: PinterestBoard[]; current: string | null } | { error: string }> {
+  if (!z.uuid().safeParse(accountId).success) return { error: "Reload the page." };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  try {
+    const result = await listBoardsFor(
+      { db: getServiceClient(), social: getSocialProvider() },
+      { tenantId: tenant.id, accountId },
+    );
+    return result ?? { error: "That Pinterest account isn't connected." };
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "pinterestBoards" } });
+    return { error: "Couldn't load your boards from Pinterest. Try again." };
+  }
+}
+
+const boardSchema = z.object({ accountId: z.uuid(), boardId: z.string().min(1).max(100) });
+
+/** T64: remember a board for the account; every pin goes there from now on. */
+export async function choosePinterestBoard(input: {
+  accountId: string;
+  boardId: string;
+}): Promise<{ board: PinterestBoard } | { error: string }> {
+  const parsed = boardSchema.safeParse(input);
+  if (!parsed.success) return { error: "Pick a board." };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  try {
+    const result = await chooseBoardFor(
+      { db: getServiceClient(), social: getSocialProvider() },
+      { tenantId: tenant.id, actor: tenant.userId, ...parsed.data },
+    );
+    if (!result.ok) return { error: "That board isn't on this Pinterest account any more." };
+    revalidatePath("/posts");
+    return { board: result.board };
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "pinterestBoard" } });
+    return { error: "Couldn't save the board. Try again." };
   }
 }

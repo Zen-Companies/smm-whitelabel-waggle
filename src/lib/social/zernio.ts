@@ -190,6 +190,10 @@ const telegramStatusSchema = z.object({
     .nullish(),
 });
 
+const pinterestBoardsSchema = z.object({
+  boards: z.array(z.object({ id: z.string().optional(), name: z.string().nullish() })).nullish(),
+});
+
 function parse<T>(schema: z.ZodType<T>, data: unknown, operation: string): T {
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
@@ -410,6 +414,13 @@ export class ZernioSocialProvider implements SocialProvider {
   private async postTargets(input: CreatePostInput) {
     return Promise.all(
       input.targets.map(async (t) => {
+        if (t.platform === "pinterest" && input.pinterestBoardId) {
+          return {
+            platform: t.platform,
+            accountId: t.accountId,
+            platformSpecificData: { boardId: input.pinterestBoardId },
+          };
+        }
         if (t.platform === "youtube" && input.youtubeTitle) {
           return {
             platform: t.platform,
@@ -477,6 +488,17 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async listPinterestBoards(input: { accountId: string; signal?: AbortSignal }) {
+    return call("listPinterestBoards", async (withFetch) => {
+      const { data } = await this.zernio.connect.getPinterestBoards(
+        withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+      );
+      return (parse(pinterestBoardsSchema, data, "listPinterestBoards").boards ?? []).flatMap(
+        (b) => (b.id ? [{ id: b.id, name: b.name?.trim() || "Untitled board" }] : []),
+      );
     });
   }
 

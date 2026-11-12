@@ -130,6 +130,7 @@ export async function publishPost(
       idempotencyKey: post.idempotency_key,
       tiktokConsent: post.tiktok_consent_at !== null,
       youtubeTitle: platformOptions(post.platform_options).youtube?.title,
+      pinterestBoardId: platformOptions(post.platform_options).pinterest?.boardId,
     });
     const status = STATUS[result.status] ?? "publishing";
     await db
@@ -209,11 +210,21 @@ export async function publishQueuedPosts(
   return summary;
 }
 
-/** The post's per-platform choices (T63), read defensively: it's free-form JSON in the row. */
-function platformOptions(value: unknown): { youtube?: { title?: string } } {
-  if (!value || typeof value !== "object") return {};
-  const youtube = (value as { youtube?: unknown }).youtube;
-  const title =
-    youtube && typeof youtube === "object" ? (youtube as { title?: unknown }).title : undefined;
-  return typeof title === "string" && title ? { youtube: { title } } : {};
+/** The post's per-platform choices (T63/T64), read defensively: free-form JSON in the row. */
+function platformOptions(value: unknown): {
+  youtube?: { title: string };
+  pinterest?: { boardId: string };
+} {
+  const pick = (key: string, field: string): string | undefined => {
+    const block =
+      value && typeof value === "object" ? (value as Record<string, unknown>)[key] : null;
+    const v = block && typeof block === "object" ? (block as Record<string, unknown>)[field] : null;
+    return typeof v === "string" && v ? v : undefined;
+  };
+  const title = pick("youtube", "title");
+  const boardId = pick("pinterest", "boardId");
+  return {
+    ...(title ? { youtube: { title } } : {}),
+    ...(boardId ? { pinterest: { boardId } } : {}),
+  };
 }

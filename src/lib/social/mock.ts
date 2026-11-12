@@ -146,6 +146,14 @@ export class MockSocialProvider implements SocialProvider {
     return { providerPostId, status };
   }
 
+  /** Four boards for every Pinterest account (local demos). */
+  async listPinterestBoards(input: { accountId: string }) {
+    return ["Coffee menu", "Cakes and pastries", "Our café", "Events"].map((name) => ({
+      id: idFrom("board", input.accountId, name),
+      name,
+    }));
+  }
+
   /** The browser PUTs to our own mock route, which stores the file like uploadMedia does. */
   async presignMedia(input: { filename: string; contentType: string; size: number }) {
     const ext = MEDIA_EXT[input.contentType] ?? "bin";

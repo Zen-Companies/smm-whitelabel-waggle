@@ -76,7 +76,7 @@ export async function createPost(
   const accountIds = [...new Set(input.accountIds)];
   const { data: owned } = await db
     .from("social_accounts")
-    .select("id, status, platform, zernio_account_id")
+    .select("id, status, platform, zernio_account_id, pinterest_board_id")
     .eq("tenant_id", input.tenantId)
     .in("id", accountIds);
   if (!accountIds.length || owned?.length !== accountIds.length) {
@@ -106,6 +106,9 @@ export async function createPost(
   if (owned.some((a) => a.platform === "tiktok") && !input.tiktokConsent) {
     return { ok: false, error: "consent_required" };
   }
+  const pinterestBoardId =
+    owned.find((a) => a.platform === "pinterest" && a.pinterest_board_id)?.pinterest_board_id ??
+    undefined;
   // Zernio's dry run: the platforms' real rules, which may have changed since our table. If the
   // check itself fails (timeout, pause), the post is saved anyway and publishing reports it.
   try {
@@ -113,6 +116,7 @@ export async function createPost(
       content: input.content,
       mediaUrls: media.map((m) => m.url),
       youtubeTitle: input.youtubeTitle,
+      pinterestBoardId,
       targets: owned.flatMap((a) =>
         isSocialPlatform(a.platform)
           ? [{ platform: a.platform, accountId: a.zernio_account_id }]
@@ -138,7 +142,11 @@ export async function createPost(
       scheduled_for: input.scheduledFor?.toISOString() ?? null,
       status: "queued",
       tiktok_consent_at: input.tiktokConsent ? now.toISOString() : null,
-      platform_options: input.youtubeTitle ? { youtube: { title: input.youtubeTitle } } : {},
+      platform_options: {
+        ...(input.youtubeTitle ? { youtube: { title: input.youtubeTitle } } : {}),
+        // The board chosen when the post was made, so a later change doesn't move a scheduled pin.
+        ...(pinterestBoardId ? { pinterest: { boardId: pinterestBoardId } } : {}),
+      },
     })
     .select("id")
     .single();

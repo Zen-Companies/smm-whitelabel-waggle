@@ -7,12 +7,15 @@ import { platformLabel } from "@/lib/social/platforms";
 import { composePost, type ComposeState } from "./actions";
 import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MAX } from "./limits";
 import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./post-rules";
+import { BoardPicker } from "./board-picker";
 import { VideoField, type VideoState } from "./video-field";
 
 export interface ComposeAccount {
   id: string;
   platform: string;
   username: string | null;
+  /** T64: the board pins go to; null = the account's first board. */
+  pinterestBoard?: { id: string; name: string } | null;
 }
 
 const OUTCOME: Record<NonNullable<ComposeState["outcome"]>, string> = {
@@ -83,6 +86,10 @@ function ComposeFields({
   const [length, setLength] = useState(0);
   const [photo, setPhoto] = useState<string | null>(null);
   const [video, setVideo] = useState<VideoState>({ step: "none" });
+  // T64: boards chosen here (saved on the account), and whose picker is open.
+  const [boards, setBoards] = useState<Record<string, { id: string; name: string }>>({});
+  const [boardFor, setBoardFor] = useState<string | null>(null);
+  const pinterest = accounts.filter((a) => a.platform === "pinterest" && picked.includes(a.id));
   const hasVideo = video.step === "ready" || video.step === "uploading";
   const [picked, setPicked] = useState<string[]>(() => accounts.map((a) => a.id));
   // What each ticked platform will do with this post (design v3 "Before it goes out").
@@ -208,7 +215,9 @@ function ComposeFields({
         {fieldError("accounts")}
       </fieldset>
 
-      {(checks.some((c) => c.level !== "ok") || serverProblems.length > 0) && (
+      {(checks.some((c) => c.level !== "ok") ||
+        serverProblems.length > 0 ||
+        pinterest.length > 0) && (
         <section
           aria-labelledby="before-heading"
           className="border-line flex flex-col gap-2.5 rounded-xl border p-4"
@@ -228,6 +237,25 @@ function ComposeFields({
                 </li>
               ),
             )}
+            {pinterest.map((a) => {
+              const board = boards[a.id] ?? a.pinterestBoard ?? null;
+              return (
+                <li key={`board-${a.id}`} className="flex items-start gap-2.5">
+                  <PlatformMark platform="pinterest" size={22} />
+                  <span className="text-ink-2">
+                    <b className="text-ink font-semibold">Pinterest</b>:{" "}
+                    {board ? `pins to “${board.name}”.` : "pins to your first board."}{" "}
+                    <button
+                      type="button"
+                      onClick={() => setBoardFor(a.id)}
+                      className="text-honey-text font-medium underline"
+                    >
+                      Change board
+                    </button>
+                  </span>
+                </li>
+              );
+            })}
             {serverProblems.map((p, i) => (
               <li key={`${p.platform}-${i}`} role="alert" className="flex items-start gap-2.5">
                 <PlatformMark platform={p.platform} size={22} />
@@ -237,6 +265,16 @@ function ComposeFields({
               </li>
             ))}
           </ul>
+          {boardFor && (
+            <BoardPicker
+              accountId={boardFor}
+              username={accounts.find((a) => a.id === boardFor)?.username ?? null}
+              onDone={(board) => {
+                if (board) setBoards((b) => ({ ...b, [boardFor]: board }));
+                setBoardFor(null);
+              }}
+            />
+          )}
           <span className="text-ink-3 text-xs">
             Rules come from each platform. Waggle checks them before saving, so nothing fails later.
           </span>

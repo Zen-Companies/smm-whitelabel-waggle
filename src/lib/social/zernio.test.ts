@@ -240,6 +240,31 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("listPinterestBoards reads the account's boards (T64)", async () => {
+    respond = () =>
+      json({ boards: [{ id: "b1", name: "Coffee menu" }, { id: "b2", name: " " }, { name: "x" }] });
+    await expect(provider.listPinterestBoards({ accountId: "acc_p" })).resolves.toEqual([
+      { id: "b1", name: "Coffee menu" },
+      { id: "b2", name: "Untitled board" },
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_p/pinterest-boards");
+  });
+
+  it("createPost pins to the chosen board (T64)", async () => {
+    respond = () => json({ post: { _id: "post_p", status: "scheduled" } }, 201);
+    await provider.createPost({
+      content: "New cakes",
+      mediaUrls: ["https://media.zernio.com/temp/1_photo.jpg"],
+      targets: [{ platform: "pinterest", accountId: "acc_p" }],
+      publishAt: new Date("2026-11-20T09:00:00Z"),
+      idempotencyKey: "k-pin",
+      pinterestBoardId: "b1",
+    });
+    expect((captured[0].body as { platforms: unknown[] }).platforms).toEqual([
+      { platform: "pinterest", accountId: "acc_p", platformSpecificData: { boardId: "b1" } },
+    ]);
+  });
+
   it("connectBluesky reports a refused app password as a 401", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/users"

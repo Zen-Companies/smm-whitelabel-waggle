@@ -37,6 +37,8 @@ export interface CreatePostInput {
   tiktokConsent?: boolean;
   /** YouTube's video title (100 max); without it Zernio uses the caption's first line. */
   youtubeTitle?: string;
+  /** Pinterest's board (T64); without it Zernio pins to the account's first board. */
+  pinterestBoardId?: string;
 }
 
 /** A video (or other file) is a video when its URL ends like one; Zernio reads the same. */
@@ -181,6 +183,10 @@ export interface SocialProvider {
   presignMedia(
     input: { filename: string; contentType: string; size: number } & CallOptions,
   ): Promise<{ uploadUrl: string; publicUrl: string }>;
+  /** A Pinterest account's boards (`GET /v1/accounts/{accountId}/pinterest-boards`, T64). */
+  listPinterestBoards(
+    input: { accountId: string } & CallOptions,
+  ): Promise<{ id: string; name: string }[]>;
   uploadMedia(
     input: {
       filename: string;

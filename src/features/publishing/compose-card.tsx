@@ -18,7 +18,7 @@ export async function ComposeCard({
   const supabase = await createServerSupabase();
   const { data: accounts } = await supabase
     .from("social_accounts")
-    .select("id, platform, username")
+    .select("id, platform, username, pinterest_board_id, pinterest_board_name")
     .eq("tenant_id", tenant.id)
     .eq("status", "active")
     .order("created_at");
@@ -42,7 +42,14 @@ export async function ComposeCard({
       {can(tenant.role, "posts.write") ? (
         <ComposeForm
           key={`${day ?? "any"}-${time ?? ""}`}
-          accounts={accounts ?? []}
+          accounts={(accounts ?? []).map((a) => ({
+            id: a.id,
+            platform: a.platform,
+            username: a.username,
+            pinterestBoard: a.pinterest_board_id
+              ? { id: a.pinterest_board_id, name: a.pinterest_board_name ?? "your board" }
+              : null,
+          }))}
           day={day}
           time={time}
         />

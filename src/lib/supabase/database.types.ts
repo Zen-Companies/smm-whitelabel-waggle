@@ -1507,6 +1507,8 @@ export type Database = {
           picture_checked_at: string | null
           picture_path: string | null
           picture_url: string | null
+          pinterest_board_id: string | null
+          pinterest_board_name: string | null
           platform: string
           released_at: string | null
           reviews_polled_at: string | null
@@ -1523,6 +1525,8 @@ export type Database = {
           picture_checked_at?: string | null
           picture_path?: string | null
           picture_url?: string | null
+          pinterest_board_id?: string | null
+          pinterest_board_name?: string | null
           platform: string
           released_at?: string | null
           reviews_polled_at?: string | null
@@ -1538,6 +1542,8 @@ export type Database = {
           picture_checked_at?: string | null
           picture_path?: string | null
           picture_url?: string | null
+          pinterest_board_id?: string | null
+          pinterest_board_name?: string | null
           platform?: string
           released_at?: string | null
           reviews_polled_at?: string | null

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from "vitest";
 import { POST } from "@/app/api/webhooks/zernio/route";
 import { signZernioBody } from "@/features/inbox/signature";
 import { settleMockPosts } from "@/features/publishing/mock-settle";
+import { chooseBoardFor, listBoardsFor } from "@/features/publishing/pinterest";
 import { createPost } from "@/features/publishing/posts";
 import { publishPost, publishQueuedPosts } from "@/features/publishing/publish";
 import { MockSocialProvider } from "@/lib/social/mock";
@@ -388,6 +389,59 @@ describe("publishing (T14)", () => {
         },
       ],
     });
+  });
+
+  it("Pinterest: the chosen board is remembered and every pin goes there (T64)", async () => {
+    const { data: pin } = await db
+      .from("social_accounts")
+      .insert({
+        tenant_id: tenantId,
+        zernio_account_id: `acc_pin_${randomUUID().slice(0, 8)}`,
+        platform: "pinterest",
+        username: "postingcafe",
+      })
+      .select("id")
+      .single();
+    const listed = await listBoardsFor({ db, social }, { tenantId, accountId: pin!.id });
+    expect(listed?.current).toBeNull();
+    const cakes = listed!.boards.find((b) => b.name === "Cakes and pastries")!;
+
+    // Someone else's board id is refused.
+    await expect(
+      chooseBoardFor({ db, social }, { tenantId, actor: userId, accountId: pin!.id, boardId: "x" }),
+    ).resolves.toEqual({ ok: false, error: "not_found" });
+    await expect(
+      chooseBoardFor(
+        { db, social },
+        { tenantId, actor: userId, accountId: pin!.id, boardId: cakes.id },
+      ),
+    ).resolves.toEqual({ ok: true, board: cakes });
+
+    const r = await createPost(deps(), {
+      tenantId,
+      userId,
+      content: "Fresh ube cake",
+      accountIds: [pin!.id],
+      scheduledFor: new Date(Date.now() + 60 * 60 * 1000),
+      media: [{ url: "https://media.zernio.com/temp/1_photo.jpg" }],
+    });
+    expect(r).toMatchObject({ ok: true });
+    const { data: row } = await db
+      .from("posts")
+      .select("platform_options")
+      .eq("id", (r as { postId: string }).postId)
+      .single();
+    expect(row?.platform_options).toEqual({ pinterest: { boardId: cakes.id } });
+    expect(social.calls.at(-1)?.pinterestBoardId).toBe(cakes.id);
+  });
+
+  it("Pinterest boards: only for the brand's own Pinterest account (T64)", async () => {
+    await expect(
+      listBoardsFor({ db, social }, { tenantId, accountId: accountId }),
+    ).resolves.toBeNull();
+    await expect(
+      listBoardsFor({ db, social }, { tenantId: randomUUID(), accountId: accountId }),
+    ).resolves.toBeNull();
   });
 
   it("Zernio's check refuses what our rules let through, with its own reason", async () => {
