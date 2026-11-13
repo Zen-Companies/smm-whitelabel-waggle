@@ -7,6 +7,7 @@ import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { generateDraft } from "./generate";
 import { loadThreadHistory } from "./history";
 import { DRAFT_PROMPT_VERSION } from "./prompts";
+import { loadBusyTimes } from "@/features/calendar";
 
 const PRE_DRAFT_EVENTS: Record<"pause" | "ignore" | "escalate", StatusEvent> = {
   pause: "pause",
@@ -104,6 +105,11 @@ export function createDraftStep(deps: {
 
     // T30: earlier messages of a DM thread, so a short follow-up keeps its meaning.
     const history = await loadThreadHistory(db, item.id);
+    // T81d: a booking request sees the owner's busy times when a calendar is connected.
+    const calendar =
+      category === "lead" && deps.social
+        ? await loadBusyTimes({ db, social: deps.social() }, item.tenantId, now, ctx.callSignal())
+        : null;
     const { result, facts, model, issues, needsHuman, needsHumanReason } = await generateDraft(
       { db, llm: deps.llm },
       {
@@ -115,6 +121,7 @@ export function createDraftStep(deps: {
         text,
         history,
         platform: social_accounts.platform,
+        calendar,
         signal: ctx.callSignal,
       },
     );

@@ -8,6 +8,7 @@ import {
   DRAFT_PROMPTS,
   draftOutputSchema,
   toDraftResult,
+  type CalendarContext,
   type DraftPromptVersion,
   type DraftResult,
   type ThreadMessage,
@@ -51,6 +52,8 @@ export async function generateDraft(
     history?: ThreadMessage[];
     /** The account's platform (T61): named in the prompt, and its reply length is enforced. */
     platform?: string;
+    /** Booking requests with a connected calendar (T81d): the owner's busy times. */
+    calendar?: CalendarContext | null;
   },
 ): Promise<GeneratedDraft> {
   const prompts = DRAFT_PROMPTS[input.promptVersion ?? DRAFT_PROMPT_VERSION];
@@ -73,6 +76,7 @@ export async function generateDraft(
       facts,
       history: input.history,
       platform: input.platform,
+      calendar: input.calendar ?? null,
     }),
     signal: input.signal?.(),
   });

@@ -24,6 +24,7 @@ import {
   type PostValidation,
   type PostingQueue,
   type AdAccount,
+  type CalendarEventSummary,
   type EmailDiscovery,
   type ProviderErrorInfo,
   type Integration,
@@ -913,6 +914,95 @@ export class ZernioSocialProvider implements SocialProvider {
         }),
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
+    });
+  }
+
+  async listCalendarEvents(input: {
+    accountId: string;
+    from: string;
+    to: string;
+    signal?: AbortSignal;
+  }): Promise<CalendarEventSummary[]> {
+    return call("listCalendarEvents", async (withFetch) => {
+      const { data } = await this.zernio.calendar.listCalendarEvents(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            from: input.from,
+            to: input.to,
+            limit: 100,
+            sortOrder: "asc",
+          },
+        }),
+      );
+      const rows = parse(
+        z.object({
+          data: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  title: z.string().nullish(),
+                  start: z.string().min(1),
+                  end: z.string().min(1),
+                  allDay: z.boolean().catch(false),
+                  busy: z.boolean().nullish().catch(null),
+                  status: z.string().nullish().catch(null),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listCalendarEvents",
+      ).data;
+      return rows.flatMap((e): CalendarEventSummary[] =>
+        e && e.status !== "cancelled"
+          ? [
+              {
+                id: e.id,
+                title: e.title ?? "Busy",
+                start: e.start,
+                end: e.end,
+                allDay: e.allDay,
+                busy: e.busy !== false,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createCalendarEvent(input: {
+    accountId: string;
+    title: string;
+    start: string;
+    end: string;
+    description?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("createCalendarEvent", async (withFetch) => {
+      const { data } = await this.zernio.calendar.createCalendarEvent(
+        withFetch({
+          signal: input.signal,
+          body: {
+            accountId: input.accountId,
+            title: input.title,
+            start: input.start,
+            end: input.end,
+            ...(input.description ? { description: input.description } : {}),
+          } as never,
+        }),
+      );
+      return {
+        id: parse(
+          z.object({ data: z.object({ id: z.string().min(1) }) }),
+          data,
+          "createCalendarEvent",
+        ).data.id,
+      };
     });
   }
 

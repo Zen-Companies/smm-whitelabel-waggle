@@ -39,6 +39,7 @@ import {
 import { InboxLive } from "./inbox-live";
 import { rowNote, type RowTone } from "./row-note";
 import { inboxRules, platformLabel } from "@/lib/social/platforms";
+import { AddBooking, calendarAccount } from "@/features/calendar";
 
 // Inbox (design.md v3 Paper): a headline ("4 things need you"), then list | conversation with the
 // reply composer | side panel on desktop; list → conversation on phones. Rows follow the ten rules:
@@ -384,6 +385,19 @@ export async function InboxView({
   ) : held ? (
     <HeldCard key={selected.itemId} entry={selected} reason={reason} />
   ) : null;
+  // T81d: a booking request, with a calendar connected: the owner adds it once confirmed.
+  const bookingCalendar =
+    selected?.category === "lead" && can(tenant.role, "replies.approve")
+      ? await calendarAccount(getServiceClient(), tenant.id)
+      : null;
+  const booking =
+    selected && bookingCalendar ? (
+      <AddBooking
+        key={`book-${selected.itemId}`}
+        itemId={selected.itemId}
+        defaultTitle={`${selected.authorName ?? "Customer"}: booking`}
+      />
+    ) : null;
   // T55: viewers read the conversation; the decision controls show disabled, with a note.
   const footer = !selected ? null : actionFooter ? (
     <RoleGate allowed={can(tenant.role, "replies.approve")} role={tenant.role} what="the replies">
@@ -476,7 +490,16 @@ export async function InboxView({
                     },
                   ]
                 }
-                footer={footer}
+                footer={
+                  booking ? (
+                    <>
+                      {footer}
+                      {booking}
+                    </>
+                  ) : (
+                    footer
+                  )
+                }
               />
             </div>
           )}

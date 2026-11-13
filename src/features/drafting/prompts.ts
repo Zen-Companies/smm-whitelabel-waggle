@@ -4,7 +4,7 @@ import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Drafting prompt (docs/tdd.md §10). Bump the version on any wording change; drafts record the
 // model, and ai_usage records cost, so versions can be compared.
-export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-11-12.1";
+export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-11-13.1";
 
 /** An earlier message in the same DM thread (T30): context for the latest one. */
 export interface ThreadMessage {
@@ -117,6 +117,41 @@ export function draftUserPromptAllPlatforms(input: {
   return base.replace(/^Channel: .*$/m, channel);
 }
 
+/** The owner's busy times for a booking request (T81d): today's date and the busy lines. */
+export interface CalendarContext {
+  today: string;
+  busy: string[];
+}
+
+/**
+ * 2026-11-13.1: email joins the channels, and a booking request can carry the owner's busy times
+ * (T81d). A time is offered only inside opening hours from BUSINESS INFO, never confirmed.
+ */
+export function draftSystemPromptCalendar(businessName: string): string {
+  return `${draftSystemPromptAllPlatforms(businessName).replace(
+    "comments, reviews and direct messages on social media",
+    "comments, reviews, direct messages and emails",
+  )}
+9. CALENDAR, if given, is when the business is busy in the next 7 days. You may suggest a time only if the opening hours in BUSINESS INFO cover it and it isn't busy, and only as an offer ("shall we hold that for you?"). Never confirm a booking. Without opening hours in BUSINESS INFO, don't suggest a time.`;
+}
+
+export function draftUserPromptCalendar(input: {
+  kind: "comment" | "dm" | "review";
+  category: string;
+  text: string;
+  facts: KbFact[];
+  history?: ThreadMessage[];
+  platform?: string;
+  calendar?: CalendarContext | null;
+}): string {
+  const base = draftUserPromptAllPlatforms(input);
+  if (!input.calendar) return base;
+  const busy = input.calendar.busy.length
+    ? input.calendar.busy.map((b) => `- ${b}`).join("\n")
+    : "(nothing booked)";
+  return [base, "", "CALENDAR (busy times, next 7 days):", input.calendar.today, busy].join("\n");
+}
+
 // Nullable rather than optional: providers' strict structured-output modes need every key.
 export const draftOutputSchema = z.object({
   reply: z.string().min(1).max(1200),
@@ -165,6 +200,8 @@ export const DRAFT_PROMPTS = {
   "2026-10-30.1": { system: draftSystemPromptWithHistory, user: draftUserPromptWithHistory },
   /** Every platform: the channel names it and its reply length (T61/T62). */
   "2026-11-12.1": { system: draftSystemPromptAllPlatforms, user: draftUserPromptAllPlatforms },
+  /** Email named as a channel, and the owner's busy times for booking requests (T81d). */
+  "2026-11-13.1": { system: draftSystemPromptCalendar, user: draftUserPromptCalendar },
 } as const;
 
 export type DraftPromptVersion = keyof typeof DRAFT_PROMPTS;

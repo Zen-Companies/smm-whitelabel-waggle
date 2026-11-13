@@ -17,6 +17,7 @@ import type {
   SocialProvider,
   PostingQueue,
   AdAccount,
+  CalendarEventSummary,
   EmailDiscovery,
   Integration,
   SiteKeys,
@@ -191,6 +192,51 @@ export class MockSocialProvider implements SocialProvider {
     const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
     this.integrations.set(input.profileId, [...list, { id, platform: k.kind, name, active: true }]);
     return { accountId: id, name };
+  }
+
+  /** Calendar (T81d): a supplier delivery at 9 and a staff meeting at 2, every day. */
+  private calendarAdds: CalendarEventSummary[] = [];
+
+  async listCalendarEvents(input: { accountId: string; from: string; to: string }) {
+    const day = input.from.slice(0, 10);
+    const fixed: CalendarEventSummary[] = [
+      {
+        id: `mock_cal_${day}_1`,
+        title: "Supplier delivery",
+        start: `${day}T09:00:00+08:00`,
+        end: `${day}T09:30:00+08:00`,
+        allDay: false,
+        busy: true,
+      },
+      {
+        id: `mock_cal_${day}_2`,
+        title: "Staff meeting",
+        start: `${day}T14:00:00+08:00`,
+        end: `${day}T15:00:00+08:00`,
+        allDay: false,
+        busy: true,
+      },
+    ];
+    void input.accountId;
+    return [...fixed, ...this.calendarAdds].filter((e) => e.start < input.to && e.end > input.from);
+  }
+
+  async createCalendarEvent(input: {
+    accountId: string;
+    title: string;
+    start: string;
+    end: string;
+  }) {
+    const id = idFrom("mock_cal", input.accountId, input.start, input.title);
+    this.calendarAdds.push({
+      id,
+      title: input.title,
+      start: input.start,
+      end: input.end,
+      allDay: false,
+      busy: true,
+    });
+    return { id };
   }
 
   async getMailConnectUrl(input: { platform: string; redirectUrl: string }) {

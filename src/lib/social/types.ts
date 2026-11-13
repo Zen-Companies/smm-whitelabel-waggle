@@ -158,6 +158,17 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** A calendar event (T81d, `GET /v1/calendar/events`): times keep the calendar's own offset. */
+export interface CalendarEventSummary {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  /** False for events marked free; cancelled ones are left out. */
+  busy: boolean;
+}
+
 /** Where an email address connects (T80b, `POST /v1/email/imap/discover`). */
 export interface EmailDiscovery {
   route: "imap" | "google_oauth" | "microsoft_oauth" | "unsupported";
@@ -412,6 +423,20 @@ export interface SocialProvider {
       scopes: readonly ("email" | "calendar")[];
     } & CallOptions,
   ): Promise<{ authUrl: string }>;
+  /** The primary calendar's events between `from` and `to` (T81d), cancelled ones left out. */
+  listCalendarEvents(
+    input: { accountId: string; from: string; to: string } & CallOptions,
+  ): Promise<CalendarEventSummary[]>;
+  /** Adds an event to the primary calendar (T81d); not idempotent upstream, one attempt. */
+  createCalendarEvent(
+    input: {
+      accountId: string;
+      title: string;
+      start: string;
+      end: string;
+      description?: string;
+    } & CallOptions,
+  ): Promise<{ id: string }>;
   /** Every account on the profile whose platform is in `platforms` (T80). */
   listIntegrations(
     input: { profileId: string; platforms: readonly string[] } & CallOptions,

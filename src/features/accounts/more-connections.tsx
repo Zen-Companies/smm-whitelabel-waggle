@@ -2,6 +2,7 @@ import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
 import { CircleCheck } from "lucide-react";
 import { BrandMark } from "@/components/app/platform-mark";
+import { CalendarToday } from "@/features/calendar";
 import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { Integration } from "@/lib/social/types";
@@ -133,6 +134,7 @@ export async function MoreConnections() {
               </li>
             )}
           </ul>
+          {group.title === "Email and calendar" && <CalendarToday tenantId={tenant.id} />}
         </div>
       ))}
     </section>

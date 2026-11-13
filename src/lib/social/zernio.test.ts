@@ -397,6 +397,75 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("calendar (T81d): events without cancelled ones; adding a booking", async () => {
+    respond = (req) =>
+      req.method === "GET"
+        ? json({
+            data: [
+              {
+                id: "e1",
+                title: "Supplier",
+                start: "2026-11-14T09:00:00+08:00",
+                end: "2026-11-14T09:30:00+08:00",
+                allDay: false,
+              },
+              {
+                id: "e2",
+                title: "Gone",
+                start: "2026-11-14T10:00:00+08:00",
+                end: "2026-11-14T11:00:00+08:00",
+                allDay: false,
+                status: "cancelled",
+              },
+              {
+                id: "e3",
+                title: "Free",
+                start: "2026-11-14T12:00:00+08:00",
+                end: "2026-11-14T13:00:00+08:00",
+                allDay: false,
+                busy: false,
+              },
+            ],
+            pagination: { hasMore: false, nextCursor: null },
+          })
+        : json({ data: { id: "e9" } }, 201);
+    await expect(
+      provider.listCalendarEvents({
+        accountId: "acc_g",
+        from: "2026-11-14T00:00:00Z",
+        to: "2026-11-15T00:00:00Z",
+      }),
+    ).resolves.toEqual([
+      {
+        id: "e1",
+        title: "Supplier",
+        start: "2026-11-14T09:00:00+08:00",
+        end: "2026-11-14T09:30:00+08:00",
+        allDay: false,
+        busy: true,
+      },
+      {
+        id: "e3",
+        title: "Free",
+        start: "2026-11-14T12:00:00+08:00",
+        end: "2026-11-14T13:00:00+08:00",
+        allDay: false,
+        busy: false,
+      },
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/calendar/events");
+    expect(captured[0].url.searchParams.get("accountId")).toBe("acc_g");
+    await expect(
+      provider.createCalendarEvent({
+        accountId: "acc_g",
+        title: "Maria: booking",
+        start: "2026-11-21T09:00:00+08:00",
+        end: "2026-11-21T10:00:00+08:00",
+      }),
+    ).resolves.toEqual({ id: "e9" });
+    expect(captured[1].body).toMatchObject({ accountId: "acc_g", title: "Maria: booking" });
+  });
+
   it("Gmail sign-in (T81c) asks for the email and calendar areas, with no welcome screen", async () => {
     respond = () =>
       json({ authUrl: "https://accounts.google.com/o/oauth2/v2/auth?x=1", state: "s" });
