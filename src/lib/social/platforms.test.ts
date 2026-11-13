@@ -43,6 +43,8 @@ describe("platform registry", () => {
       "whatsapp",
       "line",
       "imap",
+      "google",
+      "microsoft",
     ]);
     expect(isInboxLive("twitter")).toBe(false);
   });

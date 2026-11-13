@@ -400,6 +400,18 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /**
+   * Gmail or Outlook sign-in (T81c), asking for the mailbox and calendar areas. No welcome
+   * screen: from the API the owner sees only Google's or Microsoft's own pages.
+   */
+  getMailConnectUrl(
+    input: {
+      platform: "google" | "microsoft";
+      profileId: string;
+      redirectUrl: string;
+      scopes: readonly ("email" | "calendar")[];
+    } & CallOptions,
+  ): Promise<{ authUrl: string }>;
   /** Every account on the profile whose platform is in `platforms` (T80). */
   listIntegrations(
     input: { profileId: string; platforms: readonly string[] } & CallOptions,

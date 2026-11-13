@@ -6,7 +6,9 @@ import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
+import { Button } from "@/components/ui/button";
 import { EmailConnectForm } from "./email-line-forms";
+import { connectMailAction } from "./own-key-actions";
 import { CONNECTED_PLATFORMS, isOwnKeyPlatform, MORE_CONNECTIONS } from "./own-keys";
 
 /**
@@ -57,6 +59,16 @@ export async function MoreConnections() {
                       <span className="text-ink-2 text-[13px]">{item.line}</span>
                     </span>
                     {item.how === "soon" && <span className="text-ink-3 text-sm">Coming soon</span>}
+                    {item.how === "mail" && item.platform && (
+                      <form action={connectMailAction}>
+                        <input type="hidden" name="platform" value={item.platform} />
+                        <Button type="submit" variant="secondary">
+                          {item.platform === "google"
+                            ? "Sign in with Google"
+                            : "Sign in with Microsoft"}
+                        </Button>
+                      </form>
+                    )}
                     {item.how === "link" && item.href && (
                       <Link
                         href={item.href}

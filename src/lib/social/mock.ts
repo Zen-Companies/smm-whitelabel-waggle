@@ -193,6 +193,12 @@ export class MockSocialProvider implements SocialProvider {
     return { accountId: id, name };
   }
 
+  async getMailConnectUrl(input: { platform: string; redirectUrl: string }) {
+    const url = new URL(input.redirectUrl);
+    url.searchParams.set("connected", input.platform);
+    return { authUrl: url.toString() };
+  }
+
   async discoverEmail(input: { email: string }): Promise<EmailDiscovery> {
     const domain = input.email.split("@")[1] ?? "";
     if (domain === "gmail.com") {

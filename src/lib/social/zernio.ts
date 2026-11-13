@@ -893,6 +893,29 @@ export class ZernioSocialProvider implements SocialProvider {
     };
   }
 
+  async getMailConnectUrl(input: {
+    platform: "google" | "microsoft";
+    profileId: string;
+    redirectUrl: string;
+    scopes: readonly ("email" | "calendar")[];
+    signal?: AbortSignal;
+  }) {
+    return call("getConnectUrl", async (withFetch) => {
+      const { data } = await this.zernio.connect.getConnectUrl(
+        withFetch({
+          signal: input.signal,
+          path: { platform: input.platform },
+          query: {
+            profileId: input.profileId,
+            redirect_url: input.redirectUrl,
+            scopes: input.scopes.join(","),
+          },
+        }),
+      );
+      return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
+    });
+  }
+
   async listIntegrations(input: {
     profileId: string;
     platforms: readonly string[];

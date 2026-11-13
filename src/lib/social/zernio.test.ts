@@ -397,6 +397,22 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("Gmail sign-in (T81c) asks for the email and calendar areas, with no welcome screen", async () => {
+    respond = () =>
+      json({ authUrl: "https://accounts.google.com/o/oauth2/v2/auth?x=1", state: "s" });
+    await expect(
+      provider.getMailConnectUrl({
+        platform: "google",
+        profileId: "prof_1",
+        redirectUrl: "https://app.test/settings",
+        scopes: ["email", "calendar"],
+      }),
+    ).resolves.toEqual({ authUrl: "https://accounts.google.com/o/oauth2/v2/auth?x=1" });
+    expect(captured[0].url.pathname).toBe("/api/v1/connect/google");
+    expect(captured[0].url.searchParams.get("scopes")).toBe("email,calendar");
+    expect(captured[0].url.searchParams.get("welcome")).toBeNull();
+  });
+
   it("email and LINE (T80b): discovery, a failed sign-in with the provider's fix, LINE's state", async () => {
     respond = (req) => {
       const p = req.url.pathname;

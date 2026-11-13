@@ -2,6 +2,7 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { ensureZernioProfile, getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
@@ -310,4 +311,39 @@ export async function connectLineAction(
       ? `${result.name} is connected. In LINE Official Account Manager, Settings, Response settings: turn on Webhooks, and turn off Auto-response and Greeting messages.`
       : `${result.name} is connected, but LINE didn't take the automatic setup. Contact us and we'll finish it with you.`,
   };
+}
+
+/**
+ * Gmail or Outlook sign-in (T81c): mailbox and calendar areas. The account arrives with
+ * account.connected; Settings shows "connecting" until then.
+ */
+export async function connectMailAction(formData: FormData): Promise<void> {
+  const platform = formData.get("platform");
+  if (platform !== "google" && platform !== "microsoft") redirect("/settings?section=accounts");
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) redirect("/settings?section=accounts&connect_error=not_allowed");
+  const db = getServiceClient();
+  let authUrl: string;
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    ({ authUrl } = await getSocialProvider().getMailConnectUrl({
+      platform,
+      profileId,
+      redirectUrl: `${process.env.APP_URL}/settings?section=accounts&connecting=${platform}`,
+      scopes: ["email", "calendar"],
+      signal: AbortSignal.timeout(20_000),
+    }));
+    await writeAudit(db, {
+      tenantId: tenant.id,
+      action: "account_connect_started",
+      actor: tenant.userId,
+      details: { platform, scopes: ["email", "calendar"] },
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, platform } });
+    redirect(
+      `/settings?section=accounts&connect_error=${status(error) === 402 ? "plan_limit" : "unavailable"}&platform=${platform}`,
+    );
+  }
+  redirect(authUrl);
 }

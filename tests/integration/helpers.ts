@@ -51,6 +51,7 @@ export function fakeZernio() {
     presignMedia: notImplemented,
     listPinterestBoards: notImplemented,
     getQueue: notImplemented,
+    getMailConnectUrl: notImplemented,
     discoverEmail: notImplemented,
     connectEmail: notImplemented,
     connectLine: notImplemented,

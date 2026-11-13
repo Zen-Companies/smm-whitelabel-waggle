@@ -23,6 +23,8 @@ export const PLATFORM_IDS = [
   "snapchat",
   "line",
   "imap",
+  "google",
+  "microsoft",
 ] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
@@ -348,6 +350,33 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     inboxLive: true,
     analyticsLive: false,
   },
+  google: {
+    id: "google",
+    label: "Gmail",
+    mark: { text: "G", bg: "#FEE2E2", fg: "#991B1B" },
+    kind: "answers",
+    // Signed in from More connections with the email and calendar areas, not a tile.
+    connect: "none",
+    line: "Answers email in the same thread",
+    needs: "Sends up to 200 emails a day (500 on Google Workspace)",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  microsoft: {
+    id: "microsoft",
+    label: "Outlook",
+    mark: { text: "O", bg: "#DBEAFE", fg: "#1E40AF" },
+    kind: "answers",
+    connect: "none",
+    line: "Answers email in the same thread",
+    needs: "Outlook or Microsoft 365",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
 };
 
 export function isPlatformId(id: string): id is PlatformId {
@@ -461,6 +490,8 @@ const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
   line: { replyMax: 5000 },
   // T81b: email has no reply window; replies go from the owner's own mailbox, in the thread.
   imap: {},
+  google: {},
+  microsoft: {},
 };
 
 export function inboxRules(platform: string): InboxRules {

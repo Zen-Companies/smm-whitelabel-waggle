@@ -18,7 +18,7 @@ export type ConnectionItem = {
   id: string;
   label: string;
   line: string;
-  how: "keys" | "email" | "link" | "soon";
+  how: "keys" | "email" | "mail" | "link" | "soon";
   /** The Zernio platform its connections carry, when it differs from `id`. */
   platform?: string;
   href?: string;
@@ -38,8 +38,14 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
   {
     title: "Email and calendar",
     items: [
-      { id: "gmail", label: "Gmail", line: "Email, calendar", how: "soon" },
-      { id: "outlook", label: "Outlook", line: "Email, calendar", how: "soon" },
+      { id: "gmail", label: "Gmail", line: "Email, calendar", how: "mail", platform: "google" },
+      {
+        id: "outlook",
+        label: "Outlook",
+        line: "Email, calendar",
+        how: "mail",
+        platform: "microsoft",
+      },
       { id: "email", label: "Email", line: "Any email (IMAP)", how: "email", platform: "imap" },
     ],
   },
