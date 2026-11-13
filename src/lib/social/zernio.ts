@@ -24,6 +24,7 @@ import {
   type PostValidation,
   type PostingQueue,
   type ChatFlow,
+  type Contact,
   type Sequence,
   type SequenceStep,
   type CommentAutomation,
@@ -92,6 +93,22 @@ const gbpPerformanceSchema = z.object({
   metrics: z
     .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
     .optional(),
+});
+const contactSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().catch(""),
+  email: z.string().nullish().catch(null),
+  tags: z.array(z.string()).catch([]),
+  isSubscribed: z.boolean().catch(false),
+  platform: z.string().nullish().catch(null),
+  displayIdentifier: z.string().nullish().catch(null),
+  platformIdentifier: z.string().nullish().catch(null),
+  lastMessageReceivedAt: z.string().nullish().catch(null),
+  lastMessageSentAt: z.string().nullish().catch(null),
+});
+const contactsSchema = z.object({
+  contacts: z.array(contactSchema.nullable().catch(null)).catch([]),
+  pagination: z.object({ total: z.number().optional() }).nullish().catch(null),
 });
 const sequencesSchema = z.object({
   sequences: z
@@ -620,6 +637,136 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async listContacts(input: {
+    profileId: string;
+    search?: string;
+    tag?: string;
+    skip?: number;
+    signal?: AbortSignal;
+  }): Promise<{ contacts: Contact[]; total: number }> {
+    return call("listContacts", async (withFetch) => {
+      const { data } = await this.zernio.contacts.listContacts(
+        withFetch({
+          signal: input.signal,
+          query: {
+            profileId: input.profileId,
+            limit: 50,
+            skip: input.skip ?? 0,
+            ...(input.search ? { search: input.search } : {}),
+            ...(input.tag ? { tag: input.tag } : {}),
+          },
+        }),
+      );
+      const parsed = parse(contactsSchema, data, "listContacts");
+      const contacts = parsed.contacts.flatMap((c): Contact[] =>
+        c
+          ? [
+              {
+                id: c.id,
+                name: c.name,
+                email: c.email ?? null,
+                tags: c.tags,
+                subscribed: c.isSubscribed,
+                platform: c.platform ?? null,
+                identifier: c.displayIdentifier ?? c.platformIdentifier ?? null,
+                lastMessageAt: c.lastMessageReceivedAt ?? c.lastMessageSentAt ?? null,
+              },
+            ]
+          : [],
+      );
+      return { contacts, total: parsed.pagination?.total ?? contacts.length };
+    });
+  }
+
+  async createContact(input: {
+    profileId: string;
+    name: string;
+    email?: string;
+    tags: string[];
+    subscribed: boolean;
+    channel?: { accountId: string; platform: string; identifier: string };
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createContact", async (withFetch) => {
+      const { data } = await this.zernio.contacts.createContact(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            name: input.name,
+            ...(input.email ? { email: input.email } : {}),
+            tags: input.tags,
+            isSubscribed: input.subscribed,
+            ...(input.channel
+              ? {
+                  accountId: input.channel.accountId,
+                  platform: input.channel.platform as "whatsapp",
+                  platformIdentifier: input.channel.identifier,
+                  displayIdentifier: input.channel.identifier,
+                }
+              : {}),
+          },
+        }),
+      );
+      return {
+        id: parse(z.object({ contact: z.object({ id: z.string().min(1) }) }), data, "createContact")
+          .contact.id,
+      };
+    });
+  }
+
+  async importContacts(input: {
+    profileId: string;
+    accountId?: string;
+    rows: { name: string; identifier?: string; email?: string; tags: string[] }[];
+    signal?: AbortSignal;
+  }) {
+    return call("bulkCreateContacts", async (withFetch) => {
+      const { data } = await this.zernio.contacts.bulkCreateContacts(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            ...(input.accountId ? { accountId: input.accountId } : {}),
+            contacts: input.rows.map((r) => ({
+              name: r.name,
+              ...(input.accountId && r.identifier
+                ? { platformIdentifier: r.identifier, displayIdentifier: r.identifier }
+                : {}),
+              ...(r.email ? { email: r.email } : {}),
+              tags: r.tags,
+            })),
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({
+          created: z.number().catch(0),
+          skipped: z.number().catch(0),
+          errors: z.array(z.string()).catch([]),
+        }),
+        data,
+        "bulkCreateContacts",
+      );
+      return { created: parsed.created, skipped: parsed.skipped, errors: parsed.errors.length };
+    });
+  }
+
+  async updateContact(input: { id: string; tags?: string[]; subscribed?: boolean; signal?: AbortSignal }) {
+    await call("updateContact", async (withFetch) => {
+      await this.zernio.contacts.updateContact(
+        withFetch({
+          signal: input.signal,
+          path: { contactId: input.id },
+          body: {
+            ...(input.tags ? { tags: input.tags } : {}),
+            ...(input.subscribed !== undefined ? { isSubscribed: input.subscribed } : {}),
+          },
+        }),
+      );
     });
   }
 

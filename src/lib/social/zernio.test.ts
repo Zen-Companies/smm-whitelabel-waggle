@@ -302,6 +302,40 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("createContact puts a WhatsApp number on the contact; importContacts sends rows (T78a)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/contacts"
+        ? json({ success: true, contact: { id: "c_1" } })
+        : json({ success: true, created: 2, skipped: 1, errors: ["bad row"] });
+    await expect(
+      provider.createContact({
+        profileId: "prof_1",
+        name: "Ana",
+        tags: ["regular"],
+        subscribed: true,
+        channel: { accountId: "acc_wa", platform: "whatsapp", identifier: "+639175550142" },
+      }),
+    ).resolves.toEqual({ id: "c_1" });
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      name: "Ana",
+      tags: ["regular"],
+      isSubscribed: true,
+      accountId: "acc_wa",
+      platform: "whatsapp",
+      platformIdentifier: "+639175550142",
+      displayIdentifier: "+639175550142",
+    });
+    await expect(
+      provider.importContacts({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        rows: [{ name: "Jun", identifier: "+639185550199", tags: [] }],
+      }),
+    ).resolves.toEqual({ created: 2, skipped: 1, errors: 1 });
+    expect(captured[1].url.pathname).toBe("/api/v1/contacts/bulk");
+  });
+
   it("createSequence sends the steps; enrollInSequence adds contacts (T77c)", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/sequences"

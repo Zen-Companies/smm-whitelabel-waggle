@@ -4,6 +4,7 @@ import { BOTTOM_TABS, isActive, NAV_ITEMS } from "./nav-items";
 describe("nav items", () => {
   it("the menu uses the redesign's names", () => {
     expect(NAV_ITEMS.map((i) => i.label)).toEqual(["Inbox", "Contacts", "Posts", "Teach Waggle", "Insights"]);
+    expect(isActive(NAV_ITEMS[1], "/leads")).toBe(true);
   });
 
   it("Teach Waggle is active on Business info and the Lab", () => {

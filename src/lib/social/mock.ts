@@ -17,6 +17,7 @@ import type {
   SocialProvider,
   PostingQueue,
   ChatFlow,
+  Contact,
   Sequence,
   SequenceStep,
   CommentAutomation,
@@ -160,6 +161,73 @@ export class MockSocialProvider implements SocialProvider {
       status,
       scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
     };
+  }
+
+  /** Contacts (T78a), kept in memory per profile. */
+  private contacts = new Map<string, Contact & { profileId: string }>();
+
+  async listContacts(input: { profileId: string; search?: string; tag?: string; skip?: number }) {
+    const all = [...this.contacts.values()]
+      .filter((c) => c.profileId === input.profileId)
+      .filter((c) => !input.tag || c.tags.includes(input.tag))
+      .filter((c) => !input.search || c.name.toLowerCase().includes(input.search.toLowerCase()))
+      .reverse();
+    const page = all.slice(input.skip ?? 0, (input.skip ?? 0) + 50).map((c) => {
+      const { profileId, ...rest } = c;
+      void profileId;
+      return rest;
+    });
+    return { contacts: page, total: all.length };
+  }
+
+  async createContact(input: {
+    profileId: string;
+    name: string;
+    email?: string;
+    tags: string[];
+    subscribed: boolean;
+    channel?: { accountId: string; platform: string; identifier: string };
+  }) {
+    const id = idFrom("mock_contact", input.profileId, input.name, String(this.contacts.size));
+    this.contacts.set(id, {
+      id,
+      profileId: input.profileId,
+      name: input.name,
+      email: input.email ?? null,
+      tags: input.tags,
+      subscribed: input.subscribed,
+      platform: input.channel?.platform ?? null,
+      identifier: input.channel?.identifier ?? null,
+      lastMessageAt: null,
+    });
+    return { id };
+  }
+
+  async importContacts(input: {
+    profileId: string;
+    accountId?: string;
+    rows: { name: string; identifier?: string; email?: string; tags: string[] }[];
+  }) {
+    for (const r of input.rows) {
+      await this.createContact({
+        profileId: input.profileId,
+        name: r.name,
+        email: r.email,
+        tags: r.tags,
+        subscribed: false,
+        ...(input.accountId && r.identifier
+          ? { channel: { accountId: input.accountId, platform: "whatsapp", identifier: r.identifier } }
+          : {}),
+      });
+    }
+    return { created: input.rows.length, skipped: 0, errors: 0 };
+  }
+
+  async updateContact(input: { id: string; tags?: string[]; subscribed?: boolean }) {
+    const c = this.contacts.get(input.id);
+    if (!c) return;
+    if (input.tags) c.tags = input.tags;
+    if (input.subscribed !== undefined) c.subscribed = input.subscribed;
   }
 
   /** Sequences (T77c), kept in memory per profile. */

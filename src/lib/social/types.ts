@@ -158,6 +158,20 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** A contact (T78a, `/v1/contacts`). */
+export interface Contact {
+  id: string;
+  name: string;
+  email: string | null;
+  tags: string[];
+  /** Agreed to get messages. */
+  subscribed: boolean;
+  /** Where they can be messaged, e.g. whatsapp and "+639175550142". */
+  platform: string | null;
+  identifier: string | null;
+  lastMessageAt: string | null;
+}
+
 /** A Zernio workflow graph (T77b, `/v1/workflows`): nodes, edges and the trigger node. */
 export interface WorkflowGraph {
   nodes: { id: string; type: string; config?: Record<string, unknown>; label?: string }[];
@@ -276,6 +290,33 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** The brand's contacts, newest first, 50 a page (T78a). */
+  listContacts(
+    input: { profileId: string; search?: string; tag?: string; skip?: number } & CallOptions,
+  ): Promise<{ contacts: Contact[]; total: number }>;
+  /** One contact; with `channel`, reachable there (e.g. a WhatsApp number). */
+  createContact(
+    input: {
+      profileId: string;
+      name: string;
+      email?: string;
+      tags: string[];
+      subscribed: boolean;
+      channel?: { accountId: string; platform: string; identifier: string };
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  /** Up to 1,000 at once; with `accountId`, each row's `identifier` is its handle there. */
+  importContacts(
+    input: {
+      profileId: string;
+      accountId?: string;
+      rows: { name: string; identifier?: string; email?: string; tags: string[] }[];
+    } & CallOptions,
+  ): Promise<{ created: number; skipped: number; errors: number }>;
+  /** Change a contact's tags or whether they agreed to get messages. */
+  updateContact(
+    input: { id: string; tags?: string[]; subscribed?: boolean } & CallOptions,
+  ): Promise<void>;
   /** The brand's sequences (T77c, `GET /v1/sequences`). */
   listSequences(input: { profileId: string } & CallOptions): Promise<Sequence[]>;
   /** Creates a sequence as a draft. */
