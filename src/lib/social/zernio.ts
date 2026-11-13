@@ -27,6 +27,9 @@ import {
   type SmsOnNumber,
   type SmsRegistration,
   RCS_AGENT_STATUSES,
+  IMESSAGE_SENDER_STATUSES,
+  type ImessageSenderView,
+  type ImessageOrderResult,
   type RcsAgentView,
   type VoiceSettings,
   type OwnedNumber,
@@ -1215,6 +1218,157 @@ export class ZernioSocialProvider implements SocialProvider {
           path: { agentId: input.agentId },
           body: input.body as never,
         }),
+      );
+    });
+  }
+
+  async listImessageSenders(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listImessageSenderOrders", async (withFetch) => {
+      const { data } = await this.zernio.imessage.listImessageSenderOrders(
+        withFetch({ signal: input.signal }),
+      );
+      const rows = parse(
+        z.object({
+          senders: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  profileId: z.string().nullish(),
+                  status: z.enum(IMESSAGE_SENDER_STATUSES),
+                  region: z.enum(["US", "GB"]).nullish().catch(null),
+                  handle: z.string().nullish(),
+                  optInLink: z.string().nullish(),
+                  priceCents: z.number().nullish(),
+                  displayName: z.string().nullish(),
+                  failureReason: z.string().nullish(),
+                  accountId: z.string().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listImessageSenderOrders",
+      ).senders;
+      return rows.flatMap((s): ImessageSenderView[] =>
+        s && s.profileId === input.profileId && s.status !== "canceled"
+          ? [
+              {
+                id: s.id,
+                status: s.status,
+                region: s.region ?? null,
+                handle: s.handle ?? null,
+                // Only the app link: the provider's hosted page would show its name.
+                optInLink: s.optInLink?.startsWith("imessage:") ? s.optInLink : null,
+                priceCents: s.priceCents ?? null,
+                displayName: s.displayName ?? null,
+                failureReason: s.failureReason ?? null,
+                accountId: s.accountId ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async listImessageNumbers(input: { region: "US" | "GB"; signal?: AbortSignal }) {
+    return call("listImessageAvailableNumbers", async (withFetch) => {
+      const { data } = await this.zernio.imessage.listImessageAvailableNumbers(
+        withFetch({ signal: input.signal, query: { region: input.region } }),
+      );
+      return parse(
+        z.object({
+          numbers: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  phone: z.string().min(1),
+                  location: z.string().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listImessageAvailableNumbers",
+      ).numbers.flatMap((n) =>
+        n ? [{ id: n.id, phone: n.phone, location: n.location ?? null }] : [],
+      );
+    });
+  }
+
+  async orderImessageSender(input: {
+    profileId: string;
+    region: "US" | "GB";
+    availableNumberId?: string;
+    zipCode?: string;
+    displayName: string;
+    contact: { firstName: string; lastName?: string };
+    purchaseIntentId: string;
+    signal?: AbortSignal;
+  }): Promise<ImessageOrderResult> {
+    try {
+      return await call("orderImessageSender", async (withFetch) => {
+        const { data } = await this.zernio.imessage.orderImessageSender(
+          withFetch({
+            signal: input.signal,
+            body: {
+              profileId: input.profileId,
+              kind: "phone",
+              region: input.region,
+              ...(input.availableNumberId ? { availableNumberId: input.availableNumberId } : {}),
+              ...(input.zipCode ? { zipCode: input.zipCode } : {}),
+              displayName: input.displayName,
+              contact: input.contact,
+              purchaseIntentId: input.purchaseIntentId,
+            },
+          }),
+        );
+        const s = parse(
+          z.object({
+            sender: z.object({
+              id: z.string().min(1),
+              status: z.enum(IMESSAGE_SENDER_STATUSES).catch("ordering"),
+            }),
+          }),
+          data,
+          "orderImessageSender",
+        ).sender;
+        return { kind: "ordered" as const, id: s.id, status: s.status };
+      });
+    } catch (error) {
+      const status = error instanceof SocialProviderError ? error.details.status : undefined;
+      if (status === 402 || status === 422) return { kind: "billing" };
+      if (status === 502) return { kind: "refused" };
+      throw error;
+    }
+  }
+
+  async updateImessageSender(input: {
+    senderId: string;
+    displayName: string;
+    contact: { firstName: string; lastName?: string };
+    signal?: AbortSignal;
+  }) {
+    await call("updateImessageSender", async (withFetch) => {
+      await this.zernio.imessage.updateImessageSender(
+        withFetch({
+          signal: input.signal,
+          path: { senderId: input.senderId },
+          body: { displayName: input.displayName, contact: input.contact },
+        }),
+      );
+    });
+  }
+
+  async cancelImessageSender(input: { senderId: string; signal?: AbortSignal }) {
+    await call("cancelImessageSender", async (withFetch) => {
+      await this.zernio.imessage.cancelImessageSender(
+        withFetch({ signal: input.signal, path: { senderId: input.senderId } }),
       );
     });
   }

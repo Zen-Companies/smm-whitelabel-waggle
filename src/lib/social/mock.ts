@@ -20,6 +20,7 @@ import type {
   SmsOnNumber,
   SmsRegistration,
   RcsAgentView,
+  ImessageSenderView,
   VoiceSettings,
   OwnedNumber,
   PhoneCountry,
@@ -335,6 +336,78 @@ export class MockSocialProvider implements SocialProvider {
     const a = this.rcsAgent(input.agentId, "requestRcsAgentLaunch");
     a.launchSent = true;
     if (a.status === "testing") a.status = "launch_review";
+  }
+
+  /** iMessage (T83c): instant numbers activate at once; others wait in "activating". */
+  imessageSenders: (ImessageSenderView & { profileId: string; intent: string })[] = [];
+
+  async listImessageSenders(input: { profileId: string }): Promise<ImessageSenderView[]> {
+    return this.imessageSenders
+      .filter((s) => s.profileId === input.profileId && s.status !== "canceled")
+      .map((s) => {
+        const { profileId, intent, ...rest } = s;
+        void profileId;
+        void intent;
+        return { ...rest };
+      });
+  }
+
+  async listImessageNumbers(input: { region: "US" | "GB" }) {
+    return input.region === "US"
+      ? [
+          { id: "mock_imsg_num_1", phone: "+14155550170", location: "CA" },
+          { id: "mock_imsg_num_2", phone: "+12125550171", location: "NY" },
+        ]
+      : [];
+  }
+
+  async orderImessageSender(input: {
+    profileId: string;
+    region: "US" | "GB";
+    availableNumberId?: string;
+    displayName: string;
+    purchaseIntentId: string;
+  }) {
+    const existing = this.imessageSenders.find((s) => s.intent === input.purchaseIntentId);
+    if (existing) return { kind: "ordered" as const, id: existing.id, status: existing.status };
+    const picked = (await this.listImessageNumbers({ region: input.region })).find(
+      (n) => n.id === input.availableNumberId,
+    );
+    const id = idFrom("mock_imsg", input.purchaseIntentId);
+    this.imessageSenders.push({
+      id,
+      profileId: input.profileId,
+      intent: input.purchaseIntentId,
+      status: picked ? "active" : "activating",
+      region: input.region,
+      handle: picked?.phone ?? null,
+      optInLink: picked ? `imessage://${picked.phone}?body=Hi` : null,
+      priceCents: 20_000,
+      displayName: input.displayName,
+      failureReason: null,
+      accountId: picked ? idFrom("mock_imsg_acct", id) : null,
+    });
+    return {
+      kind: "ordered" as const,
+      id,
+      status: picked ? ("active" as const) : ("activating" as const),
+    };
+  }
+
+  async updateImessageSender(input: { senderId: string; displayName: string }) {
+    const s = this.imessageSenders.find((x) => x.id === input.senderId);
+    if (!s) {
+      throw new SocialProviderError("mock updateImessageSender failed (404)", {
+        status: 404,
+        ambiguous: false,
+      });
+    }
+    s.displayName = input.displayName;
+  }
+
+  async cancelImessageSender(input: { senderId: string }) {
+    const s = this.imessageSenders.find((x) => x.id === input.senderId);
+    if (s) s.status = "canceled";
   }
 
   private voice = new Map<string, VoiceSettings>();

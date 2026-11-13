@@ -6,9 +6,10 @@ import { z } from "zod";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
-import { SocialProviderError, type RcsAgentView } from "@/lib/social/types";
+import { SocialProviderError, type ImessageNumber, type RcsAgentView } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { messagingOn } from "./flags";
+import { contactOf, holdsNumber, parseOrder } from "./imessage";
 import { launchDue, parseLaunch, parseTestPhone } from "./launch";
 import { canFix, checkImage, isClosed, parseRcsRequest } from "./rcs";
 
@@ -270,4 +271,145 @@ export async function sendLaunchAction(_prev: RcsState, f: FormData): Promise<Rc
   }
   revalidatePath(SETTINGS);
   return { done: "Launch details sent for review." };
+}
+
+// --- iMessage (T83c) --------------------------------------------------------------------------
+
+export type NumbersState = { error?: string; region?: "US" | "GB"; numbers?: ImessageNumber[] };
+
+/** Numbers that turn on the moment they're ordered (the pool can be empty). */
+export async function imessageNumbersAction(
+  _prev: NumbersState,
+  f: FormData,
+): Promise<NumbersState> {
+  const tenant = await messagingTenant();
+  if (!tenant) return { error: NOT_ALLOWED };
+  const region = f.get("region") === "GB" ? "GB" : "US";
+  try {
+    const numbers = await getSocialProvider().listImessageNumbers({
+      region,
+      signal: AbortSignal.timeout(15_000),
+    });
+    return { region, numbers: numbers.slice(0, 20) };
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "imessageNumbers" } });
+    return { error: "Numbers couldn't be loaded right now. Try again in a moment." };
+  }
+}
+
+/** Order the brand's iMessage number ($200 a month, idempotent on purchaseIntentId). */
+export async function orderImessageAction(_prev: RcsState, f: FormData): Promise<RcsState> {
+  const tenant = await messagingTenant();
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  const intent = z.uuid().safeParse(f.get("purchaseIntentId"));
+  if (!intent.success) return { error: "Something went wrong. Reload the page." };
+  const parsed = parseOrder(f);
+  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+  const social = getSocialProvider();
+  try {
+    const senders = await social.listImessageSenders({
+      profileId: tenant.zernioProfileId,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (holdsNumber(senders)) return { error: "This brand already has an iMessage number." };
+    const result = await social.orderImessageSender({
+      profileId: tenant.zernioProfileId,
+      region: parsed.value.region,
+      availableNumberId: parsed.value.availableNumberId,
+      zipCode: parsed.value.zipCode,
+      displayName: parsed.value.cardName,
+      contact: contactOf(parsed.value.cardName),
+      purchaseIntentId: intent.data,
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (result.kind === "billing") {
+      Sentry.captureMessage("imessage order refused: team billing not set up", {
+        extra: { tenantId: tenant.id },
+      });
+      return { error: "iMessage can't be ordered for this brand yet. Contact support." };
+    }
+    if (result.kind === "refused") {
+      return { error: "That number couldn't be ordered. Nothing was charged. Try another." };
+    }
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "imessage_ordered",
+      actor: tenant.userId,
+      details: {
+        senderId: result.id,
+        region: parsed.value.region,
+        instant: !!parsed.value.availableNumberId,
+      },
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "orderImessage" } });
+    // Retrying with the same purchaseIntentId returns this order rather than a second number.
+    return { error: "We couldn't confirm the order. Reload the page before trying again." };
+  }
+  revalidatePath(SETTINGS);
+  return { done: "Ordered. It turns on within minutes to a few hours." };
+}
+
+async function ownSender(profileId: string, senderId: string) {
+  const senders = await getSocialProvider().listImessageSenders({
+    profileId,
+    signal: AbortSignal.timeout(15_000),
+  });
+  return senders.find((s) => s.id === senderId) ?? null;
+}
+
+/** The name on the number's contact card. */
+export async function renameImessageAction(_prev: RcsState, f: FormData): Promise<RcsState> {
+  const tenant = await messagingTenant();
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  const name = String(f.get("cardName") ?? "").trim();
+  if (name.length < 2 || name.length > 60) return { error: "Add a name, up to 60 characters." };
+  const senderId = String(f.get("senderId") ?? "");
+  try {
+    const sender = await ownSender(tenant.zernioProfileId, senderId);
+    if (!sender || sender.status === "failed") {
+      return { error: "Something went wrong. Reload the page." };
+    }
+    await getSocialProvider().updateImessageSender({
+      senderId,
+      displayName: name,
+      contact: contactOf(name),
+      signal: AbortSignal.timeout(20_000),
+    });
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "imessage_renamed",
+      actor: tenant.userId,
+      details: { senderId },
+    });
+  } catch (error) {
+    return providerError(error, tenant.id, "renameImessage");
+  }
+  revalidatePath(SETTINGS);
+  return { done: "Saved." };
+}
+
+/** Cancel the number: it goes offline at once and the started month isn't refunded. */
+export async function cancelImessageAction(_prev: RcsState, f: FormData): Promise<RcsState> {
+  const tenant = await messagingTenant();
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  const senderId = String(f.get("senderId") ?? "");
+  try {
+    const sender = await ownSender(tenant.zernioProfileId, senderId);
+    if (!sender) return { error: "Something went wrong. Reload the page." };
+    await getSocialProvider().cancelImessageSender({
+      senderId,
+      signal: AbortSignal.timeout(20_000),
+    });
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "imessage_canceled",
+      actor: tenant.userId,
+      details: { senderId },
+    });
+  } catch (error) {
+    return providerError(error, tenant.id, "cancelImessage");
+  }
+  revalidatePath(SETTINGS);
+  return { done: "Canceled." };
 }

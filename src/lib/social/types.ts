@@ -250,6 +250,47 @@ export interface RcsAgentView {
   filed: { brand: Record<string, unknown> | null; profile: Record<string, unknown> | null };
 }
 
+export const IMESSAGE_SENDER_STATUSES = [
+  "ordering",
+  "awaiting_payment",
+  "activating",
+  "active",
+  "suspended",
+  "canceled",
+  "failed",
+] as const;
+export type ImessageSenderStatus = (typeof IMESSAGE_SENDER_STATUSES)[number];
+
+/** A brand's iMessage number (T83c, `/v1/imessage/senders/order`). */
+export interface ImessageSenderView {
+  id: string;
+  status: ImessageSenderStatus;
+  region: "US" | "GB" | null;
+  /** The number, once activation assigns it. */
+  handle: string | null;
+  /** `imessage://` link that opens Messages on the number with a prefilled text. */
+  optInLink: string | null;
+  priceCents: number | null;
+  displayName: string | null;
+  failureReason: string | null;
+  /** The inbox account, created at activation. */
+  accountId: string | null;
+}
+
+/** A number that turns on the moment it's ordered. */
+export interface ImessageNumber {
+  id: string;
+  phone: string;
+  location: string | null;
+}
+
+export type ImessageOrderResult =
+  | { kind: "ordered"; id: string; status: ImessageSenderStatus }
+  /** The team has no card or isn't on usage billing (402/422): staff must fix it. */
+  | { kind: "billing" }
+  /** The provider refused the order; nothing was charged (502). */
+  | { kind: "refused" };
+
 /** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
 export interface VoiceSettings {
   enabled: boolean;
@@ -567,6 +608,38 @@ export interface SocialProvider {
   removeRcsTestDevice(
     input: { agentId: string; testDeviceId: string } & CallOptions,
   ): Promise<void>;
+  /**
+   * The brand's iMessage numbers (T83c), canceled ones left out. Zernio lists the whole team's,
+   * so this keeps only the ones on `profileId`.
+   */
+  listImessageSenders(input: { profileId: string } & CallOptions): Promise<ImessageSenderView[]>;
+  /** Numbers that activate the moment they're ordered (the pool can be empty). */
+  listImessageNumbers(input: { region: "US" | "GB" } & CallOptions): Promise<ImessageNumber[]>;
+  /**
+   * Orders a dedicated number ($200 a month). `purchaseIntentId` makes a repeat return the same
+   * order instead of buying twice; the provider order is never retried upstream.
+   */
+  orderImessageSender(
+    input: {
+      profileId: string;
+      region: "US" | "GB";
+      availableNumberId?: string;
+      zipCode?: string;
+      displayName: string;
+      contact: { firstName: string; lastName?: string };
+      purchaseIntentId: string;
+    } & CallOptions,
+  ): Promise<ImessageOrderResult>;
+  /** The name on the number's contact card (what people see when they save it). */
+  updateImessageSender(
+    input: {
+      senderId: string;
+      displayName: string;
+      contact: { firstName: string; lastName?: string };
+    } & CallOptions,
+  ): Promise<void>;
+  /** Cancels the number at once; the started month isn't refunded. */
+  cancelImessageSender(input: { senderId: string } & CallOptions): Promise<void>;
   /** The launch details carriers review (T83b). */
   requestRcsLaunch(
     input: { agentId: string; body: Record<string, unknown> } & CallOptions,

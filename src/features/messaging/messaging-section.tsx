@@ -4,8 +4,16 @@ import { Check } from "lucide-react";
 import { can } from "@/features/orgs";
 import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
-import type { RcsAgentView } from "@/lib/social/types";
+import type { ImessageSenderView, RcsAgentView } from "@/lib/social/types";
 import { cn } from "cn";
+import {
+  currentSender,
+  IMESSAGE_MONTHLY_CENTS,
+  optInLinkWith,
+  SENDER_STATUS,
+  WARM_UP,
+} from "./imessage";
+import { CopyLink, ImessageCancel, ImessageOrder, ImessageRename } from "./imessage-forms";
 import { launchDefaults, launchDue } from "./launch";
 import { LaunchForm, TestPhones } from "./launch-forms";
 import { RcsRequestForm } from "./rcs-forms";
@@ -163,18 +171,118 @@ function RcsCard({
   );
 }
 
+function ImessageCard({
+  sender,
+  mayEdit,
+  businessName,
+}: {
+  sender: ImessageSenderView | null;
+  mayEdit: boolean;
+  businessName: string;
+}) {
+  const live = sender && sender.status !== "failed" ? sender : null;
+  const label = live?.handle ?? "the iMessage number";
+  return (
+    <div className="card flex flex-col gap-4 p-5">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="font-semibold">iMessage</h3>
+        {live && (
+          <span className="bg-subtle text-ink-2 rounded-full px-2.5 py-0.5 text-xs font-medium">
+            {SENDER_STATUS[live.status]}
+          </span>
+        )}
+        {!live && (
+          <span className="text-ink-3 ml-auto text-sm font-medium">
+            {usd(IMESSAGE_MONTHLY_CENTS)} a month
+          </span>
+        )}
+      </div>
+      {live ? (
+        <>
+          <div className="flex flex-wrap items-center gap-3">
+            <b className="flex-1 text-lg font-semibold tabular-nums">
+              {live.handle ?? "Your number appears when it turns on"}
+            </b>
+            {mayEdit && <ImessageCancel senderId={live.id} label={label} />}
+          </div>
+          {live.status === "suspended" && (
+            <p className="danger-box">The number is paused. Contact support.</p>
+          )}
+          {live.optInLink && (
+            <div className="flex flex-col gap-2">
+              <p className="text-sm font-medium">Let customers message you first</p>
+              <p className="meta">
+                Put this link on your website or in a QR code. It opens Messages with a first
+                message filled in, and needs no pacing.
+              </p>
+              <CopyLink link={optInLinkWith(live.optInLink, `Hi ${businessName}!`)} />
+            </div>
+          )}
+          {mayEdit && <ImessageRename senderId={live.id} name={live.displayName ?? businessName} />}
+        </>
+      ) : (
+        <>
+          <p className="meta">
+            A new number just for iMessage. Your current number can&apos;t be used. Up to 1,000
+            people a day, no charge per message. People without iMessage get a text instead.
+          </p>
+          {sender?.status === "failed" && (
+            <p className="danger-box">
+              The last order didn&apos;t go through
+              {sender.failureReason ? `: “${sender.failureReason}”` : "."} You can order again.
+            </p>
+          )}
+          {mayEdit && <ImessageOrder purchaseIntentId={randomUUID()} businessName={businessName} />}
+          <p className="meta flex flex-wrap items-center gap-2">
+            Try it free first
+            <span className="bg-subtle rounded-full px-2 py-0.5 text-xs font-medium">
+              Coming soon
+            </span>
+          </p>
+        </>
+      )}
+      <details className="text-sm">
+        <summary className="cursor-pointer font-medium">Starting chats is paced</summary>
+        <div className="mt-2 flex flex-col gap-2">
+          <p className="meta">
+            When you message someone first: one new person every 15 minutes, no links, emails, phone
+            numbers or prices in that first message, and at most two follow-ups a day apart until
+            they reply. People who write to you first have no limits.
+          </p>
+          <ul className="grid grid-cols-2 gap-x-6 gap-y-1 sm:grid-cols-3">
+            {WARM_UP.map((w) => (
+              <li key={w.days} className="flex justify-between gap-2">
+                <span className="text-ink-3">{w.days}</span>
+                <span className="tabular-nums">{w.perDay} a day</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </details>
+    </div>
+  );
+}
+
 /** Settings → Messaging (T83, design "Settings · Messaging"): branded texts and iMessage. */
 export async function MessagingSection() {
   const tenant = await getCurrentTenant();
   const mayEdit = can(tenant.role, "brand.settings");
   let agents: RcsAgentView[] = [];
+  let senders: ImessageSenderView[] = [];
   let failed = false;
   if (tenant.zernioProfileId) {
     try {
-      agents = await getSocialProvider().listRcsAgents({
-        profileId: tenant.zernioProfileId,
-        signal: AbortSignal.timeout(15_000),
-      });
+      const social = getSocialProvider();
+      [agents, senders] = await Promise.all([
+        social.listRcsAgents({
+          profileId: tenant.zernioProfileId,
+          signal: AbortSignal.timeout(15_000),
+        }),
+        social.listImessageSenders({
+          profileId: tenant.zernioProfileId,
+          signal: AbortSignal.timeout(15_000),
+        }),
+      ]);
     } catch (error) {
       Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "messagingSection" } });
       failed = true;
@@ -194,7 +302,14 @@ export async function MessagingSection() {
           Messaging couldn&apos;t be loaded right now. Try again in a moment.
         </p>
       ) : (
-        <RcsCard agent={currentAgent(agents)} mayEdit={mayEdit} businessName={tenant.name} />
+        <>
+          <RcsCard agent={currentAgent(agents)} mayEdit={mayEdit} businessName={tenant.name} />
+          <ImessageCard
+            sender={currentSender(senders)}
+            mayEdit={mayEdit}
+            businessName={tenant.name}
+          />
+        </>
       )}
     </section>
   );
