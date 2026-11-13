@@ -32,7 +32,13 @@ export type AlertContent =
       agreedToMessages: boolean;
     }
   | { kind: "disconnect"; platform: string; username: string | null }
-  | { kind: "draft_waiting"; count: number };
+  | { kind: "draft_waiting"; count: number }
+  | {
+      kind: "rcs_status";
+      status: "changes_requested" | "testing" | "live" | "rejected";
+      /** The review note, when there is one. */
+      reason: string | null;
+    };
 
 export interface ComposedEmail {
   subject: string;
@@ -145,6 +151,47 @@ export function composeAlert(
         ],
         { href: `${appUrl}/settings`, label: "Reconnect" },
       );
+    }
+    case "rcs_status": {
+      const href = `${appUrl}/settings?section=messaging`;
+      const note = content.reason ? [`The note: “${content.reason}”`] : [];
+      switch (content.status) {
+        case "changes_requested":
+          return render(
+            `${businessName}: your branded texts request needs a fix`,
+            ["Before it goes to the carriers, a detail needs changing.", ...note],
+            { href, label: "Fix the request" },
+          );
+        case "testing":
+          return content.reason
+            ? render(
+                `${businessName}: your launch details came back`,
+                ["The carriers' review needs another look at the launch details.", ...note],
+                { href, label: "Send them again" },
+              )
+            : render(
+                `${businessName}: branded texts are ready to test`,
+                [
+                  "Carriers approved your business. Invite your phone, try a few messages, then send the launch details.",
+                ],
+                { href, label: "Start testing" },
+              );
+        case "live":
+          return render(
+            `${businessName}: branded texts are live`,
+            [
+              "Your texts now show your name, logo and a verified tick. Replies arrive in the inbox.",
+            ],
+            { href: `${appUrl}/inbox`, label: "Open the inbox" },
+          );
+        case "rejected":
+          return render(
+            `${businessName}: carriers didn't approve your branded texts`,
+            [...note, "You can send a new request from Settings."],
+            { href, label: "Open Messaging" },
+          );
+      }
+      break;
     }
     case "draft_waiting": {
       const n = content.count;

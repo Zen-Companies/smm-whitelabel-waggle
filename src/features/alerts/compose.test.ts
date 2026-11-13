@@ -81,6 +81,30 @@ describe("composeAlert", () => {
     expect(email.text).toContain("https://app.test/inbox/items/item-9");
   });
 
+  it("rcs status: what to do next, the review note, a link to Messaging (T83b)", () => {
+    const fix = composeAlert(
+      { kind: "rcs_status", status: "changes_requested", reason: "Use the IRS name." },
+      ctx,
+    );
+    expect(fix.subject).toBe("Harbour Bean: your branded texts request needs a fix");
+    expect(fix.text).toContain("The note: “Use the IRS name.”");
+    expect(fix.text).toContain("https://app.test/settings?section=messaging");
+    expect(composeAlert({ kind: "rcs_status", status: "testing", reason: null }, ctx).subject).toBe(
+      "Harbour Bean: branded texts are ready to test",
+    );
+    expect(
+      composeAlert({ kind: "rcs_status", status: "testing", reason: "No STOP reply." }, ctx)
+        .subject,
+    ).toBe("Harbour Bean: your launch details came back");
+    expect(composeAlert({ kind: "rcs_status", status: "live", reason: null }, ctx).text).toContain(
+      "https://app.test/inbox",
+    );
+    expect(
+      composeAlert({ kind: "rcs_status", status: "rejected", reason: "Brand not verified." }, ctx)
+        .text,
+    ).toContain("Brand not verified.");
+  });
+
   it("ad lead: every answer, the consent, and a link to the leads (T78d)", () => {
     const email = composeAlert(
       {

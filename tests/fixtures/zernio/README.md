@@ -23,3 +23,5 @@ Customer names and messages are made up.
 `message-received-email.json` is built from the `message.received` docs plus the `metadata.email` note on docs.zernio.com/platforms/google/webhooks, not recorded; replace it with a real email event.
 
 `call-ended.json` is built from docs.zernio.com/webhooks/phone/call-ended, not recorded; `account.platform: "phone"` is our reading and needs a real call to confirm.
+
+`rcs-agent-status-updated.json` is built from Zernio's `rcs.agent.status_updated` docs (docs.zernio.com/webhooks/phone/rcs-agent-status-updated and /platforms/rcs/connect), not recorded.

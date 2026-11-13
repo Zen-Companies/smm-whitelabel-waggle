@@ -6,6 +6,8 @@ import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { RcsAgentView } from "@/lib/social/types";
 import { cn } from "cn";
+import { launchDefaults, launchDue } from "./launch";
+import { LaunchForm, TestPhones } from "./launch-forms";
 import { RcsRequestForm } from "./rcs-forms";
 import { canFix, currentAgent, filedDefaults, isClosed, RCS_PRICES, rcsSteps } from "./rcs";
 
@@ -82,7 +84,15 @@ function Steps({ agent }: { agent: RcsAgentView }) {
   );
 }
 
-function RcsCard({ agent, mayEdit }: { agent: RcsAgentView | null; mayEdit: boolean }) {
+function RcsCard({
+  agent,
+  mayEdit,
+  businessName,
+}: {
+  agent: RcsAgentView | null;
+  mayEdit: boolean;
+  businessName: string;
+}) {
   const open = agent && !isClosed(agent) ? agent : null;
   return (
     <div className="card flex flex-col gap-4 p-5">
@@ -112,6 +122,21 @@ function RcsCard({ agent, mayEdit }: { agent: RcsAgentView | null; mayEdit: bool
               </p>
               {mayEdit && <RcsRequestForm agentId={open.id} defaults={filedDefaults(open)} />}
             </div>
+          )}
+          {mayEdit && open.status === "testing" && open.country === "US" && (
+            <TestPhones agentId={open.id} devices={open.testDevices} />
+          )}
+          {mayEdit && launchDue(open) && (
+            <LaunchForm
+              agentId={open.id}
+              us={open.country === "US"}
+              defaults={launchDefaults(businessName)}
+            />
+          )}
+          {open.launchSent && open.status === "testing" && (
+            <p className="meta">
+              The launch details came back. Check the email we sent, then send them again.
+            </p>
           )}
           {open.status === "live" && (
             <p className="text-sm">Live. Replies to your branded texts arrive in the inbox.</p>
@@ -169,7 +194,7 @@ export async function MessagingSection() {
           Messaging couldn&apos;t be loaded right now. Try again in a moment.
         </p>
       ) : (
-        <RcsCard agent={currentAgent(agents)} mayEdit={mayEdit} />
+        <RcsCard agent={currentAgent(agents)} mayEdit={mayEdit} businessName={tenant.name} />
       )}
     </section>
   );

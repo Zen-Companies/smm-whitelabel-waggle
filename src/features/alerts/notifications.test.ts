@@ -39,6 +39,22 @@ describe("describeNotification", () => {
     });
     expect(
       describeNotification(
+        row({ kind: "account", details: { source: "rcs", status: "testing", reason: null } }),
+        lookups,
+      ),
+    ).toMatchObject({
+      tone: "attention",
+      title: "Branded texts are ready to test",
+      href: "/settings?section=messaging",
+    });
+    expect(
+      describeNotification(
+        row({ kind: "account", details: { source: "rcs", status: "live" } }),
+        lookups,
+      ),
+    ).toMatchObject({ tone: "post", title: "Branded texts are live" });
+    expect(
+      describeNotification(
         row({ kind: "lead", details: { source: "ad_form", formName: "Catering inquiry" } }),
         lookups,
       ),

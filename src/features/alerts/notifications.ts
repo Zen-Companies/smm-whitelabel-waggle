@@ -119,6 +119,24 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
       };
     }
     case "account": {
+      if (row.details.source === "rcs") {
+        const titles: Record<string, string> = {
+          changes_requested: "Branded texts: your request needs a fix",
+          testing: row.details.reason
+            ? "Branded texts: the launch details came back"
+            : "Branded texts are ready to test",
+          live: "Branded texts are live",
+          rejected: "Branded texts weren't approved",
+        };
+        return {
+          ...base,
+          tone: row.details.status === "live" ? "post" : "attention",
+          title: titles[String(row.details.status)] ?? "Branded texts changed",
+          meta: "Settings · Messaging",
+          href: "/settings?section=messaging",
+          action: "Open",
+        };
+      }
       const a = row.social_account_id ? l.accounts.get(row.social_account_id) : undefined;
       return {
         ...base,

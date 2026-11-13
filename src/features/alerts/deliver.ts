@@ -32,7 +32,7 @@ export interface DeliverSummary {
 type AlertRow = {
   id: string;
   tenant_id: string;
-  kind: "escalation" | "lead" | "disconnect" | "draft_waiting" | "ad_lead";
+  kind: "escalation" | "lead" | "disconnect" | "draft_waiting" | "ad_lead" | "rcs_status";
   item_id: string | null;
   social_account_id: string | null;
   lead_id: string | null;
@@ -142,6 +142,23 @@ async function contentOf(db: ServiceClient, alert: AlertRow): Promise<AlertConte
     }
     case "ad_lead":
       return adLeadContent(db, alert);
+    case "rcs_status": {
+      const d = (alert.details ?? {}) as { status?: unknown; reason?: unknown };
+      const status = d.status;
+      if (
+        status !== "changes_requested" &&
+        status !== "testing" &&
+        status !== "live" &&
+        status !== "rejected"
+      ) {
+        throw new PermanentAlertError("bad_status");
+      }
+      return {
+        kind: "rcs_status",
+        status,
+        reason: typeof d.reason === "string" ? d.reason : null,
+      };
+    }
     case "disconnect": {
       const { data: account } = await db
         .from("social_accounts")
@@ -168,7 +185,11 @@ async function recipientEmails(
   tenantId: string,
   kind: string,
 ): Promise<string[]> {
-  const roles = kind === "disconnect" ? ["owner", "admin"] : ["owner", "admin", "member"];
+  // Connections and paid channels (RCS) are set up by owners and admins.
+  const roles =
+    kind === "disconnect" || kind === "rcs_status"
+      ? ["owner", "admin"]
+      : ["owner", "admin", "member"];
   const { data: members, error } = await db
     .from("tenant_members")
     .select("user_id")

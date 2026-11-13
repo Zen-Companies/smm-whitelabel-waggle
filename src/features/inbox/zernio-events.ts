@@ -195,6 +195,29 @@ export const callEndedSchema = z.object({
   account: accountBlock,
 });
 
+/** An RCS agent moved status (T83b, `rcs.agent.status_updated`). `reason` is the partner's note. */
+export const rcsStatusSchema = z.object({
+  event: z.literal("rcs.agent.status_updated"),
+  agent: z.object({
+    id: z.string().min(1),
+    displayName: z.string().nullish(),
+    profileId: z.string().min(1),
+    accountId: z.string().nullish(),
+  }),
+  status: z.enum([
+    "changes_requested",
+    "brand_vetting",
+    "agent_review",
+    "testing",
+    "launch_review",
+    "launching",
+    "live",
+    "rejected",
+    "deactivated",
+  ]),
+  reason: z.string().nullish(),
+});
+
 /** The accountId field is canonical; `id` carries the same value (docs.zernio.com/webhooks). */
 export function zernioAccountIdOf(account: z.infer<typeof accountBlock>): string {
   return account.accountId ?? account.id;

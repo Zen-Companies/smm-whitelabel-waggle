@@ -14,6 +14,7 @@ import {
   callEndedSchema,
   envelopeSchema,
   leadReceivedSchema,
+  rcsStatusSchema,
   messageEventSchema,
   messageFailedSchema,
   postEventSchema,
@@ -174,6 +175,7 @@ async function mapEvent(
     "account.disconnected": (t) => mapAccountDisconnected(deps, t, payload),
     "message.failed": (t) => mapMessageFailed(deps.db, t.tenantId, payload),
     "lead.received": (t) => mapLeadReceived(deps.db, t, event.id, payload),
+    "rcs.agent.status_updated": (t) => mapRcsStatus(deps.db, t, event.id, payload),
     "call.ended": (t) => mapCallEnded(deps, t.tenantId, payload),
   };
   const handler = handlers[event.event];
@@ -265,6 +267,40 @@ async function mapLeadReceived(
   );
   if (error) throw new Error(`ad lead alert insert failed: ${error.message}`);
   return { outcome: "processed", detail: "ad_lead" };
+}
+
+/** RCS statuses the owner acts on (T83b); the others show on the Messaging page only. */
+const RCS_ALERT_STATUSES = new Set(["changes_requested", "testing", "live", "rejected"]);
+
+/** An RCS agent moved status (T83b): one 'rcs_status' alert (email + bell) when it needs the owner. */
+async function mapRcsStatus(
+  db: ServiceClient,
+  tenant: { tenantId: string; profileId: string },
+  eventId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(rcsStatusSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (e.agent.profileId !== tenant.profileId) return rejected("profile_mismatch");
+  if (!RCS_ALERT_STATUSES.has(e.status))
+    return { outcome: "processed", detail: "rcs_status_noted" };
+  const { error } = await db.from("alerts").upsert(
+    {
+      tenant_id: tenant.tenantId,
+      kind: "rcs_status",
+      details: {
+        source: "rcs",
+        agentId: e.agent.id,
+        status: e.status,
+        // The partner's review note (never customer text); shown to the owner as written.
+        reason: e.reason?.slice(0, 1000) ?? null,
+      },
+      dedupe_key: `rcs_status:${eventId}`,
+    },
+    { onConflict: "dedupe_key", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`rcs status alert insert failed: ${error.message}`);
+  return { outcome: "processed", detail: "rcs_status" };
 }
 
 /** A reply we sent was not delivered: its draft and item fail, and the owner is told (T13). */

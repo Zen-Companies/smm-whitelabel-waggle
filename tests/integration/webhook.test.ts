@@ -344,6 +344,33 @@ describe("POST /api/webhooks/zernio", () => {
     expect(await count("inbound_items", "zernio_message_id", payload.message.id)).toBe(1);
   });
 
+  it("rcs.agent.status_updated alerts the owner only when it needs them (T83b)", async () => {
+    const payload = fixture("rcs-agent-status-updated");
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "rcs_status" });
+    const { data: alerts } = await db
+      .from("alerts")
+      .select("kind, details")
+      .eq("dedupe_key", `rcs_status:${payload.id}`);
+    expect(alerts).toHaveLength(1);
+    expect(alerts![0]).toMatchObject({
+      kind: "rcs_status",
+      details: { source: "rcs", status: "changes_requested", agentId: payload.agent.id },
+    });
+
+    const quiet = fixture("rcs-agent-status-updated");
+    quiet.status = "agent_review";
+    delete quiet.reason;
+    expect(await (await deliver(quiet)).json()).toEqual({
+      outcome: "processed",
+      detail: "rcs_status_noted",
+    });
+
+    const other = fixture("rcs-agent-status-updated");
+    other.agent.profileId = "someone_elses_profile";
+    expect(await (await deliver(other)).json()).toMatchObject({ outcome: "rejected" });
+  });
+
   it("lead.received queues one ad-lead alert per lead, holding ids only (T78d)", async () => {
     const leadgenId = `lg_${randomUUID().slice(0, 8)}`;
     const payload = fixture("lead-received");
