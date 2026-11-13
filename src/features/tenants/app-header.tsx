@@ -1,5 +1,6 @@
-import { LogOut } from "lucide-react";
 import Link from "next/link";
+import { AccountMenu } from "@/components/app/account-menu";
+import { BottomTabs } from "@/components/app/bottom-tabs";
 import { Brand } from "@/components/app/brand";
 import { TopNav } from "@/components/app/top-nav";
 import { can, listMyOrgs } from "@/features/orgs";
@@ -12,8 +13,9 @@ import { listBrands } from "./brands";
 import { getCurrentTenant } from "./current-tenant";
 
 /**
- * The top bar (docs/design.md §4): wordmark, the Organization / Brand switcher (T54), nav, then
- * the bell and sign out. On phones the nav drops to its own scrolling row. `needsYouStatuses`
+ * The top bar (docs/design.md §4): wordmark, the Organization / Brand switcher (T54), the tabs,
+ * then the bell and the account menu (Settings, Appearance, Staff tools, Log out). On phones the
+ * tabs move to the bottom bar. `needsYouStatuses`
  * is the inbox's For you list, for each brand's count in the menu.
  */
 export async function AppHeader({
@@ -55,7 +57,7 @@ export async function AppHeader({
     .eq("status", "awaiting_approval");
 
   return (
-    <header className="border-line bg-page sticky top-0 z-40 border-b">
+    <header className="border-line bg-surface sticky top-0 z-40 border-b">
       <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-6 px-4 md:flex-nowrap md:px-8">
         <Link href="/inbox" className="flex min-h-14 items-center gap-2" aria-label="Waggle, inbox">
           <Brand />
@@ -73,23 +75,19 @@ export async function AppHeader({
             canAddBrandIn={orgs.filter((o) => can(o.role, "brands.add")).map((o) => o.id)}
           />
         </div>
-        <div className="order-last -mb-px w-full md:order-none md:w-auto md:flex-1">
-          <TopNav staffHref={firstStaffPage(staff.permissions)} inboxCount={count ?? 0} />
+        <div className="hidden min-w-0 flex-1 md:block">
+          <TopNav inboxCount={count ?? 0} />
         </div>
         <div className="ml-auto flex min-h-14 items-center gap-2">
           {bell}
-          <form action={signOut}>
-            <button
-              type="submit"
-              aria-label={`Sign out (${user.email})`}
-              title={`Sign out (${user.email})`}
-              className="text-ink-2 hover:bg-subtle hover:text-ink inline-flex size-10 items-center justify-center rounded-md transition-colors duration-150"
-            >
-              <LogOut strokeWidth={1.5} className="size-[18px]" aria-hidden />
-            </button>
-          </form>
+          <AccountMenu
+            email={user.email ?? ""}
+            staffHref={firstStaffPage(staff.permissions)}
+            signOut={signOut}
+          />
         </div>
       </div>
+    <BottomTabs inboxCount={count ?? 0} />
     </header>
   );
 }

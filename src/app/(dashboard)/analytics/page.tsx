@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { AnalyticsView } from "@/features/analytics";
 
-export const metadata = { title: "Analytics" };
+export const metadata = { title: "Insights" };
 
 export default function AnalyticsPage({
   searchParams,

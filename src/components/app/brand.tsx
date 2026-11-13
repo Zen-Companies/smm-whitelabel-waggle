@@ -27,14 +27,13 @@ export function Mark({ size = 22, className }: { size?: number; className?: stri
 }
 
 /**
- * The lockup: the mark, then `waggle` as text, lowercase, Inter 700. The honey lives in the
- * mark now, so the wordmark has no full stop. In the top bar: 22px mark, 19px wordmark.
+ * The wordmark (design.md §2): `waggle.` in Outfit 700, lowercase, the full stop in honey.
+ * 24px in the top bar.
  */
 export function Brand() {
   return (
-    <span className="inline-flex items-center gap-2">
-      <Mark />
-      <span className="wordmark text-[19px]">waggle</span>
+    <span className="wordmark text-2xl">
+      waggle<span className="text-honey">.</span>
     </span>
   );
 }

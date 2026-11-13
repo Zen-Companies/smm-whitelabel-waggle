@@ -3,59 +3,36 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
-
-const ITEMS = [
-  { href: "/inbox", label: "Inbox" },
-  { href: "/posts", label: "Posts" },
-  { href: "/analytics", label: "Analytics" },
-  { href: "/leads", label: "Leads" },
-  { href: "/knowledge-base", label: "Business info" },
-  { href: "/lab", label: "Lab" },
-  { href: "/settings", label: "Settings" },
-] as const;
+import { isActive, NAV_ITEMS } from "./nav-items";
 
 /**
- * The top bar's links (docs/design.md §4): active = ink text with a 2px ink underline. A honey dot
- * on Inbox while replies wait for approval. Scrolls sideways on phones.
+ * The top bar's tabs (design.md §4): active = ink fill with white text. A honey count on Inbox
+ * while replies wait for the owner's OK. Desktop only; phones use the bottom tabs.
  */
-export function TopNav({
-  staffHref,
-  inboxCount,
-}: {
-  /** The first staff page the signed-in user's role may open (features/staff), or none. */
-  staffHref: string | null;
-  inboxCount: number;
-}) {
+export function TopNav({ inboxCount }: { inboxCount: number }) {
   const pathname = usePathname();
-  const items: { href: string; label: string }[] = [
-    ...ITEMS,
-    ...(staffHref ? [{ href: staffHref, label: "Staff" }] : []),
-  ];
   return (
-    <nav aria-label="Main" className="-mx-1 flex self-stretch overflow-x-auto">
-      {items.map(({ href, label }) => {
-        const active =
-          href === staffHref
-            ? pathname.startsWith("/admin/")
-            : pathname === href || pathname.startsWith(`${href}/`);
+    <nav aria-label="Main" className="flex items-center gap-0.5">
+      {NAV_ITEMS.map((item) => {
+        const active = isActive(item, pathname);
         return (
           <Link
-            key={href}
-            href={href}
+            key={item.href}
+            href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex min-h-11 shrink-0 items-center gap-1.5 px-3 text-sm transition-colors duration-150",
-              active
-                ? "text-ink font-semibold shadow-[inset_0_-2px_0_var(--ink)]"
-                : "text-ink-2 hover:text-ink",
+              "flex min-h-11 shrink-0 items-center gap-1.5 rounded-[10px] px-3.5 text-[15px] font-medium transition-colors duration-150",
+              active ? "bg-ink text-page" : "text-ink-2 hover:bg-subtle hover:text-ink",
             )}
           >
-            {label}
-            {href === "/inbox" && inboxCount > 0 && (
+            {item.label}
+            {item.href === "/inbox" && inboxCount > 0 && (
               <span
-                className="bg-honey size-1.5 rounded-full"
+                className="bg-honey rounded-full px-2 text-xs font-semibold text-[#17140f]"
                 aria-label={`${inboxCount} waiting for your OK`}
-              />
+              >
+                {inboxCount}
+              </span>
             )}
           </Link>
         );

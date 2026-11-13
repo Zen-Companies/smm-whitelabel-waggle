@@ -169,7 +169,7 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
     <>
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-0.5">
-          <h1 className="page-title">Analytics</h1>
+          <h1 className="page-title">Insights</h1>
           <span className="meta">{accountsLine(accounts)}</span>
         </div>
         <div className="flex flex-wrap gap-2">

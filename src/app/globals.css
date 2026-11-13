@@ -218,8 +218,9 @@
 
   /* Wordmark (design.md §2): lowercase, Inter 700, tight tracking. */
   .wordmark {
+    font-family: var(--font-display);
     font-weight: 700;
-    letter-spacing: -0.035em;
+    letter-spacing: -0.5px;
     line-height: 1;
     color: var(--ink);
   }
