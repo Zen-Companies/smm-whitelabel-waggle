@@ -225,7 +225,15 @@ export class MockSocialProvider implements SocialProvider {
   async listWorkflows(input: { profileId: string }): Promise<ChatFlow[]> {
     return [...this.flows.values()]
       .filter((f) => f.profileId === input.profileId)
-      .map((f) => ({ id: f.id, name: f.name, platform: f.platform, status: f.status, started: f.started, completed: f.completed }));
+      .map((f) => ({
+        id: f.id,
+        name: f.name,
+        description: f.description,
+        platform: f.platform,
+        status: f.status,
+        started: f.started,
+        completed: f.completed,
+      }));
   }
 
   async createWorkflow(input: {
@@ -233,6 +241,7 @@ export class MockSocialProvider implements SocialProvider {
     accountId: string;
     platform: string;
     name: string;
+    description?: string;
     graph: WorkflowGraph;
   }) {
     const id = idFrom("mock_wf", input.profileId, input.name, String(this.flows.size));
@@ -240,6 +249,7 @@ export class MockSocialProvider implements SocialProvider {
       id,
       profileId: input.profileId,
       name: input.name,
+      description: input.description ?? "",
       platform: input.platform,
       status: "draft",
       started: 0,

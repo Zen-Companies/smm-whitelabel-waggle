@@ -74,17 +74,28 @@ export function parseFlowForm(
 }
 
 /** The straight-line workflow graph Zernio runs. */
-export function buildFlow(input: { keywords: string[]; steps: FlowStep[] }): WorkflowGraph {
+export function buildFlow(input: {
+  keywords: string[];
+  steps: FlowStep[];
+  /** T77d: start on this ig.me / m.me link code instead of words. */
+  referral?: string;
+}): WorkflowGraph {
   const nodes: WorkflowGraph["nodes"] = [
     {
       id: "trigger",
       type: "trigger",
-      config: {
-        triggerType: "inbound_message",
-        keywords: input.keywords,
-        matchType: input.keywords.length ? "contains" : "any",
-        cooldownHours: 24,
-      },
+      config: input.referral
+        ? {
+            triggerType: "referral",
+            referral: { ref: input.referral, matchType: "exact" },
+            cooldownHours: 24,
+          }
+        : {
+            triggerType: "inbound_message",
+            keywords: input.keywords,
+            matchType: input.keywords.length ? "contains" : "any",
+            cooldownHours: 24,
+          },
     },
   ];
   const edges: WorkflowGraph["edges"] = [];

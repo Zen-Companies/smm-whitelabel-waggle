@@ -121,6 +121,7 @@ const workflowsSchema = z.object({
         .object({
           id: z.string().min(1),
           name: z.string().catch(""),
+          description: z.string().catch(""),
           platform: z.string().catch(""),
           status: z.enum(["draft", "active", "paused"]).catch("draft"),
           totalStarted: z.number().optional(),
@@ -754,6 +755,7 @@ export class ZernioSocialProvider implements SocialProvider {
               {
                 id: w.id,
                 name: w.name,
+                description: w.description,
                 platform: w.platform,
                 status: w.status,
                 started: w.totalStarted ?? 0,
@@ -770,6 +772,7 @@ export class ZernioSocialProvider implements SocialProvider {
     accountId: string;
     platform: string;
     name: string;
+    description?: string;
     graph: WorkflowGraph;
     signal?: AbortSignal;
   }): Promise<{ id: string }> {
@@ -782,6 +785,7 @@ export class ZernioSocialProvider implements SocialProvider {
             accountId: input.accountId,
             platform: input.platform as "whatsapp",
             name: input.name,
+            ...(input.description ? { description: input.description } : {}),
             nodes: input.graph.nodes as never,
             edges: input.graph.edges,
             entryNodeId: input.graph.entryNodeId,

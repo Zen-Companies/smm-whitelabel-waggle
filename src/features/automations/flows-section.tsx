@@ -8,6 +8,7 @@ import { platformLabel } from "@/lib/social/platforms";
 import type { ChatFlow } from "@/lib/social/types";
 import { changeFlow, saveFlow, type AutomationFormState } from "./actions";
 import type { FlowStep } from "./chat-flow";
+import { chatLink, linkCode, pageHandle } from "./links";
 import type { AutomationAccount } from "./comment-dm-form";
 
 const STEP_LABEL: Record<FlowStep["kind"], string> = {
@@ -115,7 +116,19 @@ function FlowRow({ f, canEdit }: { f: ChatFlow; canEdit: boolean }) {
   );
 }
 
-function FlowForm({ accounts, onDone }: { accounts: AutomationAccount[]; onDone: () => void }) {
+/**
+ * The chat flow form. `mode: "link"` (T77d) starts it from an ig.me / m.me link code instead of
+ * words, and shows the link as it's typed.
+ */
+export function FlowForm({
+  accounts,
+  onDone,
+  mode = "words",
+}: {
+  accounts: AutomationAccount[];
+  onDone: () => void;
+  mode?: "words" | "link";
+}) {
   const [state, action, pending] = useActionState<AutomationFormState, FormData>(
     async (prev, data) => {
       const next = await saveFlow(prev, data);
@@ -126,6 +139,8 @@ function FlowForm({ accounts, onDone }: { accounts: AutomationAccount[]; onDone:
   );
   const [accountId, setAccountId] = useState(accounts[0]?.zernioId ?? "");
   const [steps, setSteps] = useState<FlowStep[]>(START);
+  const [code, setCode] = useState("");
+  const [page, setPage] = useState("");
   const account = accounts.find((a) => a.zernioId === accountId);
   const update = (i: number, s: FlowStep) => setSteps((all) => all.map((x, j) => (j === i ? s : x)));
   const move = (i: number, by: number) =>
@@ -177,13 +192,17 @@ function FlowForm({ accounts, onDone }: { accounts: AutomationAccount[]; onDone:
         </select>
         {err("accountId")}
       </div>
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="flow-words" className="text-sm font-medium">
-          When someone sends
-        </label>
-        <input id="flow-words" name="keywords" placeholder="BOOK, reserve" className="field" />
-        <span className="meta">Words, separated by commas. Leave empty to start on any message. Starts again for the same person after a day at the earliest.</span>
-      </div>
+      {mode === "words" ? (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="flow-words" className="text-sm font-medium">
+            When someone sends
+          </label>
+          <input id="flow-words" name="keywords" placeholder="BOOK, reserve" className="field" />
+          <span className="meta">Words, separated by commas. Leave empty to start on any message. Starts again for the same person after a day at the earliest.</span>
+        </div>
+      ) : (
+        <LinkFields account={account} code={code} setCode={setCode} page={page} setPage={setPage} error={err} />
+      )}
       <ol className="flex flex-col gap-2">
         {steps.map((s, i) => (
           <li key={i} className="border-line flex flex-col gap-2 rounded-xl border p-3">
@@ -247,5 +266,68 @@ function FlowForm({ accounts, onDone }: { accounts: AutomationAccount[]; onDone:
         )}
       </div>
     </form>
+  );
+}
+
+function LinkFields({
+  account,
+  code,
+  setCode,
+  page,
+  setPage,
+  error,
+}: {
+  account: AutomationAccount | undefined;
+  code: string;
+  setCode: (v: string) => void;
+  page: string;
+  setPage: (v: string) => void;
+  error: (field: string) => React.ReactNode;
+}) {
+  const fb = account?.platform === "facebook";
+  const known = fb ? pageHandle(account?.username ?? null) : (account?.username ?? null);
+  const handle = fb ? (pageHandle(page) ?? known) : known;
+  const clean = linkCode(code);
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="link-code" className="text-sm font-medium">
+          Link code
+        </label>
+        <input
+          id="link-code"
+          name="linkCode"
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          placeholder="table-menu"
+          className="field"
+          required
+        />
+        <span className="meta">Letters, numbers and dashes. It goes at the end of the link.</span>
+        {error("linkCode")}
+      </div>
+      {fb && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="link-page" className="text-sm font-medium">
+            Your Page&apos;s username
+          </label>
+          <input
+            id="link-page"
+            name="pageHandle"
+            value={page}
+            onChange={(e) => setPage(e.target.value)}
+            placeholder={known ?? "harbourbeancafe"}
+            className="field"
+          />
+          <span className="meta">As in facebook.com/yourpage.</span>
+          {error("pageHandle")}
+        </div>
+      )}
+      {account && handle && clean && (
+        <p className="meta">
+          Link: <span className="text-ink font-mono">{chatLink(account.platform, handle, clean)}</span>
+        </p>
+      )}
+    </>
   );
 }

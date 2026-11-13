@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import QRCode from "qrcode";
 import Link from "next/link";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
@@ -9,6 +10,8 @@ import { AutomationsList } from "./automations-list";
 import { FLOW_PLATFORMS } from "./chat-flow";
 import { supportsCommentAutomation } from "./comment-dm";
 import { FlowsSection } from "./flows-section";
+import { isChatLink, LINK_PLATFORMS } from "./links";
+import { LinksSection, type LinkFlow } from "./links-section";
 import { SEQUENCE_PLATFORMS } from "./sequence";
 import { SequencesSection, type SequenceTemplate } from "./sequences-section";
 
@@ -16,12 +19,13 @@ const KINDS = [
   { key: "comment", label: "Comment to DM" },
   { key: "flows", label: "Chat flows" },
   { key: "sequences", label: "Sequences" },
+  { key: "links", label: "Links and QR" },
 ] as const;
 type Kind = (typeof KINDS)[number]["key"];
 
 /**
  * Teach Waggle → Automations (T77, design "Automations"): replies that happen on their own, set
- * up once. Comment to DM, chat flows and sequences; links and QR codes come next.
+ * up once: comment to DM, chat flows, sequences, and links with QR codes.
  */
 export async function AutomationsView({ kind: raw }: { kind?: string }) {
   const kind: Kind = KINDS.some((k) => k.key === raw) ? (raw as Kind) : "comment";
@@ -50,7 +54,7 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
       const social = getSocialProvider();
       const opts = { profileId: tenant.zernioProfileId, signal: AbortSignal.timeout(10_000) };
       if (kind === "comment") automations = await social.listCommentAutomations(opts);
-      else if (kind === "flows") flows = await social.listWorkflows(opts);
+      else if (kind === "flows" || kind === "links") flows = await social.listWorkflows(opts);
       else {
         sequences = await social.listSequences(opts);
         // WhatsApp follow-ups a day or more later need an approved template (≤ 1 placeholder).
@@ -68,6 +72,14 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
       unavailable = true;
     }
   }
+
+  // Link flows (T77d) keep their ig.me / m.me link as the description; the rest are chat flows.
+  const links: LinkFlow[] = await Promise.all(
+    flows
+      .filter((f) => isChatLink(f.description))
+      .map(async (f) => ({ ...f, qrSvg: await QRCode.toString(f.description, { type: "svg", margin: 1 }) })),
+  );
+  const plainFlows = flows.filter((f) => !isChatLink(f.description));
 
   return (
     <div className="flex max-w-[860px] flex-col gap-5">
@@ -103,9 +115,15 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
             reply only.
           </p>
         </>
+      ) : kind === "links" ? (
+        <LinksSection
+          links={links}
+          accounts={all.filter((a) => LINK_PLATFORMS.has(a.platform))}
+          canEdit={canEdit}
+        />
       ) : kind === "flows" ? (
         <FlowsSection
-          flows={flows}
+          flows={plainFlows}
           accounts={all.filter((a) => FLOW_PLATFORMS.has(a.platform))}
           canEdit={canEdit}
         />

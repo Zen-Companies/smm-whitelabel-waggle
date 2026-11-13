@@ -196,6 +196,8 @@ export interface Sequence {
 export interface ChatFlow {
   id: string;
   name: string;
+  /** Free text; a link flow (T77d) keeps its ig.me / m.me link here. */
+  description: string;
   platform: string;
   status: "draft" | "active" | "paused";
   started: number;
@@ -307,6 +309,7 @@ export interface SocialProvider {
       accountId: string;
       platform: string;
       name: string;
+      description?: string;
       graph: WorkflowGraph;
     } & CallOptions,
   ): Promise<{ id: string }>;

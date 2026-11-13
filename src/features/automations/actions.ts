@@ -8,6 +8,7 @@ import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 import { buildFlow, parseFlowForm } from "./chat-flow";
+import { chatLink, LINK_PLATFORMS, linkCode, pageHandle } from "./links";
 import { parseCommentDmForm } from "./comment-dm";
 import { parseSequenceForm, toSequenceSteps } from "./sequence";
 
@@ -158,13 +159,30 @@ export async function saveFlow(
   const db = getServiceClient();
   const { data: account } = await db
     .from("social_accounts")
-    .select("id")
+    .select("id, username")
     .eq("tenant_id", tenant.id)
     .eq("zernio_account_id", parsed.value.accountId)
     .eq("platform", parsed.value.platform)
     .eq("status", "active")
     .maybeSingle();
   if (!account) return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
+  // T77d: a link flow starts on its ig.me / m.me link code instead of words.
+  let link: { code: string; url: string } | null = null;
+  if (formData.has("linkCode")) {
+    const code = linkCode(String(formData.get("linkCode") ?? ""));
+    if (!code) return { error: "Give the link a code: letters, numbers and dashes.", field: "linkCode" };
+    if (!LINK_PLATFORMS.has(parsed.value.platform)) {
+      return { error: "Links work on Instagram and Facebook.", field: "accountId" };
+    }
+    const handle =
+      parsed.value.platform === "instagram"
+        ? account.username
+        : pageHandle(String(formData.get("pageHandle") ?? "") || account.username);
+    if (!handle) {
+      return { error: "Type your Page's username, as in facebook.com/yourpage.", field: "pageHandle" };
+    }
+    link = { code, url: chatLink(parsed.value.platform, handle, code) };
+  }
   const turnOn = formData.get("intent") !== "draft";
   try {
     const social = getSocialProvider();
@@ -173,7 +191,8 @@ export async function saveFlow(
       accountId: parsed.value.accountId,
       platform: parsed.value.platform,
       name: parsed.value.name,
-      graph: buildFlow(parsed.value),
+      ...(link ? { description: link.url } : {}),
+      graph: buildFlow({ ...parsed.value, ...(link ? { referral: link.code } : {}) }),
       signal: AbortSignal.timeout(15_000),
     });
     if (turnOn) await social.setWorkflowActive({ id, active: true, signal: AbortSignal.timeout(15_000) });
@@ -185,7 +204,7 @@ export async function saveFlow(
     tenantId: tenant.id,
     action: "automation_created",
     actor: tenant.userId,
-    details: { kind: "chat_flow", active: turnOn, steps: parsed.value.steps.length },
+    details: { kind: link ? "chat_link" : "chat_flow", active: turnOn, steps: parsed.value.steps.length },
   });
   revalidatePath("/automations");
   return { savedAt: Date.now() };
