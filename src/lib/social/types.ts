@@ -45,7 +45,20 @@ export interface CreatePostInput {
    * When given for a platform it replaces `youtubeTitle` / `pinterestBoardId` there.
    */
   extras?: Partial<Record<string, TargetExtras>>;
+  /**
+   * T75: post in the brand's next free queue slot (`queuedFromProfile`); Zernio picks and holds
+   * the time. Wins over `publishAt`.
+   */
+  queueProfileId?: string;
 }
+
+/** A brand's posting times (`/v1/queue/slots`, T75): dayOfWeek 0 = Sunday, time "HH:mm". */
+export type PostingQueue = {
+  timezone: string;
+  slots: { dayOfWeek: number; time: string }[];
+  /** The next free times, ISO, soonest first. */
+  nextSlots: string[];
+};
 
 /** One target's extra createPost fields (T75). */
 export type TargetExtras = {
@@ -177,7 +190,17 @@ export interface SocialProvider {
   checkTelegramConnect(input: { code: string } & CallOptions): Promise<TelegramConnectStatus>;
   createPost(
     input: CreatePostInput,
-  ): Promise<{ providerPostId: string; status: ProviderPostStatus }>;
+  ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** The brand's default queue, or null when it has none yet (T75). */
+  getQueue(input: { profileId: string } & CallOptions): Promise<PostingQueue | null>;
+  /** Replaces the brand's default queue (creates it the first time). */
+  saveQueue(
+    input: {
+      profileId: string;
+      timezone: string;
+      slots: { dayOfWeek: number; time: string }[];
+    } & CallOptions,
+  ): Promise<PostingQueue>;
   /**
    * Checks a post against each platform's real rules without publishing
    * (`POST /v1/tools/validate/post`, same body as createPost). The composer's last check.

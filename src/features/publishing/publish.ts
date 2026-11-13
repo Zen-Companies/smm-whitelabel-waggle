@@ -64,7 +64,7 @@ export async function publishPost(
   const { data: post, error } = await db
     .from("posts")
     .select(
-      "id, tenant_id, content, media, target_account_ids, scheduled_for, status, idempotency_key, attempts, tiktok_consent_at, platform_options",
+      "id, tenant_id, content, media, target_account_ids, scheduled_for, status, idempotency_key, attempts, tiktok_consent_at, platform_options, queued",
     )
     .eq("id", postId)
     .single();
@@ -117,6 +117,19 @@ export async function publishPost(
 
   const scheduledFor = post.scheduled_for ? new Date(post.scheduled_for) : null;
   const media = (post.media as { url?: string }[] | null) ?? [];
+  // T75: "next free slot" posts go to the brand's queue; Zernio picks the time.
+  let queueProfileId: string | undefined;
+  if (post.queued && !post.scheduled_for) {
+    const { data: tenant } = await db
+      .from("tenants")
+      .select("zernio_profile_id")
+      .eq("id", post.tenant_id)
+      .single();
+    if (!tenant?.zernio_profile_id) {
+      return fail("Set your posting times in Posts → Queue, then try again.", { reason: "no_queue" });
+    }
+    queueProfileId = tenant.zernio_profile_id;
+  }
   try {
     const result = await deps.social().createPost({
       content: post.content,
@@ -129,6 +142,7 @@ export async function publishPost(
       // A time already in the past (e.g. retried after a pause) publishes now.
       publishAt: scheduledFor && scheduledFor > now ? scheduledFor : null,
       idempotencyKey: post.idempotency_key,
+      queueProfileId,
       tiktokConsent: post.tiktok_consent_at !== null,
       // Per platform: its own text, post type, first comment and options (T75), with the
       // YouTube title and Pinterest board (T63/T64) read from the same JSON.
@@ -145,6 +159,8 @@ export async function publishPost(
       .update({
         zernio_post_id: result.providerPostId,
         status,
+        // The time the queue picked, so the calendar shows it.
+        ...(queueProfileId && result.scheduledFor ? { scheduled_for: result.scheduledFor } : {}),
         attempts: 0,
         next_attempt_at: null,
         last_error: null,

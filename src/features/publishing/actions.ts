@@ -32,7 +32,7 @@ export interface ComposeState {
 const composeSchema = z.object({
   content: z.string().trim().min(1, "Write something to post.").max(POST_TEXT_MAX),
   accounts: z.array(z.uuid()).min(1, "Pick at least one account."),
-  when: z.enum(["now", "later"]),
+  when: z.enum(["now", "later", "queue"]),
   // The browser sends the chosen local time as ISO (with its offset).
   scheduledFor: z.string().optional(),
   youtubeTitle: z
@@ -141,6 +141,7 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
       tiktokConsent: formData.get("tiktokConsent") === "yes",
       youtubeTitle: parsed.data.youtubeTitle || undefined,
       options: readOptions(formData.get("platformOptions")),
+      queued: when === "queue",
     },
   );
   if (!result.ok) {

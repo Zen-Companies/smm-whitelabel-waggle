@@ -33,6 +33,12 @@ function whenLabel(date: string, time: string): string {
   return `${at.toLocaleDateString(undefined, { weekday: "short" })} ${at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
 
+/** "Mon 9:00 AM" for a queue slot. */
+function slotLabel(iso: string): string {
+  const at = new Date(iso);
+  return `${at.toLocaleDateString(undefined, { weekday: "short" })} ${at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+}
+
 const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -46,10 +52,13 @@ export function ComposeForm({
   accounts,
   day = null,
   time = null,
+  nextSlot = null,
 }: {
   accounts: ComposeAccount[];
   day?: string | null;
   time?: string | null;
+  /** T75: the brand's next free posting time (ISO), or null when it has no posting times. */
+  nextSlot?: string | null;
 }) {
   const [state, action, pending] = useActionState<ComposeState, FormData>(composePost, {});
   // A saved post changes savedAt, which remounts the fields: text, counter and time reset.
@@ -59,6 +68,7 @@ export function ComposeForm({
       accounts={accounts}
       day={day}
       initialTime={time}
+      nextSlot={nextSlot}
       state={state}
       action={action}
       pending={pending}
@@ -70,6 +80,7 @@ function ComposeFields({
   accounts,
   day,
   initialTime,
+  nextSlot,
   state,
   action,
   pending,
@@ -77,11 +88,12 @@ function ComposeFields({
   accounts: ComposeAccount[];
   day: string | null;
   initialTime: string | null;
+  nextSlot: string | null;
   state: ComposeState;
   action: (formData: FormData) => void;
   pending: boolean;
 }) {
-  const [when, setWhen] = useState<"now" | "later">(day ? "later" : "now");
+  const [when, setWhen] = useState<"now" | "queue" | "later">(day ? "later" : "now");
   const [date, setDate] = useState(() => day ?? localDay(new Date(Date.now() + 24 * 3_600_000)));
   const [time, setTime] = useState(initialTime ?? "09:00");
   const [text, setText] = useState("");
@@ -308,20 +320,42 @@ function ComposeFields({
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">When</legend>
         <div className="segmented self-start" role="radiogroup">
-          {(["now", "later"] as const).map((v) => (
-            <label key={v} data-active={when === v || undefined}>
+          {(["now", "queue", "later"] as const).map((v) => (
+            <label
+              key={v}
+              data-active={when === v || undefined}
+              aria-disabled={v === "queue" && !nextSlot}
+            >
               <input
                 type="radio"
                 name="when"
                 value={v}
                 checked={when === v}
+                disabled={v === "queue" && !nextSlot}
                 onChange={() => setWhen(v)}
                 className="sr-only"
               />
-              {v === "now" ? "Now" : "Schedule"}
+              {v === "now" ? "Now" : v === "queue" ? "Next free slot" : "Pick a time"}
             </label>
           ))}
         </div>
+        {nextSlot ? (
+          when === "queue" && (
+            <p className="meta">
+              Next free slot: {slotLabel(nextSlot)}.{" "}
+              <a href="/posts/queue" className="text-honey-text underline">
+                Change posting times
+              </a>
+            </p>
+          )
+        ) : (
+          <p className="meta">
+            <a href="/posts/queue" className="text-honey-text underline">
+              Set posting times
+            </a>{" "}
+            to post at your usual times with one tap.
+          </p>
+        )}
         {when === "later" && (
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1.5">
@@ -371,7 +405,9 @@ function ComposeFields({
             ? "Saving…"
             : when === "now"
               ? "Post now"
-              : `Schedule${whenLabel(date, time) ? ` for ${whenLabel(date, time)}` : ""}`}
+              : when === "queue" && nextSlot
+                ? `Add to queue · ${slotLabel(nextSlot)}`
+                : `Schedule${whenLabel(date, time) ? ` for ${whenLabel(date, time)}` : ""}`}
         </Button>
         {state.outcome && (
           <p role="status" className="text-sm">

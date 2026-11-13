@@ -15,6 +15,7 @@ import type {
   ProviderUsage,
   SocialPlatform,
   SocialProvider,
+  PostingQueue,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
 import { SocialProviderError } from "./types";
@@ -140,11 +141,42 @@ export class MockSocialProvider implements SocialProvider {
 
   async createPost(
     input: CreatePostInput,
-  ): Promise<{ providerPostId: string; status: ProviderPostStatus }> {
+  ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }> {
     const providerPostId = idFrom("mock_post", input.idempotencyKey);
-    const status: ProviderPostStatus = input.publishAt ? "scheduled" : "publishing";
+    const queued = input.queueProfileId
+      ? ((await this.getQueue({ profileId: input.queueProfileId }))?.nextSlots[0] ?? null)
+      : null;
+    const status: ProviderPostStatus = input.publishAt || queued ? "scheduled" : "publishing";
     if (!this.posts.has(providerPostId)) this.posts.set(providerPostId, { ...input, status });
-    return { providerPostId, status };
+    return {
+      providerPostId,
+      status,
+      scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
+    };
+  }
+
+  /** Posting times per profile (T75); the mock works out the next slots in UTC. */
+  private queues = new Map<
+    string,
+    { timezone: string; slots: { dayOfWeek: number; time: string }[] }
+  >();
+
+  async getQueue(input: { profileId: string }): Promise<PostingQueue | null> {
+    const q = this.queues.get(input.profileId);
+    return q ? { ...q, nextSlots: mockNextSlots(q.slots, new Date()) } : null;
+  }
+
+  async saveQueue(input: {
+    profileId: string;
+    timezone: string;
+    slots: { dayOfWeek: number; time: string }[];
+  }): Promise<PostingQueue> {
+    this.queues.set(input.profileId, { timezone: input.timezone, slots: input.slots });
+    return {
+      timezone: input.timezone,
+      slots: input.slots,
+      nextSlots: mockNextSlots(input.slots, new Date()),
+    };
   }
 
   /** Templates per WhatsApp account; two approved ones to start with (local demos). */
@@ -463,4 +495,20 @@ export function resolveSocialProviderMode(
     throw new Error("SOCIAL_PROVIDER_MODE=mock is not allowed in production");
   }
   return mode;
+}
+
+/** The next 5 slot times after `now` (UTC), for the mock queue. */
+export function mockNextSlots(slots: { dayOfWeek: number; time: string }[], now: Date): string[] {
+  const out: string[] = [];
+  const sorted = [...slots].sort((a, b) => a.time.localeCompare(b.time));
+  for (let d = 0; d < 14 && out.length < 5; d++) {
+    const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + d));
+    for (const s of sorted) {
+      if (s.dayOfWeek !== day.getUTCDay() || out.length >= 5) continue;
+      const [h, m] = s.time.split(":").map(Number);
+      const at = new Date(day.getTime() + (h * 60 + m) * 60_000);
+      if (at > now) out.push(at.toISOString());
+    }
+  }
+  return out;
 }

@@ -114,6 +114,9 @@ export async function PostsView({
     <>
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <h1 className="page-title">Posts</h1>
+        <Link href="/posts/queue" className="text-honey-text text-sm font-medium underline">
+          Posting times
+        </Link>
         {view === "month" && (
           <div className="flex items-center gap-1">
             <Link

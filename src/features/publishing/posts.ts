@@ -67,13 +67,19 @@ export async function createPost(
     youtubeTitle?: string;
     /** Per-platform choices from the composer (T75): text, post type, first comment, options. */
     options?: PostOptions;
+    /** T75: the brand's next free posting time (Zernio's queue); `scheduledFor` is ignored. */
+    queued?: boolean;
     via?: Record<string, string>;
     now?: Date;
   },
 ): Promise<CreatePostResult> {
   const { db } = deps;
   const now = input.now ?? new Date();
-  if (input.scheduledFor && input.scheduledFor.getTime() < now.getTime() + MIN_SCHEDULE_AHEAD_MS) {
+  if (
+    !input.queued &&
+    input.scheduledFor &&
+    input.scheduledFor.getTime() < now.getTime() + MIN_SCHEDULE_AHEAD_MS
+  ) {
     return { ok: false, error: "too_soon" };
   }
   const accountIds = [...new Set(input.accountIds)];
@@ -142,7 +148,8 @@ export async function createPost(
       content: input.content,
       media,
       target_account_ids: accountIds,
-      scheduled_for: input.scheduledFor?.toISOString() ?? null,
+      scheduled_for: input.queued ? null : (input.scheduledFor?.toISOString() ?? null),
+      queued: !!input.queued,
       status: "queued",
       tiktok_consent_at: input.tiktokConsent ? now.toISOString() : null,
       platform_options: postOptionsRow(
@@ -163,7 +170,8 @@ export async function createPost(
     actor: input.userId,
     details: {
       postId: post.id,
-      scheduled: !!input.scheduledFor,
+      scheduled: !!input.scheduledFor || !!input.queued,
+      queued: !!input.queued,
       accounts: accountIds.length,
       image: media.length > videos.length,
       video: videos.length > 0,
@@ -176,7 +184,11 @@ export async function createPost(
     return { ok: true, postId: post.id, outcome: "failed", error: result.error };
   }
   if (result.outcome === "retry_later") return { ok: true, postId: post.id, outcome: "waiting" };
-  return { ok: true, postId: post.id, outcome: input.scheduledFor ? "scheduled" : "published" };
+  return {
+    ok: true,
+    postId: post.id,
+    outcome: input.scheduledFor || input.queued ? "scheduled" : "published",
+  };
 }
 
 export type CancelPostResult =

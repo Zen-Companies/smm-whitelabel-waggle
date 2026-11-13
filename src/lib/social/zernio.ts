@@ -22,6 +22,7 @@ import {
   type ProviderMessage,
   type ProviderPostStatus,
   type PostValidation,
+  type PostingQueue,
   type ProviderUsage,
   type SocialPlatform,
   type SocialProvider,
@@ -66,7 +67,19 @@ const postSchema = z.object({
       "failed",
       "cancelled",
     ]),
+    scheduledFor: z.string().nullish().catch(null),
   }),
+});
+const queueSlotSchema = z.object({ dayOfWeek: z.number().int().min(0).max(6), time: z.string() });
+const queueSchema = z.object({
+  exists: z.boolean().optional(),
+  schedule: z
+    .object({
+      timezone: z.string().optional(),
+      slots: z.array(queueSlotSchema.nullable().catch(null)).optional(),
+    })
+    .nullish(),
+  nextSlots: z.array(z.string()).optional(),
 });
 const presignSchema = z.object({ uploadUrl: z.url(), publicUrl: z.url() });
 const replySchema = z.object({ data: z.object({ commentId: z.string().min(1) }) });
@@ -421,15 +434,22 @@ export class ZernioSocialProvider implements SocialProvider {
             content: input.content,
             mediaItems: input.mediaUrls?.map((url) => ({ url })),
             platforms: await this.postTargets(input),
-            ...(input.publishAt
-              ? { scheduledFor: input.publishAt.toISOString() }
-              : { publishNow: true }),
+            // The queue picks (and holds) the time itself; never pass its next slot as a time.
+            ...(input.queueProfileId
+              ? { queuedFromProfile: input.queueProfileId }
+              : input.publishAt
+                ? { scheduledFor: input.publishAt.toISOString() }
+                : { publishNow: true }),
           },
           headers: { "Idempotency-Key": input.idempotencyKey },
         }),
       );
       const { post } = parse(postSchema, data, "createPost");
-      return { providerPostId: post._id, status: post.status };
+      return {
+        providerPostId: post._id,
+        status: post.status,
+        scheduledFor: post.scheduledFor ?? null,
+      };
     });
   }
 
@@ -503,6 +523,35 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async getQueue(input: { profileId: string; signal?: AbortSignal }): Promise<PostingQueue | null> {
+    return call("getQueue", async (withFetch) => {
+      const { data } = await this.zernio.queue.listQueueSlots(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      const q = parse(queueSchema, data, "getQueue");
+      if (q.exists === false || !q.schedule) return null;
+      return toQueue(q);
+    });
+  }
+
+  async saveQueue(input: {
+    profileId: string;
+    timezone: string;
+    slots: { dayOfWeek: number; time: string }[];
+    signal?: AbortSignal;
+  }): Promise<PostingQueue> {
+    const existing = await this.getQueue({ profileId: input.profileId, signal: input.signal });
+    return call("saveQueue", async (withFetch) => {
+      const body = { profileId: input.profileId, timezone: input.timezone, slots: input.slots };
+      const { data } = existing
+        ? await this.zernio.queue.updateQueueSlot(withFetch({ signal: input.signal, body }))
+        : await this.zernio.queue.createQueueSlot(
+            withFetch({ signal: input.signal, body: { ...body, name: "Posting times" } }),
+          );
+      return toQueue(parse(queueSchema, data, "saveQueue"));
     });
   }
 
@@ -1144,4 +1193,12 @@ function legacyExtras(platform: string, input: CreatePostInput): TargetExtras {
     return { platformSpecificData: { title: input.youtubeTitle } };
   }
   return {};
+}
+
+function toQueue(q: z.infer<typeof queueSchema>): PostingQueue {
+  return {
+    timezone: q.schedule?.timezone ?? "UTC",
+    slots: (q.schedule?.slots ?? []).flatMap((s) => (s ? [s] : [])),
+    nextSlots: q.nextSlots ?? [],
+  };
 }

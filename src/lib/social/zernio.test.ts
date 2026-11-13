@@ -254,6 +254,87 @@ describe("ZernioSocialProvider", () => {
     expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_p/pinterest-boards");
   });
 
+  it("createPost into the queue sends queuedFromProfile, no time, and reads back Zernio's time (T75)", async () => {
+    respond = () =>
+      json({ post: { _id: "post_q", status: "scheduled", scheduledFor: "2026-11-17T01:00:00.000Z" } }, 201);
+    await expect(
+      provider.createPost({
+        content: "Ube is back",
+        targets: [{ platform: "instagram", accountId: "acc_ig" }],
+        publishAt: null,
+        idempotencyKey: "k-q",
+        queueProfileId: "prof_1",
+      }),
+    ).resolves.toEqual({
+      providerPostId: "post_q",
+      status: "scheduled",
+      scheduledFor: "2026-11-17T01:00:00.000Z",
+    });
+    const body = captured[0].body as Record<string, unknown>;
+    expect(body.queuedFromProfile).toBe("prof_1");
+    expect(body).not.toHaveProperty("publishNow");
+    expect(body).not.toHaveProperty("scheduledFor");
+  });
+
+  it("createPost sends each platform's own text and options (T75)", async () => {
+    respond = () => json({ post: { _id: "post_o", status: "published" } }, 201);
+    await provider.createPost({
+      content: "Shared",
+      targets: [
+        { platform: "instagram", accountId: "acc_ig" },
+        { platform: "linkedin", accountId: "acc_li" },
+      ],
+      publishAt: null,
+      idempotencyKey: "k-o",
+      extras: {
+        instagram: { platformSpecificData: { contentType: "story" } },
+        linkedin: { customContent: "Longer text", platformSpecificData: { firstComment: "x" } },
+      },
+    });
+    expect((captured[0].body as { platforms: unknown[] }).platforms).toEqual([
+      { platform: "instagram", accountId: "acc_ig", platformSpecificData: { contentType: "story" } },
+      {
+        platform: "linkedin",
+        accountId: "acc_li",
+        customContent: "Longer text",
+        platformSpecificData: { firstComment: "x" },
+      },
+    ]);
+  });
+
+  it("getQueue reads the default queue; none yet is null (T75)", async () => {
+    respond = () =>
+      json({
+        exists: true,
+        schedule: { timezone: "Asia/Manila", slots: [{ dayOfWeek: 1, time: "09:00" }, { bad: 1 }] },
+        nextSlots: ["2026-11-17T01:00:00Z"],
+      });
+    await expect(provider.getQueue({ profileId: "prof_1" })).resolves.toEqual({
+      timezone: "Asia/Manila",
+      slots: [{ dayOfWeek: 1, time: "09:00" }],
+      nextSlots: ["2026-11-17T01:00:00Z"],
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/queue/slots");
+    expect(captured[0].url.searchParams.get("profileId")).toBe("prof_1");
+
+    respond = () => json({ exists: false });
+    await expect(provider.getQueue({ profileId: "prof_2" })).resolves.toBeNull();
+  });
+
+  it("saveQueue creates the queue the first time, then updates it (T75)", async () => {
+    let n = 0;
+    respond = (req) => {
+      n += 1;
+      if (req.method === "GET") return json(n === 1 ? { exists: false } : { exists: true, schedule: { timezone: "UTC", slots: [] } });
+      return json({ schedule: { timezone: "Asia/Manila", slots: [{ dayOfWeek: 2, time: "18:00" }] }, nextSlots: [] });
+    };
+    await provider.saveQueue({ profileId: "prof_1", timezone: "Asia/Manila", slots: [{ dayOfWeek: 2, time: "18:00" }] });
+    expect(captured[1].method).toBe("POST");
+    expect(captured[1].body).toMatchObject({ profileId: "prof_1", name: "Posting times", timezone: "Asia/Manila" });
+    await provider.saveQueue({ profileId: "prof_1", timezone: "Asia/Manila", slots: [] });
+    expect(captured[3].method).toBe("PUT");
+  });
+
   it("createPost pins to the chosen board (T64)", async () => {
     respond = () => json({ post: { _id: "post_p", status: "scheduled" } }, 201);
     await provider.createPost({
@@ -371,7 +452,7 @@ describe("ZernioSocialProvider", () => {
         publishAt: new Date("2026-11-01T09:00:00Z"),
         idempotencyKey: "post-key",
       }),
-    ).resolves.toEqual({ providerPostId: "post_1", status: "scheduled" });
+    ).resolves.toMatchObject({ providerPostId: "post_1", status: "scheduled" });
 
     const [req] = captured;
     expect(req.url.pathname).toBe("/api/v1/posts");

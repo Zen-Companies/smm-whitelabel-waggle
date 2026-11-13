@@ -3,6 +3,7 @@ import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { platformOf } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ComposeForm } from "./compose-form";
+import { loadQueue } from "./queue-data";
 
 /**
  * The composer, always beside the calendar (design v2). `day` comes from a clicked day; `time`
@@ -23,6 +24,7 @@ export async function ComposeCard({
     .eq("tenant_id", tenant.id)
     .eq("status", "active")
     .order("created_at");
+  const queue = await loadQueue(tenant.zernioProfileId);
   return (
     <section className="card-lifted flex flex-col gap-4 p-5" aria-labelledby="compose-heading">
       <div className="flex flex-col">
@@ -56,6 +58,7 @@ export async function ComposeCard({
             }))}
           day={day}
           time={time}
+          nextSlot={queue?.nextSlots[0] ?? null}
         />
       ) : (
         <ReadOnlyNote role={tenant.role} what="the posts" />

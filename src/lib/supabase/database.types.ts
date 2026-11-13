@@ -1444,6 +1444,7 @@ export type Database = {
           last_error: string | null
           media: Json
           platform_options: Json
+          queued: boolean
           next_attempt_at: string | null
           platform_results: Json
           published_at: string | null
@@ -1465,6 +1466,7 @@ export type Database = {
           last_error?: string | null
           media?: Json
           platform_options?: Json
+          queued?: boolean
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null
@@ -1485,6 +1487,7 @@ export type Database = {
           last_error?: string | null
           media?: Json
           platform_options?: Json
+          queued?: boolean
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null
