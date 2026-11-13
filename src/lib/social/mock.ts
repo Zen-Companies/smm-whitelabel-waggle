@@ -261,6 +261,19 @@ export class MockSocialProvider implements SocialProvider {
     return { publicUrl: `${this.appUrl}/api/mock-media/${name}` };
   }
 
+  /** Steady demo numbers for Google Business Profile (T76). */
+  async getGoogleBusinessPerformance(input: { accountId: string; fromDate: string; toDate: string }) {
+    const days = Math.max(1, Math.round((Date.parse(input.toDate) - Date.parse(input.fromDate)) / 86_400_000));
+    return {
+      BUSINESS_IMPRESSIONS_MOBILE_MAPS: 14 * days,
+      BUSINESS_IMPRESSIONS_MOBILE_SEARCH: 9 * days,
+      BUSINESS_IMPRESSIONS_DESKTOP_SEARCH: 4 * days,
+      CALL_CLICKS: Math.round(days / 2),
+      BUSINESS_DIRECTION_REQUESTS: days,
+      WEBSITE_CLICKS: Math.round(days * 0.7),
+    };
+  }
+
   async deletePost(input: { postId: string }) {
     const post = this.posts.get(input.postId);
     if (post) post.status = "deleted";

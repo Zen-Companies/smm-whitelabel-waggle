@@ -81,6 +81,11 @@ const queueSchema = z.object({
     .nullish(),
   nextSlots: z.array(z.string()).optional(),
 });
+const gbpPerformanceSchema = z.object({
+  metrics: z
+    .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
+    .optional(),
+});
 const presignSchema = z.object({ uploadUrl: z.url(), publicUrl: z.url() });
 const replySchema = z.object({ data: z.object({ commentId: z.string().min(1) }) });
 const dmSchema = z.object({ data: z.object({ messageId: z.string().min(1) }) });
@@ -860,6 +865,26 @@ export class ZernioSocialProvider implements SocialProvider {
               }),
             );
       return toDemographics(data);
+    });
+  }
+
+  async getGoogleBusinessPerformance(input: {
+    accountId: string;
+    fromDate: string;
+    toDate: string;
+    signal?: AbortSignal;
+  }): Promise<Record<string, number>> {
+    return call("getGoogleBusinessPerformance", async (withFetch) => {
+      const { data } = await this.zernio.analytics.getGoogleBusinessPerformance(
+        withFetch({
+          signal: input.signal,
+          query: { accountId: input.accountId, fromDate: input.fromDate, toDate: input.toDate },
+        }),
+      );
+      const parsed = parse(gbpPerformanceSchema, data, "getGoogleBusinessPerformance");
+      return Object.fromEntries(
+        Object.entries(parsed.metrics ?? {}).map(([k, v]) => [k, v?.total ?? 0]),
+      );
     });
   }
 

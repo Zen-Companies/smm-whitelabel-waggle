@@ -51,6 +51,7 @@ export function fakeZernio() {
     presignMedia: notImplemented,
     listPinterestBoards: notImplemented,
     getQueue: notImplemented,
+    getGoogleBusinessPerformance: notImplemented,
     unpublishPost: notImplemented,
     saveQueue: notImplemented,
     listWhatsAppTemplates: notImplemented,

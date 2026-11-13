@@ -33,6 +33,7 @@ import { PostsSection } from "./posts-section";
 import { ANALYTICS_PERIODS } from "./sync";
 import { WorkSection } from "./work-section";
 import { isAnalyticsLive } from "@/lib/social/platforms";
+import { NO_NUMBERS } from "./platform-words";
 
 // Analytics (T49-T52, design v3 "Analytics"): the brand's numbers, copied from Zernio by the
 // sync job (TDD §7.7), and Waggle's own work from our tables. Controls are links (searchParams).
@@ -82,6 +83,9 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
   // Platform filters only where the analytics pages cover the platform today.
   const platforms = connected.filter(isAnalyticsLive);
   const notCovered = connected.filter((p) => !isAnalyticsLive(p));
+  // Google Business Profile has its own report ("By platform"); some apps share nothing.
+  const noNumbers = notCovered.filter((p) => NO_NUMBERS.has(p));
+  const later = notCovered.filter((p) => !NO_NUMBERS.has(p) && p !== "googlebusiness");
   const section = parseSection(param(params, "section"));
   const period = parsePeriod(param(params, "period"));
   const platform = parsePlatform(param(params, "platform"), platforms);
@@ -101,7 +105,17 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
   if (section !== "work" && !syncedAt) {
     body = <CollectingNumbers />;
   } else if (section === "overview") {
-    const data = await loadOverview(supabase, tenant.id, { period, platform, platforms, now });
+    const data = await loadOverview(supabase, tenant.id, {
+      period,
+      platform,
+      platforms,
+      now,
+      // Google Business Profile's report shows in "By platform" on the All view.
+      gbpAccountIds:
+        platform === "all"
+          ? accounts.filter((a) => a.platform === "googlebusiness").map((a) => a.id)
+          : [],
+    });
     body = (
       <OverviewSection
         data={data}
@@ -217,10 +231,16 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
           ))}
         </nav>
         {asOf && <p className="meta">{asOf}</p>}
-        {notCovered.length > 0 && section !== "work" && (
+        {section !== "work" && noNumbers.length > 0 && (
           <p className="meta">
-            Numbers for {notCovered.map(platformName).join(", ")} come in an update. Their posts
-            still count in All.
+            {noNumbers.map(platformName).join(", ")}{" "}
+            {noNumbers.length > 1 ? "don't" : "doesn't"} share numbers with apps.
+          </p>
+        )}
+        {section !== "work" && later.length > 0 && (
+          <p className="meta">
+            Numbers for {later.map(platformName).join(", ")} come in an update. Their posts still
+            count in All.
           </p>
         )}
       </div>

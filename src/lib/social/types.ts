@@ -300,6 +300,13 @@ export interface SocialProvider {
   getFollowerStats(
     input: { profileId: string; fromDate: string; toDate: string } & CallOptions,
   ): Promise<FollowerSeries[]>;
+  /**
+   * Google Business Profile's performance report (T76): metric name → total over the window
+   * (`GET /v1/analytics/googlebusiness/performance`; 2–3 days behind).
+   */
+  getGoogleBusinessPerformance(
+    input: { accountId: string; fromDate: string; toDate: string } & CallOptions,
+  ): Promise<Record<string, number>>;
   /** `GET /v1/analytics/best-time`: slots by average engagement, best first (UTC hours). */
   getBestTimeToPost(input: { profileId: string } & CallOptions): Promise<BestTimeSlot[]>;
   /** Instagram (age, gender, city, country) or Facebook (country, city) follower breakdown. */

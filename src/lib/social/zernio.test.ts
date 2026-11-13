@@ -302,6 +302,27 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("getGoogleBusinessPerformance returns each metric's total (T76)", async () => {
+    respond = () =>
+      json({
+        success: true,
+        metrics: {
+          CALL_CLICKS: { total: 14, values: [] },
+          WEBSITE_CLICKS: { total: 22 },
+          BUSINESS_BOOKINGS: {},
+        },
+      });
+    await expect(
+      provider.getGoogleBusinessPerformance({
+        accountId: "acc_g",
+        fromDate: "2026-10-14",
+        toDate: "2026-11-13",
+      }),
+    ).resolves.toEqual({ CALL_CLICKS: 14, WEBSITE_CLICKS: 22, BUSINESS_BOOKINGS: 0 });
+    expect(captured[0].url.pathname).toBe("/api/v1/analytics/googlebusiness/performance");
+    expect(captured[0].url.searchParams.get("accountId")).toBe("acc_g");
+  });
+
   it("getQueue reads the default queue; none yet is null (T75)", async () => {
     respond = () =>
       json({

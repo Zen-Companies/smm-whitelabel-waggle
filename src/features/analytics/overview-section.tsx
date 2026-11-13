@@ -20,6 +20,7 @@ import { LocalSlotText } from "./local-time";
 import { Card, NoData, Thumb, Tile } from "./parts";
 import { bestPosts, isPending, postMeta, postTitle } from "./posts";
 import { insightText, standOut } from "./stood-out";
+import { PlatformMark } from "@/components/app/platform-mark";
 
 // Overview (T49, design: Analytics · Overview).
 
@@ -241,6 +242,29 @@ export function OverviewSection({
                   color: platformColor(r.platform),
                 }))}
               />
+            </Card>
+          )}
+          {data.byPlatform.length > 0 && (
+            <Card title="By platform">
+              <p className="meta">Each platform counts its own way, in the words its app uses.</p>
+              <ul className="divide-line flex flex-col divide-y">
+                {data.byPlatform.map((row) => (
+                  <li key={row.platform} className="flex items-start gap-3 py-2.5">
+                    <PlatformMark platform={row.platform} size={28} />
+                    <span className="flex min-w-0 flex-col">
+                      <b className="font-semibold">{platformName(row.platform)}</b>
+                      <span className="text-ink-2 text-sm tabular-nums">
+                        {row.metrics
+                          .map(
+                            (m) =>
+                              `${m.label} ${m.delta && m.value > 0 ? "+" : ""}${compact(m.value)}`,
+                          )
+                          .join(" · ")}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </Card>
           )}
           <Card title="What stood out">

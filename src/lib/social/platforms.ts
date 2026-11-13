@@ -160,7 +160,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     }),
     inbox: { comments: true, dms: true, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   threads: {
     id: "threads",
@@ -173,7 +173,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ videoMaxSeconds: 300, textMax: 500, maxImages: 20, imageMaxBytes: 8 * MB }),
     inbox: { comments: true, dms: false, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   youtube: {
     id: "youtube",
@@ -186,7 +186,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ textMax: 5000, mediaRequired: true, videoOnly: true, maxImages: 0 }),
     inbox: { comments: true, dms: false, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   linkedin: {
     id: "linkedin",
@@ -199,7 +199,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ textMax: 3000, maxImages: 20, imageMaxBytes: 8 * MB }),
     inbox: { comments: true, dms: false, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   bluesky: {
     id: "bluesky",
@@ -212,7 +212,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ videoMaxSeconds: 60, textMax: 300, maxImages: 4, imageMaxBytes: 1_000_000 }),
     inbox: { comments: true, dms: true, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   twitter: {
     id: "twitter",
@@ -277,7 +277,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     }),
     inbox: { comments: false, dms: false, reviews: false },
     inboxLive: false,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   discord: {
     id: "discord",
