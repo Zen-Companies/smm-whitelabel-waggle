@@ -639,6 +639,8 @@ export type Database = {
           answered_on_platform_at: string | null
           attempts: number
           author_name: string | null
+          call_duration_seconds: number | null
+          call_voicemail: boolean | null
           category: string | null
           classifier_scores: Json | null
           classifier_used: string | null
@@ -659,6 +661,7 @@ export type Database = {
           status: string
           tenant_id: string
           text: string
+          zernio_call_id: string | null
           zernio_comment_id: string | null
           zernio_message_id: string | null
           zernio_post_id: string | null
@@ -669,6 +672,8 @@ export type Database = {
           answered_on_platform_at?: string | null
           attempts?: number
           author_name?: string | null
+          call_duration_seconds?: number | null
+          call_voicemail?: boolean | null
           category?: string | null
           classifier_scores?: Json | null
           classifier_used?: string | null
@@ -689,6 +694,7 @@ export type Database = {
           status?: string
           tenant_id: string
           text: string
+          zernio_call_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null
@@ -698,6 +704,8 @@ export type Database = {
           answered_on_platform_at?: string | null
           attempts?: number
           author_name?: string | null
+          call_duration_seconds?: number | null
+          call_voicemail?: boolean | null
           category?: string | null
           classifier_scores?: Json | null
           classifier_used?: string | null
@@ -718,6 +726,7 @@ export type Database = {
           status?: string
           tenant_id?: string
           text?: string
+          zernio_call_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null

@@ -1,0 +1,35 @@
+{
+  "id": "evt_call_ended_01",
+  "event": "call.ended",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "call": {
+    "id": "call_01",
+    "metaCallId": null,
+    "accountId": "acc_phone_fixture",
+    "phoneNumberId": "num_01",
+    "direction": "inbound",
+    "from": "+14155550110",
+    "to": "+14155550142",
+    "startedAt": "2026-11-13T17:12:00.000Z",
+    "endedAt": "2026-11-13T17:12:49.000Z",
+    "durationSeconds": 24,
+    "endReason": "hangup",
+    "hangupCause": "normal_clearing",
+    "sipHangupCause": null,
+    "isVoicemail": true,
+    "callErrors": []
+  },
+  "account": {
+    "id": "acc_phone_fixture",
+    "accountId": "acc_phone_fixture",
+    "profileId": "__PROFILE_ID__",
+    "platform": "phone",
+    "username": "+14155550142"
+  },
+  "timestamp": "2026-11-13T17:12:50.000Z"
+}

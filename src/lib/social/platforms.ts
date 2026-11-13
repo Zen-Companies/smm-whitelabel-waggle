@@ -25,6 +25,7 @@ export const PLATFORM_IDS = [
   "imap",
   "google",
   "microsoft",
+  "phone",
 ] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
@@ -375,6 +376,21 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: null,
     inbox: { comments: false, dms: true, reviews: false },
     inboxLive: true,
+    analyticsLive: false,
+  },
+  phone: {
+    id: "phone",
+    label: "Phone",
+    mark: { text: "☎", bg: "#E0F2FE", fg: "#075985" },
+    kind: "answers",
+    // Bought in Settings → Phone (T82a), not a tile. Missed calls and voicemails come in as call
+    // items (T82b); they're never drafted, so it isn't a message channel.
+    connect: "none",
+    line: "Missed calls and voicemail",
+    needs: null,
+    post: null,
+    inbox: { comments: false, dms: false, reviews: false },
+    inboxLive: false,
     analyticsLive: false,
   },
 };

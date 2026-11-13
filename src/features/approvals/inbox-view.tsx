@@ -20,6 +20,7 @@ import { HeldCard } from "./held-card";
 import { SpamCard, SpamCommentFooter } from "./spam-card";
 import { loadTemplateChoices, whatsappWindowClosed } from "./whatsapp-window";
 import { WhatsAppWindowCard } from "./whatsapp-window-card";
+import { CallCard } from "./call-card";
 import {
   countInboxTabs,
   heldReason,
@@ -83,7 +84,7 @@ function Row({
         <Avatar
           size={36}
           platform={entry.platform}
-          icon={entry.kind === "review" ? "review" : "person"}
+          icon={entry.kind === "review" ? "review" : entry.kind === "call" ? "call" : "person"}
         />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="flex items-center gap-1.5">
@@ -362,7 +363,10 @@ export async function InboxView({
     selected && whatsappWindowClosed(selected)
       ? await loadTemplateChoices(supabase, getSocialProvider(), selected)
       : null;
-  const actionFooter = !selected ? null : selected.status === "awaiting_approval" ? (
+  const actionFooter = !selected ? null : selected.kind === "call" ? (
+    // T82b: a missed call or voicemail: listen, call back, mark handled. Never a reply.
+    <CallCard key={selected.itemId} entry={selected} />
+  ) : selected.status === "awaiting_approval" ? (
     <ApprovalCard
       key={selected.itemId}
       entry={selected}

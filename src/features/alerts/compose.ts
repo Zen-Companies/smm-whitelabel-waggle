@@ -7,7 +7,7 @@ export type AlertContent =
   | {
       kind: "escalation";
       itemId: string;
-      itemKind: "comment" | "dm" | "review";
+      itemKind: "comment" | "dm" | "review" | "call";
       platform: string;
       authorName: string | null;
       category: string | null;
@@ -18,7 +18,7 @@ export type AlertContent =
       kind: "lead";
       itemId: string;
       platform: string;
-      itemKind: "comment" | "dm" | "review";
+      itemKind: "comment" | "dm" | "review" | "call";
       authorName: string | null;
       name: string | null;
       contact: string | null;
@@ -41,8 +41,8 @@ export interface ComposedEmail {
 }
 
 const platformName = platformLabel;
-const where = (platform: string, kind: "comment" | "dm" | "review") =>
-  `${platformName(platform)} ${kind === "dm" ? "DM" : kind}`;
+const where = (platform: string, kind: "comment" | "dm" | "review" | "call") =>
+  kind === "call" ? "phone call" : `${platformName(platform)} ${kind === "dm" ? "DM" : kind}`;
 
 /** Why an item came to the owner, from the policy / send step / runner reason codes. */
 export function escalationReason(reason: string | null, status: string): string {
@@ -61,6 +61,8 @@ export function escalationReason(reason: string | null, status: string): string 
     tenant_inactive: "Your subscription isn't active, so the reply wasn't sent.",
     send_rejected: "The platform refused the reply.",
     retries_exhausted: "Waggle couldn't process or send it after 3 tries.",
+    missed_call: "Nobody picked up. Call them back when you can.",
+    voicemail: "They left a voicemail. Listen to it in Waggle.",
     delivery_failed: "The reply was sent but not delivered.",
     no_approved_draft: "There was no approved reply to send.",
   };

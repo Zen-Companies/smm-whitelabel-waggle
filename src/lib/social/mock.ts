@@ -17,6 +17,7 @@ import type {
   SocialProvider,
   PostingQueue,
   AdAccount,
+  VoiceSettings,
   OwnedNumber,
   PhoneCountry,
   PhoneNumberType,
@@ -196,6 +197,34 @@ export class MockSocialProvider implements SocialProvider {
     const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
     this.integrations.set(input.profileId, [...list, { id, platform: k.kind, name, active: true }]);
     return { accountId: id, name };
+  }
+
+  private voice = new Map<string, VoiceSettings>();
+
+  async setVoice(input: { numberId: string; settings: Partial<VoiceSettings> }) {
+    const current: VoiceSettings = this.voice.get(input.numberId) ?? {
+      enabled: true,
+      forwardTo: null,
+      voicemailGreeting: null,
+      businessHoursEnabled: false,
+      businessHoursTimezone: null,
+      businessHours: [],
+    };
+    const next = {
+      ...current,
+      ...input.settings,
+      forwardTo:
+        input.settings.forwardTo === undefined
+          ? current.forwardTo
+          : input.settings.forwardTo || null,
+    };
+    this.voice.set(input.numberId, next);
+    return next;
+  }
+
+  async getCallRecordingUrl(input: { callId: string }) {
+    void input.callId;
+    return null;
   }
 
   /** Phone numbers (T82a): US local and toll-free at $3; a pretend ID country (GB) is left out. */

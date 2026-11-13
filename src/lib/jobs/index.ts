@@ -65,7 +65,7 @@ export interface ClaimedItem {
   id: string;
   tenantId: string;
   socialAccountId: string;
-  kind: "comment" | "dm" | "review";
+  kind: "comment" | "dm" | "review" | "call";
   status: string;
   attempts: number;
   accountStatus: string;

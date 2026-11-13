@@ -4,11 +4,13 @@ import { CircleCheck, Clock3 } from "lucide-react";
 import { can } from "@/features/orgs";
 import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
-import type { OwnedNumber } from "@/lib/social/types";
+import type { OwnedNumber, VoiceSettings } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { phoneBrands } from "./flags";
 import { displayNumber, monthly, numberOptions, typeLabel, type NumberOption } from "./numbers";
+import { CallsForm } from "./calls-form";
 import { NumberPicker, PhoneSwitchForm, PhoneSwitchOn, ReleaseNumber } from "./phone-forms";
+import { defaultGreeting } from "./voice";
 
 /** Settings → Phone (T82a, design "Settings · Phone"): the brand's number, or getting one. */
 export async function PhoneSection() {
@@ -35,6 +37,28 @@ export async function PhoneSection() {
     }
   }
   const number = owned[0];
+  // T82b: calls settings. There's no read route: an empty update returns them. A number without
+  // our greeting gets it (the partner's default wording isn't documented).
+  let voice: VoiceSettings | null = null;
+  if (number?.status === "active" && mayEdit && !failed) {
+    try {
+      const social = getSocialProvider();
+      voice = await social.setVoice({
+        numberId: number.id,
+        settings: {},
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (!voice.voicemailGreeting) {
+        voice = await social.setVoice({
+          numberId: number.id,
+          settings: { voicemailGreeting: defaultGreeting(tenant.name) },
+          signal: AbortSignal.timeout(15_000),
+        });
+      }
+    } catch (error) {
+      Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "phoneVoice" } });
+    }
+  }
   return (
     <section className="flex flex-col gap-4" aria-labelledby="phone-heading">
       <div>
@@ -89,9 +113,13 @@ export async function PhoneSection() {
       ) : (
         <ReadOnlyNote role={tenant.role} what="the phone number" />
       )}
-      {number && (
-        <p className="meta">Calls, voicemail and texts on this number come into Waggle next.</p>
+      {number && voice && (
+        <CallsForm numberId={number.id} settings={voice} greeting={defaultGreeting(tenant.name)} />
       )}
+      {number && number.status === "active" && mayEdit && !voice && (
+        <p className="danger-box">Call settings couldn&apos;t be loaded right now.</p>
+      )}
+      {number && <p className="meta">Texting on this number comes next.</p>}
     </section>
   );
 }

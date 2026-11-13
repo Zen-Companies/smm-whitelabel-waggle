@@ -91,6 +91,17 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
       };
     }
     case "needs_you": {
+      // T82b: a missed call or voicemail.
+      if (item?.kind === "call") {
+        return {
+          ...base,
+          tone: "attention",
+          title: `${who} called`,
+          meta: "Missed call. Listen and call back from the inbox.",
+          href: itemHref,
+          action: "Open",
+        };
+      }
       const failed = item?.status === "failed" || row.details.status === "failed";
       return {
         ...base,

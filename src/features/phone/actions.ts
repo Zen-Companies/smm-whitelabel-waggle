@@ -11,6 +11,7 @@ import { SocialProviderError, type PhoneNumberType } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { phoneOn, setPhoneSwitch } from "./flags";
 import { numberOptions, parsePurchase } from "./numbers";
+import { defaultGreeting, parseVoiceForm } from "./voice";
 
 export type PhoneState = { error?: string; done?: string };
 export type SearchState = {
@@ -98,6 +99,17 @@ export async function buyNumberAction(_prev: PhoneState, f: FormData): Promise<P
         extra: { tenantId: tenant.id, numberId: result.id },
       });
     }
+    // T82b: calls on, with our own voicemail greeting (the partner's default isn't documented).
+    // A number still being set up gets it when the owner opens Phone.
+    await social
+      .setVoice({
+        numberId: result.id,
+        settings: { voicemailGreeting: defaultGreeting(tenant.name) },
+        signal: AbortSignal.timeout(20_000),
+      })
+      .catch((error) =>
+        Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "voiceOnPurchase" } }),
+      );
     await writeAudit(getServiceClient(), {
       tenantId: tenant.id,
       action: "phone_number_bought",
@@ -164,4 +176,47 @@ export async function switchPhoneAction(_prev: PhoneState, f: FormData): Promise
   if (!done) return { error: "That brand wasn't found." };
   revalidatePath("/admin/switches");
   return { done: "Saved." };
+}
+
+export type VoiceState = { error?: string; field?: string; savedAt?: number };
+
+/** Calls: which phone rings, the voicemail greeting and open hours (T82b). */
+export async function saveVoiceAction(_prev: VoiceState, f: FormData): Promise<VoiceState> {
+  const tenant = await phoneTenant();
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  const parsed = parseVoiceForm(f);
+  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+  const id = String(f.get("numberId") ?? "");
+  const social = getSocialProvider();
+  try {
+    const owned = await social.listOwnedNumbers({
+      profileId: tenant.zernioProfileId,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!owned.some((n) => n.id === id && n.status === "active")) {
+      return { error: "Something went wrong. Reload the page." };
+    }
+    await social.setVoice({
+      numberId: id,
+      settings: parsed.value,
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "saveVoice" } });
+    return { error: "Couldn't save right now. Try again." };
+  }
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: "phone_calls_settings",
+    actor: tenant.userId,
+    // No phone number in the audit: whether one rings, and the hours.
+    details: {
+      numberId: id,
+      rings: !!parsed.value.forwardTo,
+      hoursOn: parsed.value.businessHoursEnabled,
+      days: parsed.value.businessHours.length,
+    },
+  });
+  revalidatePath(SETTINGS);
+  return { savedAt: Date.now() };
 }

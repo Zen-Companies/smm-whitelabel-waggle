@@ -180,6 +180,21 @@ export const leadReceivedSchema = z.object({
   }),
 });
 
+/** A call ended (T82b, `call.ended`): missed and voicemail calls become inbox items. */
+export const callEndedSchema = z.object({
+  event: z.literal("call.ended"),
+  call: z.object({
+    id: z.string().min(1),
+    direction: z.enum(["inbound", "outbound"]),
+    from: z.string(),
+    startedAt: z.string(),
+    durationSeconds: z.number().int().nonnegative().catch(0),
+    endReason: z.enum(["hangup", "no_answer", "rejected", "error"]).catch("error"),
+    isVoicemail: z.boolean().catch(false),
+  }),
+  account: accountBlock,
+});
+
 /** The accountId field is canonical; `id` carries the same value (docs.zernio.com/webhooks). */
 export function zernioAccountIdOf(account: z.infer<typeof accountBlock>): string {
   return account.accountId ?? account.id;

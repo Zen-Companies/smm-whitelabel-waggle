@@ -51,6 +51,8 @@ export function fakeZernio() {
     presignMedia: notImplemented,
     listPinterestBoards: notImplemented,
     getQueue: notImplemented,
+    setVoice: notImplemented,
+    getCallRecordingUrl: notImplemented,
     listPhoneCountries: notImplemented,
     searchPhoneNumbers: notImplemented,
     purchasePhoneNumber: notImplemented,

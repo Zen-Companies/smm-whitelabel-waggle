@@ -1,4 +1,4 @@
-import { User, Star } from "lucide-react";
+import { Phone, Star, User } from "lucide-react";
 import { cn } from "cn";
 import { platformOf } from "@/lib/social/platforms";
 
@@ -52,7 +52,7 @@ export function Avatar({
   size?: number;
   platform?: string | null;
   /** "review" (T42): a star instead of the person, for a Facebook Page review. */
-  icon?: "person" | "review";
+  icon?: "person" | "review" | "call";
   className?: string;
 }) {
   return (
@@ -68,6 +68,8 @@ export function Avatar({
         >
           {icon === "review" ? (
             <Star strokeWidth={1.5} className="size-[50%]" />
+          ) : icon === "call" ? (
+            <Phone strokeWidth={1.5} className="size-[50%]" />
           ) : (
             <User strokeWidth={1.5} className="size-[50%]" />
           )}

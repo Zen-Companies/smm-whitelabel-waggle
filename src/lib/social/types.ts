@@ -185,6 +185,17 @@ export interface OwnedNumber {
   monthlyCents: number | null;
 }
 
+/** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
+export interface VoiceSettings {
+  enabled: boolean;
+  /** "tel:+E164" (or a SIP address); null when calls go straight to voicemail. */
+  forwardTo: string | null;
+  voicemailGreeting: string | null;
+  businessHoursEnabled: boolean;
+  businessHoursTimezone: string | null;
+  businessHours: { day: number; open: string; close: string }[];
+}
+
 export type PurchaseResult =
   | { kind: "bought"; id: string; phoneNumber: string; profileId: string | null }
   /** The country needs an ID check, or the team needs a card: Waggle never shows the link. */
@@ -456,6 +467,25 @@ export interface SocialProvider {
       scopes: readonly ("email" | "calendar")[];
     } & CallOptions,
   ): Promise<{ authUrl: string }>;
+  /**
+   * Turns calls on for a number and changes the fields given (partial update, safe to repeat).
+   * With no fields it changes nothing and returns the current settings: there's no read route.
+   * Recording stays off (held: the consent notice's wording is the partner's, not ours).
+   */
+  setVoice(
+    input: {
+      numberId: string;
+      settings: Partial<{
+        forwardTo: string;
+        voicemailGreeting: string;
+        businessHoursEnabled: boolean;
+        businessHoursTimezone: string;
+        businessHours: { day: number; open: string; close: string }[];
+      }>;
+    } & CallOptions,
+  ): Promise<VoiceSettings>;
+  /** A short-lived link to a call's recording, e.g. a voicemail (T82b; about 10 minutes). */
+  getCallRecordingUrl(input: { callId: string } & CallOptions): Promise<string | null>;
   /** Countries and number types Zernio sells, with monthly prices (T82a). */
   listPhoneCountries(input?: CallOptions): Promise<PhoneCountry[]>;
   /** Numbers for sale; padded "best effort" results are left out. */

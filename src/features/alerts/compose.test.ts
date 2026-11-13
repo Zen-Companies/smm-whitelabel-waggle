@@ -62,6 +62,25 @@ describe("composeAlert", () => {
     expect(email.text).toContain("https://app.test/inbox/items/item-2");
   });
 
+  it("a missed call or voicemail: who called and what to do (T82b)", () => {
+    const email = composeAlert(
+      {
+        kind: "escalation",
+        itemId: "item-9",
+        itemKind: "call",
+        platform: "phone",
+        authorName: "+14155550110",
+        category: null,
+        status: "escalated",
+        reason: "voicemail",
+      },
+      ctx,
+    );
+    expect(email.subject).toBe("Harbour Bean: a phone call from +14155550110 needs you");
+    expect(email.text).toContain("They left a voicemail.");
+    expect(email.text).toContain("https://app.test/inbox/items/item-9");
+  });
+
   it("ad lead: every answer, the consent, and a link to the leads (T78d)", () => {
     const email = composeAlert(
       {

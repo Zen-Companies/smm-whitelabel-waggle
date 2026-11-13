@@ -74,7 +74,7 @@ async function itemSummary(db: ServiceClient, itemId: string) {
   if (!data) throw new PermanentAlertError("item_gone");
   const row = data as unknown as {
     id: string;
-    kind: "comment" | "dm" | "review";
+    kind: "comment" | "dm" | "review" | "call";
     author_name: string | null;
     category: string | null;
     status: string;

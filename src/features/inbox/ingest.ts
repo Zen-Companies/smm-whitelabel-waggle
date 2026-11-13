@@ -11,6 +11,7 @@ import {
   accountConnectedSchema,
   accountDisconnectedSchema,
   commentEventSchema,
+  callEndedSchema,
   envelopeSchema,
   leadReceivedSchema,
   messageEventSchema,
@@ -173,6 +174,7 @@ async function mapEvent(
     "account.disconnected": (t) => mapAccountDisconnected(deps, t, payload),
     "message.failed": (t) => mapMessageFailed(deps.db, t.tenantId, payload),
     "lead.received": (t) => mapLeadReceived(deps.db, t, event.id, payload),
+    "call.ended": (t) => mapCallEnded(deps, t.tenantId, payload),
   };
   const handler = handlers[event.event];
   if (!handler) return skipped("not_mapped");
@@ -180,6 +182,49 @@ async function mapEvent(
   const tenant = await resolveTenant(deps.db, event.profiles);
   if (!tenant) return rejected("unknown_tenant");
   return handler(tenant);
+}
+
+/**
+ * T82b: an inbound call nobody answered, or that went to voicemail, becomes a `call` item that
+ * goes straight to the owner (escalated: never classified or drafted). Answered and outgoing
+ * calls create nothing. Phone accounts only (WhatsApp calls come later).
+ */
+async function mapCallEnded(
+  deps: IngestDeps,
+  tenantId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(callEndedSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (e.call.direction !== "inbound") return skipped("outgoing_call");
+  const missed = e.call.isVoicemail || e.call.endReason === "no_answer";
+  if (!missed) return skipped("answered_call");
+  if (e.account.platform !== "phone") return skipped("unsupported_platform");
+
+  const resolved = await accountFor(deps, tenantId, { ...e.account, platform: "phone" });
+  if ("rejected" in resolved) return rejected(resolved.rejected);
+  const voicemail = e.call.isVoicemail;
+  const { itemId, created } = await insertInboundItem(deps.db, {
+    kind: "call",
+    tenantId,
+    socialAccountId: resolved.accountId,
+    zernioCallId: e.call.id,
+    voicemail,
+    durationSeconds: e.call.durationSeconds,
+    authorName: e.call.from || null,
+    // What the inbox shows; not customer text.
+    text: voicemail ? "Left a voicemail" : "Missed call",
+    receivedAt: e.call.startedAt,
+  });
+  if (created) {
+    await transitionItem(deps.db, {
+      itemId,
+      from: "new",
+      event: "escalate",
+      details: { policyReason: voicemail ? "voicemail" : "missed_call" },
+    });
+  }
+  return { outcome: "processed", detail: created ? "call_item_created" : "item_exists" };
 }
 
 /**

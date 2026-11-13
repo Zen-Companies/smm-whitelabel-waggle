@@ -7,7 +7,7 @@ import { type ActivityEntry, mergeActivity } from "./today-activity";
 
 export interface InboxEntry {
   itemId: string;
-  kind: "comment" | "dm" | "review";
+  kind: "comment" | "dm" | "review" | "call";
   platform: string;
   authorName: string | null;
   text: string;
@@ -35,6 +35,8 @@ export interface InboxEntry {
   dmWindowClosesAt: string | null;
   /** Email (T81b): the thread's subject, when known. */
   subject?: string | null;
+  /** T82b: a missed call or voicemail. */
+  call?: { voicemail: boolean; durationSeconds: number } | null;
   /** DMs on a platform with a reply cap (TikTok, T61): replies left in this window. */
   dmRepliesLeft?: number | null;
   /** Comments: the post on Instagram/Facebook, for "Open in Instagram" (null if not known). */
@@ -328,7 +330,7 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, " +
+      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, call_voicemail, call_duration_seconds, " +
         "social_accounts (platform), conversations (last_customer_message_at, subject)",
     )
     .eq("tenant_id", tenantId);
@@ -340,7 +342,7 @@ export async function loadEntries(
   if (error) throw new Error(`inbox load failed: ${error.message}`);
   const rows = (items ?? []) as unknown as {
     id: string;
-    kind: "comment" | "dm" | "review";
+    kind: "comment" | "dm" | "review" | "call";
     status: string;
     attempts: number;
     author_name: string | null;
@@ -355,6 +357,8 @@ export async function loadEntries(
     review_rating: number | null;
     conversation_id: string | null;
     answered_on_platform_at: string | null;
+    call_voicemail: boolean | null;
+    call_duration_seconds: number | null;
     social_accounts: { platform: string } | null;
     conversations: { last_customer_message_at: string | null; subject: string | null } | null;
   }[];
@@ -418,6 +422,10 @@ export async function loadEntries(
       reviewRating: r.review_rating,
       answeredOnPlatformAt: r.answered_on_platform_at,
       subject: r.conversations?.subject ?? null,
+      call:
+        r.kind === "call"
+          ? { voicemail: r.call_voicemail === true, durationSeconds: r.call_duration_seconds ?? 0 }
+          : null,
       dmWindowClosesAt:
         r.kind === "dm"
           ? (dmWindowClosesAt(platform, last ? new Date(last) : null)?.toISOString() ?? null)

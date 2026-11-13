@@ -24,6 +24,7 @@ import {
   type PostValidation,
   type PostingQueue,
   type AdAccount,
+  type VoiceSettings,
   type OwnedNumber,
   type PhoneCountry,
   type PhoneNumberType,
@@ -919,6 +920,65 @@ export class ZernioSocialProvider implements SocialProvider {
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
     });
+  }
+
+  async setVoice(input: {
+    numberId: string;
+    settings: Partial<{
+      forwardTo: string;
+      voicemailGreeting: string;
+      businessHoursEnabled: boolean;
+      businessHoursTimezone: string;
+      businessHours: { day: number; open: string; close: string }[];
+    }>;
+    signal?: AbortSignal;
+  }): Promise<VoiceSettings> {
+    return call("enableVoiceOnNumber", async (withFetch) => {
+      const { data } = await this.zernio.voice.enableVoiceOnNumber(
+        withFetch({
+          signal: input.signal,
+          path: { id: input.numberId },
+          body: { ...input.settings, recordingEnabled: false },
+        }),
+      );
+      const r = parse(
+        z.object({
+          enabled: z.boolean().catch(false),
+          pstnForwardTo: z.string().nullish(),
+          voicemailGreeting: z.string().nullish(),
+          businessHoursEnabled: z.boolean().catch(false),
+          businessHoursTimezone: z.string().nullish(),
+          businessHours: z
+            .array(z.object({ day: z.number().int(), open: z.string(), close: z.string() }))
+            .catch([]),
+        }),
+        data,
+        "enableVoiceOnNumber",
+      );
+      return {
+        enabled: r.enabled,
+        forwardTo: r.pstnForwardTo || null,
+        voicemailGreeting: r.voicemailGreeting || null,
+        businessHoursEnabled: r.businessHoursEnabled,
+        businessHoursTimezone: r.businessHoursTimezone ?? null,
+        businessHours: r.businessHours,
+      };
+    });
+  }
+
+  async getCallRecordingUrl(input: { callId: string; signal?: AbortSignal }) {
+    try {
+      return await call("getCallRecording", async (withFetch) => {
+        const { data } = await this.zernio.calls.getCallRecording(
+          withFetch({ signal: input.signal, path: { id: input.callId }, query: { as: "json" } }),
+        );
+        return parse(z.object({ url: z.url() }), data, "getCallRecording").url;
+      });
+    } catch (error) {
+      // No recording (a missed call with no voicemail): nothing to play.
+      if (error instanceof SocialProviderError && error.details.status === 404) return null;
+      throw error;
+    }
   }
 
   async listPhoneCountries(input?: { signal?: AbortSignal }): Promise<PhoneCountry[]> {

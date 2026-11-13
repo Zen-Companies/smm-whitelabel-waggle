@@ -3,7 +3,7 @@
 export interface ActivityEntry {
   itemId: string;
   what: "answered" | "ignored";
-  kind: "comment" | "dm" | "review";
+  kind: "comment" | "dm" | "review" | "call";
   authorName: string | null;
   text: string;
   at: string;
@@ -22,6 +22,7 @@ const KIND: Record<ActivityEntry["kind"], string> = {
   comment: "a comment",
   dm: "a DM",
   review: "a review",
+  call: "a call",
 };
 
 /** "a DM from Jun R." / "a comment" (spam keeps no name). */

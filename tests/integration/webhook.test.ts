@@ -282,6 +282,50 @@ describe("POST /api/webhooks/zernio", () => {
     expect(item?.status).toBe("paused");
   });
 
+  it("a voicemail becomes a call item for the owner; a redelivery adds nothing; answered calls none (T82b)", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const payload = fixture("call-ended");
+    payload.call.id = `call_${suffix}`;
+    payload.call.accountId = payload.account.id = payload.account.accountId = `acc_phone_${suffix}`;
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "call_item_created" });
+
+    const { data: item } = await db
+      .from("inbound_items")
+      .select("kind, status, author_name, text, call_voicemail, call_duration_seconds")
+      .eq("zernio_call_id", payload.call.id)
+      .single();
+    expect(item).toEqual({
+      kind: "call",
+      status: "escalated",
+      author_name: "+14155550110",
+      text: "Left a voicemail",
+      call_voicemail: true,
+      call_duration_seconds: 24,
+    });
+
+    const again = fixture("call-ended");
+    again.call = { ...payload.call };
+    again.account = { ...payload.account };
+    expect(await (await deliver(again)).json()).toEqual({
+      outcome: "processed",
+      detail: "item_exists",
+    });
+
+    const answered = fixture("call-ended");
+    answered.call = {
+      ...payload.call,
+      id: `call_answered_${suffix}`,
+      isVoicemail: false,
+      endReason: "hangup",
+    };
+    answered.account = { ...payload.account };
+    expect(await (await deliver(answered)).json()).toEqual({
+      outcome: "skipped",
+      reason: "answered_call",
+    });
+  });
+
   it("an email lands as a chat item, its thread keeping the subject (T81b)", async () => {
     const payload = fixture("message-received-email");
     const suffix = randomUUID().slice(0, 8);
