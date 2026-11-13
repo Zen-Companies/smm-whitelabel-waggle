@@ -186,18 +186,18 @@ export type VoiceState = { error?: string; field?: string; savedAt?: number };
 export async function saveVoiceAction(_prev: VoiceState, f: FormData): Promise<VoiceState> {
   const tenant = await phoneTenant();
   if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
-  const parsed = parseVoiceForm(f);
-  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
   const id = String(f.get("numberId") ?? "");
   const social = getSocialProvider();
+  let parsed: ReturnType<typeof parseVoiceForm>;
   try {
     const owned = await social.listOwnedNumbers({
       profileId: tenant.zernioProfileId,
       signal: AbortSignal.timeout(15_000),
     });
-    if (!owned.some((n) => n.id === id && n.status === "active")) {
-      return { error: "Something went wrong. Reload the page." };
-    }
+    const number = owned.find((n) => n.id === id && n.status === "active");
+    if (!number) return { error: "Something went wrong. Reload the page." };
+    parsed = parseVoiceForm(f, number.phoneNumber);
+    if (!parsed.ok) return { error: parsed.error, field: parsed.field };
     await social.setVoice({
       numberId: id,
       settings: parsed.value,
@@ -214,6 +214,10 @@ export async function saveVoiceAction(_prev: VoiceState, f: FormData): Promise<V
     // No phone number in the audit: whether one rings, and the hours.
     details: {
       numberId: id,
+      answers:
+        f.get("mode") === "ai"
+          ? `ai:${String(f.get("aiService"))}`
+          : String(f.get("mode") ?? "ring"),
       rings: !!parsed.value.forwardTo,
       hoursOn: parsed.value.businessHoursEnabled,
       days: parsed.value.businessHours.length,

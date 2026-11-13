@@ -115,7 +115,12 @@ export async function PhoneSection() {
         <ReadOnlyNote role={tenant.role} what="the phone number" />
       )}
       {number && voice && (
-        <CallsForm numberId={number.id} settings={voice} greeting={defaultGreeting(tenant.name)} />
+        <CallsForm
+          numberId={number.id}
+          phoneNumber={number.phoneNumber}
+          settings={voice}
+          greeting={defaultGreeting(tenant.name)}
+        />
       )}
       {number && number.status === "active" && mayEdit && !voice && (
         <p className="danger-box">Call settings couldn&apos;t be loaded right now.</p>

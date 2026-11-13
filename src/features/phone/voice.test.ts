@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultGreeting, parseVoiceForm } from "./voice";
+import { aiAddress, answererOf, defaultGreeting, parseVoiceForm } from "./voice";
 
 const form = (v: Record<string, string>) => {
   const f = new FormData();
@@ -27,10 +27,55 @@ describe("parseVoiceForm", () => {
     });
   });
 
-  it("an empty phone means voicemail only", () => {
-    expect(parseVoiceForm(form({ ...base, forwardTo: "" }))).toMatchObject({
+  it("voicemail only clears the forward; ringing needs a phone", () => {
+    expect(parseVoiceForm(form({ ...base, mode: "voicemail" }))).toMatchObject({
       ok: true,
       value: { forwardTo: "" },
+    });
+    expect(parseVoiceForm(form({ ...base, mode: "ring", forwardTo: "" }))).toMatchObject({
+      ok: false,
+      field: "forwardTo",
+    });
+  });
+
+  it("an AI receptionist: Vapi by username, Retell and ElevenLabs by the number (T82e)", () => {
+    const ai = (over: Record<string, string>) =>
+      parseVoiceForm(form({ ...base, mode: "ai", ...over }), "+14155550142");
+    expect(ai({ aiService: "vapi", vapiUsername: "harbour-bean" })).toMatchObject({
+      ok: true,
+      value: { forwardTo: "sip:harbour-bean@sip.vapi.ai" },
+    });
+    expect(ai({ aiService: "retell" })).toMatchObject({
+      value: { forwardTo: "sip:+14155550142@sip.retellai.com:5060;transport=tcp" },
+    });
+    expect(ai({ aiService: "elevenlabs" })).toMatchObject({
+      value: { forwardTo: "sip:+14155550142@sip.rtc.elevenlabs.io:5061;transport=tls" },
+    });
+    expect(ai({ aiService: "other", aiAddress: "wss://agent.example.com/media" })).toMatchObject({
+      value: { forwardTo: "wss://agent.example.com/media" },
+    });
+    expect(ai({ aiService: "vapi", vapiUsername: "has space" })).toMatchObject({
+      field: "vapiUsername",
+    });
+    expect(ai({ aiService: "other", aiAddress: "https://x" })).toMatchObject({
+      field: "aiAddress",
+    });
+  });
+
+  it("reads who answers back from the forward address", () => {
+    expect(answererOf(null)).toEqual({ mode: "voicemail" });
+    expect(answererOf("tel:+14155550199")).toEqual({ mode: "ring", phone: "+14155550199" });
+    expect(answererOf("sip:hb@sip.vapi.ai")).toEqual({
+      mode: "ai",
+      service: "vapi",
+      vapiUsername: "hb",
+    });
+    expect(answererOf(aiAddress("elevenlabs", "+14155550142", {}))).toMatchObject({
+      service: "elevenlabs",
+    });
+    expect(answererOf("wss://x.example/m")).toMatchObject({
+      service: "other",
+      address: "wss://x.example/m",
     });
   });
 

@@ -4,20 +4,27 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { VoiceSettings } from "@/lib/social/types";
 import { saveVoiceAction, type VoiceState } from "./actions";
-import { DAYS } from "./voice";
+import { AI_SERVICES, answererOf, DAYS, type AiService, type Answerer } from "./voice";
 
-/** Calls (design "Settings · Phone"): ring this phone, voicemail greeting, open hours. */
+/** Calls (design "Settings · Phone"): who answers, the voicemail greeting, open hours. */
 export function CallsForm({
   numberId,
+  phoneNumber,
   settings,
   greeting,
 }: {
   numberId: string;
+  /** E.164, for Retell and ElevenLabs (they're set up with the number itself). */
+  phoneNumber: string;
   settings: VoiceSettings;
   greeting: string;
 }) {
   const [state, action, pending] = useActionState<VoiceState, FormData>(saveVoiceAction, {});
   const [hoursOn, setHoursOn] = useState(settings.businessHoursEnabled);
+  const now = answererOf(settings.forwardTo);
+  const [mode, setMode] = useState<Answerer["mode"]>(now.mode);
+  const [service, setService] = useState<AiService>(now.mode === "ai" ? now.service : "vapi");
+  const phoneLabel = phoneNumber;
   const byDay = new Map(settings.businessHours.map((h) => [h.day, h]));
   const zone =
     settings.businessHoursTimezone ||
@@ -32,18 +39,106 @@ export function CallsForm({
     <form action={action} className="card flex flex-col gap-4 p-5">
       <h3 className="font-semibold">Calls</h3>
       <input type="hidden" name="numberId" value={numberId} />
-      <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Ring this phone
-        <input
-          name="forwardTo"
-          inputMode="tel"
-          defaultValue={settings.forwardTo?.replace(/^tel:/, "") ?? ""}
-          placeholder="+1 415 555 0199"
-          className="field w-64"
-        />
-        <span className="meta">Leave it empty to send every call to voicemail.</span>
-        {err("forwardTo")}
-      </label>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium">Who answers calls</legend>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              ["ring", "Ring my phone"],
+              ["voicemail", "Voicemail"],
+              ["ai", "AI receptionist"],
+            ] as const
+          ).map(([m, label]) => (
+            <label
+              key={m}
+              className={`flex cursor-pointer items-center rounded-full border px-3.5 py-2 text-sm ${mode === m ? "border-ink bg-ink text-surface" : "border-line-strong"}`}
+            >
+              <input
+                type="radio"
+                name="mode"
+                value={m}
+                checked={mode === m}
+                onChange={() => setMode(m)}
+                className="sr-only"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        {mode === "ring" && (
+          <label className="flex flex-col gap-1.5 text-sm font-medium">
+            Ring this phone
+            <input
+              name="forwardTo"
+              inputMode="tel"
+              defaultValue={now.mode === "ring" ? now.phone : ""}
+              placeholder="+1 415 555 0199"
+              className="field w-64"
+            />
+            {err("forwardTo")}
+          </label>
+        )}
+        {mode === "voicemail" && <p className="meta">Every call goes straight to voicemail.</p>}
+        {mode === "ai" && (
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              AI service
+              <select
+                name="aiService"
+                value={service}
+                onChange={(e) => setService(e.target.value as AiService)}
+                className="field w-72"
+              >
+                {(Object.keys(AI_SERVICES) as AiService[]).map((s) => (
+                  <option key={s} value={s}>
+                    {AI_SERVICES[s]}
+                  </option>
+                ))}
+              </select>
+              {err("aiService")}
+            </label>
+            {service === "vapi" && (
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                SIP username from Vapi
+                <input
+                  name="vapiUsername"
+                  defaultValue={now.mode === "ai" ? (now.vapiUsername ?? "") : ""}
+                  placeholder="harbour-bean"
+                  className="field w-72"
+                />
+                <span className="meta">
+                  In Vapi, give your assistant a SIP username, then paste it here.
+                </span>
+                {err("vapiUsername")}
+              </label>
+            )}
+            {(service === "retell" || service === "elevenlabs") && (
+              <p className="meta">
+                In {AI_SERVICES[service]}, add {phoneLabel} as a phone number &ldquo;through SIP
+                trunking&rdquo;, exactly as written with the +, and give it your agent. Nothing else
+                to paste.
+              </p>
+            )}
+            {service === "other" && (
+              <label className="flex flex-col gap-1.5 text-sm font-medium">
+                Address from your AI service
+                <input
+                  name="aiAddress"
+                  defaultValue={now.mode === "ai" ? (now.address ?? "") : ""}
+                  placeholder="sip:… or wss://…"
+                  className="field"
+                />
+                {err("aiAddress")}
+              </label>
+            )}
+            <p className="meta">
+              To pass callers to you when they ask for a person, add a transfer to your phone in
+              your AI service. If the AI service doesn&apos;t answer, the call goes to voicemail.
+              Calls are charged per minute, incoming only.
+            </p>
+          </div>
+        )}
+      </fieldset>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Voicemail greeting
         <textarea
