@@ -158,7 +158,8 @@ describe("MORE_CONNECTIONS", () => {
     const items = MORE_CONNECTIONS.flatMap((g) => g.items);
     expect(items.filter((i) => i.how === "keys").map((i) => i.id)).toEqual([...OWN_KEY_PLATFORMS]);
     expect(items.find((i) => i.id === "email")).toMatchObject({ how: "email", platform: "imap" });
-    expect(items.find((i) => i.id === "line")?.how).toBe("line");
+    // LINE connects from its own tile (T81a).
+    expect(items.find((i) => i.id === "line")).toBeUndefined();
     for (const id of [
       "hubspot",
       "wix",

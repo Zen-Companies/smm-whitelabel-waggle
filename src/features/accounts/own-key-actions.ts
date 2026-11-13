@@ -256,6 +256,15 @@ export async function connectLineAction(
       ...parsed.value,
       signal: AbortSignal.timeout(45_000),
     });
+    const added = await handleAccountConnected(db, {
+      tenantId: tenant.id,
+      zernioAccountId: result.accountId,
+      platform: "line",
+      username: result.name,
+    });
+    if (added.outcome === "foreign") {
+      return { error: "This LINE account is connected to another business in Waggle." };
+    }
   } catch (error) {
     const s = status(error);
     if (s === 400 || s === 403) {

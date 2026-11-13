@@ -8,7 +8,7 @@ import type { SiteKeys } from "@/lib/social/types";
 export const OWN_KEY_PLATFORMS = ["shopify", "wordpress", "webflow"] as const;
 export type OwnKeyPlatform = (typeof OWN_KEY_PLATFORMS)[number];
 /** Every platform a More connections item can hold (read from the brand's Zernio profile). */
-export const CONNECTED_PLATFORMS = [...OWN_KEY_PLATFORMS, "imap", "line"] as const;
+export const CONNECTED_PLATFORMS = [...OWN_KEY_PLATFORMS, "imap"] as const;
 
 export const isOwnKeyPlatform = (p: string): p is OwnKeyPlatform =>
   (OWN_KEY_PLATFORMS as readonly string[]).includes(p);
@@ -18,7 +18,7 @@ export type ConnectionItem = {
   id: string;
   label: string;
   line: string;
-  how: "keys" | "email" | "line" | "link" | "soon";
+  how: "keys" | "email" | "link" | "soon";
   /** The Zernio platform its connections carry, when it differs from `id`. */
   platform?: string;
   href?: string;
@@ -31,7 +31,6 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
       { id: "sms", label: "SMS", line: "Texts on your Waggle number", how: "soon" },
       { id: "rcs", label: "RCS", line: "Branded texts with buttons", how: "soon" },
       { id: "imessage", label: "iMessage", line: "Blue-bubble texts (US, UK)", how: "soon" },
-      { id: "line", label: "LINE", line: "LINE Official Account", how: "line" },
       { id: "wechat", label: "WeChat", line: "Verified Service Account", how: "soon" },
       { id: "slack", label: "Slack", line: "Your team's Slack, in the inbox", how: "soon" },
     ],

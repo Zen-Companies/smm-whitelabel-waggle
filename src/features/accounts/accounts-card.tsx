@@ -11,6 +11,7 @@ import { connectAccount } from "./actions";
 import { BlueskySetup } from "./bluesky-setup";
 import { TelegramSetup } from "./telegram-setup";
 import { WhatsAppSetup } from "./whatsapp-setup";
+import { LineSetup } from "./line-setup";
 import { connectBanner } from "./connect-banner";
 import { ConnectTiles } from "./connect-tiles";
 import { MoreConnections } from "./more-connections";
@@ -41,6 +42,8 @@ export async function AccountsCard({
     <TelegramSetup />
   ) : params.setup === "whatsapp" ? (
     <WhatsAppSetup />
+  ) : params.setup === "line" ? (
+    <LineSetup />
   ) : null;
   const tiles = !mayConnect ? (
     <ReadOnlyNote role={tenant.role} what="the connected accounts" />

@@ -21,6 +21,7 @@ export const PLATFORM_IDS = [
   "discord",
   "reddit",
   "snapchat",
+  "line",
 ] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
@@ -318,6 +319,20 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     inboxLive: false,
     analyticsLive: false,
   },
+  line: {
+    id: "line",
+    label: "LINE",
+    mark: { text: "LN", bg: "#DCFCE7", fg: "#166534" },
+    kind: "answers",
+    connect: "setup",
+    line: "Answers chats",
+    needs: "Needs a LINE Official Account",
+    // No feed: LINE VOOM has no API.
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
 };
 
 export function isPlatformId(id: string): id is PlatformId {
@@ -348,7 +363,10 @@ export const PASSWORD_CONNECT = PLATFORM_IDS.filter((id) => PLATFORMS[id].connec
  */
 export const SETUP_IN_WAGGLE = PLATFORM_IDS.filter(
   (id) =>
-    PLATFORMS[id].connect === "password" || PLATFORMS[id].connect === "code" || id === "whatsapp",
+    PLATFORMS[id].connect === "password" ||
+    PLATFORMS[id].connect === "code" ||
+    id === "whatsapp" ||
+    id === "line",
 );
 export const hasSetupCard = (id: string): boolean =>
   (SETUP_IN_WAGGLE as readonly string[]).includes(id);
@@ -424,6 +442,8 @@ const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
   twitter: { hide: true, replyMax: 280 },
   // T67: free replies for 24 hours after the customer's last message, then only a template.
   whatsapp: { dmWindow: { hours: 24, maxReplies: null }, replyMax: 4096 },
+  // T81a: no reply window (a reply after about a minute is a push, counted on the LINE plan).
+  line: { replyMax: 5000 },
 };
 
 export function inboxRules(platform: string): InboxRules {

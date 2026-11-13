@@ -6,7 +6,7 @@ import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
-import { EmailConnectForm, LineKeysForm } from "./email-line-forms";
+import { EmailConnectForm } from "./email-line-forms";
 import { CONNECTED_PLATFORMS, isOwnKeyPlatform, MORE_CONNECTIONS } from "./own-keys";
 
 /**
@@ -96,14 +96,6 @@ export async function MoreConnections() {
                         {mine.length ? "Connect another email" : "Connect an email"}
                       </summary>
                       <EmailConnectForm />
-                    </details>
-                  )}
-                  {item.how === "line" && !mine.length && (
-                    <details className="pl-11">
-                      <summary className="text-honey-text cursor-pointer text-sm font-medium">
-                        Connect with your channel keys
-                      </summary>
-                      <LineKeysForm />
                     </details>
                   )}
                 </li>
