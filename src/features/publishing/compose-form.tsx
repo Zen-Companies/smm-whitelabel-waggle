@@ -8,6 +8,7 @@ import { composePost, type ComposeState } from "./actions";
 import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MAX } from "./limits";
 import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./post-rules";
 import { BoardPicker } from "./board-picker";
+import { PostOptionsFields } from "./post-options-fields";
 import { VideoField, type VideoState } from "./video-field";
 
 export interface ComposeAccount {
@@ -83,15 +84,16 @@ function ComposeFields({
   const [when, setWhen] = useState<"now" | "later">(day ? "later" : "now");
   const [date, setDate] = useState(() => day ?? localDay(new Date(Date.now() + 24 * 3_600_000)));
   const [time, setTime] = useState(initialTime ?? "09:00");
-  const [length, setLength] = useState(0);
+  const [text, setText] = useState("");
+  const length = text.length;
   const [photo, setPhoto] = useState<string | null>(null);
   const [video, setVideo] = useState<VideoState>({ step: "none" });
   // T64: boards chosen here (saved on the account), and whose picker is open.
   const [boards, setBoards] = useState<Record<string, { id: string; name: string }>>({});
   const [boardFor, setBoardFor] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string[]>(() => accounts.map((a) => a.id));
   const pinterest = accounts.filter((a) => a.platform === "pinterest" && picked.includes(a.id));
   const hasVideo = video.step === "ready" || video.step === "uploading";
-  const [picked, setPicked] = useState<string[]>(() => accounts.map((a) => a.id));
   // What each ticked platform will do with this post (design v3 "Before it goes out").
   const pickedPlatforms = [
     ...new Set(accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform)),
@@ -130,7 +132,7 @@ function ComposeFields({
           rows={4}
           maxLength={POST_TEXT_MAX}
           required
-          onChange={(e) => setLength(e.target.value.length)}
+          onChange={(e) => setText(e.target.value)}
           placeholder="New on the menu: ube cheese pandesal, every morning from 7."
           className="field min-h-28 py-3"
         />
@@ -190,6 +192,13 @@ function ComposeFields({
           {fieldError("youtubeTitle")}
         </div>
       )}
+
+      <PostOptionsFields
+        platforms={pickedPlatforms}
+        sharedText={text}
+        hasMedia={!!photo || hasVideo}
+        hasVideo={hasVideo}
+      />
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Post to</legend>

@@ -39,7 +39,19 @@ export interface CreatePostInput {
   youtubeTitle?: string;
   /** Pinterest's board (T64); without it Zernio pins to the account's first board. */
   pinterestBoardId?: string;
+  /**
+   * Per platform (T75): text for that platform only and its `platformSpecificData` (post type,
+   * first comment, YouTube/Instagram/Facebook options), already filtered to what it accepts.
+   * When given for a platform it replaces `youtubeTitle` / `pinterestBoardId` there.
+   */
+  extras?: Partial<Record<string, TargetExtras>>;
 }
+
+/** One target's extra createPost fields (T75). */
+export type TargetExtras = {
+  customContent?: string;
+  platformSpecificData?: Record<string, unknown>;
+};
 
 /** A video (or other file) is a video when its URL ends like one; Zernio reads the same. */
 export const isVideoUrl = (url: string): boolean =>

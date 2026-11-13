@@ -14,6 +14,7 @@ import {
 } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { parsePostOptions, targetExtras } from "./post-options";
 
 // Hands a queued post to Zernio (PRD F3, docs/tdd.md §7.5). Called right after compose (so
 // "publish now" is immediate) and by the job route for posts still queued. The post's
@@ -129,8 +130,14 @@ export async function publishPost(
       publishAt: scheduledFor && scheduledFor > now ? scheduledFor : null,
       idempotencyKey: post.idempotency_key,
       tiktokConsent: post.tiktok_consent_at !== null,
-      youtubeTitle: platformOptions(post.platform_options).youtube?.title,
-      pinterestBoardId: platformOptions(post.platform_options).pinterest?.boardId,
+      // Per platform: its own text, post type, first comment and options (T75), with the
+      // YouTube title and Pinterest board (T63/T64) read from the same JSON.
+      extras: Object.fromEntries(
+        accounts.map((a) => [
+          a.platform,
+          targetExtras(a.platform, parsePostOptions(post.platform_options)[a.platform], post.content),
+        ]),
+      ),
     });
     const status = STATUS[result.status] ?? "publishing";
     await db
@@ -210,21 +217,3 @@ export async function publishQueuedPosts(
   return summary;
 }
 
-/** The post's per-platform choices (T63/T64), read defensively: free-form JSON in the row. */
-function platformOptions(value: unknown): {
-  youtube?: { title: string };
-  pinterest?: { boardId: string };
-} {
-  const pick = (key: string, field: string): string | undefined => {
-    const block =
-      value && typeof value === "object" ? (value as Record<string, unknown>)[key] : null;
-    const v = block && typeof block === "object" ? (block as Record<string, unknown>)[field] : null;
-    return typeof v === "string" && v ? v : undefined;
-  };
-  const title = pick("youtube", "title");
-  const boardId = pick("pinterest", "boardId");
-  return {
-    ...(title ? { youtube: { title } } : {}),
-    ...(boardId ? { pinterest: { boardId } } : {}),
-  };
-}

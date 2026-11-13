@@ -7,6 +7,7 @@ import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { checkPlatform, type RuleCheck } from "./post-rules";
 import { publishPost } from "./publish";
+import { postOptionsRow, type PostOptions } from "./post-options";
 
 // Post creation and cancelling without a form: the Server Actions (compose card) and the MCP
 // tools both call these with a tenant they have already checked.
@@ -64,6 +65,8 @@ export async function createPost(
     tiktokConsent?: boolean;
     /** YouTube's title; without it Zernio uses the caption's first line. */
     youtubeTitle?: string;
+    /** Per-platform choices from the composer (T75): text, post type, first comment, options. */
+    options?: PostOptions;
     via?: Record<string, string>;
     now?: Date;
   },
@@ -142,11 +145,14 @@ export async function createPost(
       scheduled_for: input.scheduledFor?.toISOString() ?? null,
       status: "queued",
       tiktok_consent_at: input.tiktokConsent ? now.toISOString() : null,
-      platform_options: {
-        ...(input.youtubeTitle ? { youtube: { title: input.youtubeTitle } } : {}),
-        // The board chosen when the post was made, so a later change doesn't move a scheduled pin.
-        ...(pinterestBoardId ? { pinterest: { boardId: pinterestBoardId } } : {}),
-      },
+      platform_options: postOptionsRow(
+        // Only the platforms this post goes to.
+        Object.fromEntries(
+          owned.map((a) => [a.platform, input.options?.[a.platform]]).filter(([, o]) => o),
+        ),
+        input.youtubeTitle,
+        pinterestBoardId,
+      ),
     })
     .select("id")
     .single();
@@ -213,3 +219,4 @@ export async function cancelScheduledPost(
   });
   return { ok: true };
 }
+

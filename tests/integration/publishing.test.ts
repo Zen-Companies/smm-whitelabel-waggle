@@ -354,10 +354,17 @@ describe("publishing (T14)", () => {
       media: [{ url: video, seconds: 80 }],
       platform_options: { youtube: { title: "Ube cheesecake is back" } },
     });
-    expect(social.calls.at(-1)).toMatchObject({
-      mediaUrls: [video],
-      youtubeTitle: "Ube cheesecake is back",
-    });
+    const last = social.calls.at(-1) as {
+      mediaUrls?: string[];
+      youtubeTitle?: string;
+      extras?: Record<string, { platformSpecificData?: Record<string, unknown> }>;
+    };
+    expect(last.mediaUrls).toEqual([video]);
+    // The publish step sends it as YouTube's platform options (T75); the check before saving
+    // still passes the title on its own.
+    expect(last.extras?.youtube?.platformSpecificData?.title ?? last.youtubeTitle).toBe(
+      "Ube cheesecake is back",
+    );
   });
 
   it("a video too long for Bluesky is refused before anything is saved (T63)", async () => {
@@ -432,7 +439,13 @@ describe("publishing (T14)", () => {
       .eq("id", (r as { postId: string }).postId)
       .single();
     expect(row?.platform_options).toEqual({ pinterest: { boardId: cakes.id } });
-    expect(social.calls.at(-1)?.pinterestBoardId).toBe(cakes.id);
+    const sent = social.calls.at(-1) as {
+      pinterestBoardId?: string;
+      extras?: Record<string, { platformSpecificData?: Record<string, unknown> }>;
+    };
+    expect(sent.extras?.pinterest?.platformSpecificData?.boardId ?? sent.pinterestBoardId).toBe(
+      cakes.id,
+    );
   });
 
   it("Pinterest boards: only for the brand's own Pinterest account (T64)", async () => {

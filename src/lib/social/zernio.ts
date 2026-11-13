@@ -25,6 +25,7 @@ import {
   type ProviderUsage,
   type SocialPlatform,
   type SocialProvider,
+  type TargetExtras,
 } from "./types";
 import { connectBranding } from "./whitelabel";
 
@@ -439,21 +440,8 @@ export class ZernioSocialProvider implements SocialProvider {
   private async postTargets(input: CreatePostInput) {
     return Promise.all(
       input.targets.map(async (t) => {
-        if (t.platform === "pinterest" && input.pinterestBoardId) {
-          return {
-            platform: t.platform,
-            accountId: t.accountId,
-            platformSpecificData: { boardId: input.pinterestBoardId },
-          };
-        }
-        if (t.platform === "youtube" && input.youtubeTitle) {
-          return {
-            platform: t.platform,
-            accountId: t.accountId,
-            platformSpecificData: { title: input.youtubeTitle },
-          };
-        }
-        if (t.platform !== "tiktok") return { platform: t.platform, accountId: t.accountId };
+        const extra = input.extras?.[t.platform] ?? legacyExtras(t.platform, input);
+        if (t.platform !== "tiktok") return { platform: t.platform, accountId: t.accountId, ...extra };
         if (!input.tiktokConsent) {
           throw new SocialProviderError("TikTok needs the owner's consent for this post", {
             code: "TIKTOK_CONSENT_REQUIRED",
@@ -473,7 +461,9 @@ export class ZernioSocialProvider implements SocialProvider {
         return {
           platform: t.platform,
           accountId: t.accountId,
+          ...(extra.customContent ? { customContent: extra.customContent } : {}),
           platformSpecificData: {
+            ...extra.platformSpecificData,
             ...(privacyLevel ? { privacyLevel } : {}),
             contentPreviewConfirmed: true,
             expressConsentGiven: true,
@@ -1143,4 +1133,15 @@ export function createZernioProvider(options: {
       timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     }),
   );
+}
+
+/** The YouTube title and Pinterest board passed the T63/T64 way (no `extras` for the platform). */
+function legacyExtras(platform: string, input: CreatePostInput): TargetExtras {
+  if (platform === "pinterest" && input.pinterestBoardId) {
+    return { platformSpecificData: { boardId: input.pinterestBoardId } };
+  }
+  if (platform === "youtube" && input.youtubeTitle) {
+    return { platformSpecificData: { title: input.youtubeTitle } };
+  }
+  return {};
 }

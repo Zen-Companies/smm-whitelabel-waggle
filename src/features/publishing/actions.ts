@@ -16,6 +16,7 @@ import { publishPost } from "./publish";
 import { chooseBoardFor, listBoardsFor, type PinterestBoard } from "./pinterest";
 import { cancelScheduledPost, createPost } from "./posts";
 import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./video";
+import { parsePostOptions, type PostOptions } from "./post-options";
 
 export interface ComposeState {
   error?: string;
@@ -139,6 +140,7 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
       media,
       tiktokConsent: formData.get("tiktokConsent") === "yes",
       youtubeTitle: parsed.data.youtubeTitle || undefined,
+      options: readOptions(formData.get("platformOptions")),
     },
   );
   if (!result.ok) {
@@ -334,5 +336,15 @@ export async function choosePinterestBoard(input: {
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "pinterestBoard" } });
     return { error: "Couldn't save the board. Try again." };
+  }
+}
+
+/** The composer's per-platform options (T75), re-checked here; bad JSON means none. */
+function readOptions(value: FormDataEntryValue | null): PostOptions {
+  if (typeof value !== "string" || !value) return {};
+  try {
+    return parsePostOptions(JSON.parse(value));
+  } catch {
+    return {};
   }
 }
