@@ -1450,6 +1450,7 @@ export type Database = {
           published_at: string | null
           scheduled_for: string | null
           status: string
+          taken_down_at: string | null
           target_account_ids: string[]
           tenant_id: string
           tiktok_consent_at: string | null
@@ -1472,6 +1473,7 @@ export type Database = {
           published_at?: string | null
           scheduled_for?: string | null
           status?: string
+          taken_down_at?: string | null
           target_account_ids?: string[]
           tenant_id: string
           tiktok_consent_at?: string | null
@@ -1493,6 +1495,7 @@ export type Database = {
           published_at?: string | null
           scheduled_for?: string | null
           status?: string
+          taken_down_at?: string | null
           target_account_ids?: string[]
           tenant_id?: string
           tiktok_consent_at?: string | null

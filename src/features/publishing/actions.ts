@@ -14,9 +14,10 @@ import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MA
 import { imageMaxBytesFor } from "./post-rules";
 import { publishPost } from "./publish";
 import { chooseBoardFor, listBoardsFor, type PinterestBoard } from "./pinterest";
-import { cancelScheduledPost, createPost } from "./posts";
+import { cancelScheduledPost, createPost, takeDownPost } from "./posts";
 import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./video";
 import { parsePostOptions, type PostOptions } from "./post-options";
+import { platformLabel } from "@/lib/social/platforms";
 
 export interface ComposeState {
   error?: string;
@@ -348,4 +349,33 @@ function readOptions(value: FormDataEntryValue | null): PostOptions {
   } catch {
     return {};
   }
+}
+
+export type TakeDownState = { error?: string; done?: string };
+
+/** Take a published post down (T75c); the row says where it's gone and where it isn't. */
+export async function takeDown(_prev: TakeDownState, formData: FormData): Promise<TakeDownState> {
+  const parsed = idSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Reload the page." };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const result = await takeDownPost(
+    { db: getServiceClient(), social: getSocialProvider },
+    { tenantId: tenant.id, userId: tenant.userId, postId: parsed.data.postId },
+  );
+  if (!result.ok) return { error: "Only a published post can be taken down." };
+  revalidatePath("/posts");
+  const names = (ps: string[]) => ps.map(platformLabel).join(", ");
+  if (result.failed.length && !result.removed.length) {
+    return { error: `Couldn't remove it from ${names(result.failed)}. Try again.` };
+  }
+  return {
+    done: [
+      result.removed.length ? `Removed from ${names(result.removed)}.` : "",
+      result.failed.length ? `Couldn't remove it from ${names(result.failed)}; try again.` : "",
+      result.byHand.length ? `Remove it yourself in the ${names(result.byHand)} app.` : "",
+    ]
+      .filter(Boolean)
+      .join(" "),
+  };
 }

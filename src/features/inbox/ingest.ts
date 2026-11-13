@@ -479,7 +479,7 @@ async function mapPost(
     .filter((p) => p.error)
     .map((p) => `${p.platform}: ${customerText(p.error ?? "")}`)
     .join("; ");
-  let failureReason: "zernio_paused" | "account_removed" | null = null;
+  let failureReason: "zernio_paused" | "account_removed" | "taken_down" | null = null;
   if (status === "failed") {
     const { data: pause } = await db
       .from("platform_state")
@@ -489,8 +489,17 @@ async function mapPost(
     const paused = !!(pause?.value as { pausedAt?: string } | null)?.pausedAt;
     if (paused || PAYMENT_ERROR.test(errors)) failureReason = "zernio_paused";
   }
-  // Cancelled by Zernio: its only account was removed after the disconnect grace period.
-  if (status === "cancelled") failureReason = "account_removed";
+  // Cancelled: the owner took it down here (T75c), or its only account was removed after the
+  // disconnect grace period.
+  if (status === "cancelled") {
+    const { data: row } = await db
+      .from("posts")
+      .select("taken_down_at")
+      .eq("tenant_id", tenantId)
+      .eq("zernio_post_id", e.post.id)
+      .maybeSingle();
+    failureReason = row?.taken_down_at ? "taken_down" : "account_removed";
+  }
 
   const { data, error } = await db
     .from("posts")

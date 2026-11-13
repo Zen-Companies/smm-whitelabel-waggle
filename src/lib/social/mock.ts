@@ -266,6 +266,13 @@ export class MockSocialProvider implements SocialProvider {
     if (post) post.status = "deleted";
   }
 
+  /** Records which platforms a post was removed from (T75c). */
+  readonly unpublished: { postId: string; platform: string; accountId?: string }[] = [];
+
+  async unpublishPost(input: { postId: string; platform: string; accountId?: string }) {
+    this.unpublished.push({ postId: input.postId, platform: input.platform, accountId: input.accountId });
+  }
+
   async replyToComment(input: {
     accountId: string;
     postId: string;

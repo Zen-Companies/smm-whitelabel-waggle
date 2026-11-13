@@ -1,7 +1,7 @@
 import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Loader } from "lucide-react";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { needsNewTime } from "./calendar";
-import { CancelPostButton, RetryPostForm } from "./post-actions";
+import { CancelPostButton, RetryPostForm, TakeDownButton } from "./post-actions";
 import { platformLabel } from "@/lib/social/platforms";
 
 // Posts (PRD F3): one post with its status and actions, and the List view. Read through RLS.
@@ -12,6 +12,7 @@ export interface PostRow {
   media: { url?: string }[];
   status: string;
   scheduled_for: string | null;
+  queued: boolean;
   published_at: string | null;
   created_at: string;
   last_error: string | null;
@@ -48,7 +49,11 @@ function Status({ post }: { post: PostRow }) {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm">
         <CalendarClock strokeWidth={1.75} aria-hidden />
-        {post.scheduled_for ? `Scheduled for ${fmt(post.scheduled_for)}` : "Waiting to post"}
+        {post.scheduled_for
+          ? `Scheduled for ${fmt(post.scheduled_for)}`
+          : post.queued
+            ? "Next free slot"
+            : "Waiting to post"}
       </span>
     );
   if (s === "publishing")
@@ -64,7 +69,9 @@ function Status({ post }: { post: PostRow }) {
         <CircleSlash strokeWidth={1.75} aria-hidden />
         {post.failure_reason === "account_removed"
           ? "Cancelled: its account was removed"
-          : "Cancelled"}
+          : post.failure_reason === "taken_down"
+            ? "Taken down"
+            : "Cancelled"}
       </span>
     );
   return (
@@ -124,9 +131,23 @@ export function Post({
           {(post.status === "scheduled" || post.status === "queued") && (
             <CancelPostButton postId={post.id} />
           )}
+          {(post.status === "published" || post.status === "partial") && (
+            <TakeDownButton
+              postId={post.id}
+              platforms={[
+                ...new Set(
+                  post.platform_results
+                    .filter((r) => r.status !== "removed")
+                    .map((r) => r.platform),
+                ),
+              ]}
+            />
+          )}
           {(post.status === "failed" ||
             post.status === "partial" ||
-            (post.status === "cancelled" && post.failure_reason)) && (
+            (post.status === "cancelled" &&
+              post.failure_reason &&
+              post.failure_reason !== "taken_down")) && (
             <RetryPostForm
               postId={post.id}
               label={post.failure_reason === "zernio_paused" ? "Post now" : "Try again"}
@@ -149,7 +170,7 @@ export async function loadPosts(tenantId: string) {
     supabase
       .from("posts")
       .select(
-        "id, content, media, status, scheduled_for, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results",
+        "id, content, media, status, scheduled_for, queued, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results",
       )
       .eq("tenant_id", tenantId)
       .neq("status", "draft")

@@ -624,6 +624,26 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async unpublishPost(input: {
+    postId: string;
+    platform: string;
+    accountId?: string;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    await call("unpublishPost", async (withFetch) => {
+      await this.zernio.posts.unpublishPost(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          body: {
+            platform: input.platform as "facebook",
+            ...(input.accountId ? { accountId: input.accountId } : {}),
+          },
+        }),
+      );
+    });
+  }
+
   async replyToComment(input: {
     accountId: string;
     postId: string;

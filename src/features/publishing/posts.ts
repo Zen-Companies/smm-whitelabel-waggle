@@ -8,6 +8,7 @@ import type { ServiceClient } from "@/lib/supabase/service";
 import { checkPlatform, type RuleCheck } from "./post-rules";
 import { publishPost } from "./publish";
 import { postOptionsRow, type PostOptions } from "./post-options";
+import { statusAfterTakeDown, takeDownSplit } from "./take-down";
 
 // Post creation and cancelling without a form: the Server Actions (compose card) and the MCP
 // tools both call these with a tenant they have already checked.
@@ -232,3 +233,73 @@ export async function cancelScheduledPost(
   return { ok: true };
 }
 
+export type TakeDownResult =
+  | { ok: true; removed: string[]; byHand: string[]; failed: string[] }
+  | { ok: false; error: "not_published" };
+
+/**
+ * Takes a published post down from every platform that allows it (T75c). Instagram, TikTok and
+ * Snapchat are left for the owner to remove in the app. Each platform is its own call; one
+ * failing doesn't stop the others.
+ */
+export async function takeDownPost(
+  deps: PostDeps,
+  input: { tenantId: string; userId: string; postId: string },
+): Promise<TakeDownResult> {
+  const { db } = deps;
+  const { data: post } = await db
+    .from("posts")
+    .select("id, status, zernio_post_id, target_account_ids, platform_results")
+    .eq("id", input.postId)
+    .eq("tenant_id", input.tenantId)
+    .maybeSingle();
+  if (!post?.zernio_post_id || !["published", "partial"].includes(post.status)) {
+    return { ok: false, error: "not_published" };
+  }
+  const { data: accounts } = await db
+    .from("social_accounts")
+    .select("platform, zernio_account_id")
+    .eq("tenant_id", input.tenantId)
+    .in("id", post.target_account_ids);
+  const { removable, byHand } = takeDownSplit((accounts ?? []).map((a) => a.platform));
+  const removed: string[] = [];
+  const failed: string[] = [];
+  for (const a of accounts ?? []) {
+    if (!removable.includes(a.platform)) continue;
+    try {
+      await deps.social().unpublishPost({
+        postId: post.zernio_post_id,
+        platform: a.platform,
+        accountId: a.zernio_account_id,
+        signal: AbortSignal.timeout(20_000),
+      });
+      removed.push(a.platform);
+    } catch (error) {
+      if (isPlatformPaused(error)) await recordPlatformPause(db);
+      Sentry.captureException(error, { extra: { postId: post.id, platform: a.platform } });
+      failed.push(a.platform);
+    }
+  }
+  if (removed.length) {
+    const results = (post.platform_results as { platform: string; status?: string }[] | null) ?? [];
+    const status = statusAfterTakeDown(removed.length, (accounts ?? []).length);
+    await db
+      .from("posts")
+      .update({
+        taken_down_at: new Date().toISOString(),
+        status,
+        failure_reason: status === "cancelled" ? "taken_down" : null,
+        platform_results: results.map((r) =>
+          removed.includes(r.platform) ? { ...r, status: "removed" } : r,
+        ),
+      })
+      .eq("id", post.id);
+  }
+  await writeAudit(db, {
+    tenantId: input.tenantId,
+    action: "post_taken_down",
+    actor: input.userId,
+    details: { postId: post.id, removed, byHand, failed },
+  });
+  return { ok: true, removed, byHand, failed };
+}

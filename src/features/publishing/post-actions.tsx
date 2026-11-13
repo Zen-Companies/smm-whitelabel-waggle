@@ -2,7 +2,9 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { cancelPost, retryPost, type PostActionState } from "./actions";
+import { cancelPost, retryPost, takeDown, type PostActionState, type TakeDownState } from "./actions";
+import { platformLabel } from "@/lib/social/platforms";
+import { takeDownSplit } from "./take-down";
 
 /** Cancel a scheduled post. Errors stay on the row (design.md §4). */
 export function CancelPostButton({ postId }: { postId: string }) {
@@ -63,6 +65,68 @@ export function RetryPostForm({ postId, label }: { postId: string; label: string
           {state.error}
         </span>
       )}
+    </form>
+  );
+}
+
+/**
+ * Take a published post down (T75c), asked first in place: where it will be removed, and where
+ * the owner has to do it in the app (Instagram, TikTok, Snapchat). YouTube removal is permanent.
+ */
+export function TakeDownButton({ postId, platforms }: { postId: string; platforms: string[] }) {
+  const [state, action, pending] = useActionState<TakeDownState, FormData>(takeDown, {});
+  const [asking, setAsking] = useState(false);
+  const { removable, byHand } = takeDownSplit(platforms);
+  const names = (ps: string[]) => ps.map(platformLabel).join(", ");
+  if (state.done) {
+    return (
+      <p role="status" className="text-sm">
+        {state.done}
+      </p>
+    );
+  }
+  if (!asking) {
+    return (
+      <Button type="button" variant="quiet" onClick={() => setAsking(true)}>
+        Take down
+      </Button>
+    );
+  }
+  return (
+    <form
+      action={action}
+      className="border-honey-border bg-honey-tint flex w-full flex-col gap-2 rounded-xl border p-3 text-sm"
+    >
+      <input type="hidden" name="postId" value={postId} />
+      {removable.length > 0 ? (
+        <p>
+          <b className="font-semibold">Take it down from {names(removable)}?</b>
+          {removable.includes("youtube") ? " On YouTube the video is deleted for good." : ""}
+        </p>
+      ) : (
+        <p>Waggle can&apos;t remove posts from {names(byHand)}.</p>
+      )}
+      {byHand.length > 0 && (
+        <p className="text-ink-2">
+          {names(byHand)} {byHand.length > 1 ? "don't" : "doesn't"} let apps remove posts: delete it
+          in the {names(byHand)} app.
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {removable.length > 0 && (
+          <Button type="submit" variant="primary" disabled={pending}>
+            {pending ? "Taking down…" : "Take down"}
+          </Button>
+        )}
+        <Button type="button" variant="quiet" onClick={() => setAsking(false)}>
+          {removable.length > 0 ? "Keep it" : "OK"}
+        </Button>
+        {state.error && (
+          <span role="alert" className="text-danger">
+            {state.error}
+          </span>
+        )}
+      </div>
     </form>
   );
 }

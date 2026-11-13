@@ -233,6 +233,13 @@ export interface SocialProvider {
   ): Promise<{ publicUrl: string }>;
   /** Cancels a scheduled post (`DELETE /v1/posts/{postId}`). */
   deletePost(input: { postId: string } & CallOptions): Promise<void>;
+  /**
+   * Removes a published post from one platform (`POST /v1/posts/{postId}/unpublish`, T75c).
+   * Not on Instagram, TikTok or Snapchat; permanent on YouTube.
+   */
+  unpublishPost(
+    input: { postId: string; platform: string; accountId?: string } & CallOptions,
+  ): Promise<void>;
   /** `postId` is the Zernio post id or the platform's post id. */
   replyToComment(
     input: {
