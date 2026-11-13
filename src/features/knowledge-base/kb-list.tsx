@@ -82,6 +82,14 @@ export async function KbList({
           <p className="text-ink-2">
             The only facts Waggle uses in replies. If it isn&apos;t here, it asks you.
           </p>
+          <nav aria-label="Teach Waggle" className="flex gap-4 text-sm font-medium">
+            <Link href="/automations" className="text-honey-text underline">
+              Automations
+            </Link>
+            <Link href="/lab" className="text-honey-text underline">
+              Practice in the Lab
+            </Link>
+          </nav>
         </div>
         {mayEdit && (
           <Link href={href({ topic: "new", q })} className={buttonVariants({ variant: "primary" })}>

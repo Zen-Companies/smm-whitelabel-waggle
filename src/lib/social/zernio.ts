@@ -23,6 +23,9 @@ import {
   type ProviderPostStatus,
   type PostValidation,
   type PostingQueue,
+  type CommentAutomation,
+  type CommentAutomationInput,
+  type CommentAutomationLogEntry,
   type ProviderUsage,
   type SocialPlatform,
   type SocialProvider,
@@ -85,6 +88,52 @@ const gbpPerformanceSchema = z.object({
   metrics: z
     .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
     .optional(),
+});
+const commentAutomationSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().catch(""),
+  platform: z.string().catch(""),
+  accountId: z.string().catch(""),
+  keywords: z.array(z.string()).catch([]),
+  matchMode: z.enum(["exact", "contains", "word"]).catch("contains"),
+  dmMessage: z.string().nullish().catch(null),
+  buttons: z
+    .array(z.object({ type: z.string(), title: z.string(), url: z.string().optional() }))
+    .nullish()
+    .catch(null),
+  commentReply: z.string().nullish().catch(null),
+  repeatPolicy: z.object({ mode: z.string() }).nullish().catch(null),
+  postTitle: z.string().nullish().catch(null),
+  isActive: z.boolean().catch(false),
+  stats: z
+    .object({
+      triggered: z.number().optional(),
+      dmsSent: z.number().optional(),
+      dmsFailed: z.number().optional(),
+      linkClicks: z.number().optional(),
+    })
+    .nullish()
+    .catch(null),
+});
+const commentAutomationsSchema = z.object({
+  automations: z.array(commentAutomationSchema.nullable().catch(null)).catch([]),
+});
+const commentAutomationLogsSchema = z.object({
+  logs: z
+    .array(
+      z
+        .object({
+          id: z.string().catch(""),
+          commenterName: z.string().nullish(),
+          commenterUsername: z.string().nullish(),
+          status: z.enum(["pending", "sent", "failed", "skipped", "gated"]).catch("pending"),
+          createdAt: z.string().nullish(),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+  misses: z.object({ total: z.number().optional() }).nullish().catch(null),
 });
 const presignSchema = z.object({ uploadUrl: z.url(), publicUrl: z.url() });
 const replySchema = z.object({ data: z.object({ commentId: z.string().min(1) }) });
@@ -527,6 +576,128 @@ export class ZernioSocialProvider implements SocialProvider {
           platform: w.platform ?? "",
           message: w.warning ?? "",
         })),
+      };
+    });
+  }
+
+  async listCommentAutomations(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listCommentAutomations", async (withFetch) => {
+      const { data } = await this.zernio.commentautomations.listCommentAutomations(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      return parse(commentAutomationsSchema, data, "listCommentAutomations").automations.flatMap(
+        (a): CommentAutomation[] =>
+          a
+            ? [
+                {
+                  id: a.id,
+                  name: a.name,
+                  platform: a.platform,
+                  accountId: a.accountId,
+                  keywords: a.keywords,
+                  matchMode: a.matchMode,
+                  dmMessage: a.dmMessage ?? null,
+                  button: (() => {
+                    const b = a.buttons?.find((x) => x.type === "url" && x.url);
+                    return b?.url ? { title: b.title, url: b.url } : null;
+                  })(),
+                  commentReply: a.commentReply ?? null,
+                  once: a.repeatPolicy?.mode !== "every_comment",
+                  postTitle: a.postTitle ?? null,
+                  isActive: a.isActive,
+                  stats: {
+                    triggered: a.stats?.triggered ?? 0,
+                    dmsSent: a.stats?.dmsSent ?? 0,
+                    dmsFailed: a.stats?.dmsFailed ?? 0,
+                    linkClicks: a.stats?.linkClicks ?? 0,
+                  },
+                },
+              ]
+            : [],
+      );
+    });
+  }
+
+  async createCommentAutomation(input: {
+    profileId: string;
+    automation: CommentAutomationInput;
+    isActive: boolean;
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createCommentAutomation", async (withFetch) => {
+      const { data } = await this.zernio.commentautomations.createCommentAutomation(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.automation.accountId,
+            trigger: "comment",
+            isActive: input.isActive,
+            ...automationBody(input.automation),
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({ automation: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createCommentAutomation",
+      );
+      return { id: parsed.automation.id };
+    });
+  }
+
+  async updateCommentAutomation(input: {
+    id: string;
+    automation?: CommentAutomationInput;
+    isActive?: boolean;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    await call("updateCommentAutomation", async (withFetch) => {
+      await this.zernio.commentautomations.updateCommentAutomation(
+        withFetch({
+          signal: input.signal,
+          path: { automationId: input.id },
+          body: {
+            ...(input.automation ? automationBody(input.automation) : {}),
+            ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          },
+        }),
+      );
+    });
+  }
+
+  async deleteCommentAutomation(input: { id: string; signal?: AbortSignal }): Promise<void> {
+    await call("deleteCommentAutomation", async (withFetch) => {
+      await this.zernio.commentautomations.deleteCommentAutomation(
+        withFetch({ signal: input.signal, path: { automationId: input.id } }),
+      );
+    });
+  }
+
+  async listCommentAutomationLogs(input: { id: string; limit?: number; signal?: AbortSignal }) {
+    return call("listCommentAutomationLogs", async (withFetch) => {
+      const { data } = await this.zernio.commentautomations.listCommentAutomationLogs(
+        withFetch({
+          signal: input.signal,
+          path: { automationId: input.id },
+          query: { limit: input.limit ?? 10 },
+        }),
+      );
+      const parsed = parse(commentAutomationLogsSchema, data, "listCommentAutomationLogs");
+      return {
+        entries: parsed.logs.flatMap((l): CommentAutomationLogEntry[] =>
+          l
+            ? [
+                {
+                  id: l.id,
+                  who: l.commenterUsername ? `@${l.commenterUsername}` : (l.commenterName ?? "Someone"),
+                  status: l.status,
+                  at: l.createdAt ?? null,
+                },
+              ]
+            : [],
+        ),
+        misses: parsed.misses?.total ?? 0,
       };
     });
   }
@@ -1245,5 +1416,18 @@ function toQueue(q: z.infer<typeof queueSchema>): PostingQueue {
     timezone: q.schedule?.timezone ?? "UTC",
     slots: (q.schedule?.slots ?? []).flatMap((s) => (s ? [s] : [])),
     nextSlots: q.nextSlots ?? [],
+  };
+}
+
+/** The create/update body of a comment automation (T77a). */
+function automationBody(a: CommentAutomationInput) {
+  return {
+    name: a.name,
+    keywords: a.keywords,
+    matchMode: a.matchMode,
+    ...(a.dmMessage ? { dmMessage: a.dmMessage } : {}),
+    buttons: a.button ? [{ type: "url" as const, title: a.button.title, url: a.button.url }] : [],
+    ...(a.commentReply ? { commentReply: a.commentReply } : {}),
+    repeatPolicy: { mode: a.once ? ("once" as const) : ("every_comment" as const) },
   };
 }

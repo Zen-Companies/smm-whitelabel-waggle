@@ -158,6 +158,45 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** A comment-to-DM automation (T77a, `/v1/comment-automations`). */
+export interface CommentAutomation {
+  id: string;
+  name: string;
+  platform: string;
+  /** Zernio account id. */
+  accountId: string;
+  keywords: string[];
+  matchMode: "exact" | "contains" | "word";
+  dmMessage: string | null;
+  button: { title: string; url: string } | null;
+  commentReply: string | null;
+  /** Only once per person (else every comment). */
+  once: boolean;
+  /** A specific post's title, or null for any post. */
+  postTitle: string | null;
+  isActive: boolean;
+  stats: { triggered: number; dmsSent: number; dmsFailed: number; linkClicks: number };
+}
+
+export interface CommentAutomationInput {
+  name: string;
+  accountId: string;
+  keywords: string[];
+  matchMode: "exact" | "contains" | "word";
+  dmMessage?: string;
+  button?: { title: string; url: string };
+  commentReply?: string;
+  once: boolean;
+}
+
+/** One comment an automation answered, skipped or failed on (the owner sees it; never logged). */
+export interface CommentAutomationLogEntry {
+  id: string;
+  who: string;
+  status: "pending" | "sent" | "failed" | "skipped" | "gated";
+  at: string | null;
+}
+
 export interface SocialProvider {
   /** A 409 for the same externalId returns the existing profile with `alreadyExisted: true`. */
   createProfile(input: {
@@ -191,6 +230,24 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** The brand's comment-to-DM automations (T77a). */
+  listCommentAutomations(input: { profileId: string } & CallOptions): Promise<CommentAutomation[]>;
+  createCommentAutomation(
+    input: { profileId: string; automation: CommentAutomationInput; isActive: boolean } & CallOptions,
+  ): Promise<{ id: string }>;
+  /** Edits an automation; any field left out stays as it is. */
+  updateCommentAutomation(
+    input: {
+      id: string;
+      automation?: CommentAutomationInput;
+      isActive?: boolean;
+    } & CallOptions,
+  ): Promise<void>;
+  deleteCommentAutomation(input: { id: string } & CallOptions): Promise<void>;
+  /** The latest comments it acted on, newest first, and how many comments matched no keyword. */
+  listCommentAutomationLogs(
+    input: { id: string; limit?: number } & CallOptions,
+  ): Promise<{ entries: CommentAutomationLogEntry[]; misses: number }>;
   /** The brand's default queue, or null when it has none yet (T75). */
   getQueue(input: { profileId: string } & CallOptions): Promise<PostingQueue | null>;
   /** Replaces the brand's default queue (creates it the first time). */

@@ -302,6 +302,70 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("createCommentAutomation sends the DM, button, reply and once-per-person (T77a)", async () => {
+    respond = () => json({ success: true, automation: { id: "ca_1" } }, 201);
+    await expect(
+      provider.createCommentAutomation({
+        profileId: "prof_1",
+        isActive: true,
+        automation: {
+          name: "MENU",
+          accountId: "acc_ig",
+          keywords: ["MENU"],
+          matchMode: "word",
+          dmMessage: "Hi {{first_name}}",
+          button: { title: "Menu", url: "https://a.b/menu" },
+          commentReply: "Sent!",
+          once: true,
+        },
+      }),
+    ).resolves.toEqual({ id: "ca_1" });
+    expect(captured[0].url.pathname).toBe("/api/v1/comment-automations");
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      accountId: "acc_ig",
+      trigger: "comment",
+      isActive: true,
+      name: "MENU",
+      keywords: ["MENU"],
+      matchMode: "word",
+      dmMessage: "Hi {{first_name}}",
+      buttons: [{ type: "url", title: "Menu", url: "https://a.b/menu" }],
+      commentReply: "Sent!",
+      repeatPolicy: { mode: "once" },
+    });
+  });
+
+  it("listCommentAutomations reads each automation and its numbers (T77a)", async () => {
+    respond = () =>
+      json({
+        automations: [
+          {
+            id: "ca_1",
+            name: "MENU",
+            platform: "instagram",
+            accountId: "acc_ig",
+            keywords: ["MENU"],
+            dmMessage: "Hi",
+            buttons: [{ type: "url", title: "Menu", url: "https://a.b" }],
+            repeatPolicy: { mode: "every_comment", cooldownHours: 24 },
+            isActive: true,
+            stats: { triggered: 5, dmsSent: 4, dmsFailed: 1 },
+          },
+          { bad: true },
+        ],
+      });
+    const [a, ...rest] = await provider.listCommentAutomations({ profileId: "prof_1" });
+    expect(rest).toEqual([]);
+    expect(a).toMatchObject({
+      id: "ca_1",
+      button: { title: "Menu", url: "https://a.b" },
+      once: false,
+      matchMode: "contains",
+      stats: { triggered: 5, dmsSent: 4, dmsFailed: 1, linkClicks: 0 },
+    });
+  });
+
   it("getGoogleBusinessPerformance returns each metric's total (T76)", async () => {
     respond = () =>
       json({

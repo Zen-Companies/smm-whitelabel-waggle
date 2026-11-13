@@ -16,6 +16,9 @@ import type {
   SocialPlatform,
   SocialProvider,
   PostingQueue,
+  CommentAutomation,
+  CommentAutomationInput,
+  CommentAutomationLogEntry,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
 import { SocialProviderError } from "./types";
@@ -153,6 +156,71 @@ export class MockSocialProvider implements SocialProvider {
       status,
       scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
     };
+  }
+
+  /** Comment-to-DM automations (T77a), kept in memory per profile. */
+  private automations = new Map<string, CommentAutomation & { profileId: string }>();
+
+  async listCommentAutomations(input: { profileId: string }) {
+    return [...this.automations.values()]
+      .filter((a) => a.profileId === input.profileId)
+      .map((a): CommentAutomation => {
+        const { profileId, ...rest } = a;
+        void profileId;
+        return rest;
+      });
+  }
+
+  async createCommentAutomation(input: {
+    profileId: string;
+    automation: CommentAutomationInput;
+    isActive: boolean;
+  }) {
+    const id = idFrom("mock_ca", input.profileId, input.automation.name, String(this.automations.size));
+    this.automations.set(id, {
+      id,
+      profileId: input.profileId,
+      platform: "instagram",
+      postTitle: null,
+      dmMessage: input.automation.dmMessage ?? null,
+      button: input.automation.button ?? null,
+      commentReply: input.automation.commentReply ?? null,
+      name: input.automation.name,
+      accountId: input.automation.accountId,
+      keywords: input.automation.keywords,
+      matchMode: input.automation.matchMode,
+      once: input.automation.once,
+      isActive: input.isActive,
+      stats: { triggered: 0, dmsSent: 0, dmsFailed: 0, linkClicks: 0 },
+    });
+    return { id };
+  }
+
+  async updateCommentAutomation(input: {
+    id: string;
+    automation?: CommentAutomationInput;
+    isActive?: boolean;
+  }) {
+    const a = this.automations.get(input.id);
+    if (!a) throw new SocialProviderError("Zernio updateCommentAutomation failed (404)", { status: 404, ambiguous: false });
+    if (input.automation) {
+      Object.assign(a, {
+        ...input.automation,
+        dmMessage: input.automation.dmMessage ?? null,
+        button: input.automation.button ?? null,
+        commentReply: input.automation.commentReply ?? null,
+      });
+    }
+    if (input.isActive !== undefined) a.isActive = input.isActive;
+  }
+
+  async deleteCommentAutomation(input: { id: string }) {
+    this.automations.delete(input.id);
+  }
+
+  /** No comments reach the mock, so nothing has been answered yet. */
+  async listCommentAutomationLogs(): Promise<{ entries: CommentAutomationLogEntry[]; misses: number }> {
+    return { entries: [], misses: 0 };
   }
 
   /** Posting times per profile (T75); the mock works out the next slots in UTC. */
