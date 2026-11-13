@@ -37,6 +37,35 @@ describe("Resend mailer", () => {
     });
   });
 
+  it("sets reply_to when a reply address is configured, so replies reach a real inbox", async () => {
+    const fetch = vi.fn(async () => Response.json({ id: "re_9" }));
+    const mailer = createResendMailer({
+      apiKey: "k",
+      from: "Waggle <noreply@gowaggle.ai>",
+      replyTo: "hello@gowaggle.ai",
+      fetch,
+    });
+    await mailer.send(email);
+    const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({ reply_to: "hello@gowaggle.ai" });
+  });
+
+  it("passes EMAIL_REPLY_TO through getMailer", async () => {
+    const fetch = vi.fn(async () => Response.json({ id: "re_10" }));
+    vi.stubGlobal("fetch", fetch);
+    try {
+      await getMailer({
+        RESEND_API_KEY: "k",
+        ALERT_FROM_EMAIL: "noreply@gowaggle.ai",
+        EMAIL_REPLY_TO: " hello@gowaggle.ai ",
+      }).send(email);
+      const [, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+      expect(JSON.parse(init.body as string).reply_to).toBe("hello@gowaggle.ai");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("throws a MailerError with the status only", async () => {
     const fetch = vi.fn(async () =>
       Response.json({ message: "owner@example.com is invalid" }, { status: 422 }),
