@@ -16,8 +16,10 @@ import type {
   SocialPlatform,
   SocialProvider,
   PostingQueue,
+  ChatFlow,
   CommentAutomation,
   CommentAutomationInput,
+  WorkflowGraph,
   CommentAutomationLogEntry,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
@@ -156,6 +158,45 @@ export class MockSocialProvider implements SocialProvider {
       status,
       scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
     };
+  }
+
+  /** Chat flows (T77b), kept in memory per profile. */
+  private flows = new Map<string, ChatFlow & { profileId: string; graph: WorkflowGraph }>();
+
+  async listWorkflows(input: { profileId: string }): Promise<ChatFlow[]> {
+    return [...this.flows.values()]
+      .filter((f) => f.profileId === input.profileId)
+      .map((f) => ({ id: f.id, name: f.name, platform: f.platform, status: f.status, started: f.started, completed: f.completed }));
+  }
+
+  async createWorkflow(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    graph: WorkflowGraph;
+  }) {
+    const id = idFrom("mock_wf", input.profileId, input.name, String(this.flows.size));
+    this.flows.set(id, {
+      id,
+      profileId: input.profileId,
+      name: input.name,
+      platform: input.platform,
+      status: "draft",
+      started: 0,
+      completed: 0,
+      graph: input.graph,
+    });
+    return { id };
+  }
+
+  async setWorkflowActive(input: { id: string; active: boolean }) {
+    const f = this.flows.get(input.id);
+    if (f) f.status = input.active ? "active" : "paused";
+  }
+
+  async deleteWorkflow(input: { id: string }) {
+    this.flows.delete(input.id);
   }
 
   /** Comment-to-DM automations (T77a), kept in memory per profile. */

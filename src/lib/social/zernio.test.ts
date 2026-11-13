@@ -302,6 +302,37 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("createWorkflow sends the graph, setWorkflowActive activates or pauses (T77b)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/workflows"
+        ? json({ success: true, workflow: { id: "wf_1", status: "draft" } }, 201)
+        : json({ success: true });
+    const graph = {
+      nodes: [
+        { id: "trigger", type: "trigger", config: { triggerType: "inbound_message" } },
+        { id: "end", type: "end" },
+      ],
+      edges: [{ id: "e0", source: "trigger", target: "end" }],
+      entryNodeId: "trigger",
+    };
+    await expect(
+      provider.createWorkflow({ profileId: "prof_1", accountId: "acc_wa", platform: "whatsapp", name: "Book", graph }),
+    ).resolves.toEqual({ id: "wf_1" });
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      accountId: "acc_wa",
+      platform: "whatsapp",
+      name: "Book",
+      nodes: graph.nodes,
+      edges: graph.edges,
+      entryNodeId: "trigger",
+    });
+    await provider.setWorkflowActive({ id: "wf_1", active: true });
+    expect(captured[1].url.pathname).toBe("/api/v1/workflows/wf_1/activate");
+    await provider.setWorkflowActive({ id: "wf_1", active: false });
+    expect(captured[2].url.pathname).toBe("/api/v1/workflows/wf_1/pause");
+  });
+
   it("createCommentAutomation sends the DM, button, reply and once-per-person (T77a)", async () => {
     respond = () => json({ success: true, automation: { id: "ca_1" } }, 201);
     await expect(

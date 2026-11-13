@@ -158,6 +158,23 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** A Zernio workflow graph (T77b, `/v1/workflows`): nodes, edges and the trigger node. */
+export interface WorkflowGraph {
+  nodes: { id: string; type: string; config?: Record<string, unknown>; label?: string }[];
+  edges: { id: string; source: string; target: string; sourceHandle?: string }[];
+  entryNodeId: string;
+}
+
+/** A chat flow as listed (T77b). */
+export interface ChatFlow {
+  id: string;
+  name: string;
+  platform: string;
+  status: "draft" | "active" | "paused";
+  started: number;
+  completed: number;
+}
+
 /** A comment-to-DM automation (T77a, `/v1/comment-automations`). */
 export interface CommentAutomation {
   id: string;
@@ -230,6 +247,21 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** The brand's chat flows (T77b, `GET /v1/workflows`). */
+  listWorkflows(input: { profileId: string } & CallOptions): Promise<ChatFlow[]>;
+  /** Creates a flow as a draft (`POST /v1/workflows`). */
+  createWorkflow(
+    input: {
+      profileId: string;
+      accountId: string;
+      platform: string;
+      name: string;
+      graph: WorkflowGraph;
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  /** Turns a flow on (`/activate`) or pauses it (`/pause`). */
+  setWorkflowActive(input: { id: string; active: boolean } & CallOptions): Promise<void>;
+  deleteWorkflow(input: { id: string } & CallOptions): Promise<void>;
   /** The brand's comment-to-DM automations (T77a). */
   listCommentAutomations(input: { profileId: string } & CallOptions): Promise<CommentAutomation[]>;
   createCommentAutomation(

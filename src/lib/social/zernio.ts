@@ -23,7 +23,9 @@ import {
   type ProviderPostStatus,
   type PostValidation,
   type PostingQueue,
+  type ChatFlow,
   type CommentAutomation,
+  type WorkflowGraph,
   type CommentAutomationInput,
   type CommentAutomationLogEntry,
   type ProviderUsage,
@@ -88,6 +90,23 @@ const gbpPerformanceSchema = z.object({
   metrics: z
     .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
     .optional(),
+});
+const workflowsSchema = z.object({
+  workflows: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          name: z.string().catch(""),
+          platform: z.string().catch(""),
+          status: z.enum(["draft", "active", "paused"]).catch("draft"),
+          totalStarted: z.number().optional(),
+          totalCompleted: z.number().optional(),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
 });
 const commentAutomationSchema = z.object({
   id: z.string().min(1),
@@ -577,6 +596,76 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async listWorkflows(input: { profileId: string; signal?: AbortSignal }): Promise<ChatFlow[]> {
+    return call("listWorkflows", async (withFetch) => {
+      const { data } = await this.zernio.workflows.listWorkflows(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 100 } }),
+      );
+      return parse(workflowsSchema, data, "listWorkflows").workflows.flatMap((w): ChatFlow[] =>
+        w
+          ? [
+              {
+                id: w.id,
+                name: w.name,
+                platform: w.platform,
+                status: w.status,
+                started: w.totalStarted ?? 0,
+                completed: w.totalCompleted ?? 0,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createWorkflow(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    graph: WorkflowGraph;
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createWorkflow", async (withFetch) => {
+      const { data } = await this.zernio.workflows.createWorkflow(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            platform: input.platform as "whatsapp",
+            name: input.name,
+            nodes: input.graph.nodes as never,
+            edges: input.graph.edges,
+            entryNodeId: input.graph.entryNodeId,
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({ workflow: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createWorkflow",
+      );
+      return { id: parsed.workflow.id };
+    });
+  }
+
+  async setWorkflowActive(input: { id: string; active: boolean; signal?: AbortSignal }) {
+    await call(input.active ? "activateWorkflow" : "pauseWorkflow", async (withFetch) => {
+      const opts = withFetch({ signal: input.signal, path: { workflowId: input.id } });
+      if (input.active) await this.zernio.workflows.activateWorkflow(opts);
+      else await this.zernio.workflows.pauseWorkflow(opts);
+    });
+  }
+
+  async deleteWorkflow(input: { id: string; signal?: AbortSignal }) {
+    await call("deleteWorkflow", async (withFetch) => {
+      await this.zernio.workflows.deleteWorkflow(
+        withFetch({ signal: input.signal, path: { workflowId: input.id } }),
+      );
     });
   }
 

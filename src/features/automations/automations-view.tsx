@@ -3,16 +3,25 @@ import Link from "next/link";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
-import type { CommentAutomation } from "@/lib/social/types";
+import type { ChatFlow, CommentAutomation } from "@/lib/social/types";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { AutomationsList } from "./automations-list";
+import { FLOW_PLATFORMS } from "./chat-flow";
 import { supportsCommentAutomation } from "./comment-dm";
+import { FlowsSection } from "./flows-section";
+
+const KINDS = [
+  { key: "comment", label: "Comment to DM" },
+  { key: "flows", label: "Chat flows" },
+] as const;
+type Kind = (typeof KINDS)[number]["key"];
 
 /**
  * Teach Waggle → Automations (T77, design "Automations"): replies that happen on their own, set
- * up once. Comment to DM first; chat flows, sequences and links come next.
+ * up once. Comment to DM and chat flows; sequences and links come next.
  */
-export async function AutomationsView() {
+export async function AutomationsView({ kind: raw }: { kind?: string }) {
+  const kind: Kind = KINDS.some((k) => k.key === raw) ? (raw as Kind) : "comment";
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
   const { data: rows } = await supabase
@@ -21,20 +30,24 @@ export async function AutomationsView() {
     .eq("tenant_id", tenant.id)
     .eq("status", "active")
     .order("created_at");
-  const accounts = (rows ?? [])
-    .filter((a) => supportsCommentAutomation(a.platform))
-    .map((a) => ({ zernioId: a.zernio_account_id, platform: a.platform, username: a.username }));
+  const all = (rows ?? []).map((a) => ({
+    zernioId: a.zernio_account_id,
+    platform: a.platform,
+    username: a.username,
+  }));
+  const canEdit = can(tenant.role, "brand.settings");
 
   let automations: CommentAutomation[] = [];
+  let flows: ChatFlow[] = [];
   let unavailable = false;
   if (tenant.zernioProfileId) {
     try {
-      automations = await getSocialProvider().listCommentAutomations({
-        profileId: tenant.zernioProfileId,
-        signal: AbortSignal.timeout(10_000),
-      });
+      const social = getSocialProvider();
+      const opts = { profileId: tenant.zernioProfileId, signal: AbortSignal.timeout(10_000) };
+      if (kind === "comment") automations = await social.listCommentAutomations(opts);
+      else flows = await social.listWorkflows(opts);
     } catch (error) {
-      Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "listCommentAutomations" } });
+      Sentry.captureException(error, { extra: { tenantId: tenant.id, step: `automations:${kind}` } });
       unavailable = true;
     }
   }
@@ -49,21 +62,37 @@ export async function AutomationsView() {
         <p className="text-ink-2">Replies that happen on their own, set up once.</p>
       </div>
       <nav aria-label="Automation kinds" className="tabs">
-        <span aria-current="page">Comment to DM</span>
+        {KINDS.map((k) => (
+          <Link
+            key={k.key}
+            href={`/automations?kind=${k.key}`}
+            aria-current={k.key === kind ? "page" : undefined}
+          >
+            {k.label}
+          </Link>
+        ))}
       </nav>
       {unavailable ? (
         <p className="danger-box">Your automations couldn&apos;t be loaded right now. Try again in a moment.</p>
+      ) : kind === "comment" ? (
+        <>
+          <AutomationsList
+            automations={automations}
+            accounts={all.filter((a) => supportsCommentAutomation(a.platform))}
+            canEdit={canEdit}
+          />
+          <p className="meta">
+            Instagram and Facebook get the DM. TikTok, Threads, LinkedIn and YouTube get the public
+            reply only.
+          </p>
+        </>
       ) : (
-        <AutomationsList
-          automations={automations}
-          accounts={accounts}
-          canEdit={can(tenant.role, "brand.settings")}
+        <FlowsSection
+          flows={flows}
+          accounts={all.filter((a) => FLOW_PLATFORMS.has(a.platform))}
+          canEdit={canEdit}
         />
       )}
-      <p className="meta">
-        Instagram and Facebook get the DM. TikTok, Threads, LinkedIn and YouTube get the public
-        reply only. Instagram and Facebook only allow one private message per comment.
-      </p>
     </div>
   );
 }

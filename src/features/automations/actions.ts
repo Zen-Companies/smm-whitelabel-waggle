@@ -7,6 +7,7 @@ import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
+import { buildFlow, parseFlowForm } from "./chat-flow";
 import { parseCommentDmForm } from "./comment-dm";
 
 export type AutomationFormState = { error?: string; field?: string; savedAt?: number };
@@ -138,4 +139,89 @@ async function ownsAutomation(profileId: string | null, id: string): Promise<boo
     signal: AbortSignal.timeout(10_000),
   });
   return list.some((a) => a.id === id);
+}
+
+/**
+ * Create a chat flow (T77b): saved as a draft, then turned on unless the owner chose "Save as
+ * draft". Owner/admin only, like every automation.
+ */
+export async function saveFlow(
+  _prev: AutomationFormState,
+  formData: FormData,
+): Promise<AutomationFormState> {
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  if (!tenant.zernioProfileId) return { error: "Connect an account first." };
+  const parsed = parseFlowForm(formData);
+  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+  const db = getServiceClient();
+  const { data: account } = await db
+    .from("social_accounts")
+    .select("id")
+    .eq("tenant_id", tenant.id)
+    .eq("zernio_account_id", parsed.value.accountId)
+    .eq("platform", parsed.value.platform)
+    .eq("status", "active")
+    .maybeSingle();
+  if (!account) return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
+  const turnOn = formData.get("intent") !== "draft";
+  try {
+    const social = getSocialProvider();
+    const { id } = await social.createWorkflow({
+      profileId: tenant.zernioProfileId,
+      accountId: parsed.value.accountId,
+      platform: parsed.value.platform,
+      name: parsed.value.name,
+      graph: buildFlow(parsed.value),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (turnOn) await social.setWorkflowActive({ id, active: true, signal: AbortSignal.timeout(15_000) });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "saveFlow" } });
+    return { error: UNAVAILABLE };
+  }
+  await writeAudit(db, {
+    tenantId: tenant.id,
+    action: "automation_created",
+    actor: tenant.userId,
+    details: { kind: "chat_flow", active: turnOn, steps: parsed.value.steps.length },
+  });
+  revalidatePath("/automations");
+  return { savedAt: Date.now() };
+}
+
+/** Turn a chat flow on, pause it, or delete it (`op`: on | off | delete). */
+export async function changeFlow(
+  _prev: AutomationFormState,
+  formData: FormData,
+): Promise<AutomationFormState> {
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const id = String(formData.get("id") ?? "");
+  const op = String(formData.get("op") ?? "");
+  if (!id || !["on", "off", "delete"].includes(op) || !tenant.zernioProfileId) {
+    return { error: "Something went wrong. Reload the page." };
+  }
+  const social = getSocialProvider();
+  try {
+    const flows = await social.listWorkflows({
+      profileId: tenant.zernioProfileId,
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!flows.some((f) => f.id === id)) return { error: "Something went wrong. Reload the page." };
+    if (op === "delete") await social.deleteWorkflow({ id, signal: AbortSignal.timeout(15_000) });
+    else await social.setWorkflowActive({ id, active: op === "on", signal: AbortSignal.timeout(15_000) });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "changeFlow" } });
+    return { error: UNAVAILABLE };
+  }
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action:
+      op === "delete" ? "automation_deleted" : op === "on" ? "automation_turned_on" : "automation_turned_off",
+    actor: tenant.userId,
+    details: { kind: "chat_flow", automationId: id },
+  });
+  revalidatePath("/automations");
+  return { savedAt: Date.now() };
 }
