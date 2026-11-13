@@ -1,11 +1,13 @@
+import { CONSENT_KEY } from "@/lib/social/lead-consent";
 import { normalizePhone } from "./contact-form";
+
+export { CONSENT_KEY, leadConsented } from "@/lib/social/lead-consent";
 
 // Ad lead forms (T78c, design "Contacts · Leads from ad lead forms"): a form shown inside a
 // Facebook or Instagram ad (`POST /v1/ads/lead-forms`, made on the Facebook Page). Each form
 // carries an optional, unticked "messages" box: a lead counts as agreeing to messages only
 // when they ticked it (consent is never assumed).
 
-export const CONSENT_KEY = "waggle_messages";
 const STANDARD = ["FULL_NAME", "EMAIL", "PHONE"] as const;
 
 export type LeadFormInput = {
@@ -83,9 +85,6 @@ export function toLeadFormBody(v: LeadFormInput, businessName: string) {
     },
   };
 }
-
-export const leadConsented = (consents: { checkboxKey: string; isChecked: boolean }[] | undefined) =>
-  !!consents?.some((c) => c.checkboxKey === CONSENT_KEY && c.isChecked);
 
 /** Name, email and phone from a lead's answers (Meta's field keys). */
 export function leadContact(fields: Record<string, string>): { name: string; email?: string; phone?: string } {

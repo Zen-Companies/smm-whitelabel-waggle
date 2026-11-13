@@ -150,6 +150,24 @@ export const accountDisconnectedSchema = z.object({
   }),
 });
 
+/** A lead from an ad's form (T78d, `lead.received`). Answers stay in webhook_events only. */
+export const leadReceivedSchema = z.object({
+  event: z.literal("lead.received"),
+  lead: z.object({
+    id: z.string().min(1),
+    platform: z.string().nullish(),
+    leadgenId: z.string().min(1),
+    formId: z.string().min(1),
+    formName: z.string().nullish(),
+  }),
+  account: z.object({
+    id: z.string().min(1),
+    accountId: z.string().min(1).optional(),
+    platform: z.string(),
+    profileId: z.string().nullable(),
+  }),
+});
+
 /** The accountId field is canonical; `id` carries the same value (docs.zernio.com/webhooks). */
 export function zernioAccountIdOf(account: z.infer<typeof accountBlock>): string {
   return account.accountId ?? account.id;

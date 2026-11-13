@@ -62,6 +62,27 @@ describe("composeAlert", () => {
     expect(email.text).toContain("https://app.test/inbox/items/item-2");
   });
 
+  it("ad lead: every answer, the consent, and a link to the leads (T78d)", () => {
+    const email = composeAlert(
+      {
+        kind: "ad_lead",
+        formName: "Catering inquiry",
+        fields: { first_name: "Ana", last_name: "Cruz", phone_number: "+639175550142", q1: "40" },
+        agreedToMessages: false,
+      },
+      ctx,
+    );
+    expect(email.subject).toBe("Harbour Bean: new lead from Ana Cruz");
+    expect(email.text).toContain("Someone filled Catering inquiry in your ad.");
+    expect(email.text).toContain("Phone number: +639175550142");
+    expect(email.text).toContain("didn't tick the messages box");
+    expect(email.text).toContain("https://app.test/contacts/ad-leads");
+    expect(
+      composeAlert({ kind: "ad_lead", formName: null, fields: {}, agreedToMessages: true }, ctx)
+        .subject,
+    ).toBe("Harbour Bean: new lead from your ad");
+  });
+
   it("disconnect links to settings; nudge counts drafts", () => {
     expect(
       composeAlert({ kind: "disconnect", platform: "instagram", username: "harbourbean" }, ctx),

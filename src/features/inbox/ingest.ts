@@ -12,6 +12,7 @@ import {
   accountDisconnectedSchema,
   commentEventSchema,
   envelopeSchema,
+  leadReceivedSchema,
   messageEventSchema,
   messageFailedSchema,
   postEventSchema,
@@ -171,6 +172,7 @@ async function mapEvent(
     "account.connected": (t) => mapAccountConnected(deps, t, payload),
     "account.disconnected": (t) => mapAccountDisconnected(deps, t, payload),
     "message.failed": (t) => mapMessageFailed(deps.db, t.tenantId, payload),
+    "lead.received": (t) => mapLeadReceived(deps.db, t, event.id, payload),
   };
   const handler = handlers[event.event];
   if (!handler) return skipped("not_mapped");
@@ -178,6 +180,46 @@ async function mapEvent(
   const tenant = await resolveTenant(deps.db, event.profiles);
   if (!tenant) return rejected("unknown_tenant");
   return handler(tenant);
+}
+
+/**
+ * A lead from an ad's form (T78d): one 'ad_lead' alert (email + bell) per lead. The answers stay
+ * in the stored event; the alert keeps ids and the form name only (rule 10).
+ */
+async function mapLeadReceived(
+  db: ServiceClient,
+  tenant: { tenantId: string; profileId: string },
+  eventId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(leadReceivedSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (e.account.profileId !== tenant.profileId) return rejected("profile_mismatch");
+  const { data: account } = await db
+    .from("social_accounts")
+    .select("id")
+    .eq("tenant_id", tenant.tenantId)
+    .eq("zernio_account_id", e.account.accountId ?? e.account.id)
+    .maybeSingle();
+  if (!account) return skipped("unknown_account");
+  const { error } = await db.from("alerts").upsert(
+    {
+      tenant_id: tenant.tenantId,
+      kind: "ad_lead",
+      social_account_id: account.id,
+      details: {
+        source: "ad_form",
+        eventId,
+        zernioLeadId: e.lead.id,
+        formName: e.lead.formName ?? null,
+        platform: e.lead.platform ?? "meta",
+      },
+      dedupe_key: `ad_lead:${e.lead.leadgenId}`,
+    },
+    { onConflict: "dedupe_key", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`ad lead alert insert failed: ${error.message}`);
+  return { outcome: "processed", detail: "ad_lead" };
 }
 
 /** A reply we sent was not delivered: its draft and item fail, and the owner is told (T13). */

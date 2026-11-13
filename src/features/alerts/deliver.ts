@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { writeAudit } from "@/lib/audit";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { leadConsented } from "@/lib/social/lead-consent";
 import { composeAlert, type AlertContent } from "./compose";
 import type { Mailer } from "@/lib/email/mailer";
 
@@ -31,7 +32,7 @@ export interface DeliverSummary {
 type AlertRow = {
   id: string;
   tenant_id: string;
-  kind: "escalation" | "lead" | "disconnect" | "draft_waiting";
+  kind: "escalation" | "lead" | "disconnect" | "draft_waiting" | "ad_lead";
   item_id: string | null;
   social_account_id: string | null;
   lead_id: string | null;
@@ -82,6 +83,33 @@ async function itemSummary(db: ServiceClient, itemId: string) {
   return { ...row, platform: row.social_accounts?.platform ?? "instagram" };
 }
 
+/** The answers live in the stored lead.received event (T78d), never in the alert itself. */
+async function adLeadContent(db: ServiceClient, alert: AlertRow): Promise<AlertContent> {
+  const eventId = (alert.details as { eventId?: unknown } | null)?.eventId;
+  if (typeof eventId !== "string") throw new PermanentAlertError("event_missing");
+  const { data: event } = await db
+    .from("webhook_events")
+    .select("payload")
+    .eq("id", eventId)
+    .maybeSingle();
+  const lead = (event?.payload as { lead?: Record<string, unknown> } | null)?.lead;
+  if (!lead) throw new PermanentAlertError("event_gone");
+  const fields: Record<string, string> = {};
+  for (const [k, v] of Object.entries((lead.fields ?? {}) as Record<string, unknown>)) {
+    if (typeof v === "string" || typeof v === "number") fields[k] = String(v).slice(0, 500);
+    else if (Array.isArray(v)) fields[k] = v.map(String).join(", ").slice(0, 500);
+  }
+  const consents = Array.isArray(lead.consents)
+    ? (lead.consents as { checkboxKey: string; isChecked: boolean }[])
+    : [];
+  return {
+    kind: "ad_lead",
+    formName: typeof lead.formName === "string" ? lead.formName : null,
+    fields,
+    agreedToMessages: leadConsented(consents),
+  };
+}
+
 async function contentOf(db: ServiceClient, alert: AlertRow): Promise<AlertContent> {
   switch (alert.kind) {
     case "escalation": {
@@ -112,6 +140,8 @@ async function contentOf(db: ServiceClient, alert: AlertRow): Promise<AlertConte
         ...lead,
       };
     }
+    case "ad_lead":
+      return adLeadContent(db, alert);
     case "disconnect": {
       const { data: account } = await db
         .from("social_accounts")

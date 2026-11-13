@@ -37,6 +37,17 @@ describe("describeNotification", () => {
       href: "/inbox/items/i2",
       unread: true,
     });
+    expect(
+      describeNotification(
+        row({ kind: "lead", details: { source: "ad_form", formName: "Catering inquiry" } }),
+        lookups,
+      ),
+    ).toMatchObject({
+      tone: "lead",
+      title: "New lead from your ad",
+      meta: "Filled Catering inquiry",
+      href: "/contacts/ad-leads",
+    });
   });
 
   it("needs you: amber, who and why", () => {

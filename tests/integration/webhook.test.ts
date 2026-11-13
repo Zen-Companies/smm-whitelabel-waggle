@@ -282,6 +282,31 @@ describe("POST /api/webhooks/zernio", () => {
     expect(item?.status).toBe("paused");
   });
 
+  it("lead.received queues one ad-lead alert per lead, holding ids only (T78d)", async () => {
+    const leadgenId = `lg_${randomUUID().slice(0, 8)}`;
+    const payload = fixture("lead-received");
+    payload.lead.leadgenId = leadgenId;
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "ad_lead" });
+
+    // Same lead under a new event id (a redelivery): still one alert.
+    const again = fixture("lead-received");
+    again.lead.leadgenId = leadgenId;
+    await deliver(again);
+
+    const { data: alerts } = await db
+      .from("alerts")
+      .select("kind, details")
+      .eq("dedupe_key", `ad_lead:${leadgenId}`);
+    expect(alerts).toHaveLength(1);
+    expect(alerts![0].details).toMatchObject({
+      source: "ad_form",
+      eventId: payload.id,
+      formName: "Catering inquiry",
+    });
+    expect(JSON.stringify(alerts![0].details)).not.toContain("Maria");
+  });
+
   it("post.* events update the post's status and error", async () => {
     const postId = `post_${randomUUID().slice(0, 8)}`;
     const { data: account } = await db

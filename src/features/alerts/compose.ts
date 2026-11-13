@@ -24,6 +24,13 @@ export type AlertContent =
       contact: string | null;
       request: string | null;
     }
+  | {
+      kind: "ad_lead";
+      formName: string | null;
+      /** Question key -> answer, as the form sent them. */
+      fields: Record<string, string>;
+      agreedToMessages: boolean;
+    }
   | { kind: "disconnect"; platform: string; username: string | null }
   | { kind: "draft_waiting"; count: number };
 
@@ -106,6 +113,24 @@ export function composeAlert(
           `Request: ${content.request ?? "not given"}`,
         ],
         { href: itemUrl(appUrl, content.itemId), label: "Open the conversation" },
+      );
+    }
+    case "ad_lead": {
+      const get = (...keys: string[]) => keys.map((k) => content.fields[k]?.trim()).find(Boolean);
+      const name =
+        get("full_name", "name") ??
+        ([get("first_name"), get("last_name")].filter(Boolean).join(" ") || null);
+      const label = (k: string) => k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+      return render(
+        `${businessName}: new lead from ${name ?? "your ad"}`,
+        [
+          `Someone filled ${content.formName ?? "your lead form"} in your ad.`,
+          ...Object.entries(content.fields).map(([k, v]) => `${label(k)}: ${v}`),
+          content.agreedToMessages
+            ? "They agreed to get messages from you on WhatsApp."
+            : "They didn't tick the messages box: reply to them directly, not with broadcasts.",
+        ],
+        { href: `${appUrl}/contacts/ad-leads`, label: "Open your leads" },
       );
     }
     case "disconnect": {

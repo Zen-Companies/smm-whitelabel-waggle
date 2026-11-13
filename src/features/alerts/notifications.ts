@@ -69,6 +69,17 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
   const itemHref = row.item_id ? `/inbox/items/${row.item_id}` : "/inbox";
   switch (row.kind) {
     case "lead": {
+      if (row.details.source === "ad_form") {
+        const form = typeof row.details.formName === "string" ? row.details.formName : null;
+        return {
+          ...base,
+          tone: "lead",
+          title: "New lead from your ad",
+          meta: form ? `Filled ${form}` : "Someone filled your lead form",
+          href: "/contacts/ad-leads",
+          action: "Open",
+        };
+      }
       const lead = l.leads.get(String(row.details.leadId ?? ""));
       return {
         ...base,
