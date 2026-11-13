@@ -158,6 +158,18 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** Where an email address connects (T80b, `POST /v1/email/imap/discover`). */
+export interface EmailDiscovery {
+  route: "imap" | "google_oauth" | "microsoft_oauth" | "unsupported";
+  providerName: string | null;
+  /** App password label, e.g. "App-specific password"; null when none is named. */
+  passwordLabel: string | null;
+  helpUrl: string | null;
+  steps: string[];
+  /** Settings to switch on at the provider first. */
+  preflight: { text: string; url: string | null }[];
+}
+
 /** A site, shop or tool connected on the profile (T80: shopify, wordpress, webflow, ...). */
 export interface Integration {
   id: string;
@@ -396,6 +408,19 @@ export interface SocialProvider {
   connectSiteWithKeys(
     input: { profileId: string; keys: SiteKeys } & CallOptions,
   ): Promise<{ accountId: string; name: string }>;
+  /** Finds an email address's provider and settings (T80b); 20 a minute upstream. */
+  discoverEmail(input: { email: string } & CallOptions): Promise<EmailDiscovery>;
+  /**
+   * Connects a mailbox with its (app) password (T80b). Zernio signs in to IMAP and SMTP before
+   * storing anything; a failed check is a 422 with the provider's fix in `details.info`.
+   */
+  connectEmail(
+    input: { profileId: string; email: string; password: string; name?: string } & CallOptions,
+  ): Promise<void>;
+  /** Connects a LINE Official Account with its channel keys (T80b). */
+  connectLine(
+    input: { profileId: string; channelId: string; channelSecret: string } & CallOptions,
+  ): Promise<{ accountId: string; name: string; webhookReady: boolean }>;
   /** Connects WhatsApp with the business's own Meta keys (T80). */
   connectWhatsAppWithKeys(
     input: {
@@ -765,6 +790,13 @@ export interface SocialProvider {
   ping(): Promise<void>;
 }
 
+export interface ProviderErrorInfo {
+  title: string | null;
+  body: string | null;
+  helpUrl: string | null;
+  steps: string[];
+}
+
 export class SocialProviderError extends Error {
   constructor(
     message: string,
@@ -780,6 +812,8 @@ export class SocialProviderError extends Error {
       retryAfterSeconds?: number;
       /** Private reply (T41): this comment's one DM is spent, by this call or an earlier one. */
       privateReplyConsumed?: boolean;
+      /** The provider's own fix for a failed connect (email: `details.title/body/guidance`). */
+      info?: ProviderErrorInfo;
     },
   ) {
     super(message);

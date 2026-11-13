@@ -6,7 +6,8 @@ import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
-import { isOwnKeyPlatform, MORE_CONNECTIONS, OWN_KEY_PLATFORMS } from "./own-keys";
+import { EmailConnectForm, LineKeysForm } from "./email-line-forms";
+import { CONNECTED_PLATFORMS, isOwnKeyPlatform, MORE_CONNECTIONS } from "./own-keys";
 
 /**
  * Settings → Accounts → More connections (T80): groups under the social tiles. Sites connect
@@ -21,7 +22,7 @@ export async function MoreConnections() {
     try {
       connected = await getSocialProvider().listIntegrations({
         profileId: tenant.zernioProfileId,
-        platforms: OWN_KEY_PLATFORMS,
+        platforms: CONNECTED_PLATFORMS,
         signal: AbortSignal.timeout(15_000),
       });
     } catch (error) {
@@ -46,7 +47,7 @@ export async function MoreConnections() {
           <h4 className="text-ink-2 text-sm font-semibold">{group.title}</h4>
           <ul className="card divide-line flex flex-col divide-y">
             {group.items.map((item) => {
-              const mine = connected.filter((c) => c.platform === item.id);
+              const mine = connected.filter((c) => c.platform === (item.platform ?? item.id));
               return (
                 <li key={item.id} className="flex flex-col px-4 py-3">
                   <div className="flex flex-wrap items-center gap-3">
@@ -87,6 +88,22 @@ export async function MoreConnections() {
                         Connect with your own key
                       </summary>
                       <SiteKeysForm kind={item.id} />
+                    </details>
+                  )}
+                  {item.how === "email" && (
+                    <details className="pl-11">
+                      <summary className="text-honey-text cursor-pointer text-sm font-medium">
+                        {mine.length ? "Connect another email" : "Connect an email"}
+                      </summary>
+                      <EmailConnectForm />
+                    </details>
+                  )}
+                  {item.how === "line" && !mine.length && (
+                    <details className="pl-11">
+                      <summary className="text-honey-text cursor-pointer text-sm font-medium">
+                        Connect with your channel keys
+                      </summary>
+                      <LineKeysForm />
                     </details>
                   )}
                 </li>

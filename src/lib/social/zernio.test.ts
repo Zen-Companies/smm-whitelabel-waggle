@@ -397,6 +397,75 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("email and LINE (T80b): discovery, a failed sign-in with the provider's fix, LINE's state", async () => {
+    respond = (req) => {
+      const p = req.url.pathname;
+      if (p === "/api/v1/email/imap/discover")
+        return json({
+          data: {
+            route: "imap",
+            provider: { id: "zoho", name: "Zoho Mail" },
+            auth: {
+              kind: "app_password",
+              label: "App password",
+              helpUrl: "https://z.example",
+              steps: ["a"],
+            },
+            preflight: [{ id: "enable_imap", text: "Turn on IMAP.", url: null }],
+          },
+        });
+      if (p === "/api/v1/email/imap/accounts")
+        return json(
+          {
+            code: "imap_auth_failed",
+            details: {
+              title: "Couldn't sign in to Zoho Mail",
+              body: "Check the password.",
+              guidance: { helpUrl: "https://z.example/app", steps: ["s1"] },
+            },
+          },
+          422,
+        );
+      if (p === "/api/v1/users") return json({ currentUserId: "user_1", users: [] });
+      return json({
+        account: { accountId: "acc_line", username: "@hb", displayName: "Harbour Bean" },
+        webhook: { configured: true, testSucceeded: true },
+      });
+    };
+    await expect(provider.discoverEmail({ email: "ana@zoho.com" })).resolves.toEqual({
+      route: "imap",
+      providerName: "Zoho Mail",
+      passwordLabel: "App password",
+      helpUrl: "https://z.example",
+      steps: ["a"],
+      preflight: [{ text: "Turn on IMAP.", url: null }],
+    });
+    expect(captured[0].headers.get("Authorization")).toBe("Bearer sk_test_zernio");
+
+    await expect(
+      provider.connectEmail({ profileId: "prof_1", email: "ana@zoho.com", password: "x" }),
+    ).rejects.toMatchObject({
+      details: {
+        status: 422,
+        code: "imap_auth_failed",
+        info: {
+          title: "Couldn't sign in to Zoho Mail",
+          helpUrl: "https://z.example/app",
+          steps: ["s1"],
+        },
+      },
+    });
+
+    await expect(
+      provider.connectLine({ profileId: "prof_1", channelId: "2001234567", channelSecret: "s" }),
+    ).resolves.toEqual({ accountId: "acc_line", name: "Harbour Bean", webhookReady: true });
+    expect(captured.at(-1)!.body).toEqual({
+      channelId: "2001234567",
+      channelSecret: "s",
+      state: "user_1-prof_1",
+    });
+  });
+
   it("ads (T79): connect, boost with its key, campaigns with results, pause", async () => {
     respond = (req) => {
       const p = req.url.pathname;

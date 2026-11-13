@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { MORE_CONNECTIONS, OWN_KEY_PLATFORMS, parseSiteKeys, parseWhatsAppKeys } from "./own-keys";
+import {
+  MORE_CONNECTIONS,
+  OWN_KEY_PLATFORMS,
+  parseEmail,
+  parseLineKeys,
+  parseSiteKeys,
+  parseWhatsAppKeys,
+} from "./own-keys";
 
 const form = (v: Record<string, string>) => {
   const f = new FormData();
@@ -119,11 +126,48 @@ describe("parseWhatsAppKeys", () => {
   });
 });
 
+describe("parseLineKeys and parseEmail", () => {
+  it("LINE: a numeric channel id and a 32-character secret", () => {
+    expect(
+      parseLineKeys(
+        form({ channelId: "2001234567", channelSecret: "0123456789abcdef0123456789abcdef" }),
+      ),
+    ).toEqual({
+      ok: true,
+      value: { channelId: "2001234567", channelSecret: "0123456789abcdef0123456789abcdef" },
+    });
+    expect(parseLineKeys(form({ channelId: "abc", channelSecret: "x" }))).toMatchObject({
+      field: "channelId",
+    });
+    expect(parseLineKeys(form({ channelId: "2001234567", channelSecret: "short" }))).toMatchObject({
+      field: "channelSecret",
+    });
+  });
+
+  it("email: lower-cased and checked", () => {
+    expect(parseEmail(form({ email: " Ana@Zoho.com " }))).toEqual({
+      ok: true,
+      email: "ana@zoho.com",
+    });
+    expect(parseEmail(form({ email: "ana@" }))).toMatchObject({ ok: false, field: "email" });
+  });
+});
+
 describe("MORE_CONNECTIONS", () => {
   it("only key-paste and Waggle's own pages connect today; the rest say Coming soon", () => {
     const items = MORE_CONNECTIONS.flatMap((g) => g.items);
     expect(items.filter((i) => i.how === "keys").map((i) => i.id)).toEqual([...OWN_KEY_PLATFORMS]);
-    for (const id of ["hubspot", "wix", "stripe", "googleanalytics", "googleads", "tiktokads"]) {
+    expect(items.find((i) => i.id === "email")).toMatchObject({ how: "email", platform: "imap" });
+    expect(items.find((i) => i.id === "line")?.how).toBe("line");
+    for (const id of [
+      "hubspot",
+      "wix",
+      "stripe",
+      "googleanalytics",
+      "googleads",
+      "tiktokads",
+      "wechat",
+    ]) {
       expect(items.find((i) => i.id === id)?.how).toBe("soon");
     }
     expect(items.find((i) => i.id === "metaads")).toMatchObject({

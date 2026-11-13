@@ -24,6 +24,8 @@ import {
   type PostValidation,
   type PostingQueue,
   type AdAccount,
+  type EmailDiscovery,
+  type ProviderErrorInfo,
   type Integration,
   type SiteKeys,
   type AdCampaignSummary,
@@ -517,6 +519,34 @@ async function ignoreGone(run: Promise<void>): Promise<void> {
   }
 }
 
+/** The provider's fix from a Zernio error body (`details.title/body/guidance`), when present. */
+function errorInfo(body: unknown): ProviderErrorInfo | undefined {
+  const d = z
+    .object({
+      details: z
+        .object({
+          title: z.string().nullish(),
+          body: z.string().nullish(),
+          helpUrl: z.string().nullish(),
+          guidance: z
+            .object({ helpUrl: z.string().nullish(), steps: z.array(z.string()).nullish() })
+            .nullish()
+            .catch(null),
+        })
+        .nullish()
+        .catch(null),
+    })
+    .safeParse(body);
+  const det = d.success ? d.data.details : null;
+  if (!det) return undefined;
+  return {
+    title: det.title ?? null,
+    body: det.body ?? null,
+    helpUrl: det.guidance?.helpUrl ?? det.helpUrl ?? null,
+    steps: det.guidance?.steps ?? [],
+  };
+}
+
 export class ZernioSocialProvider implements SocialProvider {
   constructor(private readonly zernio: Zernio) {}
 
@@ -723,6 +753,144 @@ export class ZernioSocialProvider implements SocialProvider {
         })),
       };
     });
+  }
+
+  /**
+   * A JSON call for routes the installed SDK doesn't have yet (T80b: email, LINE). Same auth,
+   * base URL and error mapping as the SDK calls.
+   */
+  private async raw<T>(
+    operation: string,
+    path: string,
+    schema: z.ZodType<T>,
+    init: { method: "GET" | "POST"; body?: unknown; signal?: AbortSignal },
+  ): Promise<T> {
+    let res: Response;
+    try {
+      res = await globalThis.fetch(`${this.zernio.baseURL}${path}`, {
+        method: init.method,
+        headers: {
+          Authorization: `Bearer ${this.zernio.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: init.signal,
+      });
+    } catch (error) {
+      throw toSocialError(error, operation);
+    }
+    const body: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      const code = z.object({ code: z.string() }).safeParse(body);
+      const info = errorInfo(body);
+      throw new SocialProviderError(`Zernio ${operation} failed (${res.status})`, {
+        status: res.status,
+        ...(code.success ? { code: code.data.code } : {}),
+        ambiguous: res.status >= 500,
+        retryAfterSeconds: parseRetryAfter(res.headers.get("Retry-After")),
+        ...(info ? { info } : {}),
+      });
+    }
+    return parse(schema, body, operation);
+  }
+
+  private async userId(signal?: AbortSignal): Promise<string> {
+    if (!this.currentUserId) {
+      this.currentUserId = await call("listUsers", async (withFetch) => {
+        const { data } = await this.zernio.users.listUsers(withFetch({ signal }));
+        return parse(usersSchema, data, "listUsers").currentUserId;
+      });
+    }
+    return this.currentUserId;
+  }
+
+  async discoverEmail(input: { email: string; signal?: AbortSignal }): Promise<EmailDiscovery> {
+    const { data } = await this.raw(
+      "discoverEmail",
+      "/v1/email/imap/discover",
+      z.object({
+        data: z.object({
+          route: z.enum(["imap", "google_oauth", "microsoft_oauth", "unsupported"]),
+          provider: z.object({ name: z.string().nullish() }).nullish().catch(null),
+          auth: z
+            .object({
+              label: z.string().nullish(),
+              helpUrl: z.string().nullish(),
+              steps: z.array(z.string()).nullish(),
+            })
+            .nullish()
+            .catch(null),
+          preflight: z
+            .array(z.object({ text: z.string(), url: z.string().nullish() }))
+            .nullish()
+            .catch(null),
+        }),
+      }),
+      { method: "POST", body: { email: input.email }, signal: input.signal },
+    );
+    return {
+      route: data.route,
+      providerName: data.provider?.name ?? null,
+      passwordLabel: data.auth?.label ?? null,
+      helpUrl: data.auth?.helpUrl ?? null,
+      steps: data.auth?.steps ?? [],
+      preflight: (data.preflight ?? []).map((p) => ({ text: p.text, url: p.url ?? null })),
+    };
+  }
+
+  async connectEmail(input: {
+    profileId: string;
+    email: string;
+    password: string;
+    name?: string;
+    signal?: AbortSignal;
+  }) {
+    // Success body isn't documented; the caller reads the new mailbox from the profile's accounts.
+    await this.raw("connectEmail", "/v1/email/imap/accounts", z.unknown(), {
+      method: "POST",
+      body: {
+        profileId: input.profileId,
+        email: input.email,
+        password: input.password,
+        ...(input.name ? { name: input.name } : {}),
+      },
+      signal: input.signal,
+    });
+  }
+
+  async connectLine(input: {
+    profileId: string;
+    channelId: string;
+    channelSecret: string;
+    signal?: AbortSignal;
+  }) {
+    const userId = await this.userId(input.signal);
+    const r = await this.raw(
+      "connectLine",
+      "/v1/connect/line/credentials",
+      z.object({
+        account: z.object({
+          accountId: z.string().min(1),
+          username: z.string().nullish(),
+          displayName: z.string().nullish(),
+        }),
+        webhook: z.object({ configured: z.boolean() }).nullish().catch(null),
+      }),
+      {
+        method: "POST",
+        body: {
+          channelId: input.channelId,
+          channelSecret: input.channelSecret,
+          state: `${userId}-${input.profileId}`,
+        },
+        signal: input.signal,
+      },
+    );
+    return {
+      accountId: r.account.accountId,
+      name: r.account.displayName ?? r.account.username ?? "LINE",
+      webhookReady: r.webhook?.configured === true,
+    };
   }
 
   async listIntegrations(input: {

@@ -17,6 +17,7 @@ import type {
   SocialProvider,
   PostingQueue,
   AdAccount,
+  EmailDiscovery,
   Integration,
   SiteKeys,
   AdCampaignSummary,
@@ -190,6 +191,70 @@ export class MockSocialProvider implements SocialProvider {
     const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
     this.integrations.set(input.profileId, [...list, { id, platform: k.kind, name, active: true }]);
     return { accountId: id, name };
+  }
+
+  async discoverEmail(input: { email: string }): Promise<EmailDiscovery> {
+    const domain = input.email.split("@")[1] ?? "";
+    if (domain === "gmail.com") {
+      return {
+        route: "google_oauth",
+        providerName: "Gmail",
+        passwordLabel: null,
+        helpUrl: null,
+        steps: [],
+        preflight: [],
+      };
+    }
+    if (domain === "proton.me") {
+      return {
+        route: "unsupported",
+        providerName: "Proton Mail",
+        passwordLabel: null,
+        helpUrl: null,
+        steps: [],
+        preflight: [],
+      };
+    }
+    return {
+      route: "imap",
+      providerName: "Zoho Mail",
+      passwordLabel: "App password",
+      helpUrl: "https://accounts.zoho.com/home#security/app_password",
+      steps: ["Open Zoho's security settings.", "Create an app password named Waggle."],
+      preflight: [{ text: "Turn on IMAP access in your Zoho Mail settings.", url: null }],
+    };
+  }
+
+  async connectEmail(input: { profileId: string; email: string; password: string }) {
+    if (input.password === "wrong") {
+      throw new SocialProviderError("mock connectEmail failed (422)", {
+        status: 422,
+        code: "imap_auth_failed",
+        ambiguous: false,
+        info: {
+          title: "Couldn't sign in to Zoho Mail",
+          body: "Check the password is typed exactly.",
+          helpUrl: null,
+          steps: [],
+        },
+      });
+    }
+    const id = idFrom("mock_imap", input.profileId, input.email);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [
+      ...list,
+      { id, platform: "imap", name: input.email, active: true },
+    ]);
+  }
+
+  async connectLine(input: { profileId: string; channelId: string }) {
+    const id = idFrom("mock_line", input.profileId, input.channelId);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [
+      ...list,
+      { id, platform: "line", name: "Your LINE account", active: true },
+    ]);
+    return { accountId: id, name: "Your LINE account", webhookReady: true };
   }
 
   async connectWhatsAppWithKeys(input: { profileId: string; phoneNumberId: string }) {

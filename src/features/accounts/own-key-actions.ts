@@ -8,12 +8,32 @@ import { getSocialProvider } from "@/lib/social";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { handleAccountConnected } from "./events";
-import { isOwnKeyPlatform, OWN_KEY_PLATFORMS, parseSiteKeys, parseWhatsAppKeys } from "./own-keys";
+import {
+  CONNECTED_PLATFORMS,
+  isOwnKeyPlatform,
+  parseEmail,
+  parseLineKeys,
+  parseSiteKeys,
+  parseWhatsAppKeys,
+} from "./own-keys";
+import type { EmailDiscovery, ProviderErrorInfo } from "@/lib/social/types";
 
 // T80: connect with the owner's own keys. Keys go straight to Zernio, which checks them; Waggle
 // never stores, logs or audits them (only the platform and the new account id).
 
-export type OwnKeyState = { error?: string; field?: string; done?: string };
+export type OwnKeyState = {
+  error?: string;
+  field?: string;
+  done?: string;
+  /** Email: the provider's own fix after a failed sign-in. */
+  info?: ProviderErrorInfo;
+};
+
+export type EmailStep = {
+  error?: string;
+  email?: string;
+  discovery?: EmailDiscovery;
+};
 
 const LABEL = { shopify: "Shopify", wordpress: "WordPress", webflow: "Webflow" } as const;
 const status = (e: unknown) => (e instanceof SocialProviderError ? e.details.status : undefined);
@@ -120,7 +140,7 @@ export async function disconnectSiteAction(
     const social = getSocialProvider();
     const mine = await social.listIntegrations({
       profileId: tenant.zernioProfileId,
-      platforms: OWN_KEY_PLATFORMS,
+      platforms: CONNECTED_PLATFORMS,
       signal: AbortSignal.timeout(15_000),
     });
     const site = mine.find((i) => i.id === id);
@@ -138,4 +158,127 @@ export async function disconnectSiteAction(
   }
   revalidatePath("/settings");
   return { done: "Disconnected." };
+}
+
+/** Email, step 1: find the address's provider and its app-password steps (T80b). */
+export async function discoverEmailAction(
+  _prev: EmailStep,
+  formData: FormData,
+): Promise<EmailStep> {
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const parsed = parseEmail(formData);
+  if (!parsed.ok) return { error: parsed.error };
+  try {
+    const discovery = await getSocialProvider().discoverEmail({
+      email: parsed.email,
+      signal: AbortSignal.timeout(20_000),
+    });
+    return { email: parsed.email, discovery };
+  } catch (error) {
+    if (status(error) === 429) return { error: "Too many tries. Wait a minute, then try again." };
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "discoverEmail" } });
+    return { error: "Couldn't look up this address right now. Try again in a moment." };
+  }
+}
+
+const EMAIL_CODES: Record<string, string> = {
+  app_password_required: "This provider needs an app password, not your usual one.",
+  imap_auth_failed: "The password didn't work for reading mail.",
+  smtp_auth_failed: "Reading works, but sending didn't. Turn on sending (SMTP) at your provider.",
+  imap_disabled: "IMAP access is off. Turn it on in your mailbox settings.",
+  use_oauth: "Gmail and Outlook addresses connect differently; that's coming soon.",
+  too_many_attempts: "Your provider is refusing sign-ins for now. Wait a few minutes.",
+};
+
+/** Email, step 2: connect with the (app) password. Zernio checks before storing anything. */
+export async function connectEmailAction(
+  _prev: OwnKeyState,
+  formData: FormData,
+): Promise<OwnKeyState> {
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const parsed = parseEmail(formData);
+  if (!parsed.ok) return { error: parsed.error };
+  const password = String(formData.get("password") ?? "");
+  if (!password) return { error: "Add the password.", field: "password" };
+  const name = String(formData.get("name") ?? "")
+    .trim()
+    .slice(0, 100);
+  const db = getServiceClient();
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    await getSocialProvider().connectEmail({
+      profileId,
+      email: parsed.email,
+      password,
+      ...(name ? { name } : {}),
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch (error) {
+    if (error instanceof SocialProviderError && error.details.status === 422) {
+      return {
+        error:
+          EMAIL_CODES[error.details.code ?? ""] ?? "Your provider didn't accept these details.",
+        field: "password",
+        info: error.details.info,
+      };
+    }
+    if (status(error) === 402) return { error: PLAN_LIMIT };
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "connectEmail" } });
+    return { error: "The mailbox couldn't be connected right now. Try again in a moment." };
+  }
+  await writeAudit(db, {
+    tenantId: tenant.id,
+    action: "integration_connected",
+    actor: tenant.userId,
+    details: { platform: "imap", how: "own_keys" },
+  });
+  revalidatePath("/settings");
+  return { done: `${parsed.email} is connected.` };
+}
+
+/** LINE Official Account with its channel keys (T80b). */
+export async function connectLineAction(
+  _prev: OwnKeyState,
+  formData: FormData,
+): Promise<OwnKeyState> {
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const parsed = parseLineKeys(formData);
+  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+  const db = getServiceClient();
+  let result: { accountId: string; name: string; webhookReady: boolean };
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    result = await getSocialProvider().connectLine({
+      profileId,
+      ...parsed.value,
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (error) {
+    const s = status(error);
+    if (s === 400 || s === 403) {
+      return { error: "LINE didn't accept these keys. Copy the Channel ID and secret again." };
+    }
+    if (s === 402) return { error: PLAN_LIMIT };
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "connectLine" } });
+    return { error: "LINE couldn't be connected right now. Try again in a moment." };
+  }
+  await writeAudit(db, {
+    tenantId: tenant.id,
+    action: "integration_connected",
+    actor: tenant.userId,
+    details: {
+      platform: "line",
+      zernioAccountId: result.accountId,
+      webhookReady: result.webhookReady,
+    },
+  });
+  revalidatePath("/settings");
+  return {
+    done: result.webhookReady
+      ? `${result.name} is connected. In LINE Official Account Manager, Settings, Response settings: turn on Webhooks, and turn off Auto-response and Greeting messages.`
+      : `${result.name} is connected, but LINE didn't take the automatic setup. Contact us and we'll finish it with you.`,
+  };
 }

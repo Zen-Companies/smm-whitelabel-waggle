@@ -7,6 +7,9 @@ import type { SiteKeys } from "@/lib/social/types";
 
 export const OWN_KEY_PLATFORMS = ["shopify", "wordpress", "webflow"] as const;
 export type OwnKeyPlatform = (typeof OWN_KEY_PLATFORMS)[number];
+/** Every platform a More connections item can hold (read from the brand's Zernio profile). */
+export const CONNECTED_PLATFORMS = [...OWN_KEY_PLATFORMS, "imap", "line"] as const;
+
 export const isOwnKeyPlatform = (p: string): p is OwnKeyPlatform =>
   (OWN_KEY_PLATFORMS as readonly string[]).includes(p);
 
@@ -15,7 +18,9 @@ export type ConnectionItem = {
   id: string;
   label: string;
   line: string;
-  how: "keys" | "link" | "soon";
+  how: "keys" | "email" | "line" | "link" | "soon";
+  /** The Zernio platform its connections carry, when it differs from `id`. */
+  platform?: string;
   href?: string;
 };
 
@@ -26,7 +31,7 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
       { id: "sms", label: "SMS", line: "Texts on your Waggle number", how: "soon" },
       { id: "rcs", label: "RCS", line: "Branded texts with buttons", how: "soon" },
       { id: "imessage", label: "iMessage", line: "Blue-bubble texts (US, UK)", how: "soon" },
-      { id: "line", label: "LINE", line: "LINE Official Account", how: "soon" },
+      { id: "line", label: "LINE", line: "LINE Official Account", how: "line" },
       { id: "wechat", label: "WeChat", line: "Verified Service Account", how: "soon" },
       { id: "slack", label: "Slack", line: "Your team's Slack, in the inbox", how: "soon" },
     ],
@@ -36,7 +41,7 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
     items: [
       { id: "gmail", label: "Gmail", line: "Email, calendar", how: "soon" },
       { id: "outlook", label: "Outlook", line: "Email, calendar", how: "soon" },
-      { id: "email", label: "Email", line: "Any email (IMAP)", how: "soon" },
+      { id: "email", label: "Email", line: "Any email (IMAP)", how: "email", platform: "imap" },
     ],
   },
   {
@@ -139,6 +144,33 @@ export function parseSiteKeys(
   if (siteToken.length < 20)
     return { ok: false, field: "siteToken", error: "Paste the site's API key." };
   return { ok: true, keys: { kind, siteToken } };
+}
+
+/** LINE channel keys (LINE Official Account Manager → Settings → Messaging API). */
+export function parseLineKeys(
+  f: FormData,
+): { ok: true; value: { channelId: string; channelSecret: string } } | Bad {
+  const channelId = val(f, "channelId");
+  if (!/^\d{6,20}$/.test(channelId))
+    return { ok: false, field: "channelId", error: "The Channel ID is a number." };
+  const channelSecret = val(f, "channelSecret");
+  if (!/^[0-9a-f]{32}$/i.test(channelSecret)) {
+    return {
+      ok: false,
+      field: "channelSecret",
+      error: "The Channel secret is 32 letters and digits.",
+    };
+  }
+  return { ok: true, value: { channelId, channelSecret } };
+}
+
+/** An email address, checked before discovery. */
+export function parseEmail(f: FormData): { ok: true; email: string } | Bad {
+  const email = val(f, "email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) {
+    return { ok: false, field: "email", error: "Check the email address." };
+  }
+  return { ok: true, email };
 }
 
 export type WhatsAppKeys = {
