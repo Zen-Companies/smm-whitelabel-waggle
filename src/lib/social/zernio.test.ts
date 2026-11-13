@@ -302,6 +302,31 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("createWhatsAppBroadcast targets subscribed people with the tag, then fills from them (T78b)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/broadcasts"
+        ? json({ success: true, broadcast: { id: "bc_1" } })
+        : json({ success: true, added: 42, skipped: 0 });
+    await expect(
+      provider.createWhatsAppBroadcast({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        name: "Promo",
+        template: { name: "weekend_promo", language: "en", nameVariable: true },
+        tag: "regular",
+      }),
+    ).resolves.toEqual({ id: "bc_1", recipients: 42 });
+    expect(captured[0].body).toMatchObject({
+      platform: "whatsapp",
+      template: { name: "weekend_promo", language: "en", variableMapping: { "1": { field: "name" } } },
+      segmentFilters: { isSubscribed: true, tags: ["regular"] },
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/broadcasts/bc_1/recipients");
+    expect(captured[1].body).toEqual({ useSegment: true });
+    await provider.startBroadcast({ id: "bc_1", at: "2026-11-15T00:00:00.000Z" });
+    expect(captured[2].url.pathname).toBe("/api/v1/broadcasts/bc_1/schedule");
+  });
+
   it("createContact puts a WhatsApp number on the contact; importContacts sends rows (T78a)", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/contacts"

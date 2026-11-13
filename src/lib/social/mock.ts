@@ -16,6 +16,7 @@ import type {
   SocialPlatform,
   SocialProvider,
   PostingQueue,
+  Broadcast,
   ChatFlow,
   Contact,
   Sequence,
@@ -161,6 +162,62 @@ export class MockSocialProvider implements SocialProvider {
       status,
       scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
     };
+  }
+
+  /** Broadcasts (T78b), kept in memory per profile. */
+  private broadcasts = new Map<string, Broadcast & { profileId: string; tag: string | null }>();
+
+  async listBroadcasts(input: { profileId: string }): Promise<Broadcast[]> {
+    return [...this.broadcasts.values()]
+      .filter((b) => b.profileId === input.profileId)
+      .reverse()
+      .map((b) => {
+        const { profileId, tag, ...rest } = b;
+        void profileId;
+        void tag;
+        return rest;
+      });
+  }
+
+  async createWhatsAppBroadcast(input: {
+    profileId: string;
+    name: string;
+    template: { name: string };
+    tag: string | null;
+  }) {
+    const id = idFrom("mock_bc", input.profileId, input.name, String(this.broadcasts.size));
+    const recipients = [...this.contacts.values()].filter(
+      (c) => c.profileId === input.profileId && c.subscribed && (!input.tag || c.tags.includes(input.tag)),
+    ).length;
+    this.broadcasts.set(id, {
+      id,
+      profileId: input.profileId,
+      tag: input.tag,
+      name: input.name,
+      platform: "whatsapp",
+      status: "draft",
+      preview: input.template.name,
+      scheduledAt: null,
+      completedAt: null,
+      recipients,
+      sent: 0,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+    });
+    return { id, recipients };
+  }
+
+  async startBroadcast(input: { id: string; at: string | null }) {
+    const b = this.broadcasts.get(input.id);
+    if (!b) return;
+    if (input.at) Object.assign(b, { status: "scheduled", scheduledAt: input.at });
+    else Object.assign(b, { status: "completed", completedAt: new Date().toISOString(), sent: b.recipients, delivered: b.recipients });
+  }
+
+  async cancelBroadcast(input: { id: string }) {
+    const b = this.broadcasts.get(input.id);
+    if (b) b.status = "cancelled";
   }
 
   /** Contacts (T78a), kept in memory per profile. */

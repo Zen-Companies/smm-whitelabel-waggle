@@ -23,6 +23,7 @@ import {
   type ProviderPostStatus,
   type PostValidation,
   type PostingQueue,
+  type Broadcast,
   type ChatFlow,
   type Contact,
   type Sequence,
@@ -93,6 +94,31 @@ const gbpPerformanceSchema = z.object({
   metrics: z
     .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
     .optional(),
+});
+const broadcastsSchema = z.object({
+  broadcasts: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          name: z.string().catch(""),
+          platform: z.string().catch(""),
+          status: z
+            .enum(["draft", "scheduled", "sending", "completed", "failed", "cancelled"])
+            .catch("draft"),
+          messagePreview: z.string().catch(""),
+          scheduledAt: z.string().nullish().catch(null),
+          completedAt: z.string().nullish().catch(null),
+          recipientCount: z.number().catch(0),
+          sentCount: z.number().catch(0),
+          deliveredCount: z.number().catch(0),
+          readCount: z.number().catch(0),
+          failedCount: z.number().catch(0),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
 });
 const contactSchema = z.object({
   id: z.string().min(1),
@@ -637,6 +663,95 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async listBroadcasts(input: { profileId: string; signal?: AbortSignal }): Promise<Broadcast[]> {
+    return call("listBroadcasts", async (withFetch) => {
+      const { data } = await this.zernio.broadcasts.listBroadcasts(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 50 } }),
+      );
+      return parse(broadcastsSchema, data, "listBroadcasts").broadcasts.flatMap((b): Broadcast[] =>
+        b
+          ? [
+              {
+                id: b.id,
+                name: b.name,
+                platform: b.platform,
+                status: b.status,
+                preview: b.messagePreview,
+                scheduledAt: b.scheduledAt ?? null,
+                completedAt: b.completedAt ?? null,
+                recipients: b.recipientCount,
+                sent: b.sentCount,
+                delivered: b.deliveredCount,
+                read: b.readCount,
+                failed: b.failedCount,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createWhatsAppBroadcast(input: {
+    profileId: string;
+    accountId: string;
+    name: string;
+    template: { name: string; language: string; nameVariable: boolean };
+    tag: string | null;
+    signal?: AbortSignal;
+  }): Promise<{ id: string; recipients: number }> {
+    const { id } = await call("createBroadcast", async (withFetch) => {
+      const { data } = await this.zernio.broadcasts.createBroadcast(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            platform: "whatsapp",
+            name: input.name,
+            template: {
+              name: input.template.name,
+              language: input.template.language,
+              ...(input.template.nameVariable ? { variableMapping: { "1": { field: "name" } } } : {}),
+            },
+            // Only people who agreed to messages, ever.
+            segmentFilters: { isSubscribed: true, ...(input.tag ? { tags: [input.tag] } : {}) },
+          },
+        }),
+      );
+      return parse(z.object({ broadcast: z.object({ id: z.string().min(1) }) }), data, "createBroadcast")
+        .broadcast;
+    });
+    const added = await call("addBroadcastRecipients", async (withFetch) => {
+      const { data } = await this.zernio.broadcasts.addBroadcastRecipients(
+        withFetch({ signal: input.signal, path: { broadcastId: id }, body: { useSegment: true } }),
+      );
+      return parse(z.object({ added: z.number().catch(0) }), data, "addBroadcastRecipients").added;
+    });
+    return { id, recipients: added };
+  }
+
+  async startBroadcast(input: { id: string; at: string | null; signal?: AbortSignal }) {
+    await call(input.at ? "scheduleBroadcast" : "sendBroadcast", async (withFetch) => {
+      if (input.at) {
+        await this.zernio.broadcasts.scheduleBroadcast(
+          withFetch({ signal: input.signal, path: { broadcastId: input.id }, body: { scheduledAt: input.at } }),
+        );
+      } else {
+        await this.zernio.broadcasts.sendBroadcast(
+          withFetch({ signal: input.signal, path: { broadcastId: input.id } }),
+        );
+      }
+    });
+  }
+
+  async cancelBroadcast(input: { id: string; signal?: AbortSignal }) {
+    await call("cancelBroadcast", async (withFetch) => {
+      await this.zernio.broadcasts.cancelBroadcast(
+        withFetch({ signal: input.signal, path: { broadcastId: input.id } }),
+      );
     });
   }
 

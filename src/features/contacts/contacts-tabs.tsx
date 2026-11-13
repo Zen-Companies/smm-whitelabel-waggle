@@ -3,9 +3,10 @@ import Link from "next/link";
 const TABS = [
   { href: "/contacts", label: "People" },
   { href: "/leads", label: "Leads" },
+  { href: "/contacts/broadcasts", label: "Broadcasts" },
 ] as const;
 
-/** Contacts' sections (design "Contacts"): people, leads; broadcasts and lead forms join next. */
+/** Contacts' sections (design "Contacts"): people, leads, broadcasts; lead forms join next. */
 export function ContactsTabs({ active }: { active: (typeof TABS)[number]["href"] }) {
   return (
     <nav aria-label="Contacts sections" className="tabs">

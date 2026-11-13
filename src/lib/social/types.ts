@@ -158,6 +158,22 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** A broadcast as listed (T78b, `/v1/broadcasts`). */
+export interface Broadcast {
+  id: string;
+  name: string;
+  platform: string;
+  status: "draft" | "scheduled" | "sending" | "completed" | "failed" | "cancelled";
+  preview: string;
+  scheduledAt: string | null;
+  completedAt: string | null;
+  recipients: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+}
+
 /** A contact (T78a, `/v1/contacts`). */
 export interface Contact {
   id: string;
@@ -290,6 +306,24 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** The brand's broadcasts, newest first (T78b). */
+  listBroadcasts(input: { profileId: string } & CallOptions): Promise<Broadcast[]>;
+  /**
+   * A WhatsApp broadcast to everyone subscribed (with `tag`, only them), filled from that
+   * audience; returns how many it will reach.
+   */
+  createWhatsAppBroadcast(
+    input: {
+      profileId: string;
+      accountId: string;
+      name: string;
+      template: { name: string; language: string; nameVariable: boolean };
+      tag: string | null;
+    } & CallOptions,
+  ): Promise<{ id: string; recipients: number }>;
+  /** Sends now, or at `at` (ISO). */
+  startBroadcast(input: { id: string; at: string | null } & CallOptions): Promise<void>;
+  cancelBroadcast(input: { id: string } & CallOptions): Promise<void>;
   /** The brand's contacts, newest first, 50 a page (T78a). */
   listContacts(
     input: { profileId: string; search?: string; tag?: string; skip?: number } & CallOptions,
