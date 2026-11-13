@@ -460,6 +460,7 @@ async function mapMessage(
       platform: account.platform,
       participant_name: participantName,
       participant_external_id: e.message.sender.id,
+      subject: e.metadata?.email?.subject?.trim() || null,
     },
     { onConflict: "zernio_conversation_id", ignoreDuplicates: true },
   );

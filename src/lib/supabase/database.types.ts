@@ -374,6 +374,7 @@ export type Database = {
           participant_external_id: string | null
           participant_name: string | null
           platform: string
+          subject: string | null
           social_account_id: string
           tenant_id: string
           zernio_conversation_id: string
@@ -386,6 +387,7 @@ export type Database = {
           participant_external_id?: string | null
           participant_name?: string | null
           platform: string
+          subject?: string | null
           social_account_id: string
           tenant_id: string
           zernio_conversation_id: string
@@ -397,6 +399,7 @@ export type Database = {
           participant_external_id?: string | null
           participant_name?: string | null
           platform?: string
+          subject?: string | null
           social_account_id?: string
           tenant_id?: string
           zernio_conversation_id?: string

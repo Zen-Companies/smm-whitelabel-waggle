@@ -103,7 +103,11 @@ export async function AccountsCard({
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">
                       {name(account.platform)}
-                      {account.username ? ` @${account.username}` : ""}
+                      {account.username
+                        ? account.username.includes("@")
+                          ? ` ${account.username}`
+                          : ` @${account.username}`
+                        : ""}
                     </span>
                     {(() => {
                       // T66: what Waggle does here, and a gray line only when it differs.

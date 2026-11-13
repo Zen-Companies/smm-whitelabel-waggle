@@ -42,6 +42,7 @@ describe("platform registry", () => {
       "bluesky",
       "whatsapp",
       "line",
+      "imap",
     ]);
     expect(isInboxLive("twitter")).toBe(false);
   });

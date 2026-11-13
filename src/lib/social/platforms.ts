@@ -22,6 +22,7 @@ export const PLATFORM_IDS = [
   "reddit",
   "snapchat",
   "line",
+  "imap",
 ] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
@@ -333,6 +334,20 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     inboxLive: true,
     analyticsLive: false,
   },
+  imap: {
+    id: "imap",
+    label: "Email",
+    mark: { text: "@", bg: "#FEF3C7", fg: "#92400E" },
+    kind: "answers",
+    // Connected from More connections (our own email form), not a tile.
+    connect: "none",
+    line: "Answers email in the same thread",
+    needs: "Any provider with an app password",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
 };
 
 export function isPlatformId(id: string): id is PlatformId {
@@ -444,6 +459,8 @@ const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
   whatsapp: { dmWindow: { hours: 24, maxReplies: null }, replyMax: 4096 },
   // T81a: no reply window (a reply after about a minute is a push, counted on the LINE plan).
   line: { replyMax: 5000 },
+  // T81b: email has no reply window; replies go from the owner's own mailbox, in the thread.
+  imap: {},
 };
 
 export function inboxRules(platform: string): InboxRules {

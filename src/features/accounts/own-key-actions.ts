@@ -208,13 +208,33 @@ export async function connectEmailAction(
   const db = getServiceClient();
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
-    await getSocialProvider().connectEmail({
+    const social = getSocialProvider();
+    await social.connectEmail({
       profileId,
       email: parsed.email,
       password,
       ...(name ? { name } : {}),
       signal: AbortSignal.timeout(60_000),
     });
+    // T81b: add the mailbox to the brand's accounts now (account.connected does it too), so its
+    // mail is answered from the first message. Matched by address; otherwise the webhook adds it.
+    const mailboxes = await social.listIntegrations({
+      profileId,
+      platforms: ["imap"],
+      signal: AbortSignal.timeout(15_000),
+    });
+    const mailbox = mailboxes.find((m) => m.name.toLowerCase() === parsed.email);
+    if (mailbox) {
+      const added = await handleAccountConnected(db, {
+        tenantId: tenant.id,
+        zernioAccountId: mailbox.id,
+        platform: "imap",
+        username: parsed.email,
+      });
+      if (added.outcome === "foreign") {
+        return { error: "This mailbox is connected to another business in Waggle." };
+      }
+    }
   } catch (error) {
     if (error instanceof SocialProviderError && error.details.status === 422) {
       return {

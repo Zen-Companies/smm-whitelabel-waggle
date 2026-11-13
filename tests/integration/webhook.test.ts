@@ -282,6 +282,24 @@ describe("POST /api/webhooks/zernio", () => {
     expect(item?.status).toBe("paused");
   });
 
+  it("an email lands as a chat item, its thread keeping the subject (T81b)", async () => {
+    const payload = fixture("message-received-email");
+    const suffix = randomUUID().slice(0, 8);
+    payload.message.id = `msg_email_${suffix}`;
+    payload.message.conversationId = `conv_email_${suffix}`;
+    payload.account.id = payload.account.accountId = `acc_imap_${suffix}`;
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "item_created" });
+
+    const { data: conv } = await db
+      .from("conversations")
+      .select("platform, subject")
+      .eq("zernio_conversation_id", payload.message.conversationId)
+      .single();
+    expect(conv).toEqual({ platform: "imap", subject: "Catering for 30 people?" });
+    expect(await count("inbound_items", "zernio_message_id", payload.message.id)).toBe(1);
+  });
+
   it("lead.received queues one ad-lead alert per lead, holding ids only (T78d)", async () => {
     const leadgenId = `lg_${randomUUID().slice(0, 8)}`;
     const payload = fixture("lead-received");

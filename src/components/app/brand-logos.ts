@@ -25,6 +25,8 @@ const FILES = {
   rcs: "rcs.svg",
   sms: "sms.svg",
   email: "email.svg",
+  // Zernio's platform id for a mailbox connected with our own email form (T81b).
+  imap: "email.svg",
   phone: "phone.svg",
   gmail: "gmail.svg",
   outlook: "outlook.svg",

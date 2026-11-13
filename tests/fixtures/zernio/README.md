@@ -19,3 +19,5 @@ Placeholders, filled in by `tests/integration/webhook.test.ts`:
 Customer names and messages are made up.
 
 `lead-received.json` is built from Zernio's `lead.received` docs (docs.zernio.com/webhooks/ads/lead-received), not recorded; replace it with a recorded one once a real lead arrives.
+
+`message-received-email.json` is built from the `message.received` docs plus the `metadata.email` note on docs.zernio.com/platforms/google/webhooks, not recorded; replace it with a real email event.

@@ -33,6 +33,8 @@ export interface InboxEntry {
   attempts: number;
   /** DMs: when the platform's reply window closes (null if unknown or the platform has none). */
   dmWindowClosesAt: string | null;
+  /** Email (T81b): the thread's subject, when known. */
+  subject?: string | null;
   /** DMs on a platform with a reply cap (TikTok, T61): replies left in this window. */
   dmRepliesLeft?: number | null;
   /** Comments: the post on Instagram/Facebook, for "Open in Instagram" (null if not known). */
@@ -327,7 +329,7 @@ export async function loadEntries(
     .from("inbound_items")
     .select(
       "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, " +
-        "social_accounts (platform), conversations (last_customer_message_at)",
+        "social_accounts (platform), conversations (last_customer_message_at, subject)",
     )
     .eq("tenant_id", tenantId);
   if (filter.statuses) query = query.in("status", filter.statuses);
@@ -354,7 +356,7 @@ export async function loadEntries(
     conversation_id: string | null;
     answered_on_platform_at: string | null;
     social_accounts: { platform: string } | null;
-    conversations: { last_customer_message_at: string | null } | null;
+    conversations: { last_customer_message_at: string | null; subject: string | null } | null;
   }[];
   if (rows.length === 0) return [];
 
@@ -415,6 +417,7 @@ export async function loadEntries(
       reviewRecommends: r.review_recommends,
       reviewRating: r.review_rating,
       answeredOnPlatformAt: r.answered_on_platform_at,
+      subject: r.conversations?.subject ?? null,
       dmWindowClosesAt:
         r.kind === "dm"
           ? (dmWindowClosesAt(platform, last ? new Date(last) : null)?.toISOString() ?? null)

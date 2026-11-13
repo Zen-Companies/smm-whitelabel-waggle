@@ -99,6 +99,9 @@ function Row({
               {shortTime(entry.receivedAt)}
             </time>
           </span>
+          {entry.subject && (
+            <span className="truncate text-[14px] font-medium">{entry.subject}</span>
+          )}
           <span className={cn("truncate", needs ? "text-ink-2" : "text-ink-3")}>
             {entry.text || "(no text)"}
           </span>

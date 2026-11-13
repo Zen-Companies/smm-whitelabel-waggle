@@ -66,6 +66,18 @@ export const messageEventSchema = z.object({
     .object({ participantName: z.string().optional(), participantUsername: z.string().optional() })
     .optional(),
   account: accountBlock,
+  // Email (T81b): Zernio puts the subject and other email fields under `metadata.email`
+  // (docs.zernio.com/platforms/google/webhooks). The field names aren't documented, so the
+  // subject is read only when it is a plain string, and ignored otherwise. VERIFY with Zernio.
+  metadata: z
+    .object({
+      email: z
+        .object({ subject: z.string().max(998).optional().catch(undefined) })
+        .nullish()
+        .catch(null),
+    })
+    .nullish()
+    .catch(null),
 });
 
 /**
