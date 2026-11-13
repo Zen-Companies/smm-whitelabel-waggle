@@ -158,6 +158,28 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** A lead form in an ad (T78c, `/v1/ads/lead-forms`). */
+export interface LeadForm {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export type AdLeadStatus = "new" | "contacted" | "unreachable" | "qualified" | "converted" | "disqualified";
+
+/** A lead from an ad's form (T78c, `/v1/ads/leads`). */
+export interface AdLead {
+  id: string;
+  formName: string;
+  createdAt: string | null;
+  /** Question key → answer. */
+  fields: Record<string, string>;
+  consents: { checkboxKey: string; isChecked: boolean }[];
+  status: AdLeadStatus;
+  /** Set when Zernio already linked a contact. */
+  contactId: string | null;
+}
+
 /** A broadcast as listed (T78b, `/v1/broadcasts`). */
 export interface Broadcast {
   id: string;
@@ -306,6 +328,15 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** A Facebook Page's lead forms (T78c). */
+  listLeadForms(input: { accountId: string } & CallOptions): Promise<LeadForm[]>;
+  /** Creates a lead form on the Page (Meta shape; never retried: not idempotent upstream). */
+  createLeadForm(input: { body: Record<string, unknown> } & CallOptions): Promise<{ id: string }>;
+  /** Leads from these accounts' forms, newest first. */
+  listAdLeads(
+    input: { accountIds: string[]; status?: AdLeadStatus } & CallOptions,
+  ): Promise<AdLead[]>;
+  updateAdLeadStatus(input: { id: string; status: AdLeadStatus } & CallOptions): Promise<void>;
   /** The brand's broadcasts, newest first (T78b). */
   listBroadcasts(input: { profileId: string } & CallOptions): Promise<Broadcast[]>;
   /**

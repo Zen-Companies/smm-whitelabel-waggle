@@ -23,7 +23,10 @@ import {
   type ProviderPostStatus,
   type PostValidation,
   type PostingQueue,
+  type AdLead,
+  type AdLeadStatus,
   type Broadcast,
+  type LeadForm,
   type ChatFlow,
   type Contact,
   type Sequence,
@@ -94,6 +97,30 @@ const gbpPerformanceSchema = z.object({
   metrics: z
     .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
     .optional(),
+});
+const leadStatusSchema = z
+  .enum(["new", "contacted", "unreachable", "qualified", "converted", "disqualified"])
+  .catch("new");
+const adLeadsSchema = z.object({
+  leads: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          formName: z.string().nullish().catch(null),
+          createdTime: z.string().nullish().catch(null),
+          fields: z.record(z.string(), z.string()).catch({}),
+          consents: z
+            .array(z.object({ checkboxKey: z.string(), isChecked: z.boolean() }))
+            .nullish()
+            .catch(null),
+          status: leadStatusSchema,
+          contactId: z.string().nullish().catch(null),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
 });
 const broadcastsSchema = z.object({
   broadcasts: z
@@ -663,6 +690,80 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async listLeadForms(input: { accountId: string; signal?: AbortSignal }): Promise<LeadForm[]> {
+    return call("listLeadForms", async (withFetch) => {
+      const { data } = await this.zernio.leadgen.listLeadForms(
+        withFetch({ signal: input.signal, query: { accountId: input.accountId, limit: 50 } }),
+      );
+      const forms = parse(
+        z.object({ forms: z.array(z.record(z.string(), z.unknown())).catch([]) }),
+        data,
+        "listLeadForms",
+      ).forms;
+      return forms.flatMap((f): LeadForm[] => {
+        const id = typeof f.id === "string" ? f.id : null;
+        if (!id) return [];
+        return [
+          {
+            id,
+            name: typeof f.name === "string" ? f.name : "Lead form",
+            status: typeof f.status === "string" ? f.status.toLowerCase() : "active",
+          },
+        ];
+      });
+    });
+  }
+
+  async createLeadForm(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("createLeadForm", async (withFetch) => {
+      const { data } = await this.zernio.leadgen.createLeadForm(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      return {
+        id: parse(z.object({ form: z.object({ id: z.string().min(1) }) }), data, "createLeadForm").form.id,
+      };
+    });
+  }
+
+  async listAdLeads(input: { accountIds: string[]; status?: AdLeadStatus; signal?: AbortSignal }) {
+    return call("listLeads", async (withFetch) => {
+      const { data } = await this.zernio.leadgen.listLeads(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountIds: input.accountIds.join(","),
+            platform: "meta",
+            limit: 100,
+            ...(input.status ? { status: input.status } : {}),
+          },
+        }),
+      );
+      return parse(adLeadsSchema, data, "listLeads").leads.flatMap((l): AdLead[] =>
+        l
+          ? [
+              {
+                id: l.id,
+                formName: l.formName ?? "Lead form",
+                createdAt: l.createdTime ?? null,
+                fields: l.fields,
+                consents: l.consents ?? [],
+                status: l.status,
+                contactId: l.contactId ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async updateAdLeadStatus(input: { id: string; status: AdLeadStatus; signal?: AbortSignal }) {
+    await call("updateLead", async (withFetch) => {
+      await this.zernio.leadgen.updateLead(
+        withFetch({ signal: input.signal, path: { id: input.id }, body: { status: input.status } }),
+      );
     });
   }
 

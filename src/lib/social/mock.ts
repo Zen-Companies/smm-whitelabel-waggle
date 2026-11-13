@@ -16,7 +16,10 @@ import type {
   SocialPlatform,
   SocialProvider,
   PostingQueue,
+  AdLead,
+  AdLeadStatus,
   Broadcast,
+  LeadForm,
   ChatFlow,
   Contact,
   Sequence,
@@ -162,6 +165,50 @@ export class MockSocialProvider implements SocialProvider {
       status,
       scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
     };
+  }
+
+  /** Lead forms and their leads (T78c); one demo lead per new form. */
+  private leadForms = new Map<string, LeadForm & { accountId: string }>();
+  private adLeads = new Map<string, AdLead & { accountId: string }>();
+
+  async listLeadForms(input: { accountId: string }): Promise<LeadForm[]> {
+    return [...this.leadForms.values()]
+      .filter((f) => f.accountId === input.accountId)
+      .map((f) => ({ id: f.id, name: f.name, status: f.status }));
+  }
+
+  async createLeadForm(input: { body: Record<string, unknown> }) {
+    const accountId = String(input.body.accountId ?? "");
+    const name = String(input.body.name ?? "Lead form");
+    const id = idFrom("mock_form", accountId, name, String(this.leadForms.size));
+    this.leadForms.set(id, { id, name, status: "active", accountId });
+    const leadId = idFrom("mock_lead", id);
+    this.adLeads.set(leadId, {
+      id: leadId,
+      accountId,
+      formName: name,
+      createdAt: new Date().toISOString(),
+      fields: { full_name: "Maria Santos", email: "maria@example.com", phone_number: "+639175550142" },
+      consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
+      status: "new",
+      contactId: null,
+    });
+    return { id };
+  }
+
+  async listAdLeads(input: { accountIds: string[]; status?: AdLeadStatus }): Promise<AdLead[]> {
+    return [...this.adLeads.values()]
+      .filter((l) => input.accountIds.includes(l.accountId) && (!input.status || l.status === input.status))
+      .map((l) => {
+        const { accountId, ...rest } = l;
+        void accountId;
+        return rest;
+      });
+  }
+
+  async updateAdLeadStatus(input: { id: string; status: AdLeadStatus }) {
+    const l = this.adLeads.get(input.id);
+    if (l) l.status = input.status;
   }
 
   /** Broadcasts (T78b), kept in memory per profile. */

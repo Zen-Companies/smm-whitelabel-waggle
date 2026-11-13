@@ -327,6 +327,44 @@ describe("ZernioSocialProvider", () => {
     expect(captured[2].url.pathname).toBe("/api/v1/broadcasts/bc_1/schedule");
   });
 
+  it("listAdLeads reads Meta leads for the Pages; createLeadForm returns the form id (T78c)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/ads/leads"
+        ? json({
+            success: true,
+            leads: [
+              {
+                id: "lead_1",
+                formName: "Catering",
+                createdTime: "2026-11-13T02:00:00.000Z",
+                fields: { full_name: "Ana Cruz", email: "ana@example.com" },
+                consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
+                status: "weird",
+              },
+              { nope: true },
+            ],
+          })
+        : json({ success: true, form: { id: "form_1" } });
+    const leads = await provider.listAdLeads({ accountIds: ["acc_fb", "acc_fb2"] });
+    expect(captured[0].url.searchParams.get("accountIds")).toBe("acc_fb,acc_fb2");
+    expect(captured[0].url.searchParams.get("platform")).toBe("meta");
+    expect(leads).toEqual([
+      {
+        id: "lead_1",
+        formName: "Catering",
+        createdAt: "2026-11-13T02:00:00.000Z",
+        fields: { full_name: "Ana Cruz", email: "ana@example.com" },
+        consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
+        status: "new",
+        contactId: null,
+      },
+    ]);
+    await expect(provider.createLeadForm({ body: { accountId: "acc_fb", name: "Catering" } })).resolves.toEqual({
+      id: "form_1",
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/ads/lead-forms");
+  });
+
   it("createContact puts a WhatsApp number on the contact; importContacts sends rows (T78a)", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/contacts"
