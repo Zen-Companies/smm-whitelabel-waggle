@@ -3,22 +3,25 @@ import Link from "next/link";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
-import type { ChatFlow, CommentAutomation } from "@/lib/social/types";
+import type { ChatFlow, CommentAutomation, Sequence } from "@/lib/social/types";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { AutomationsList } from "./automations-list";
 import { FLOW_PLATFORMS } from "./chat-flow";
 import { supportsCommentAutomation } from "./comment-dm";
 import { FlowsSection } from "./flows-section";
+import { SEQUENCE_PLATFORMS } from "./sequence";
+import { SequencesSection, type SequenceTemplate } from "./sequences-section";
 
 const KINDS = [
   { key: "comment", label: "Comment to DM" },
   { key: "flows", label: "Chat flows" },
+  { key: "sequences", label: "Sequences" },
 ] as const;
 type Kind = (typeof KINDS)[number]["key"];
 
 /**
  * Teach Waggle → Automations (T77, design "Automations"): replies that happen on their own, set
- * up once. Comment to DM and chat flows; sequences and links come next.
+ * up once. Comment to DM, chat flows and sequences; links and QR codes come next.
  */
 export async function AutomationsView({ kind: raw }: { kind?: string }) {
   const kind: Kind = KINDS.some((k) => k.key === raw) ? (raw as Kind) : "comment";
@@ -39,13 +42,27 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
 
   let automations: CommentAutomation[] = [];
   let flows: ChatFlow[] = [];
+  let sequences: Sequence[] = [];
+  const templates: Record<string, SequenceTemplate[]> = {};
   let unavailable = false;
   if (tenant.zernioProfileId) {
     try {
       const social = getSocialProvider();
       const opts = { profileId: tenant.zernioProfileId, signal: AbortSignal.timeout(10_000) };
       if (kind === "comment") automations = await social.listCommentAutomations(opts);
-      else flows = await social.listWorkflows(opts);
+      else if (kind === "flows") flows = await social.listWorkflows(opts);
+      else {
+        sequences = await social.listSequences(opts);
+        // WhatsApp follow-ups a day or more later need an approved template (≤ 1 placeholder).
+        for (const a of all.filter((x) => x.platform === "whatsapp")) {
+          const list = await social
+            .listWhatsAppTemplates({ accountId: a.zernioId, signal: AbortSignal.timeout(10_000) })
+            .catch(() => []);
+          templates[a.zernioId] = list
+            .filter((t) => t.status === "APPROVED" && t.variables <= 1)
+            .map((t) => ({ name: t.name, language: t.language, variables: t.variables, body: t.body }));
+        }
+      }
     } catch (error) {
       Sentry.captureException(error, { extra: { tenantId: tenant.id, step: `automations:${kind}` } });
       unavailable = true;
@@ -86,10 +103,17 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
             reply only.
           </p>
         </>
-      ) : (
+      ) : kind === "flows" ? (
         <FlowsSection
           flows={flows}
           accounts={all.filter((a) => FLOW_PLATFORMS.has(a.platform))}
+          canEdit={canEdit}
+        />
+      ) : (
+        <SequencesSection
+          sequences={sequences}
+          accounts={all.filter((a) => SEQUENCE_PLATFORMS.has(a.platform))}
+          templates={templates}
           canEdit={canEdit}
         />
       )}

@@ -165,6 +165,33 @@ export interface WorkflowGraph {
   entryNodeId: string;
 }
 
+/** One sequence step as Zernio takes it (T77c): a wait, then a message or a WhatsApp template. */
+export type SequenceStep = {
+  order: number;
+  delayMinutes: number;
+  message?: { text: string };
+  template?: {
+    name: string;
+    language: string;
+    variableMapping?: Record<string, { field: "name" | "phone" | "email" | "company" | "custom" }>;
+  };
+};
+
+/** A sequence as listed (T77c). */
+export interface Sequence {
+  id: string;
+  name: string;
+  platform: string;
+  /** Zernio account id it sends from. */
+  accountId: string;
+  status: "draft" | "active" | "paused";
+  steps: number;
+  preview: string;
+  enrolled: number;
+  completed: number;
+  exited: number;
+}
+
 /** A chat flow as listed (T77b). */
 export interface ChatFlow {
   id: string;
@@ -247,6 +274,30 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** The brand's sequences (T77c, `GET /v1/sequences`). */
+  listSequences(input: { profileId: string } & CallOptions): Promise<Sequence[]>;
+  /** Creates a sequence as a draft. */
+  createSequence(
+    input: {
+      profileId: string;
+      accountId: string;
+      platform: string;
+      name: string;
+      steps: SequenceStep[];
+      exitOnReply: boolean;
+      exitOnUnsubscribe: boolean;
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  setSequenceActive(input: { id: string; active: boolean } & CallOptions): Promise<void>;
+  deleteSequence(input: { id: string } & CallOptions): Promise<void>;
+  /** Adds contacts (Zernio contact ids); people already in it or not reachable there fail. */
+  enrollInSequence(
+    input: { id: string; contactIds: string[] } & CallOptions,
+  ): Promise<{ enrolled: number; failed: number }>;
+  /** Ids of the brand's subscribed contacts with a tag on one account (up to 1,000). */
+  listContactIdsByTag(
+    input: { profileId: string; accountId: string; tag: string } & CallOptions,
+  ): Promise<string[]>;
   /** The brand's chat flows (T77b, `GET /v1/workflows`). */
   listWorkflows(input: { profileId: string } & CallOptions): Promise<ChatFlow[]>;
   /** Creates a flow as a draft (`POST /v1/workflows`). */

@@ -24,6 +24,8 @@ import {
   type PostValidation,
   type PostingQueue,
   type ChatFlow,
+  type Sequence,
+  type SequenceStep,
   type CommentAutomation,
   type WorkflowGraph,
   type CommentAutomationInput,
@@ -90,6 +92,27 @@ const gbpPerformanceSchema = z.object({
   metrics: z
     .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
     .optional(),
+});
+const sequencesSchema = z.object({
+  sequences: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          name: z.string().catch(""),
+          platform: z.string().catch(""),
+          status: z.enum(["draft", "active", "paused"]).catch("draft"),
+          accountId: z.string().catch(""),
+          stepsCount: z.number().optional(),
+          messagePreview: z.string().optional(),
+          totalEnrolled: z.number().optional(),
+          totalCompleted: z.number().optional(),
+          totalExited: z.number().optional(),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
 });
 const workflowsSchema = z.object({
   workflows: z
@@ -596,6 +619,127 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async listSequences(input: { profileId: string; signal?: AbortSignal }): Promise<Sequence[]> {
+    return call("listSequences", async (withFetch) => {
+      const { data } = await this.zernio.sequences.listSequences(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 100 } }),
+      );
+      return parse(sequencesSchema, data, "listSequences").sequences.flatMap((s): Sequence[] =>
+        s
+          ? [
+              {
+                id: s.id,
+                name: s.name,
+                platform: s.platform,
+                accountId: s.accountId,
+                status: s.status,
+                steps: s.stepsCount ?? 0,
+                preview: s.messagePreview ?? "",
+                enrolled: s.totalEnrolled ?? 0,
+                completed: s.totalCompleted ?? 0,
+                exited: s.totalExited ?? 0,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createSequence(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    steps: SequenceStep[];
+    exitOnReply: boolean;
+    exitOnUnsubscribe: boolean;
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createSequence", async (withFetch) => {
+      const { data } = await this.zernio.sequences.createSequence(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            platform: input.platform as "whatsapp",
+            name: input.name,
+            steps: input.steps,
+            exitOnReply: input.exitOnReply,
+            exitOnUnsubscribe: input.exitOnUnsubscribe,
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({ sequence: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createSequence",
+      );
+      return { id: parsed.sequence.id };
+    });
+  }
+
+  async setSequenceActive(input: { id: string; active: boolean; signal?: AbortSignal }) {
+    await call(input.active ? "activateSequence" : "pauseSequence", async (withFetch) => {
+      const opts = withFetch({ signal: input.signal, path: { sequenceId: input.id } });
+      if (input.active) await this.zernio.sequences.activateSequence(opts);
+      else await this.zernio.sequences.pauseSequence(opts);
+    });
+  }
+
+  async deleteSequence(input: { id: string; signal?: AbortSignal }) {
+    await call("deleteSequence", async (withFetch) => {
+      await this.zernio.sequences.deleteSequence(
+        withFetch({ signal: input.signal, path: { sequenceId: input.id } }),
+      );
+    });
+  }
+
+  async enrollInSequence(input: { id: string; contactIds: string[]; signal?: AbortSignal }) {
+    return call("enrollContacts", async (withFetch) => {
+      const { data } = await this.zernio.sequences.enrollContacts(
+        withFetch({
+          signal: input.signal,
+          path: { sequenceId: input.id },
+          body: { contactIds: input.contactIds },
+        }),
+      );
+      const parsed = parse(
+        z.object({ enrolled: z.number().catch(0), failed: z.number().catch(0) }),
+        data,
+        "enrollContacts",
+      );
+      return { enrolled: parsed.enrolled, failed: parsed.failed };
+    });
+  }
+
+  async listContactIdsByTag(input: {
+    profileId: string;
+    accountId: string;
+    tag: string;
+    signal?: AbortSignal;
+  }): Promise<string[]> {
+    return call("listContacts", async (withFetch) => {
+      const { data } = await this.zernio.contacts.listContacts(
+        withFetch({
+          signal: input.signal,
+          query: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            tag: input.tag,
+            isSubscribed: "true",
+            limit: 1000,
+          },
+        }),
+      );
+      return parse(
+        z.object({ contacts: z.array(z.object({ id: z.string().optional() }).catch({})).catch([]) }),
+        data,
+        "listContacts",
+      ).contacts.flatMap((c) => (c.id ? [c.id] : []));
     });
   }
 

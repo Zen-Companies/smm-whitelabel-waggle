@@ -17,6 +17,8 @@ import type {
   SocialProvider,
   PostingQueue,
   ChatFlow,
+  Sequence,
+  SequenceStep,
   CommentAutomation,
   CommentAutomationInput,
   WorkflowGraph,
@@ -158,6 +160,63 @@ export class MockSocialProvider implements SocialProvider {
       status,
       scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
     };
+  }
+
+  /** Sequences (T77c), kept in memory per profile. */
+  private sequences = new Map<string, Sequence & { profileId: string }>();
+
+  async listSequences(input: { profileId: string }): Promise<Sequence[]> {
+    return [...this.sequences.values()]
+      .filter((s) => s.profileId === input.profileId)
+      .map((s) => {
+        const { profileId, ...rest } = s;
+        void profileId;
+        return rest;
+      });
+  }
+
+  async createSequence(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    steps: SequenceStep[];
+  }) {
+    const id = idFrom("mock_seq", input.profileId, input.name, String(this.sequences.size));
+    this.sequences.set(id, {
+      id,
+      profileId: input.profileId,
+      name: input.name,
+      platform: input.platform,
+      accountId: input.accountId,
+      status: "draft",
+      steps: input.steps.length,
+      preview: input.steps[0]?.message?.text ?? input.steps[0]?.template?.name ?? "",
+      enrolled: 0,
+      completed: 0,
+      exited: 0,
+    });
+    return { id };
+  }
+
+  async setSequenceActive(input: { id: string; active: boolean }) {
+    const s = this.sequences.get(input.id);
+    if (s) s.status = input.active ? "active" : "paused";
+  }
+
+  async deleteSequence(input: { id: string }) {
+    this.sequences.delete(input.id);
+  }
+
+  async enrollInSequence(input: { id: string; contactIds: string[] }) {
+    const s = this.sequences.get(input.id);
+    if (s) s.enrolled += input.contactIds.length;
+    return { enrolled: input.contactIds.length, failed: 0 };
+  }
+
+  /** The demo has no contacts yet (T78): three for any tag. */
+  async listContactIdsByTag(input: { tag: string }) {
+    return [1, 2, 3].map((n) => idFrom("mock_contact", input.tag, String(n)));
   }
 
   /** Chat flows (T77b), kept in memory per profile. */

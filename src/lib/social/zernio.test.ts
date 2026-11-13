@@ -302,6 +302,31 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("createSequence sends the steps; enrollInSequence adds contacts (T77c)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/sequences"
+        ? json({ success: true, sequence: { id: "seq_1" } })
+        : json({ success: true, enrolled: 2, failed: 1 });
+    const steps = [{ order: 1, delayMinutes: 0, message: { text: "Hi" } }];
+    await expect(
+      provider.createSequence({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        platform: "whatsapp",
+        name: "Welcome",
+        steps,
+        exitOnReply: true,
+        exitOnUnsubscribe: true,
+      }),
+    ).resolves.toEqual({ id: "seq_1" });
+    expect(captured[0].body).toMatchObject({ platform: "whatsapp", steps, exitOnReply: true });
+    await expect(
+      provider.enrollInSequence({ id: "seq_1", contactIds: ["c1", "c2", "c3"] }),
+    ).resolves.toEqual({ enrolled: 2, failed: 1 });
+    expect(captured[1].url.pathname).toBe("/api/v1/sequences/seq_1/enroll");
+    expect(captured[1].body).toEqual({ contactIds: ["c1", "c2", "c3"] });
+  });
+
   it("createWorkflow sends the graph, setWorkflowActive activates or pauses (T77b)", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/workflows"
