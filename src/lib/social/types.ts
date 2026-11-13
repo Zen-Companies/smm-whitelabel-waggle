@@ -212,6 +212,44 @@ export interface SmsRegistration {
   phoneNumbers: string[];
 }
 
+export const RCS_AGENT_STATUSES = [
+  "requested",
+  "changes_requested",
+  "brand_vetting",
+  "agent_review",
+  "testing",
+  "launch_review",
+  "launching",
+  "live",
+  "rejected",
+  "deactivated",
+] as const;
+export type RcsAgentStatus = (typeof RCS_AGENT_STATUSES)[number];
+
+/** A brand's RCS agent (T83, `/v1/rcs/agents`): the verified sender carriers approve. */
+export interface RcsAgentView {
+  id: string;
+  status: RcsAgentStatus;
+  /** Launch market (ISO 2-letter); US agents add a testing step. */
+  country: string | null;
+  displayName: string;
+  useCase: string | null;
+  /** The inbox account, once the agent exists with the carriers. */
+  accountId: string | null;
+  /** The review note while changes are asked for. */
+  reviewNote: string | null;
+  declineReason: string | null;
+  /** The launch details were sent. */
+  launchSent: boolean;
+  testDevices: {
+    id: string;
+    phoneNumber: string;
+    inviteStatus: "PENDING" | "ACCEPTED" | "DECLINED";
+  }[];
+  /** What was filed, to prefill the fix-and-resend form. */
+  filed: { brand: Record<string, unknown> | null; profile: Record<string, unknown> | null };
+}
+
 /** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
 export interface VoiceSettings {
   enabled: boolean;
@@ -507,6 +545,32 @@ export interface SocialProvider {
   ): Promise<{ id: string; status: SmsRegistrationStatus; awaitingOtp: boolean }>;
   verifySmsRegistrationCode(input: { id: string; code: string } & CallOptions): Promise<void>;
   resendSmsRegistrationCode(input: { id: string } & CallOptions): Promise<void>;
+  /**
+   * The brand's RCS agents (T83a), closed ones included. Zernio lists the whole team's, so this
+   * keeps only the ones on `profileId`.
+   */
+  listRcsAgents(input: { profileId: string } & CallOptions): Promise<RcsAgentView[]>;
+  /** Requests an agent with a new company (never a reused one: brands are team-wide). */
+  requestRcsAgent(
+    input: { body: Record<string, unknown>; idempotencyKey: string } & CallOptions,
+  ): Promise<{ id: string; status: RcsAgentStatus }>;
+  /** Fixes a request after changes were asked for; it goes back to review. */
+  updateRcsAgent(
+    input: { agentId: string; body: Record<string, unknown> } & CallOptions,
+  ): Promise<void>;
+  /** Uploads a logo or banner; Zernio crops it to the carriers' size and returns its URL. */
+  uploadRcsAsset(
+    input: { file: Blob; kind: "logo" | "banner" } & CallOptions,
+  ): Promise<{ url: string }>;
+  /** US testing (T83b): invites a phone to receive the agent's messages. */
+  addRcsTestDevice(input: { agentId: string; phoneNumber: string } & CallOptions): Promise<void>;
+  removeRcsTestDevice(
+    input: { agentId: string; testDeviceId: string } & CallOptions,
+  ): Promise<void>;
+  /** The launch details carriers review (T83b). */
+  requestRcsLaunch(
+    input: { agentId: string; body: Record<string, unknown> } & CallOptions,
+  ): Promise<void>;
   /**
    * Turns calls on for a number and changes the fields given (partial update, safe to repeat).
    * With no fields it changes nothing and returns the current settings: there's no read route.

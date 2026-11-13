@@ -7,6 +7,7 @@ import { AutonomyCard } from "@/features/approvals";
 import { AssistantsCard } from "@/features/mcp";
 import { listMyOrgs, OrgBillingSection, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { BusinessSettings, getCurrentTenant } from "@/features/tenants";
+import { messagingOn, MessagingSection } from "@/features/messaging";
 import { phoneOn, PhoneSection } from "@/features/phone";
 import { whatsappAccount, WhatsAppTemplatesSection } from "@/features/whatsapp";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -32,6 +33,8 @@ const BRAND_SECTIONS = [
   { key: "whatsapp", label: "WhatsApp templates" },
   // T82a: only listed once staff switch Phone on for the brand.
   { key: "phone", label: "Phone" },
+  // T83: only listed once staff switch Messaging (RCS, iMessage) on for the brand.
+  { key: "messaging", label: "Messaging" },
 ] as const;
 type Section =
   "account" | (typeof ORG_SECTIONS)[number]["key"] | (typeof BRAND_SECTIONS)[number]["key"];
@@ -69,7 +72,10 @@ async function Body({ searchParams }: PageProps<"/settings">) {
   const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
   const org = orgs.find((o) => o.id === tenant.organizationId);
   const hasWhatsApp = !!(await whatsappAccount(getServiceClient(), tenant.id));
-  const hasPhone = await phoneOn(getServiceClient(), tenant.id);
+  const [hasPhone, hasMessaging] = await Promise.all([
+    phoneOn(getServiceClient(), tenant.id),
+    messagingOn(getServiceClient(), tenant.id),
+  ]);
   return (
     <div className="flex flex-col gap-6 md:flex-row md:items-start">
       <nav aria-label="Settings sections" className="flex flex-col gap-0.5 md:w-56 md:shrink-0">
@@ -87,7 +93,10 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         ))}
         <span className="text-ink-4 truncate px-3 pt-4 pb-1 text-xs">Brand · {tenant.name}</span>
         {BRAND_SECTIONS.filter(
-          (s) => (s.key !== "whatsapp" || hasWhatsApp) && (s.key !== "phone" || hasPhone),
+          (s) =>
+            (s.key !== "whatsapp" || hasWhatsApp) &&
+            (s.key !== "phone" || hasPhone) &&
+            (s.key !== "messaging" || hasMessaging),
         ).map((s) => (
           <NavLink key={s.key} href={`/settings?section=${s.key}`} active={s.key === section}>
             {s.label}
@@ -111,6 +120,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         {section === "ai-assistants" && <AssistantsCard />}
         {section === "whatsapp" && <WhatsAppTemplatesSection />}
         {section === "phone" && hasPhone && <PhoneSection />}
+        {section === "messaging" && hasMessaging && <MessagingSection />}
       </div>
     </div>
   );

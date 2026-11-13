@@ -18,5 +18,6 @@ export {
   removeStaffMember,
 } from "./members";
 export type { StaffChange, StaffMember } from "./members";
+export { BrandSwitches } from "./brand-switches";
 export { StaffStrip } from "./staff-strip";
 export { StaffView } from "./staff-view";

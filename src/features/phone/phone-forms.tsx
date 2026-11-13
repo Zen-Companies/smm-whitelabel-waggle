@@ -6,7 +6,6 @@ import {
   buyNumberAction,
   releaseNumberAction,
   searchNumbersAction,
-  switchPhoneAction,
   type PhoneState,
   type SearchState,
 } from "./actions";
@@ -158,60 +157,5 @@ export function ReleaseNumber({ id, label }: { id: string; label: string }) {
     <Button type="button" variant="quiet" onClick={() => setSure(true)}>
       Release
     </Button>
-  );
-}
-
-/** Staff: Phone on or off for one brand. */
-export function PhoneSwitchForm({
-  tenantId,
-  on,
-  label,
-}: {
-  tenantId: string;
-  on: boolean;
-  label: string;
-}) {
-  const [state, action, pending] = useActionState<PhoneState, FormData>(switchPhoneAction, {});
-  return (
-    <form action={action} className="flex items-center gap-2 text-sm">
-      <input type="hidden" name="tenantId" value={tenantId} />
-      <input type="hidden" name="on" value={on ? "true" : "false"} />
-      <Button type="submit" variant={on ? "secondary" : "quiet"} disabled={pending}>
-        {label}
-      </Button>
-      {state.error && (
-        <span role="alert" className="text-danger">
-          {state.error}
-        </span>
-      )}
-    </form>
-  );
-}
-
-/** Staff: pick a brand to switch Phone on for. */
-export function PhoneSwitchOn({ brands }: { brands: { id: string; name: string }[] }) {
-  const [state, action, pending] = useActionState<PhoneState, FormData>(switchPhoneAction, {});
-  return (
-    <form action={action} className="flex flex-wrap items-end gap-2 text-sm">
-      <input type="hidden" name="on" value="true" />
-      <label className="flex flex-col gap-1.5 font-medium">
-        Brand
-        <select name="tenantId" className="field w-72">
-          {brands.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <Button type="submit" variant="secondary" disabled={pending || !brands.length}>
-        Turn Phone on
-      </Button>
-      {state.error && (
-        <span role="alert" className="text-danger">
-          {state.error}
-        </span>
-      )}
-    </form>
   );
 }

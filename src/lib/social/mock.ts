@@ -19,6 +19,7 @@ import type {
   AdAccount,
   SmsOnNumber,
   SmsRegistration,
+  RcsAgentView,
   VoiceSettings,
   OwnedNumber,
   PhoneCountry,
@@ -253,6 +254,87 @@ export class MockSocialProvider implements SocialProvider {
 
   async resendSmsRegistrationCode(input: { id: string }) {
     void input.id;
+  }
+
+  /** RCS (T83): requests wait in review; tests move them along by hand. */
+  rcsAgents: (RcsAgentView & { profileId: string })[] = [];
+
+  async listRcsAgents(input: { profileId: string }): Promise<RcsAgentView[]> {
+    return this.rcsAgents
+      .filter((a) => a.profileId === input.profileId)
+      .map((a) => {
+        const { profileId, ...rest } = a;
+        void profileId;
+        return structuredClone(rest);
+      });
+  }
+
+  async requestRcsAgent(input: { body: Record<string, unknown>; idempotencyKey: string }) {
+    const id = idFrom("mock_rcs", input.idempotencyKey);
+    if (!this.rcsAgents.some((a) => a.id === id)) {
+      const b = input.body;
+      const brand = (b.brand as Record<string, unknown> | undefined) ?? null;
+      const address = brand?.address as { country?: string } | undefined;
+      this.rcsAgents.push({
+        id,
+        profileId: String(b.profileId),
+        status: "requested",
+        country: address?.country ?? "US",
+        displayName: String(b.displayName ?? ""),
+        useCase: String(b.useCase ?? ""),
+        accountId: null,
+        reviewNote: null,
+        declineReason: null,
+        launchSent: false,
+        testDevices: [],
+        filed: { brand, profile: (b.profile as Record<string, unknown> | undefined) ?? null },
+      });
+    }
+    return { id, status: "requested" as const };
+  }
+
+  private rcsAgent(id: string, step: string) {
+    const a = this.rcsAgents.find((x) => x.id === id);
+    if (!a) {
+      throw new SocialProviderError(`mock ${step} failed (404)`, {
+        status: 404,
+        ambiguous: false,
+      });
+    }
+    return a;
+  }
+
+  async updateRcsAgent(input: { agentId: string; body: Record<string, unknown> }) {
+    const a = this.rcsAgent(input.agentId, "updateRcsAgent");
+    if (input.body.displayName) a.displayName = String(input.body.displayName);
+    if (input.body.brand) a.filed.brand = input.body.brand as Record<string, unknown>;
+    if (input.body.profile) a.filed.profile = input.body.profile as Record<string, unknown>;
+    a.status = "requested";
+    a.reviewNote = null;
+  }
+
+  async uploadRcsAsset(input: { file: Blob; kind: "logo" | "banner" }) {
+    return { url: `https://media.example.test/rcs/${input.kind}-${input.file.size}.jpg` };
+  }
+
+  async addRcsTestDevice(input: { agentId: string; phoneNumber: string }) {
+    const a = this.rcsAgent(input.agentId, "addRcsTestDevice");
+    a.testDevices.push({
+      id: idFrom("mock_rcsdev", input.agentId, input.phoneNumber),
+      phoneNumber: input.phoneNumber,
+      inviteStatus: "PENDING",
+    });
+  }
+
+  async removeRcsTestDevice(input: { agentId: string; testDeviceId: string }) {
+    const a = this.rcsAgent(input.agentId, "removeRcsTestDevice");
+    a.testDevices = a.testDevices.filter((d) => d.id !== input.testDeviceId);
+  }
+
+  async requestRcsLaunch(input: { agentId: string; body: Record<string, unknown> }) {
+    const a = this.rcsAgent(input.agentId, "requestRcsAgentLaunch");
+    a.launchSent = true;
+    if (a.status === "testing") a.status = "launch_review";
   }
 
   private voice = new Map<string, VoiceSettings>();

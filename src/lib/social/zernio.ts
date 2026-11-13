@@ -26,6 +26,8 @@ import {
   type AdAccount,
   type SmsOnNumber,
   type SmsRegistration,
+  RCS_AGENT_STATUSES,
+  type RcsAgentView,
   type VoiceSettings,
   type OwnedNumber,
   type PhoneCountry,
@@ -1039,6 +1041,180 @@ export class ZernioSocialProvider implements SocialProvider {
     await call("resendSmsRegistrationOtp", async (withFetch) => {
       await this.zernio.sms.resendSmsRegistrationOtp(
         withFetch({ signal: input.signal, path: { id: input.id } }),
+      );
+    });
+  }
+
+  async listRcsAgents(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listRcsAgents", async (withFetch) => {
+      const { data } = await this.zernio.rcs.listRcsAgents(
+        withFetch({ signal: input.signal, query: { includeClosed: true } }),
+      );
+      const record = z.record(z.string(), z.unknown());
+      const rows = parse(
+        z.object({
+          agents: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  profileId: z.string().nullish(),
+                  accountId: z.string().nullish(),
+                  country: z.string().nullish(),
+                  status: z.enum(RCS_AGENT_STATUSES),
+                  displayName: z.string().catch(""),
+                  useCase: z.string().nullish(),
+                  reviewNote: z.string().nullish(),
+                  declineReason: z.string().nullish(),
+                  launchRequest: record.nullish().catch(null),
+                  profile: record.nullish().catch(null),
+                  brand: record.nullish().catch(null),
+                  testDevices: z
+                    .array(
+                      z
+                        .object({
+                          testDeviceId: z.string().min(1),
+                          phoneNumber: z.string().min(1),
+                          inviteStatus: z
+                            .enum(["PENDING", "ACCEPTED", "DECLINED"])
+                            .catch("PENDING"),
+                        })
+                        .nullable()
+                        .catch(null),
+                    )
+                    .catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listRcsAgents",
+      ).agents;
+      return rows.flatMap((a): RcsAgentView[] =>
+        a && a.profileId === input.profileId
+          ? [
+              {
+                id: a.id,
+                status: a.status,
+                country: a.country ?? null,
+                displayName: a.displayName,
+                useCase: a.useCase ?? null,
+                accountId: a.accountId ?? null,
+                reviewNote: a.reviewNote ?? null,
+                declineReason: a.declineReason ?? null,
+                launchSent: !!a.launchRequest,
+                testDevices: a.testDevices.flatMap((d) =>
+                  d
+                    ? [
+                        {
+                          id: d.testDeviceId,
+                          phoneNumber: d.phoneNumber,
+                          inviteStatus: d.inviteStatus,
+                        },
+                      ]
+                    : [],
+                ),
+                filed: { brand: a.brand ?? null, profile: a.profile ?? null },
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async requestRcsAgent(input: {
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }) {
+    return call("createRcsAgent", async (withFetch) => {
+      const { data } = await this.zernio.rcs.createRcsAgent(
+        withFetch({
+          signal: input.signal,
+          body: input.body as never,
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      const a = parse(
+        z.object({
+          agent: z.object({
+            id: z.string().min(1),
+            status: z.enum(RCS_AGENT_STATUSES).catch("requested"),
+          }),
+        }),
+        data,
+        "createRcsAgent",
+      ).agent;
+      return { id: a.id, status: a.status };
+    });
+  }
+
+  async updateRcsAgent(input: {
+    agentId: string;
+    body: Record<string, unknown>;
+    signal?: AbortSignal;
+  }) {
+    await call("updateRcsAgent", async (withFetch) => {
+      await this.zernio.rcs.updateRcsAgent(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId },
+          body: input.body as never,
+        }),
+      );
+    });
+  }
+
+  async uploadRcsAsset(input: { file: Blob; kind: "logo" | "banner"; signal?: AbortSignal }) {
+    return call("uploadRcsAsset", async (withFetch) => {
+      const { data } = await this.zernio.rcs.uploadRcsAsset(
+        withFetch({ signal: input.signal, body: { file: input.file, kind: input.kind } }),
+      );
+      return { url: parse(z.object({ url: z.url() }), data, "uploadRcsAsset").url };
+    });
+  }
+
+  async addRcsTestDevice(input: { agentId: string; phoneNumber: string; signal?: AbortSignal }) {
+    await call("addRcsTestDevice", async (withFetch) => {
+      await this.zernio.rcs.addRcsTestDevice(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId },
+          body: { phoneNumber: input.phoneNumber },
+        }),
+      );
+    });
+  }
+
+  async removeRcsTestDevice(input: {
+    agentId: string;
+    testDeviceId: string;
+    signal?: AbortSignal;
+  }) {
+    await call("removeRcsTestDevice", async (withFetch) => {
+      await this.zernio.rcs.removeRcsTestDevice(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId, testDeviceId: input.testDeviceId },
+        }),
+      );
+    });
+  }
+
+  async requestRcsLaunch(input: {
+    agentId: string;
+    body: Record<string, unknown>;
+    signal?: AbortSignal;
+  }) {
+    await call("requestRcsAgentLaunch", async (withFetch) => {
+      await this.zernio.rcs.requestRcsAgentLaunch(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId },
+          body: input.body as never,
+        }),
       );
     });
   }

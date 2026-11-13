@@ -2,14 +2,12 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
-import { z } from "zod";
-import { currentStaffAccess } from "@/features/staff";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { SocialProviderError, type PhoneNumberType } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
-import { phoneOn, setPhoneSwitch } from "./flags";
+import { phoneOn } from "./flags";
 import { numberOptions, parsePurchase } from "./numbers";
 import { defaultGreeting, parseVoiceForm } from "./voice";
 import { parseRegistration } from "./registration";
@@ -161,23 +159,6 @@ export async function releaseNumberAction(_prev: PhoneState, f: FormData): Promi
   });
   revalidatePath(SETTINGS);
   return { done: "The number was released." };
-}
-
-/** Staff: switch Phone on or off for a brand (Feature switches). */
-export async function switchPhoneAction(_prev: PhoneState, f: FormData): Promise<PhoneState> {
-  const access = await currentStaffAccess();
-  if (!access.permissions.has("flags.manage")) return { error: "Not available." };
-  const tenantId = z.uuid().safeParse(f.get("tenantId"));
-  if (!tenantId.success) return { error: "That brand wasn't found." };
-  const done = await setPhoneSwitch(
-    getServiceClient(),
-    access.userId,
-    tenantId.data,
-    f.get("on") === "true",
-  );
-  if (!done) return { error: "That brand wasn't found." };
-  revalidatePath("/admin/switches");
-  return { done: "Saved." };
 }
 
 export type VoiceState = { error?: string; field?: string; savedAt?: number };

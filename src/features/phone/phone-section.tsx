@@ -5,12 +5,10 @@ import { can } from "@/features/orgs";
 import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { OwnedNumber, VoiceSettings } from "@/lib/social/types";
-import { getServiceClient } from "@/lib/supabase/service";
-import { phoneBrands } from "./flags";
 import { displayNumber, monthly, numberOptions, typeLabel, type NumberOption } from "./numbers";
 import { CallsForm } from "./calls-form";
 import { TextingCard } from "./texting-card";
-import { NumberPicker, PhoneSwitchForm, PhoneSwitchOn, ReleaseNumber } from "./phone-forms";
+import { NumberPicker, ReleaseNumber } from "./phone-forms";
 import { defaultGreeting } from "./voice";
 
 /** Settings → Phone (T82a, design "Settings · Phone"): the brand's number, or getting one. */
@@ -128,40 +126,6 @@ export async function PhoneSection() {
       {number && number.status === "active" && mayEdit && (
         <TextingCard tenantId={tenant.id} businessName={tenant.name} number={number} />
       )}
-    </section>
-  );
-}
-
-/** Staff: Phone is switched on brand by brand until billing is built (Feature switches). */
-export async function PhoneSwitches() {
-  const db = getServiceClient();
-  const [on, { data: brands }] = await Promise.all([
-    phoneBrands(db),
-    db.from("tenants").select("id, name").is("offboarded_at", null).order("name").limit(500),
-  ]);
-  const onIds = new Set(on.map((b) => b.id));
-  return (
-    <section className="card flex flex-col gap-3 p-5" aria-labelledby="phone-switches">
-      <h2 id="phone-switches" className="section-title">
-        Phone
-      </h2>
-      <p className="text-ink-2 text-sm">
-        Numbers, calls and texts are billed to our account until billing is built, so Phone is on
-        only for the brands listed here.
-      </p>
-      {on.length ? (
-        <ul className="divide-line flex flex-col divide-y">
-          {on.map((b) => (
-            <li key={b.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span>{b.name}</span>
-              <PhoneSwitchForm tenantId={b.id} on={false} label="Turn off" />
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="meta">No brand has Phone yet.</p>
-      )}
-      <PhoneSwitchOn brands={(brands ?? []).filter((b) => !onIds.has(b.id))} />
     </section>
   );
 }

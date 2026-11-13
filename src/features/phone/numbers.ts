@@ -4,8 +4,6 @@ import type { PhoneCountry, PhoneNumberType } from "@/lib/social/types";
 // brand until billing exists (numbers, calls and texts bill our account); only countries and
 // types that need no ID check; one number per brand.
 
-export const PHONE_FLAG = "phone";
-
 export type NumberOption = {
   country: string;
   numberType: PhoneNumberType;
