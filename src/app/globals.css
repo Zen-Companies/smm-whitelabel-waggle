@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Design system: docs/design.md (Waggle Paper, v3). Components use these tokens, never raw hex. */
+/* Design system: docs/design.md (Waggle Hive, v4). Components use these tokens, never raw hex. */
 
 @theme inline {
   /* Palette (design.md §3) */
@@ -48,48 +48,48 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Type: Inter for everything (design.md §3) */
+  /* Type: Outfit for headings and the wordmark, Inter for the rest (design.md §3) */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-outfit), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-display);
 
-  /* Radius: 8 controls · 12 panels; nothing rounder except avatars and dots */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 12px;
-  --radius-3xl: 12px;
+  /* Radius: 12 controls · 18 cards and panels (design.md §3) */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 18px;
+  --radius-3xl: 20px;
 
   /* Depth: borders do the work; one shadow, only on overlays */
-  --shadow-overlay: 0 12px 32px rgba(24, 24, 27, 0.12);
+  --shadow-overlay: 0 12px 32px rgba(23, 20, 15, 0.14);
 }
 
 :root {
   color-scheme: light;
-  --page: #ffffff;
+  --page: #faf8f3;
   --surface: #ffffff;
-  --subtle: #f5f5f4;
-  --line: #e7e5e4;
-  --line-strong: #d6d3d1;
-  --ink: #18181b;
-  --ink-2: #52525b;
-  --ink-3: #71717a;
-  --ink-4: #a1a1aa;
-  --honey: #f5b014;
+  --subtle: #f4f1e9;
+  --line: #ece8df;
+  --line-strong: #d9d2c2;
+  --ink: #17140f;
+  --ink-2: #4f4a40;
+  --ink-3: #6b6458;
+  --ink-4: #a39b8b;
+  --honey: #f6b21b;
   --honey-hover: #e5a50f;
-  --honey-text: #92600a;
-  --honey-tint: #fff7e0;
-  --honey-border: #f5d98c;
-  --danger: #b42318;
-  --danger-soft: #fef3f2;
-  --danger-border: #fecdca;
-  --success: #15803d;
-  --success-soft: #f0fdf4;
-  /* Staff-only marks (Playground, staff role); never on owner screens. */
-  --info: #1e4f8a;
-  --info-soft: #e0edfb;
-  --focus-ring: rgba(24, 24, 27, 0.08);
+  --honey-text: #7a4f00;
+  --honey-tint: #fff9ea;
+  --honey-border: #f3dfa8;
+  --danger: #8c2a1e;
+  --danger-soft: #fce8e6;
+  --danger-border: #f2c6bf;
+  --success: #1c5b36;
+  --success-soft: #e7f4ec;
+  /* Neutral notes; staff-only marks (Playground, staff role) too. */
+  --info: #3a4250;
+  --info-soft: #eef0f3;
+  --focus-ring: rgba(23, 20, 15, 0.1);
 
   --background: var(--page);
   --foreground: var(--ink);
@@ -98,7 +98,8 @@
   --popover: var(--surface);
   --popover-foreground: var(--ink);
   --primary: var(--honey);
-  --primary-foreground: var(--ink);
+  /* Text on honey is always dark, in both themes. */
+  --primary-foreground: #17140f;
   --secondary: var(--surface);
   --secondary-foreground: var(--ink);
   --muted: var(--subtle);
@@ -109,7 +110,43 @@
   --border: var(--line);
   --input: var(--line-strong);
   --ring: var(--ink);
-  --radius: 8px;
+  --radius: 12px;
+}
+
+/* Dark (design.md §3): chosen in the account menu or Settings, or "match device". */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #14110c;
+  --surface: #1f1a13;
+  --subtle: #2a241a;
+  --line: #3a3226;
+  --line-strong: #4a4033;
+  --ink: #f5f1e8;
+  --ink-2: #d8d0c0;
+  --ink-3: #aba290;
+  --ink-4: #6b6458;
+  --honey-hover: #f6c350;
+  --honey-text: #f6c350;
+  --honey-tint: #2b2312;
+  --honey-border: #6b5420;
+  --danger: #f2a093;
+  --danger-soft: #3a1712;
+  --danger-border: #5a2a22;
+  --success: #7fd3a0;
+  --success-soft: #12301f;
+  --info: #b8c2d3;
+  --info-soft: #252a33;
+  --focus-ring: rgba(245, 241, 232, 0.16);
+}
+
+/* On a honey fill, text stays dark in both themes. */
+.bg-honey,
+.bg-primary {
+  --ink: #17140f;
+  --ink-2: #4f4a40;
+  --ink-3: #4f4a40;
+  --honey-text: #4a3000;
+  color: #17140f;
 }
 
 @layer base {
@@ -142,13 +179,15 @@
 @layer components {
   /* Type roles (design.md §3) */
   .page-title {
-    font-size: 24px;
-    line-height: 1.25;
+    font-family: var(--font-display);
+    font-size: 32px;
+    line-height: 1.2;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.6px;
     color: var(--ink);
   }
   .display-title {
+    font-family: var(--font-display);
     font-size: 20px;
     line-height: 1.3;
     font-weight: 600;
@@ -156,7 +195,8 @@
     color: var(--ink);
   }
   .section-title {
-    font-size: 16px;
+    font-family: var(--font-display);
+    font-size: 18px;
     line-height: 1.4;
     font-weight: 600;
     color: var(--ink);
