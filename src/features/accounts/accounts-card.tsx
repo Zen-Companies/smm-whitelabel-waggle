@@ -13,6 +13,7 @@ import { TelegramSetup } from "./telegram-setup";
 import { WhatsAppSetup } from "./whatsapp-setup";
 import { connectBanner } from "./connect-banner";
 import { ConnectTiles } from "./connect-tiles";
+import { MoreConnections } from "./more-connections";
 
 /** Connected accounts (Settings). Status is inline text + icon, never a colored chip. */
 export async function AccountsCard({
@@ -47,6 +48,7 @@ export async function AccountsCard({
     <>
       {setup}
       <ConnectTiles exclude={connected} />
+      <MoreConnections />
     </>
   );
 

@@ -158,6 +158,20 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** A site, shop or tool connected on the profile (T80: shopify, wordpress, webflow, ...). */
+export interface Integration {
+  id: string;
+  platform: string;
+  name: string;
+  active: boolean;
+}
+
+/** What the owner pastes to connect a site with their own keys (T80, nothing installed). */
+export type SiteKeys =
+  | { kind: "shopify"; shop: string; accessToken: string }
+  | { kind: "wordpress"; siteUrl: string; username: string; applicationPassword: string }
+  | { kind: "webflow"; siteToken: string };
+
 /** An ads connection on the profile (T79, `metaads`, `googleads`, ...). */
 export interface AdConnection {
   id: string;
@@ -374,6 +388,24 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /** Every account on the profile whose platform is in `platforms` (T80). */
+  listIntegrations(
+    input: { profileId: string; platforms: readonly string[] } & CallOptions,
+  ): Promise<Integration[]>;
+  /** Connects a site with the owner's own keys (T80); Zernio checks them before saving. */
+  connectSiteWithKeys(
+    input: { profileId: string; keys: SiteKeys } & CallOptions,
+  ): Promise<{ accountId: string; name: string }>;
+  /** Connects WhatsApp with the business's own Meta keys (T80). */
+  connectWhatsAppWithKeys(
+    input: {
+      profileId: string;
+      accessToken: string;
+      wabaId: string;
+      phoneNumberId: string;
+      pin?: string;
+    } & CallOptions,
+  ): Promise<{ accountId: string; username: string }>;
   /**
    * Connects Meta ads from the brand's Facebook account (classic login, T79). Returns the
    * `metaads` connection when no consent is needed, otherwise Meta's consent link.

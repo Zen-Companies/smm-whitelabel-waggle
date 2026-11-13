@@ -17,6 +17,8 @@ import type {
   SocialProvider,
   PostingQueue,
   AdAccount,
+  Integration,
+  SiteKeys,
   AdCampaignSummary,
   AdConnection,
   AdLead,
@@ -168,6 +170,32 @@ export class MockSocialProvider implements SocialProvider {
       providerPostId,
       status,
       scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
+    };
+  }
+
+  /** Sites connected with the owner's keys (T80), per profile. */
+  private integrations = new Map<string, Integration[]>();
+
+  async listIntegrations(input: { profileId: string; platforms: readonly string[] }) {
+    return (this.integrations.get(input.profileId) ?? []).filter((i) =>
+      input.platforms.includes(i.platform),
+    );
+  }
+
+  async connectSiteWithKeys(input: { profileId: string; keys: SiteKeys }) {
+    const k = input.keys;
+    const name =
+      k.kind === "shopify" ? k.shop : k.kind === "wordpress" ? k.siteUrl : "Your Webflow site";
+    const id = idFrom(`mock_${k.kind}`, input.profileId, name);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [...list, { id, platform: k.kind, name, active: true }]);
+    return { accountId: id, name };
+  }
+
+  async connectWhatsAppWithKeys(input: { profileId: string; phoneNumberId: string }) {
+    return {
+      accountId: idFrom("mock_whatsapp", input.profileId, input.phoneNumberId),
+      username: "+63 917 555 0100",
     };
   }
 

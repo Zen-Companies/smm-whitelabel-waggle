@@ -338,6 +338,65 @@ describe("ZernioSocialProvider", () => {
     expect(captured[2].url.pathname).toBe("/api/v1/broadcasts/bc_1/schedule");
   });
 
+  it("own keys (T80): Shopify, WordPress and Webflow return the account; WhatsApp too", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/connect/whatsapp/credentials"
+        ? json({
+            account: { accountId: "acc_wa", username: "harbourbean", phoneNumber: "+639175550100" },
+          })
+        : json({
+            account: {
+              _id: "acc_site",
+              platform: "shopify",
+              username: "hb",
+              displayName: "Harbour Bean",
+            },
+          });
+    await expect(
+      provider.connectSiteWithKeys({
+        profileId: "prof_1",
+        keys: { kind: "shopify", shop: "hb.myshopify.com", accessToken: "shpat_x" },
+      }),
+    ).resolves.toEqual({ accountId: "acc_site", name: "Harbour Bean" });
+    expect(captured[0].url.pathname).toBe("/api/v1/connect/shopify/token");
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      shop: "hb.myshopify.com",
+      accessToken: "shpat_x",
+    });
+
+    await provider.connectSiteWithKeys({
+      profileId: "prof_1",
+      keys: {
+        kind: "wordpress",
+        siteUrl: "https://hb.ph",
+        username: "m",
+        applicationPassword: "a b",
+      },
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/connect/wordpress/token");
+    await provider.connectSiteWithKeys({
+      profileId: "prof_1",
+      keys: { kind: "webflow", siteToken: "t" },
+    });
+    expect(captured[2].url.pathname).toBe("/api/v1/connect/webflow/token");
+
+    await expect(
+      provider.connectWhatsAppWithKeys({
+        profileId: "prof_1",
+        accessToken: "EAAG",
+        wabaId: "1",
+        phoneNumberId: "2",
+      }),
+    ).resolves.toEqual({ accountId: "acc_wa", username: "harbourbean" });
+    expect(captured[3].body).toEqual({
+      profileId: "prof_1",
+      accessToken: "EAAG",
+      wabaId: "1",
+      phoneNumberId: "2",
+    });
+  });
+
   it("ads (T79): connect, boost with its key, campaigns with results, pause", async () => {
     respond = (req) => {
       const p = req.url.pathname;

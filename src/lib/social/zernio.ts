@@ -24,6 +24,8 @@ import {
   type PostValidation,
   type PostingQueue,
   type AdAccount,
+  type Integration,
+  type SiteKeys,
   type AdCampaignSummary,
   type AdConnection,
   type AdLead,
@@ -720,6 +722,120 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  async listIntegrations(input: {
+    profileId: string;
+    platforms: readonly string[];
+    signal?: AbortSignal;
+  }) {
+    return call("listIntegrations", async (withFetch) => {
+      const { data } = await this.zernio.accounts.listAccounts(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 100 } }),
+      );
+      const accounts = parse(
+        z.object({
+          accounts: z
+            .array(
+              z.object({
+                _id: z.string().min(1),
+                platform: z.string(),
+                username: z.string().nullish(),
+                displayName: z.string().nullish(),
+                isActive: z.boolean().catch(false),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listIntegrations",
+      ).accounts;
+      return accounts
+        .filter((a) => input.platforms.includes(a.platform))
+        .map((a): Integration => ({
+          id: a._id,
+          platform: a.platform,
+          name: a.displayName ?? a.username ?? a.platform,
+          active: a.isActive,
+        }));
+    });
+  }
+
+  async connectSiteWithKeys(input: { profileId: string; keys: SiteKeys; signal?: AbortSignal }) {
+    const accountSchema = z.object({
+      account: z.object({
+        _id: z.string().min(1),
+        username: z.string().nullish(),
+        displayName: z.string().nullish(),
+      }),
+    });
+    const k = input.keys;
+    return call(`connect_${k.kind}`, async (withFetch) => {
+      const { data } =
+        k.kind === "shopify"
+          ? await this.zernio.connect.connectShopifyWithToken(
+              withFetch({
+                signal: input.signal,
+                body: { profileId: input.profileId, shop: k.shop, accessToken: k.accessToken },
+              }),
+            )
+          : k.kind === "wordpress"
+            ? await this.zernio.connect.connectWordPressWithApplicationPassword(
+                withFetch({
+                  signal: input.signal,
+                  body: {
+                    profileId: input.profileId,
+                    siteUrl: k.siteUrl,
+                    username: k.username,
+                    applicationPassword: k.applicationPassword,
+                  },
+                }),
+              )
+            : await this.zernio.connect.connectWebflowWithSiteToken(
+                withFetch({
+                  signal: input.signal,
+                  body: { profileId: input.profileId, siteToken: k.siteToken },
+                }),
+              );
+      const a = parse(accountSchema, data, `connect_${k.kind}`).account;
+      return { accountId: a._id, name: a.displayName ?? a.username ?? k.kind };
+    });
+  }
+
+  async connectWhatsAppWithKeys(input: {
+    profileId: string;
+    accessToken: string;
+    wabaId: string;
+    phoneNumberId: string;
+    pin?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("connectWhatsAppCredentials", async (withFetch) => {
+      const { data } = await this.zernio.connect.connectWhatsAppCredentials(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accessToken: input.accessToken,
+            wabaId: input.wabaId,
+            phoneNumberId: input.phoneNumberId,
+            ...(input.pin ? { pin: input.pin } : {}),
+          },
+        }),
+      );
+      const a = parse(
+        z.object({
+          account: z.object({
+            accountId: z.string().min(1),
+            username: z.string().nullish(),
+            phoneNumber: z.string().nullish(),
+          }),
+        }),
+        data,
+        "connectWhatsAppCredentials",
+      ).account;
+      return { accountId: a.accountId, username: a.username ?? a.phoneNumber ?? "WhatsApp" };
     });
   }
 
