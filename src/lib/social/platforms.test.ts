@@ -46,6 +46,8 @@ describe("platform registry", () => {
       "google",
       "microsoft",
       "sms",
+      "rcs",
+      "imessage",
     ]);
     expect(isInboxLive("twitter")).toBe(false);
   });

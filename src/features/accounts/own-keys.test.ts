@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MORE_CONNECTIONS,
+  withSettingsLinks,
   OWN_KEY_PLATFORMS,
   parseEmail,
   parseLineKeys,
@@ -175,5 +176,17 @@ describe("MORE_CONNECTIONS", () => {
       how: "link",
       href: "/posts/ads",
     });
+  });
+});
+
+describe("withSettingsLinks (T83d)", () => {
+  const item = (id: string) => MORE_CONNECTIONS.flatMap((g) => g.items).find((i) => i.id === id);
+  it("links paid channels to Settings only when switched on", () => {
+    const on = withSettingsLinks(MORE_CONNECTIONS, { phone: false, messaging: true });
+    const find = (id: string) => on.flatMap((g) => g.items).find((i) => i.id === id);
+    expect(find("rcs")).toMatchObject({ how: "link", href: "/settings?section=messaging" });
+    expect(find("imessage")).toMatchObject({ how: "link" });
+    expect(find("sms")).toMatchObject({ how: item("sms")?.how });
+    expect(find("wechat")?.how).toBe("soon");
   });
 });

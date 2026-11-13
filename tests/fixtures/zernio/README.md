@@ -25,3 +25,5 @@ Customer names and messages are made up.
 `call-ended.json` is built from docs.zernio.com/webhooks/phone/call-ended, not recorded; `account.platform: "phone"` is our reading and needs a real call to confirm.
 
 `rcs-agent-status-updated.json` is built from Zernio's `rcs.agent.status_updated` docs (docs.zernio.com/webhooks/phone/rcs-agent-status-updated and /platforms/rcs/connect), not recorded.
+
+`message-received-imessage.json` is the Instagram DM fixture with iMessage's platform and a phone sender (docs.zernio.com/platforms/imessage/inbox), not recorded.

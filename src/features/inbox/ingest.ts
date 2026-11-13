@@ -24,6 +24,7 @@ import {
   type ZernioEnvelope,
 } from "./zernio-events";
 import { customerText } from "@/lib/social/whitelabel";
+import { isOptKeyword } from "./opt-keywords";
 
 // Webhook mapping (docs/tdd.md §7.1): dedupe on the event id, then map to rows. DB writes only,
 // no external calls. Never logs payloads (they hold customer text); logs event ids.
@@ -526,6 +527,8 @@ async function mapMessage(
   if (e.message.direction !== "incoming") return skipped("outgoing_message");
   const account = supportedAccount(e.account);
   if (!account) return skipped("unsupported_platform");
+  // T83d: STOP and START on texting channels are handled upstream, never answered.
+  if (isOptKeyword(account.platform, e.message.text)) return skipped("opt_keyword");
 
   const resolved = await accountFor(deps, tenantId, account);
   if ("rejected" in resolved) return rejected(resolved.rejected);

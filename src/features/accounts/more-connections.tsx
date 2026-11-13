@@ -4,13 +4,20 @@ import { CircleCheck } from "lucide-react";
 import { BrandMark } from "@/components/app/platform-mark";
 import { CalendarToday } from "@/features/calendar";
 import { getCurrentTenant } from "@/features/tenants";
+import { brandSwitchOn } from "@/lib/flags/brand-switch";
 import { getSocialProvider } from "@/lib/social";
+import { getServiceClient } from "@/lib/supabase/service";
 import type { Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
 import { Button } from "@/components/ui/button";
 import { EmailConnectForm } from "./email-line-forms";
 import { connectMailAction } from "./own-key-actions";
-import { CONNECTED_PLATFORMS, isOwnKeyPlatform, MORE_CONNECTIONS } from "./own-keys";
+import {
+  CONNECTED_PLATFORMS,
+  isOwnKeyPlatform,
+  MORE_CONNECTIONS,
+  withSettingsLinks,
+} from "./own-keys";
 
 /**
  * Settings → Accounts → More connections (T80): groups under the social tiles. Sites connect
@@ -19,6 +26,12 @@ import { CONNECTED_PLATFORMS, isOwnKeyPlatform, MORE_CONNECTIONS } from "./own-k
  */
 export async function MoreConnections() {
   const tenant = await getCurrentTenant();
+  const db = getServiceClient();
+  const [phone, messaging] = await Promise.all([
+    brandSwitchOn(db, "phone", tenant.id),
+    brandSwitchOn(db, "messaging", tenant.id),
+  ]);
+  const groups = withSettingsLinks(MORE_CONNECTIONS, { phone, messaging });
   let connected: Integration[] = [];
   let unavailable = false;
   if (tenant.zernioProfileId) {
@@ -45,7 +58,7 @@ export async function MoreConnections() {
       {unavailable && (
         <p className="danger-box">Your connected sites couldn&apos;t be loaded right now.</p>
       )}
-      {MORE_CONNECTIONS.map((group) => (
+      {groups.map((group) => (
         <div key={group.title} className="flex flex-col gap-2">
           <h4 className="text-ink-2 text-sm font-semibold">{group.title}</h4>
           <ul className="card divide-line flex flex-col divide-y">

@@ -82,6 +82,28 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
   },
 ];
 
+/**
+ * Paid channels set up in Settings (T82, T83) once staff switch them on for the brand: their
+ * rows link there instead of saying Coming soon.
+ */
+export function withSettingsLinks(
+  groups: typeof MORE_CONNECTIONS,
+  on: { phone: boolean; messaging: boolean },
+): typeof MORE_CONNECTIONS {
+  const links: Record<string, string | null> = {
+    sms: on.phone ? "/settings?section=phone" : null,
+    rcs: on.messaging ? "/settings?section=messaging" : null,
+    imessage: on.messaging ? "/settings?section=messaging" : null,
+  };
+  return groups.map((g) => ({
+    ...g,
+    items: g.items.map((item) => {
+      const href = links[item.id];
+      return href ? { ...item, how: "link" as const, href } : item;
+    }),
+  }));
+}
+
 type Bad = { ok: false; field: string; error: string };
 const val = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 

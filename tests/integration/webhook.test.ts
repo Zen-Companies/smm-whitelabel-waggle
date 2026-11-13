@@ -344,6 +344,32 @@ describe("POST /api/webhooks/zernio", () => {
     expect(await count("inbound_items", "zernio_message_id", payload.message.id)).toBe(1);
   });
 
+  it("an iMessage lands as a chat item; STOP never does (T83d)", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const payload = fixture("message-received-imessage");
+    payload.message.id = `msg_imsg_${suffix}`;
+    payload.message.conversationId = `conv_imsg_${suffix}`;
+    payload.account.id = payload.account.accountId = `acc_imsg_${suffix}`;
+    expect(await (await deliver(payload)).json()).toEqual({
+      outcome: "processed",
+      detail: "item_created",
+    });
+    const { data: conv } = await db
+      .from("conversations")
+      .select("platform")
+      .eq("zernio_conversation_id", payload.message.conversationId)
+      .single();
+    expect(conv).toEqual({ platform: "imessage" });
+
+    const stop = fixture("message-received-imessage");
+    stop.message.id = `msg_imsg_stop_${suffix}`;
+    stop.message.conversationId = payload.message.conversationId;
+    stop.account.id = stop.account.accountId = payload.account.id;
+    stop.message.text = "STOP";
+    expect(await (await deliver(stop)).json()).toMatchObject({ outcome: "skipped" });
+    expect(await count("inbound_items", "zernio_message_id", stop.message.id)).toBe(0);
+  });
+
   it("rcs.agent.status_updated alerts the owner only when it needs them (T83b)", async () => {
     const payload = fixture("rcs-agent-status-updated");
     const res = await deliver(payload);

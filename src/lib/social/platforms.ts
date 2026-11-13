@@ -27,6 +27,8 @@ export const PLATFORM_IDS = [
   "microsoft",
   "phone",
   "sms",
+  "rcs",
+  "imessage",
 ] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
@@ -408,6 +410,34 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     inboxLive: true,
     analyticsLive: false,
   },
+  rcs: {
+    id: "rcs",
+    label: "RCS",
+    mark: { text: "RCS", bg: "#E0E7FF", fg: "#3730A3" },
+    kind: "answers",
+    // Requested in Settings → Messaging (T83a); the account appears once carriers have the agent.
+    connect: "none",
+    line: "Answers branded texts",
+    needs: "Carriers approve the business first",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  imessage: {
+    id: "imessage",
+    label: "iMessage",
+    mark: { text: "iM", bg: "#DBEAFE", fg: "#1D4ED8" },
+    kind: "answers",
+    // Ordered in Settings → Messaging (T83c); the account appears when the number turns on.
+    connect: "none",
+    line: "Answers iMessages",
+    needs: "A US or UK iMessage number",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
 };
 
 export function isPlatformId(id: string): id is PlatformId {
@@ -525,6 +555,10 @@ const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
   microsoft: {},
   // T82c: no reply window; up to 10 segments (Zernio's cap), about 1,530 characters.
   sms: { replyMax: 1530 },
+  // T83d: inbox replies go out as plain RCS text (Zernio documents no length limit).
+  rcs: {},
+  // T83d: under 10,000 characters (docs.zernio.com/platforms/imessage/inbox).
+  imessage: { replyMax: 9999 },
 };
 
 export function inboxRules(platform: string): InboxRules {

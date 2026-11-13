@@ -502,6 +502,13 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
         await clearAttempt();
         throw new RetryLaterError(retryAfterSeconds ?? RATE_LIMIT_FALLBACK_SECONDS);
       }
+      // T83d: texting channels refuse a contact who replied STOP, or one who must write first.
+      if (
+        status === 409 &&
+        (code === "recipient_opted_out" || code === "recipient_must_message_first")
+      ) {
+        return rejected(status, code);
+      }
       if (status === 409) {
         // The same key is still in flight: the first request may yet succeed. Keep the mark.
         throw new RetryLaterError(retryAfterSeconds ?? IN_FLIGHT_RETRY_SECONDS);
