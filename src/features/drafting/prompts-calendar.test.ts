@@ -16,7 +16,7 @@ describe("draft prompt 2026-11-13.1 (T81d)", () => {
     const system = p.system("Harbour Bean");
     expect(system).toContain("emails");
     expect(system).toMatch(
-      /9\. CALENDAR.*opening hours in BUSINESS INFO.*Never confirm a booking/s,
+      /9\. CALENDAR[\s\S]*opening hours in BUSINESS INFO[\s\S]*Never confirm a booking/,
     );
   });
 

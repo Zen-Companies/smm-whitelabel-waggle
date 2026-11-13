@@ -17,6 +17,10 @@ import type {
   SocialProvider,
   PostingQueue,
   AdAccount,
+  OwnedNumber,
+  PhoneCountry,
+  PhoneNumberType,
+  PurchaseResult,
   CalendarEventSummary,
   EmailDiscovery,
   Integration,
@@ -192,6 +196,70 @@ export class MockSocialProvider implements SocialProvider {
     const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
     this.integrations.set(input.profileId, [...list, { id, platform: k.kind, name, active: true }]);
     return { accountId: id, name };
+  }
+
+  /** Phone numbers (T82a): US local and toll-free at $3; a pretend ID country (GB) is left out. */
+  private numbers = new Map<string, OwnedNumber[]>();
+
+  async listPhoneCountries(): Promise<PhoneCountry[]> {
+    const t = (numberType: PhoneNumberType, needsKyc = false) => ({
+      numberType,
+      monthlyCents: 300,
+      needsKyc,
+      callsAvailable: true,
+      smsAvailable: true,
+      inStock: true,
+      instant: true,
+    });
+    return [
+      { code: "US", types: [t("local"), t("toll_free")] },
+      { code: "GB", types: [t("local", true)] },
+    ];
+  }
+
+  async searchPhoneNumbers(input: { numberType: PhoneNumberType; areaCode?: string }) {
+    const area = input.numberType === "toll_free" ? "800" : (input.areaCode || "415").slice(0, 3);
+    return ["0142", "0177", "0190"].map((end) => ({
+      phoneNumber: `+1${area}555${end}`,
+      locality: input.numberType === "toll_free" ? null : "San Francisco",
+      features: ["voice", "sms"],
+    }));
+  }
+
+  async purchasePhoneNumber(input: {
+    profileId: string;
+    country: string;
+    numberType: PhoneNumberType;
+    phoneNumber: string;
+    purchaseIntentId: string;
+  }): Promise<PurchaseResult> {
+    const id = idFrom("mock_number", input.purchaseIntentId);
+    const list = (this.numbers.get(input.profileId) ?? []).filter((n) => n.id !== id);
+    this.numbers.set(input.profileId, [
+      ...list,
+      {
+        id,
+        phoneNumber: input.phoneNumber,
+        country: input.country,
+        numberType: input.numberType,
+        status: "active",
+        monthlyCents: 300,
+      },
+    ]);
+    return { kind: "bought", id, phoneNumber: input.phoneNumber, profileId: input.profileId };
+  }
+
+  async listOwnedNumbers(input: { profileId: string }) {
+    return this.numbers.get(input.profileId) ?? [];
+  }
+
+  async releasePhoneNumber(input: { id: string }) {
+    for (const [profile, list] of this.numbers) {
+      this.numbers.set(
+        profile,
+        list.filter((n) => n.id !== input.id),
+      );
+    }
   }
 
   /** Calendar (T81d): a supplier delivery at 9 and a staff meeting at 2, every day. */

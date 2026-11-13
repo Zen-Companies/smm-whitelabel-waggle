@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { SwitchesView } from "@/features/mcp";
+import { PhoneSwitches } from "@/features/phone";
 
 export const metadata = { title: "Feature switches" };
 
@@ -14,6 +15,9 @@ export default function Page(props: PageProps<"/admin/switches">) {
       </div>
       <Suspense fallback={<div className="skeleton h-96" />}>
         <SwitchesView searchParams={props.searchParams} />
+      </Suspense>
+      <Suspense fallback={<div className="skeleton h-40" />}>
+        <PhoneSwitches />
       </Suspense>
     </main>
   );

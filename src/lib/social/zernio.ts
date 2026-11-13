@@ -24,6 +24,10 @@ import {
   type PostValidation,
   type PostingQueue,
   type AdAccount,
+  type OwnedNumber,
+  type PhoneCountry,
+  type PhoneNumberType,
+  type PurchaseResult,
   type CalendarEventSummary,
   type EmailDiscovery,
   type ProviderErrorInfo,
@@ -914,6 +918,218 @@ export class ZernioSocialProvider implements SocialProvider {
         }),
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
+    });
+  }
+
+  async listPhoneCountries(input?: { signal?: AbortSignal }): Promise<PhoneCountry[]> {
+    return call("listPhoneNumberCountries", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.listPhoneNumberCountries(
+        withFetch({ signal: input?.signal }),
+      );
+      const typeSchema = z.object({
+        numberType: z.enum(["local", "mobile", "national", "toll_free"]),
+        monthlyCents: z.number(),
+        needsKyc: z.boolean().catch(true),
+        callsAvailable: z.boolean().catch(false),
+        smsAvailable: z.boolean().catch(false),
+        inStock: z.boolean().catch(false),
+        fulfilment: z.string().nullish(),
+      });
+      const countries = parse(
+        z.object({
+          countries: z
+            .array(
+              z.object({
+                code: z.string().length(2),
+                types: z.array(typeSchema.nullable().catch(null)).catch([]),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listPhoneNumberCountries",
+      ).countries;
+      return countries.map((c) => ({
+        code: c.code,
+        types: c.types.flatMap((t) =>
+          t
+            ? [
+                {
+                  numberType: t.numberType,
+                  monthlyCents: t.monthlyCents,
+                  needsKyc: t.needsKyc,
+                  callsAvailable: t.callsAvailable,
+                  smsAvailable: t.smsAvailable,
+                  inStock: t.inStock,
+                  instant: t.fulfilment !== "request",
+                },
+              ]
+            : [],
+        ),
+      }));
+    });
+  }
+
+  async searchPhoneNumbers(input: {
+    country: string;
+    numberType: PhoneNumberType;
+    areaCode?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("searchAvailablePhoneNumbers", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.searchAvailablePhoneNumbers(
+        withFetch({
+          signal: input.signal,
+          query: {
+            country: input.country,
+            numberType: input.numberType,
+            limit: 10,
+            ...(input.areaCode ? { areaCode: input.areaCode } : {}),
+          },
+        }),
+      );
+      const numbers = parse(
+        z.object({
+          numbers: z
+            .array(
+              z.object({
+                phoneNumber: z.string().min(4),
+                features: z.array(z.string()).catch([]),
+                locality: z.string().nullish(),
+                bestEffort: z.boolean().nullish(),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "searchAvailablePhoneNumbers",
+      ).numbers;
+      return numbers
+        .filter((n) => !n.bestEffort)
+        .map((n) => ({
+          phoneNumber: n.phoneNumber,
+          locality: n.locality ?? null,
+          features: n.features,
+        }));
+    });
+  }
+
+  async purchasePhoneNumber(input: {
+    profileId: string;
+    country: string;
+    numberType: PhoneNumberType;
+    phoneNumber: string;
+    wantsSms: boolean;
+    purchaseIntentId: string;
+    signal?: AbortSignal;
+  }): Promise<PurchaseResult> {
+    return call("purchasePhoneNumber", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.purchasePhoneNumber(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            country: input.country,
+            numberType: input.numberType,
+            phoneNumber: input.phoneNumber,
+            wantsSms: input.wantsSms,
+            connectWhatsapp: false,
+            purchaseIntentId: input.purchaseIntentId,
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          status: z.string().nullish(),
+          checkoutUrl: z.string().nullish(),
+          numberId: z.string().nullish(),
+          phoneNumber: z
+            .union([
+              z.string(),
+              z.object({
+                id: z.string(),
+                phoneNumber: z.string(),
+                profileId: z.string().nullish(),
+              }),
+            ])
+            .nullish(),
+          profileId: z.string().nullish(),
+        }),
+        data,
+        "purchasePhoneNumber",
+      );
+      if (r.status === "kyc_required") return { kind: "needs_id" };
+      if (r.checkoutUrl) return { kind: "needs_payment" };
+      if (r.phoneNumber && typeof r.phoneNumber === "object") {
+        return {
+          kind: "bought",
+          id: r.phoneNumber.id,
+          phoneNumber: r.phoneNumber.phoneNumber,
+          profileId: r.phoneNumber.profileId ?? null,
+        };
+      }
+      if (r.status === "already_purchased" && r.numberId && typeof r.phoneNumber === "string") {
+        return {
+          kind: "bought",
+          id: r.numberId,
+          phoneNumber: r.phoneNumber,
+          profileId: r.profileId ?? null,
+        };
+      }
+      throw new SocialProviderError("Zernio purchasePhoneNumber: unexpected response shape", {
+        ambiguous: true,
+      });
+    });
+  }
+
+  async listOwnedNumbers(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listPhoneNumbers", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.listPhoneNumbers(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      const numbers = parse(
+        z.object({
+          numbers: z
+            .array(
+              z
+                .object({
+                  _id: z.string().min(1),
+                  phoneNumber: z.string().min(1),
+                  country: z.string().catch(""),
+                  numberType: z.string().nullish(),
+                  status: z.string(),
+                  monthlyCents: z.number().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listPhoneNumbers",
+      ).numbers;
+      return numbers.flatMap((n): OwnedNumber[] =>
+        n && n.status !== "released" && n.status !== "releasing"
+          ? [
+              {
+                id: n._id,
+                phoneNumber: n.phoneNumber,
+                country: n.country,
+                numberType: n.numberType ?? null,
+                status: n.status,
+                monthlyCents: n.monthlyCents ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async releasePhoneNumber(input: { id: string; signal?: AbortSignal }) {
+    await call("releasePhoneNumber", async (withFetch) => {
+      await this.zernio.phonenumbers.releasePhoneNumber(
+        withFetch({ signal: input.signal, path: { id: input.id } }),
+      );
     });
   }
 

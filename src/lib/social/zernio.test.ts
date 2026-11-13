@@ -397,6 +397,49 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("phone numbers (T82a): buy never connects WhatsApp; ID and payment answers carry no link", async () => {
+    let answer: unknown = {
+      message: "ok",
+      phoneNumber: {
+        id: "num_1",
+        phoneNumber: "+14155550142",
+        status: "active",
+        profileId: "prof_1",
+      },
+    };
+    respond = () => json(answer);
+    const buy = () =>
+      provider.purchasePhoneNumber({
+        profileId: "prof_1",
+        country: "US",
+        numberType: "local",
+        phoneNumber: "+14155550142",
+        wantsSms: true,
+        purchaseIntentId: "intent-1",
+      });
+    await expect(buy()).resolves.toEqual({
+      kind: "bought",
+      id: "num_1",
+      phoneNumber: "+14155550142",
+      profileId: "prof_1",
+    });
+    expect(captured[0].body).toMatchObject({
+      connectWhatsapp: false,
+      purchaseIntentId: "intent-1",
+    });
+    answer = {
+      status: "already_purchased",
+      numberId: "num_1",
+      phoneNumber: "+14155550142",
+      profileId: "prof_1",
+    };
+    await expect(buy()).resolves.toMatchObject({ kind: "bought", id: "num_1" });
+    answer = { status: "kyc_required", country: "GB", kycUrl: "https://example.test/kyc/x" };
+    await expect(buy()).resolves.toEqual({ kind: "needs_id" });
+    answer = { message: "pay", checkoutUrl: "https://example.test/checkout" };
+    await expect(buy()).resolves.toEqual({ kind: "needs_payment" });
+  });
+
   it("calendar (T81d): events without cancelled ones; adding a booking", async () => {
     respond = (req) =>
       req.method === "GET"

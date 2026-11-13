@@ -158,6 +158,39 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+export type PhoneNumberType = "local" | "mobile" | "national" | "toll_free";
+
+/** A country's phone number offer (T82a, `GET /v1/phone-numbers/countries`). */
+export interface PhoneCountry {
+  code: string;
+  types: {
+    numberType: PhoneNumberType;
+    monthlyCents: number;
+    needsKyc: boolean;
+    callsAvailable: boolean;
+    smsAvailable: boolean;
+    inStock: boolean;
+    /** "request": the number is ordered, not handed over at once. */
+    instant: boolean;
+  }[];
+}
+
+/** A number the brand owns (`GET /v1/phone-numbers?profileId`). */
+export interface OwnedNumber {
+  id: string;
+  phoneNumber: string;
+  country: string;
+  numberType: string | null;
+  status: string;
+  monthlyCents: number | null;
+}
+
+export type PurchaseResult =
+  | { kind: "bought"; id: string; phoneNumber: string; profileId: string | null }
+  /** The country needs an ID check, or the team needs a card: Waggle never shows the link. */
+  | { kind: "needs_id" }
+  | { kind: "needs_payment" };
+
 /** A calendar event (T81d, `GET /v1/calendar/events`): times keep the calendar's own offset. */
 export interface CalendarEventSummary {
   id: string;
@@ -423,6 +456,30 @@ export interface SocialProvider {
       scopes: readonly ("email" | "calendar")[];
     } & CallOptions,
   ): Promise<{ authUrl: string }>;
+  /** Countries and number types Zernio sells, with monthly prices (T82a). */
+  listPhoneCountries(input?: CallOptions): Promise<PhoneCountry[]>;
+  /** Numbers for sale; padded "best effort" results are left out. */
+  searchPhoneNumbers(
+    input: { country: string; numberType: PhoneNumberType; areaCode?: string } & CallOptions,
+  ): Promise<{ phoneNumber: string; locality: string | null; features: string[] }[]>;
+  /**
+   * Buys a number for calls (and texts where offered), never WhatsApp. `purchaseIntentId` makes
+   * a retry return the same number.
+   */
+  purchasePhoneNumber(
+    input: {
+      profileId: string;
+      country: string;
+      numberType: PhoneNumberType;
+      phoneNumber: string;
+      wantsSms: boolean;
+      purchaseIntentId: string;
+    } & CallOptions,
+  ): Promise<PurchaseResult>;
+  /** The profile's numbers, released ones left out. */
+  listOwnedNumbers(input: { profileId: string } & CallOptions): Promise<OwnedNumber[]>;
+  /** Gives the number back. Can't be undone. */
+  releasePhoneNumber(input: { id: string } & CallOptions): Promise<void>;
   /** The primary calendar's events between `from` and `to` (T81d), cancelled ones left out. */
   listCalendarEvents(
     input: { accountId: string; from: string; to: string } & CallOptions,
