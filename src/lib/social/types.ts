@@ -185,6 +185,33 @@ export interface OwnedNumber {
   monthlyCents: number | null;
 }
 
+/** Texting on a number (T82c, `POST /v1/phone-numbers/{id}/sms`). */
+export interface SmsOnNumber {
+  enabled: boolean;
+  /** The account texts are sent from and arrive on; null when texting couldn't be turned on. */
+  accountId: string | null;
+  /** The number can't text at all. */
+  notCapable: boolean;
+  /** Still being set up at the carrier: try again shortly. */
+  notReady: boolean;
+  /** US: carriers must approve the business before it can send. */
+  needsRegistration: boolean;
+}
+
+export type SmsRegistrationStatus =
+  "requested" | "changes_requested" | "pending" | "approved" | "rejected" | "deactivated";
+
+/** A US texting registration covering a number (T82c, `/v1/sms/registrations`). */
+export interface SmsRegistration {
+  id: string;
+  type: "standard_10dlc" | "sole_prop_10dlc" | "toll_free";
+  status: SmsRegistrationStatus;
+  declineReason: string | null;
+  /** Sole proprietors: waiting for the code texted to the owner's mobile. */
+  awaitingOtp: boolean;
+  phoneNumbers: string[];
+}
+
 /** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
 export interface VoiceSettings {
   enabled: boolean;
@@ -467,6 +494,19 @@ export interface SocialProvider {
       scopes: readonly ("email" | "calendar")[];
     } & CallOptions,
   ): Promise<{ authUrl: string }>;
+  /** Turns texting on for a number (T82c); receiving works at once, US sending after approval. */
+  enableSms(input: { numberId: string } & CallOptions): Promise<SmsOnNumber>;
+  /**
+   * The registrations that cover this number. Zernio lists the whole team's, so this keeps only
+   * the ones naming `phoneNumber` (never another brand's).
+   */
+  listSmsRegistrations(input: { phoneNumber: string } & CallOptions): Promise<SmsRegistration[]>;
+  /** Files a US registration (10DLC); not idempotent upstream, one attempt. */
+  startSmsRegistration(
+    input: { body: Record<string, unknown> } & CallOptions,
+  ): Promise<{ id: string; status: SmsRegistrationStatus; awaitingOtp: boolean }>;
+  verifySmsRegistrationCode(input: { id: string; code: string } & CallOptions): Promise<void>;
+  resendSmsRegistrationCode(input: { id: string } & CallOptions): Promise<void>;
   /**
    * Turns calls on for a number and changes the fields given (partial update, safe to repeat).
    * With no fields it changes nothing and returns the current settings: there's no read route.

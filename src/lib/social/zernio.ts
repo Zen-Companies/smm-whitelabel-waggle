@@ -24,6 +24,8 @@ import {
   type PostValidation,
   type PostingQueue,
   type AdAccount,
+  type SmsOnNumber,
+  type SmsRegistration,
   type VoiceSettings,
   type OwnedNumber,
   type PhoneCountry,
@@ -919,6 +921,125 @@ export class ZernioSocialProvider implements SocialProvider {
         }),
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
+    });
+  }
+
+  async enableSms(input: { numberId: string; signal?: AbortSignal }): Promise<SmsOnNumber> {
+    return call("enableSmsOnNumber", async (withFetch) => {
+      const { data } = await this.zernio.sms.enableSmsOnNumber(
+        withFetch({ signal: input.signal, path: { id: input.numberId } }),
+      );
+      const r = parse(
+        z.object({
+          enabled: z.boolean().catch(false),
+          id: z.string().nullish(),
+          smsCapable: z.boolean().nullish(),
+          notReady: z.boolean().nullish(),
+          needsRegistration: z.boolean().nullish(),
+        }),
+        data,
+        "enableSmsOnNumber",
+      );
+      return {
+        enabled: r.enabled,
+        accountId: r.enabled ? (r.id ?? null) : null,
+        notCapable: r.smsCapable === false,
+        notReady: r.notReady === true,
+        needsRegistration: r.needsRegistration === true,
+      };
+    });
+  }
+
+  async listSmsRegistrations(input: { phoneNumber: string; signal?: AbortSignal }) {
+    return call("listSmsRegistrations", async (withFetch) => {
+      const { data } = await this.zernio.sms.listSmsRegistrations(
+        withFetch({ signal: input.signal }),
+      );
+      const rows = parse(
+        z.object({
+          registrations: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  registrationType: z.enum(["standard_10dlc", "sole_prop_10dlc", "toll_free"]),
+                  status: z.enum([
+                    "requested",
+                    "changes_requested",
+                    "pending",
+                    "approved",
+                    "rejected",
+                    "deactivated",
+                  ]),
+                  declineReason: z.string().nullish(),
+                  awaitingOtp: z.boolean().catch(false),
+                  phoneNumbers: z.array(z.string()).catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listSmsRegistrations",
+      ).registrations;
+      return rows.flatMap((r): SmsRegistration[] =>
+        r && r.phoneNumbers.includes(input.phoneNumber)
+          ? [
+              {
+                id: r.id,
+                type: r.registrationType,
+                status: r.status,
+                declineReason: r.declineReason ?? null,
+                awaitingOtp: r.awaitingOtp,
+                phoneNumbers: [input.phoneNumber],
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async startSmsRegistration(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("startSmsRegistration", async (withFetch) => {
+      const { data } = await this.zernio.sms.startSmsRegistration(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      const r = parse(
+        z.object({
+          registrationId: z.string().min(1),
+          status: z
+            .enum([
+              "requested",
+              "changes_requested",
+              "pending",
+              "approved",
+              "rejected",
+              "deactivated",
+            ])
+            .catch("pending"),
+          awaitingOtp: z.boolean().catch(false),
+        }),
+        data,
+        "startSmsRegistration",
+      );
+      return { id: r.registrationId, status: r.status, awaitingOtp: r.awaitingOtp };
+    });
+  }
+
+  async verifySmsRegistrationCode(input: { id: string; code: string; signal?: AbortSignal }) {
+    await call("verifySmsRegistrationOtp", async (withFetch) => {
+      await this.zernio.sms.verifySmsRegistrationOtp(
+        withFetch({ signal: input.signal, path: { id: input.id }, body: { otpPin: input.code } }),
+      );
+    });
+  }
+
+  async resendSmsRegistrationCode(input: { id: string; signal?: AbortSignal }) {
+    await call("resendSmsRegistrationOtp", async (withFetch) => {
+      await this.zernio.sms.resendSmsRegistrationOtp(
+        withFetch({ signal: input.signal, path: { id: input.id } }),
+      );
     });
   }
 

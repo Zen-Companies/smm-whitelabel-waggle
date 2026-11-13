@@ -26,6 +26,7 @@ export const PLATFORM_IDS = [
   "google",
   "microsoft",
   "phone",
+  "sms",
 ] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
@@ -393,6 +394,20 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     inboxLive: false,
     analyticsLive: false,
   },
+  sms: {
+    id: "sms",
+    label: "Texts",
+    mark: { text: "SMS", bg: "#DCFCE7", fg: "#166534" },
+    kind: "answers",
+    // Turned on in Settings → Phone (T82c) on the brand's number, not a tile.
+    connect: "none",
+    line: "Answers texts",
+    needs: "US numbers send once carriers approve the business",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
 };
 
 export function isPlatformId(id: string): id is PlatformId {
@@ -508,6 +523,8 @@ const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
   imap: {},
   google: {},
   microsoft: {},
+  // T82c: no reply window; up to 10 segments (Zernio's cap), about 1,530 characters.
+  sms: { replyMax: 1530 },
 };
 
 export function inboxRules(platform: string): InboxRules {

@@ -45,6 +45,7 @@ describe("platform registry", () => {
       "imap",
       "google",
       "microsoft",
+      "sms",
     ]);
     expect(isInboxLive("twitter")).toBe(false);
   });

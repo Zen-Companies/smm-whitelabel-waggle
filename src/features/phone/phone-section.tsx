@@ -9,6 +9,7 @@ import { getServiceClient } from "@/lib/supabase/service";
 import { phoneBrands } from "./flags";
 import { displayNumber, monthly, numberOptions, typeLabel, type NumberOption } from "./numbers";
 import { CallsForm } from "./calls-form";
+import { TextingCard } from "./texting-card";
 import { NumberPicker, PhoneSwitchForm, PhoneSwitchOn, ReleaseNumber } from "./phone-forms";
 import { defaultGreeting } from "./voice";
 
@@ -119,7 +120,9 @@ export async function PhoneSection() {
       {number && number.status === "active" && mayEdit && !voice && (
         <p className="danger-box">Call settings couldn&apos;t be loaded right now.</p>
       )}
-      {number && <p className="meta">Texting on this number comes next.</p>}
+      {number && number.status === "active" && mayEdit && (
+        <TextingCard tenantId={tenant.id} businessName={tenant.name} number={number} />
+      )}
     </section>
   );
 }

@@ -12,6 +12,8 @@ import { getServiceClient } from "@/lib/supabase/service";
 import { phoneOn, setPhoneSwitch } from "./flags";
 import { numberOptions, parsePurchase } from "./numbers";
 import { defaultGreeting, parseVoiceForm } from "./voice";
+import { parseRegistration } from "./registration";
+import { handleAccountConnected } from "@/features/accounts";
 
 export type PhoneState = { error?: string; done?: string };
 export type SearchState = {
@@ -219,4 +221,142 @@ export async function saveVoiceAction(_prev: VoiceState, f: FormData): Promise<V
   });
   revalidatePath(SETTINGS);
   return { savedAt: Date.now() };
+}
+
+export type TextingState = { error?: string; field?: string; done?: string };
+
+/** The brand's own active number, checked against its profile. */
+async function ownNumber(profileId: string, id: string) {
+  const owned = await getSocialProvider().listOwnedNumbers({
+    profileId,
+    signal: AbortSignal.timeout(15_000),
+  });
+  return owned.find((n) => n.id === id && n.status === "active") ?? null;
+}
+
+/**
+ * Turn texting on (T82c): texts arrive in the inbox at once; a US number sends once carriers
+ * approve the business. The texting account joins the brand's accounts right away.
+ */
+export async function enableTextingAction(_prev: TextingState, f: FormData): Promise<TextingState> {
+  const tenant = await phoneTenant();
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  const id = String(f.get("numberId") ?? "");
+  try {
+    const number = await ownNumber(tenant.zernioProfileId, id);
+    if (!number) return { error: "Something went wrong. Reload the page." };
+    const sms = await getSocialProvider().enableSms({
+      numberId: id,
+      signal: AbortSignal.timeout(20_000),
+    });
+    if (sms.notCapable) return { error: "This number can't send or receive texts." };
+    if (sms.notReady || !sms.accountId)
+      return { error: "The number is still being set up. Try again in a few minutes." };
+    const added = await handleAccountConnected(getServiceClient(), {
+      tenantId: tenant.id,
+      zernioAccountId: sms.accountId,
+      platform: "sms",
+      username: number.phoneNumber,
+    });
+    if (added.outcome === "foreign") return { error: "Something went wrong. Contact us." };
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "texting_enabled",
+      actor: tenant.userId,
+      details: { numberId: id, needsRegistration: sms.needsRegistration },
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "enableTexting" } });
+    return { error: "Texting couldn't be turned on right now. Try again." };
+  }
+  revalidatePath(SETTINGS);
+  return { done: "Texting is on." };
+}
+
+/** File the US registration from our own form (one attempt: not idempotent upstream). */
+export async function registerTextingAction(
+  _prev: TextingState,
+  f: FormData,
+): Promise<TextingState> {
+  const tenant = await phoneTenant();
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  const id = String(f.get("numberId") ?? "");
+  const social = getSocialProvider();
+  try {
+    const number = await ownNumber(tenant.zernioProfileId, id);
+    if (!number) return { error: "Something went wrong. Reload the page." };
+    const existing = await social.listSmsRegistrations({
+      phoneNumber: number.phoneNumber,
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (existing.some((r) => r.status !== "deactivated" && r.status !== "rejected")) {
+      return { error: "This number already has a registration in progress." };
+    }
+    const parsed = parseRegistration(f, number.phoneNumber);
+    if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+    const reg = await social.startSmsRegistration({
+      body: parsed.body,
+      signal: AbortSignal.timeout(45_000),
+    });
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "texting_registration_sent",
+      actor: tenant.userId,
+      // No business details in the audit: ids and the kind only.
+      details: { numberId: id, registrationId: reg.id, kind: parsed.kind },
+    });
+  } catch (error) {
+    const s = error instanceof SocialProviderError ? error.details.status : undefined;
+    if (s === 400 || s === 422) {
+      return {
+        error: "The carriers' registry didn't accept a detail. Check the form and try again.",
+      };
+    }
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "registerTexting" } });
+    return { error: "It couldn't be sent right now. Reload before trying again." };
+  }
+  revalidatePath(SETTINGS);
+  return { done: "Sent to the carriers for review." };
+}
+
+/** Sole proprietors: the code texted to the owner's mobile, or a new code. */
+export async function textingCodeAction(_prev: TextingState, f: FormData): Promise<TextingState> {
+  const tenant = await phoneTenant();
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  const id = String(f.get("numberId") ?? "");
+  const resend = f.get("op") === "resend";
+  const code = String(f.get("code") ?? "").trim();
+  if (!resend && !/^\d{4,8}$/.test(code))
+    return { error: "Type the code from the text.", field: "code" };
+  const social = getSocialProvider();
+  try {
+    const number = await ownNumber(tenant.zernioProfileId, id);
+    if (!number) return { error: "Something went wrong. Reload the page." };
+    const reg = (
+      await social.listSmsRegistrations({
+        phoneNumber: number.phoneNumber,
+        signal: AbortSignal.timeout(15_000),
+      })
+    ).find((r) => r.awaitingOtp);
+    if (!reg) return { error: "There's no code to confirm." };
+    if (resend)
+      await social.resendSmsRegistrationCode({ id: reg.id, signal: AbortSignal.timeout(15_000) });
+    else
+      await social.verifySmsRegistrationCode({
+        id: reg.id,
+        code,
+        signal: AbortSignal.timeout(15_000),
+      });
+  } catch (error) {
+    const s = error instanceof SocialProviderError ? error.details.status : undefined;
+    if (s === 400)
+      return { error: "That code didn't work. Check it, or send a new one.", field: "code" };
+    if (s === 429) return { error: "Wait a minute before asking for another code." };
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "textingCode" } });
+    return { error: "Couldn't do that right now. Try again." };
+  }
+  revalidatePath(SETTINGS);
+  return {
+    done: resend ? "A new code is on its way." : "Confirmed. The carriers are reviewing it now.",
+  };
 }

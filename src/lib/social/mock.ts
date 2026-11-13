@@ -17,6 +17,8 @@ import type {
   SocialProvider,
   PostingQueue,
   AdAccount,
+  SmsOnNumber,
+  SmsRegistration,
   VoiceSettings,
   OwnedNumber,
   PhoneCountry,
@@ -197,6 +199,60 @@ export class MockSocialProvider implements SocialProvider {
     const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
     this.integrations.set(input.profileId, [...list, { id, platform: k.kind, name, active: true }]);
     return { accountId: id, name };
+  }
+
+  /** Texting (T82c): every number can text and needs a US registration. */
+  private smsRegistrations: (SmsRegistration & { otp: string | null })[] = [];
+
+  async enableSms(input: { numberId: string }): Promise<SmsOnNumber> {
+    return {
+      enabled: true,
+      accountId: idFrom("mock_sms", input.numberId),
+      notCapable: false,
+      notReady: false,
+      needsRegistration: true,
+    };
+  }
+
+  async listSmsRegistrations(input: { phoneNumber: string }): Promise<SmsRegistration[]> {
+    return this.smsRegistrations
+      .filter((r) => r.phoneNumbers.includes(input.phoneNumber))
+      .map((r) => {
+        const { otp, ...rest } = r;
+        void otp;
+        return rest;
+      });
+  }
+
+  async startSmsRegistration(input: { body: Record<string, unknown> }) {
+    const type = input.body.registrationType as SmsRegistration["type"];
+    const id = idFrom("mock_smsreg", String(this.smsRegistrations.length));
+    const awaitingOtp = type === "sole_prop_10dlc";
+    this.smsRegistrations.push({
+      id,
+      type,
+      status: "pending",
+      declineReason: null,
+      awaitingOtp,
+      phoneNumbers: (input.body.phoneNumbers as string[]) ?? [],
+      otp: awaitingOtp ? "123456" : null,
+    });
+    return { id, status: "pending" as const, awaitingOtp };
+  }
+
+  async verifySmsRegistrationCode(input: { id: string; code: string }) {
+    const r = this.smsRegistrations.find((x) => x.id === input.id);
+    if (!r || r.otp !== input.code) {
+      throw new SocialProviderError("mock verifySmsRegistrationOtp failed (400)", {
+        status: 400,
+        ambiguous: false,
+      });
+    }
+    r.awaitingOtp = false;
+  }
+
+  async resendSmsRegistrationCode(input: { id: string }) {
+    void input.id;
   }
 
   private voice = new Map<string, VoiceSettings>();

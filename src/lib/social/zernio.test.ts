@@ -397,6 +397,54 @@ describe("ZernioSocialProvider", () => {
     });
   });
 
+  it("texting (T82c): only the registrations naming this number; enable returns the texting account", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/sms/registrations"
+        ? json({
+            registrations: [
+              {
+                id: "r_mine",
+                registrationType: "standard_10dlc",
+                status: "pending",
+                awaitingOtp: false,
+                phoneNumbers: ["+14155550142"],
+              },
+              {
+                id: "r_other",
+                registrationType: "sole_prop_10dlc",
+                status: "approved",
+                awaitingOtp: false,
+                phoneNumbers: ["+12125550000"],
+              },
+            ],
+          })
+        : json({
+            enabled: true,
+            id: "acc_sms",
+            smsCapable: true,
+            needsRegistration: true,
+            notReady: false,
+          });
+    await expect(provider.listSmsRegistrations({ phoneNumber: "+14155550142" })).resolves.toEqual([
+      {
+        id: "r_mine",
+        type: "standard_10dlc",
+        status: "pending",
+        declineReason: null,
+        awaitingOtp: false,
+        phoneNumbers: ["+14155550142"],
+      },
+    ]);
+    await expect(provider.enableSms({ numberId: "num_1" })).resolves.toEqual({
+      enabled: true,
+      accountId: "acc_sms",
+      notCapable: false,
+      notReady: false,
+      needsRegistration: true,
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/phone-numbers/num_1/sms");
+  });
+
   it("phone numbers (T82a): buy never connects WhatsApp; ID and payment answers carry no link", async () => {
     let answer: unknown = {
       message: "ok",
