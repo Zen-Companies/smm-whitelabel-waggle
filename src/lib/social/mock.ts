@@ -16,7 +16,11 @@ import type {
   SocialPlatform,
   SocialProvider,
   PostingQueue,
+  AdAccount,
+  AdCampaignSummary,
+  AdConnection,
   AdLead,
+  AdRuleSummary,
   AdLeadStatus,
   Broadcast,
   LeadForm,
@@ -167,6 +171,105 @@ export class MockSocialProvider implements SocialProvider {
     };
   }
 
+  /** Ads (T79): connecting makes one Meta ads connection with one ad account (PHP). */
+  private adConnections = new Map<string, AdConnection>();
+  private adCampaigns = new Map<string, AdCampaignSummary & { connectionId: string }>();
+  private adRules = new Map<string, AdRuleSummary & { connectionId: string }>();
+
+  async connectMetaAds(input: { profileId: string; facebookAccountId: string }) {
+    const id = idFrom("mock_metaads", input.profileId);
+    this.adConnections.set(input.profileId, {
+      id,
+      platform: "metaads",
+      name: "Meta ads",
+      parentAccountId: input.facebookAccountId,
+      active: true,
+    });
+    return { connectionId: id };
+  }
+
+  async listAdConnections(input: { profileId: string }): Promise<AdConnection[]> {
+    const c = this.adConnections.get(input.profileId);
+    return c ? [c] : [];
+  }
+
+  async listAdAccounts(input: { connectionId: string }): Promise<AdAccount[]> {
+    return [
+      {
+        id: `act_${input.connectionId.slice(-8)}`,
+        name: "Your ad account",
+        currency: "PHP",
+        minDailyBudget: 50,
+        billing: "ok",
+        usable: true,
+      },
+    ];
+  }
+
+  async boostPost(input: { body: Record<string, unknown>; idempotencyKey: string }) {
+    const id = idFrom("mock_campaign", input.idempotencyKey);
+    const budget = input.body.budget as { amount: number; type: "daily" | "lifetime" } | undefined;
+    this.adCampaigns.set(id, {
+      id,
+      connectionId: String(input.body.accountId ?? ""),
+      platform: "facebook",
+      name: String(input.body.name ?? "Boost"),
+      status: "pending_review",
+      budget: budget ?? null,
+      currency: "PHP",
+      spend: 0,
+      reach: 0,
+      clicks: 0,
+    });
+    return { id, status: "pending_review" as const };
+  }
+
+  async listAdCampaigns(input: { connectionId: string }): Promise<AdCampaignSummary[]> {
+    return [...this.adCampaigns.values()]
+      .filter((c) => c.connectionId === input.connectionId)
+      .map((c) => {
+        const { connectionId, ...rest } = c;
+        void connectionId;
+        return rest;
+      });
+  }
+
+  async setAdCampaignStatus(input: { campaignId: string; status: "active" | "paused" }) {
+    const c = this.adCampaigns.get(input.campaignId);
+    if (c) c.status = input.status;
+  }
+
+  async listAdRules(input: { connectionId: string }): Promise<AdRuleSummary[]> {
+    return [...this.adRules.values()]
+      .filter((r) => r.connectionId === input.connectionId)
+      .map((r) => {
+        const { connectionId, ...rest } = r;
+        void connectionId;
+        return rest;
+      });
+  }
+
+  async createAdRule(input: { body: Record<string, unknown> }) {
+    const id = idFrom("mock_rule", String(input.body.name), String(this.adRules.size));
+    this.adRules.set(id, {
+      id,
+      connectionId: String(input.body.accountId ?? ""),
+      name: String(input.body.name ?? "Rule"),
+      adAccountId: String(input.body.adAccountId ?? ""),
+      enabled: input.body.enabled === true,
+    });
+    return { id };
+  }
+
+  async setAdRuleEnabled(input: { id: string; enabled: boolean }) {
+    const r = this.adRules.get(input.id);
+    if (r) r.enabled = input.enabled;
+  }
+
+  async deleteAdRule(input: { id: string }) {
+    this.adRules.delete(input.id);
+  }
+
   /** Lead forms and their leads (T78c); one demo lead per new form. */
   private leadForms = new Map<string, LeadForm & { accountId: string }>();
   private adLeads = new Map<string, AdLead & { accountId: string }>();
@@ -188,7 +291,11 @@ export class MockSocialProvider implements SocialProvider {
       accountId,
       formName: name,
       createdAt: new Date().toISOString(),
-      fields: { full_name: "Maria Santos", email: "maria@example.com", phone_number: "+639175550142" },
+      fields: {
+        full_name: "Maria Santos",
+        email: "maria@example.com",
+        phone_number: "+639175550142",
+      },
       consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
       status: "new",
       contactId: null,
@@ -198,7 +305,10 @@ export class MockSocialProvider implements SocialProvider {
 
   async listAdLeads(input: { accountIds: string[]; status?: AdLeadStatus }): Promise<AdLead[]> {
     return [...this.adLeads.values()]
-      .filter((l) => input.accountIds.includes(l.accountId) && (!input.status || l.status === input.status))
+      .filter(
+        (l) =>
+          input.accountIds.includes(l.accountId) && (!input.status || l.status === input.status),
+      )
       .map((l) => {
         const { accountId, ...rest } = l;
         void accountId;
@@ -234,7 +344,10 @@ export class MockSocialProvider implements SocialProvider {
   }) {
     const id = idFrom("mock_bc", input.profileId, input.name, String(this.broadcasts.size));
     const recipients = [...this.contacts.values()].filter(
-      (c) => c.profileId === input.profileId && c.subscribed && (!input.tag || c.tags.includes(input.tag)),
+      (c) =>
+        c.profileId === input.profileId &&
+        c.subscribed &&
+        (!input.tag || c.tags.includes(input.tag)),
     ).length;
     this.broadcasts.set(id, {
       id,
@@ -259,7 +372,13 @@ export class MockSocialProvider implements SocialProvider {
     const b = this.broadcasts.get(input.id);
     if (!b) return;
     if (input.at) Object.assign(b, { status: "scheduled", scheduledAt: input.at });
-    else Object.assign(b, { status: "completed", completedAt: new Date().toISOString(), sent: b.recipients, delivered: b.recipients });
+    else
+      Object.assign(b, {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        sent: b.recipients,
+        delivered: b.recipients,
+      });
   }
 
   async cancelBroadcast(input: { id: string }) {
@@ -320,7 +439,13 @@ export class MockSocialProvider implements SocialProvider {
         tags: r.tags,
         subscribed: false,
         ...(input.accountId && r.identifier
-          ? { channel: { accountId: input.accountId, platform: "whatsapp", identifier: r.identifier } }
+          ? {
+              channel: {
+                accountId: input.accountId,
+                platform: "whatsapp",
+                identifier: r.identifier,
+              },
+            }
           : {}),
       });
     }
@@ -458,7 +583,12 @@ export class MockSocialProvider implements SocialProvider {
     automation: CommentAutomationInput;
     isActive: boolean;
   }) {
-    const id = idFrom("mock_ca", input.profileId, input.automation.name, String(this.automations.size));
+    const id = idFrom(
+      "mock_ca",
+      input.profileId,
+      input.automation.name,
+      String(this.automations.size),
+    );
     this.automations.set(id, {
       id,
       profileId: input.profileId,
@@ -484,7 +614,11 @@ export class MockSocialProvider implements SocialProvider {
     isActive?: boolean;
   }) {
     const a = this.automations.get(input.id);
-    if (!a) throw new SocialProviderError("Zernio updateCommentAutomation failed (404)", { status: 404, ambiguous: false });
+    if (!a)
+      throw new SocialProviderError("Zernio updateCommentAutomation failed (404)", {
+        status: 404,
+        ambiguous: false,
+      });
     if (input.automation) {
       Object.assign(a, {
         ...input.automation,
@@ -501,7 +635,10 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   /** No comments reach the mock, so nothing has been answered yet. */
-  async listCommentAutomationLogs(): Promise<{ entries: CommentAutomationLogEntry[]; misses: number }> {
+  async listCommentAutomationLogs(): Promise<{
+    entries: CommentAutomationLogEntry[];
+    misses: number;
+  }> {
     return { entries: [], misses: 0 };
   }
 
@@ -612,8 +749,15 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   /** Steady demo numbers for Google Business Profile (T76). */
-  async getGoogleBusinessPerformance(input: { accountId: string; fromDate: string; toDate: string }) {
-    const days = Math.max(1, Math.round((Date.parse(input.toDate) - Date.parse(input.fromDate)) / 86_400_000));
+  async getGoogleBusinessPerformance(input: {
+    accountId: string;
+    fromDate: string;
+    toDate: string;
+  }) {
+    const days = Math.max(
+      1,
+      Math.round((Date.parse(input.toDate) - Date.parse(input.fromDate)) / 86_400_000),
+    );
     return {
       BUSINESS_IMPRESSIONS_MOBILE_MAPS: 14 * days,
       BUSINESS_IMPRESSIONS_MOBILE_SEARCH: 9 * days,
@@ -633,7 +777,11 @@ export class MockSocialProvider implements SocialProvider {
   readonly unpublished: { postId: string; platform: string; accountId?: string }[] = [];
 
   async unpublishPost(input: { postId: string; platform: string; accountId?: string }) {
-    this.unpublished.push({ postId: input.postId, platform: input.platform, accountId: input.accountId });
+    this.unpublished.push({
+      postId: input.postId,
+      platform: input.platform,
+      accountId: input.accountId,
+    });
   }
 
   async replyToComment(input: {

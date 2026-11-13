@@ -158,6 +158,51 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+/** An ads connection on the profile (T79, `metaads`, `googleads`, ...). */
+export interface AdConnection {
+  id: string;
+  platform: string;
+  name: string;
+  /** The posting account it was connected from (classic Meta connect). */
+  parentAccountId: string | null;
+  active: boolean;
+}
+
+/** An ad account an ads connection reaches (`GET /v1/ads/accounts`). */
+export interface AdAccount {
+  id: string;
+  name: string;
+  currency: string;
+  minDailyBudget: number | null;
+  /** Whether the ad account has a payment method (Meta). */
+  billing: "ok" | "missing" | "unknown";
+  usable: boolean;
+}
+
+export type AdCampaignStatus =
+  "active" | "paused" | "pending_review" | "rejected" | "completed" | "cancelled" | "error";
+
+/** A campaign as listed (`GET /v1/ads/campaigns`). Money in whole currency units. */
+export interface AdCampaignSummary {
+  id: string;
+  platform: string;
+  name: string;
+  status: AdCampaignStatus;
+  budget: { amount: number; type: "daily" | "lifetime" } | null;
+  currency: string | null;
+  spend: number;
+  reach: number;
+  clicks: number;
+}
+
+/** An automated ad rule (`/v1/ads/rules`); its name says what it does. */
+export interface AdRuleSummary {
+  id: string;
+  name: string;
+  adAccountId: string;
+  enabled: boolean;
+}
+
 /** A lead form in an ad (T78c, `/v1/ads/lead-forms`). */
 export interface LeadForm {
   id: string;
@@ -165,7 +210,8 @@ export interface LeadForm {
   status: string;
 }
 
-export type AdLeadStatus = "new" | "contacted" | "unreachable" | "qualified" | "converted" | "disqualified";
+export type AdLeadStatus =
+  "new" | "contacted" | "unreachable" | "qualified" | "converted" | "disqualified";
 
 /** A lead from an ad's form (T78c, `/v1/ads/leads`). */
 export interface AdLead {
@@ -328,6 +374,28 @@ export interface SocialProvider {
   createPost(
     input: CreatePostInput,
   ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /**
+   * Connects Meta ads from the brand's Facebook account (classic login, T79). Returns the
+   * `metaads` connection when no consent is needed, otherwise Meta's consent link.
+   */
+  connectMetaAds(
+    input: { profileId: string; facebookAccountId: string; redirectUrl: string } & CallOptions,
+  ): Promise<{ connectionId: string } | { authUrl: string }>;
+  /** The profile's ads connections. */
+  listAdConnections(input: { profileId: string } & CallOptions): Promise<AdConnection[]>;
+  listAdAccounts(input: { connectionId: string } & CallOptions): Promise<AdAccount[]>;
+  /** Boosts a published post (`POST /v1/ads/boost`); never retried without the same key. */
+  boostPost(
+    input: { body: Record<string, unknown>; idempotencyKey: string } & CallOptions,
+  ): Promise<{ id: string; status: AdCampaignStatus }>;
+  listAdCampaigns(input: { connectionId: string } & CallOptions): Promise<AdCampaignSummary[]>;
+  setAdCampaignStatus(
+    input: { campaignId: string; platform: string; status: "active" | "paused" } & CallOptions,
+  ): Promise<void>;
+  listAdRules(input: { connectionId: string } & CallOptions): Promise<AdRuleSummary[]>;
+  createAdRule(input: { body: Record<string, unknown> } & CallOptions): Promise<{ id: string }>;
+  setAdRuleEnabled(input: { id: string; enabled: boolean } & CallOptions): Promise<void>;
+  deleteAdRule(input: { id: string } & CallOptions): Promise<void>;
   /** A Facebook Page's lead forms (T78c). */
   listLeadForms(input: { accountId: string } & CallOptions): Promise<LeadForm[]>;
   /** Creates a lead form on the Page (Meta shape; never retried: not idempotent upstream). */
@@ -425,7 +493,11 @@ export interface SocialProvider {
   /** The brand's comment-to-DM automations (T77a). */
   listCommentAutomations(input: { profileId: string } & CallOptions): Promise<CommentAutomation[]>;
   createCommentAutomation(
-    input: { profileId: string; automation: CommentAutomationInput; isActive: boolean } & CallOptions,
+    input: {
+      profileId: string;
+      automation: CommentAutomationInput;
+      isActive: boolean;
+    } & CallOptions,
   ): Promise<{ id: string }>;
   /** Edits an automation; any field left out stays as it is. */
   updateCommentAutomation(

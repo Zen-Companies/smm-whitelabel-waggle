@@ -256,7 +256,10 @@ describe("ZernioSocialProvider", () => {
 
   it("createPost into the queue sends queuedFromProfile, no time, and reads back Zernio's time (T75)", async () => {
     respond = () =>
-      json({ post: { _id: "post_q", status: "scheduled", scheduledFor: "2026-11-17T01:00:00.000Z" } }, 201);
+      json(
+        { post: { _id: "post_q", status: "scheduled", scheduledFor: "2026-11-17T01:00:00.000Z" } },
+        201,
+      );
     await expect(
       provider.createPost({
         content: "Ube is back",
@@ -292,7 +295,11 @@ describe("ZernioSocialProvider", () => {
       },
     });
     expect((captured[0].body as { platforms: unknown[] }).platforms).toEqual([
-      { platform: "instagram", accountId: "acc_ig", platformSpecificData: { contentType: "story" } },
+      {
+        platform: "instagram",
+        accountId: "acc_ig",
+        platformSpecificData: { contentType: "story" },
+      },
       {
         platform: "linkedin",
         accountId: "acc_li",
@@ -318,13 +325,83 @@ describe("ZernioSocialProvider", () => {
     ).resolves.toEqual({ id: "bc_1", recipients: 42 });
     expect(captured[0].body).toMatchObject({
       platform: "whatsapp",
-      template: { name: "weekend_promo", language: "en", variableMapping: { "1": { field: "name" } } },
+      template: {
+        name: "weekend_promo",
+        language: "en",
+        variableMapping: { "1": { field: "name" } },
+      },
       segmentFilters: { isSubscribed: true, tags: ["regular"] },
     });
     expect(captured[1].url.pathname).toBe("/api/v1/broadcasts/bc_1/recipients");
     expect(captured[1].body).toEqual({ useSegment: true });
     await provider.startBroadcast({ id: "bc_1", at: "2026-11-15T00:00:00.000Z" });
     expect(captured[2].url.pathname).toBe("/api/v1/broadcasts/bc_1/schedule");
+  });
+
+  it("ads (T79): connect, boost with its key, campaigns with results, pause", async () => {
+    respond = (req) => {
+      const p = req.url.pathname;
+      if (p === "/api/v1/connect/facebook/ads")
+        return json({ alreadyConnected: true, accountId: "c_meta" });
+      if (p === "/api/v1/ads/boost")
+        return json({ ad: { _id: "ad_1", status: "pending_review" }, message: "ok" }, 201);
+      if (p === "/api/v1/ads/campaigns")
+        return json({
+          campaigns: [
+            {
+              platformCampaignId: "cmp_1",
+              platform: "facebook",
+              campaignName: "Boost: Ube",
+              status: "active",
+              budget: { amount: 300, type: "daily" },
+              currency: "PHP",
+              metrics: { spend: 612, reach: 9800, clicks: 214 },
+            },
+            { nope: true },
+          ],
+        });
+      return json({ status: "paused", updated: 1, skipped: 0 });
+    };
+    await expect(
+      provider.connectMetaAds({
+        profileId: "prof_1",
+        facebookAccountId: "acc_fb",
+        redirectUrl: "https://app.test/x",
+      }),
+    ).resolves.toEqual({ connectionId: "c_meta" });
+    expect(captured[0].url.searchParams.get("loginMode")).toBe("classic");
+    expect(captured[0].url.searchParams.get("accountId")).toBe("acc_fb");
+
+    await expect(
+      provider.boostPost({
+        body: { postId: "zp_1", accountId: "c_meta" },
+        idempotencyKey: "boost-key",
+      }),
+    ).resolves.toEqual({ id: "ad_1", status: "pending_review" });
+    expect(captured[1].headers.get("Idempotency-Key")).toBe("boost-key");
+
+    await expect(provider.listAdCampaigns({ connectionId: "c_meta" })).resolves.toEqual([
+      {
+        id: "cmp_1",
+        platform: "facebook",
+        name: "Boost: Ube",
+        status: "active",
+        budget: { amount: 300, type: "daily" },
+        currency: "PHP",
+        spend: 612,
+        reach: 9800,
+        clicks: 214,
+      },
+    ]);
+    expect(captured[2].url.searchParams.get("accountId")).toBe("c_meta");
+
+    await provider.setAdCampaignStatus({
+      campaignId: "cmp_1",
+      platform: "facebook",
+      status: "paused",
+    });
+    expect(captured[3].url.pathname).toBe("/api/v1/ads/campaigns/cmp_1/status");
+    expect(captured[3].body).toEqual({ status: "paused", platform: "facebook" });
   });
 
   it("listAdLeads reads Meta leads for the Pages; createLeadForm returns the form id (T78c)", async () => {
@@ -359,7 +436,9 @@ describe("ZernioSocialProvider", () => {
         contactId: null,
       },
     ]);
-    await expect(provider.createLeadForm({ body: { accountId: "acc_fb", name: "Catering" } })).resolves.toEqual({
+    await expect(
+      provider.createLeadForm({ body: { accountId: "acc_fb", name: "Catering" } }),
+    ).resolves.toEqual({
       id: "form_1",
     });
     expect(captured[1].url.pathname).toBe("/api/v1/ads/lead-forms");
@@ -438,7 +517,13 @@ describe("ZernioSocialProvider", () => {
       entryNodeId: "trigger",
     };
     await expect(
-      provider.createWorkflow({ profileId: "prof_1", accountId: "acc_wa", platform: "whatsapp", name: "Book", graph }),
+      provider.createWorkflow({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        platform: "whatsapp",
+        name: "Book",
+        graph,
+      }),
     ).resolves.toEqual({ id: "wf_1" });
     expect(captured[0].body).toEqual({
       profileId: "prof_1",
@@ -563,12 +648,26 @@ describe("ZernioSocialProvider", () => {
     let n = 0;
     respond = (req) => {
       n += 1;
-      if (req.method === "GET") return json(n === 1 ? { exists: false } : { exists: true, schedule: { timezone: "UTC", slots: [] } });
-      return json({ schedule: { timezone: "Asia/Manila", slots: [{ dayOfWeek: 2, time: "18:00" }] }, nextSlots: [] });
+      if (req.method === "GET")
+        return json(
+          n === 1 ? { exists: false } : { exists: true, schedule: { timezone: "UTC", slots: [] } },
+        );
+      return json({
+        schedule: { timezone: "Asia/Manila", slots: [{ dayOfWeek: 2, time: "18:00" }] },
+        nextSlots: [],
+      });
     };
-    await provider.saveQueue({ profileId: "prof_1", timezone: "Asia/Manila", slots: [{ dayOfWeek: 2, time: "18:00" }] });
+    await provider.saveQueue({
+      profileId: "prof_1",
+      timezone: "Asia/Manila",
+      slots: [{ dayOfWeek: 2, time: "18:00" }],
+    });
     expect(captured[1].method).toBe("POST");
-    expect(captured[1].body).toMatchObject({ profileId: "prof_1", name: "Posting times", timezone: "Asia/Manila" });
+    expect(captured[1].body).toMatchObject({
+      profileId: "prof_1",
+      name: "Posting times",
+      timezone: "Asia/Manila",
+    });
     await provider.saveQueue({ profileId: "prof_1", timezone: "Asia/Manila", slots: [] });
     expect(captured[3].method).toBe("PUT");
   });

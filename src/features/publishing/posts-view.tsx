@@ -117,6 +117,9 @@ export async function PostsView({
         <Link href="/posts/queue" className="text-honey-text text-sm font-medium underline">
           Posting times
         </Link>
+        <Link href="/posts/ads" className="text-honey-text text-sm font-medium underline">
+          Ads
+        </Link>
         {view === "month" && (
           <div className="flex items-center gap-1">
             <Link

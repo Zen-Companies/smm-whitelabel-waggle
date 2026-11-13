@@ -23,7 +23,11 @@ import {
   type ProviderPostStatus,
   type PostValidation,
   type PostingQueue,
+  type AdAccount,
+  type AdCampaignSummary,
+  type AdConnection,
   type AdLead,
+  type AdRuleSummary,
   type AdLeadStatus,
   type Broadcast,
   type LeadForm,
@@ -116,6 +120,31 @@ const adLeadsSchema = z.object({
             .catch(null),
           status: leadStatusSchema,
           contactId: z.string().nullish().catch(null),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+});
+const adCampaignStatusSchema = z
+  .enum(["active", "paused", "pending_review", "rejected", "completed", "cancelled", "error"])
+  .catch("error");
+const num = z.number().nullish().catch(null);
+const adCampaignsSchema = z.object({
+  campaigns: z
+    .array(
+      z
+        .object({
+          platformCampaignId: z.string().min(1),
+          platform: z.string().catch("facebook"),
+          campaignName: z.string().nullish().catch(null),
+          status: adCampaignStatusSchema,
+          budget: z
+            .object({ amount: z.number(), type: z.enum(["daily", "lifetime"]) })
+            .nullish()
+            .catch(null),
+          currency: z.string().nullish().catch(null),
+          metrics: z.object({ spend: num, reach: num, clicks: num }).nullish().catch(null),
         })
         .nullable()
         .catch(null),
@@ -628,7 +657,8 @@ export class ZernioSocialProvider implements SocialProvider {
     return Promise.all(
       input.targets.map(async (t) => {
         const extra = input.extras?.[t.platform] ?? legacyExtras(t.platform, input);
-        if (t.platform !== "tiktok") return { platform: t.platform, accountId: t.accountId, ...extra };
+        if (t.platform !== "tiktok")
+          return { platform: t.platform, accountId: t.accountId, ...extra };
         if (!input.tiktokConsent) {
           throw new SocialProviderError("TikTok needs the owner's consent for this post", {
             code: "TIKTOK_CONSENT_REQUIRED",
@@ -693,6 +723,226 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async connectMetaAds(input: {
+    profileId: string;
+    facebookAccountId: string;
+    redirectUrl: string;
+    signal?: AbortSignal;
+  }) {
+    return call("connectAds", async (withFetch) => {
+      const { data } = await this.zernio.connect.connectAds(
+        withFetch({
+          signal: input.signal,
+          path: { platform: "facebook" },
+          query: {
+            profileId: input.profileId,
+            accountId: input.facebookAccountId,
+            loginMode: "classic",
+            redirect_url: input.redirectUrl,
+          },
+        }),
+      );
+      const r = parse(
+        z.object({ accountId: z.string().nullish(), authUrl: z.url().nullish() }),
+        data,
+        "connectAds",
+      );
+      if (r.authUrl) return { authUrl: r.authUrl };
+      if (r.accountId) return { connectionId: r.accountId };
+      throw new SocialProviderError("Zernio connectAds: neither a connection nor a link", {
+        ambiguous: false,
+      });
+    });
+  }
+
+  async listAdConnections(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listAdConnections", async (withFetch) => {
+      const { data } = await this.zernio.accounts.listAccounts(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, category: "ads" } }),
+      );
+      const accounts = parse(
+        z.object({
+          accounts: z
+            .array(
+              z.object({
+                _id: z.string().min(1),
+                platform: z.string(),
+                username: z.string().nullish(),
+                displayName: z.string().nullish(),
+                parentAccountId: z.string().nullish(),
+                isActive: z.boolean().catch(false),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listAdConnections",
+      ).accounts;
+      return accounts.map((a): AdConnection => ({
+        id: a._id,
+        platform: a.platform,
+        name: a.displayName ?? a.username ?? a.platform,
+        parentAccountId: a.parentAccountId ?? null,
+        active: a.isActive,
+      }));
+    });
+  }
+
+  async listAdAccounts(input: { connectionId: string; signal?: AbortSignal }) {
+    return call("listAdAccounts", async (withFetch) => {
+      const { data } = await this.zernio.adaccounts.listAdAccounts(
+        withFetch({ signal: input.signal, query: { accountId: input.connectionId } }),
+      );
+      const accounts = parse(
+        z.object({
+          accounts: z
+            .array(
+              z.object({
+                id: z.string().min(1),
+                name: z.string().nullish(),
+                currency: z.string().nullish(),
+                minimumDailyBudget: z.number().nullish(),
+                billingStatus: z.enum(["ok", "missing", "unknown"]).nullish().catch(null),
+                selectable: z.boolean().nullish(),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listAdAccounts",
+      ).accounts;
+      return accounts.map((a): AdAccount => ({
+        id: a.id,
+        name: a.name ?? a.id,
+        currency: a.currency ?? "USD",
+        minDailyBudget: a.minimumDailyBudget ?? null,
+        billing: a.billingStatus ?? "unknown",
+        usable: a.selectable !== false,
+      }));
+    });
+  }
+
+  async boostPost(input: {
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }) {
+    return call("boostPost", async (withFetch) => {
+      const { data } = await this.zernio.adcampaigns.boostPost(
+        withFetch({
+          signal: input.signal,
+          body: input.body as never,
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      const ad = parse(
+        z.object({ ad: z.object({ _id: z.string().min(1), status: adCampaignStatusSchema }) }),
+        data,
+        "boostPost",
+      ).ad;
+      return { id: ad._id, status: ad.status };
+    });
+  }
+
+  async listAdCampaigns(input: { connectionId: string; signal?: AbortSignal }) {
+    return call("listAdCampaigns", async (withFetch) => {
+      const { data } = await this.zernio.adcampaigns.listAdCampaigns(
+        withFetch({ signal: input.signal, query: { accountId: input.connectionId, limit: 50 } }),
+      );
+      return parse(adCampaignsSchema, data, "listAdCampaigns").campaigns.flatMap(
+        (c): AdCampaignSummary[] =>
+          c
+            ? [
+                {
+                  id: c.platformCampaignId,
+                  platform: c.platform,
+                  name: c.campaignName ?? "Ad",
+                  status: c.status,
+                  budget: c.budget ?? null,
+                  currency: c.currency ?? null,
+                  spend: c.metrics?.spend ?? 0,
+                  reach: c.metrics?.reach ?? 0,
+                  clicks: c.metrics?.clicks ?? 0,
+                },
+              ]
+            : [],
+      );
+    });
+  }
+
+  async setAdCampaignStatus(input: {
+    campaignId: string;
+    platform: string;
+    status: "active" | "paused";
+    signal?: AbortSignal;
+  }) {
+    await call("updateAdCampaignStatus", async (withFetch) => {
+      await this.zernio.adcampaigns.updateAdCampaignStatus(
+        withFetch({
+          signal: input.signal,
+          path: { campaignId: input.campaignId },
+          body: { status: input.status, platform: input.platform as never },
+        }),
+      );
+    });
+  }
+
+  async listAdRules(input: { connectionId: string; signal?: AbortSignal }) {
+    return call("listAdRules", async (withFetch) => {
+      const { data } = await this.zernio.adrules.listAdRules(
+        withFetch({ signal: input.signal, query: { accountId: input.connectionId, limit: 50 } }),
+      );
+      return parse(
+        z.object({
+          rules: z
+            .array(
+              z.object({
+                id: z.string().min(1),
+                name: z.string(),
+                adAccountId: z.string(),
+                enabled: z.boolean(),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listAdRules",
+      ).rules.map((r): AdRuleSummary => ({ ...r }));
+    });
+  }
+
+  async createAdRule(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("createAdRule", async (withFetch) => {
+      const { data } = await this.zernio.adrules.createAdRule(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      return {
+        id: parse(z.object({ rule: z.object({ id: z.string().min(1) }) }), data, "createAdRule")
+          .rule.id,
+      };
+    });
+  }
+
+  async setAdRuleEnabled(input: { id: string; enabled: boolean; signal?: AbortSignal }) {
+    await call("updateAdRule", async (withFetch) => {
+      await this.zernio.adrules.updateAdRule(
+        withFetch({
+          signal: input.signal,
+          path: { ruleId: input.id },
+          body: { enabled: input.enabled },
+        }),
+      );
+    });
+  }
+
+  async deleteAdRule(input: { id: string; signal?: AbortSignal }) {
+    await call("deleteAdRule", async (withFetch) => {
+      await this.zernio.adrules.deleteAdRule(
+        withFetch({ signal: input.signal, path: { ruleId: input.id } }),
+      );
+    });
+  }
+
   async listLeadForms(input: { accountId: string; signal?: AbortSignal }): Promise<LeadForm[]> {
     return call("listLeadForms", async (withFetch) => {
       const { data } = await this.zernio.leadgen.listLeadForms(
@@ -723,7 +973,8 @@ export class ZernioSocialProvider implements SocialProvider {
         withFetch({ signal: input.signal, body: input.body as never }),
       );
       return {
-        id: parse(z.object({ form: z.object({ id: z.string().min(1) }) }), data, "createLeadForm").form.id,
+        id: parse(z.object({ form: z.object({ id: z.string().min(1) }) }), data, "createLeadForm")
+          .form.id,
       };
     });
   }
@@ -815,15 +1066,20 @@ export class ZernioSocialProvider implements SocialProvider {
             template: {
               name: input.template.name,
               language: input.template.language,
-              ...(input.template.nameVariable ? { variableMapping: { "1": { field: "name" } } } : {}),
+              ...(input.template.nameVariable
+                ? { variableMapping: { "1": { field: "name" } } }
+                : {}),
             },
             // Only people who agreed to messages, ever.
             segmentFilters: { isSubscribed: true, ...(input.tag ? { tags: [input.tag] } : {}) },
           },
         }),
       );
-      return parse(z.object({ broadcast: z.object({ id: z.string().min(1) }) }), data, "createBroadcast")
-        .broadcast;
+      return parse(
+        z.object({ broadcast: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createBroadcast",
+      ).broadcast;
     });
     const added = await call("addBroadcastRecipients", async (withFetch) => {
       const { data } = await this.zernio.broadcasts.addBroadcastRecipients(
@@ -838,7 +1094,11 @@ export class ZernioSocialProvider implements SocialProvider {
     await call(input.at ? "scheduleBroadcast" : "sendBroadcast", async (withFetch) => {
       if (input.at) {
         await this.zernio.broadcasts.scheduleBroadcast(
-          withFetch({ signal: input.signal, path: { broadcastId: input.id }, body: { scheduledAt: input.at } }),
+          withFetch({
+            signal: input.signal,
+            path: { broadcastId: input.id },
+            body: { scheduledAt: input.at },
+          }),
         );
       } else {
         await this.zernio.broadcasts.sendBroadcast(
@@ -971,7 +1231,12 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
-  async updateContact(input: { id: string; tags?: string[]; subscribed?: boolean; signal?: AbortSignal }) {
+  async updateContact(input: {
+    id: string;
+    tags?: string[];
+    subscribed?: boolean;
+    signal?: AbortSignal;
+  }) {
     await call("updateContact", async (withFetch) => {
       await this.zernio.contacts.updateContact(
         withFetch({
@@ -1100,7 +1365,9 @@ export class ZernioSocialProvider implements SocialProvider {
         }),
       );
       return parse(
-        z.object({ contacts: z.array(z.object({ id: z.string().optional() }).catch({})).catch([]) }),
+        z.object({
+          contacts: z.array(z.object({ id: z.string().optional() }).catch({})).catch([]),
+        }),
         data,
         "listContacts",
       ).contacts.flatMap((c) => (c.id ? [c.id] : []));
@@ -1290,7 +1557,9 @@ export class ZernioSocialProvider implements SocialProvider {
             ? [
                 {
                   id: l.id,
-                  who: l.commenterUsername ? `@${l.commenterUsername}` : (l.commenterName ?? "Someone"),
+                  who: l.commenterUsername
+                    ? `@${l.commenterUsername}`
+                    : (l.commenterName ?? "Someone"),
                   status: l.status,
                   at: l.createdAt ?? null,
                 },
