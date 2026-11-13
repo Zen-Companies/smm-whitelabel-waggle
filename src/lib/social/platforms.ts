@@ -219,7 +219,8 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     label: "X",
     mark: { text: "X", bg: "#F4F4F5", fg: "#18181B" },
     kind: "answers",
-    connect: "oauth",
+    // Off until the beta is deployed (owner, 2026-11-12): shown under Coming soon.
+    connect: "none",
     line: "Answers mentions and DMs",
     needs: "Each X call costs extra",
     post: rules({
@@ -297,7 +298,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     mark: { text: "R", bg: "#FFEDD5", fg: "#9A3412" },
     kind: "soon",
     connect: "none",
-    line: "Turned off by Zernio for now",
+    line: "Not available yet",
     needs: null,
     post: null,
     inbox: { comments: true, dms: true, reviews: false },

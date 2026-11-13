@@ -26,6 +26,7 @@ import {
   type SocialPlatform,
   type SocialProvider,
 } from "./types";
+import { connectBranding } from "./whitelabel";
 
 // The SDK's 300 s default is the whole job route budget; inbox and profile calls are fast.
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -336,7 +337,11 @@ export class ZernioSocialProvider implements SocialProvider {
       const { data } = await this.zernio.connect.getConnectUrl(
         withFetch({
           path: { platform: input.platform },
-          query: { profileId: input.profileId, redirect_url: input.redirectUrl },
+          query: {
+            profileId: input.profileId,
+            redirect_url: input.redirectUrl,
+            ...connectBranding(process.env.APP_URL ?? ""),
+          },
         }),
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };

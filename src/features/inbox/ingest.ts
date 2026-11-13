@@ -20,6 +20,7 @@ import {
   zernioAccountIdOf,
   type ZernioEnvelope,
 } from "./zernio-events";
+import { customerText } from "@/lib/social/whitelabel";
 
 // Webhook mapping (docs/tdd.md §7.1): dedupe on the event id, then map to rows. DB writes only,
 // no external calls. Never logs payloads (they hold customer text); logs event ids.
@@ -476,7 +477,7 @@ async function mapPost(
   const status = POST_STATUS[e.event];
   const errors = e.post.platforms
     .filter((p) => p.error)
-    .map((p) => `${p.platform}: ${p.error}`)
+    .map((p) => `${p.platform}: ${customerText(p.error ?? "")}`)
     .join("; ");
   let failureReason: "zernio_paused" | "account_removed" | null = null;
   if (status === "failed") {
@@ -501,7 +502,7 @@ async function mapPost(
         platform: p.platform,
         status: p.status,
         url: p.publishedUrl ?? null,
-        error: p.error ?? null,
+        error: customerText(p.error ?? null),
       })),
       ...(e.post.publishedAt ? { published_at: e.post.publishedAt } : {}),
     })

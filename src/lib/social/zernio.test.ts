@@ -112,6 +112,10 @@ describe("ZernioSocialProvider", () => {
     expect(req.url.pathname).toBe("/api/v1/connect/instagram");
     expect(req.url.searchParams.get("profileId")).toBe("prof_1");
     expect(req.url.searchParams.get("redirect_url")).toBe("https://app.test/settings");
+    // Whitelabel (T68): Waggle's welcome screen, never Zernio's name.
+    expect(req.url.searchParams.get("welcome")).toBe("true");
+    expect(req.url.searchParams.get("brandName")).toBe("Waggle");
+    expect(req.url.searchParams.get("primaryColor")).toBe("#F6B21B");
   });
 
   it("connectBluesky sends the app password with state {userId}-{profileId}", async () => {
