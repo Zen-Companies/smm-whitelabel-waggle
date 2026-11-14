@@ -20,6 +20,7 @@ import type {
   SmsOnNumber,
   SmsRegistration,
   RcsAgentView,
+  BlogArticleView,
   ImessageSenderView,
   VoiceSettings,
   OwnedNumber,
@@ -255,6 +256,51 @@ export class MockSocialProvider implements SocialProvider {
 
   async resendSmsRegistrationCode(input: { id: string }) {
     void input.id;
+  }
+
+  /** Blogs (T84a): one blog per site; articles kept per account and blog. */
+  blogArticles = new Map<string, BlogArticleView[]>();
+  private blogKeys = new Map<string, BlogArticleView>();
+
+  async listBlogs(input: { accountId: string }) {
+    void input.accountId;
+    return [{ id: "1", title: "News", handle: "news" }];
+  }
+
+  async listBlogArticles(input: { accountId: string; blogId: string }) {
+    return {
+      articles: [...(this.blogArticles.get(`${input.accountId}:${input.blogId}`) ?? [])],
+      nextCursor: null,
+    };
+  }
+
+  async createBlogArticle(input: {
+    accountId: string;
+    blogId: string;
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+  }) {
+    const seen = this.blogKeys.get(input.idempotencyKey);
+    if (seen) return seen;
+    const b = input.body;
+    const date = typeof b.publishDate === "string" ? b.publishDate : null;
+    const published = b.isPublished === true && !date;
+    const article: BlogArticleView = {
+      id: idFrom("mock_article", input.idempotencyKey),
+      title: String(b.title ?? ""),
+      url: published
+        ? `https://example.test/blog/${String(b.title ?? "post")
+            .toLowerCase()
+            .replace(/\W+/g, "-")}`
+        : null,
+      isPublished: published,
+      status: published ? "publish" : date ? "future" : "draft",
+      date: date ?? (published ? new Date().toISOString() : null),
+    };
+    const key = `${input.accountId}:${input.blogId}`;
+    this.blogArticles.set(key, [article, ...(this.blogArticles.get(key) ?? [])]);
+    this.blogKeys.set(input.idempotencyKey, article);
+    return article;
   }
 
   /** RCS (T83): requests wait in review; tests move them along by hand. */

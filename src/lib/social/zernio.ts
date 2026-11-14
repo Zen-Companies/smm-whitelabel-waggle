@@ -27,6 +27,7 @@ import {
   type SmsOnNumber,
   type SmsRegistration,
   RCS_AGENT_STATUSES,
+  type BlogArticleView,
   IMESSAGE_SENDER_STATUSES,
   type ImessageSenderView,
   type ImessageOrderResult,
@@ -62,6 +63,27 @@ import {
   type TargetExtras,
 } from "./types";
 import { connectBranding } from "./whitelabel";
+
+const blogArticleSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().catch(""),
+  url: z.string().nullish(),
+  isPublished: z.boolean().catch(false),
+  status: z.string().nullish(),
+  publishedAt: z.string().nullish(),
+  publishDate: z.string().nullish(),
+});
+
+function blogArticleView(a: z.infer<typeof blogArticleSchema>): BlogArticleView {
+  return {
+    id: a.id,
+    title: a.title,
+    url: a.url?.startsWith("https://") || a.url?.startsWith("http://") ? a.url : null,
+    isPublished: a.isPublished,
+    status: a.status ?? null,
+    date: a.publishDate ?? a.publishedAt ?? null,
+  };
+}
 
 // The SDK's 300 s default is the whole job route budget; inbox and profile calls are fast.
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -1044,6 +1066,87 @@ export class ZernioSocialProvider implements SocialProvider {
     await call("resendSmsRegistrationOtp", async (withFetch) => {
       await this.zernio.sms.resendSmsRegistrationOtp(
         withFetch({ signal: input.signal, path: { id: input.id } }),
+      );
+    });
+  }
+
+  async listBlogs(input: { accountId: string; signal?: AbortSignal }) {
+    return call("listBlogs", async (withFetch) => {
+      const { data } = await this.zernio.blogs.listBlogs(
+        withFetch({
+          signal: input.signal,
+          path: { accountId: input.accountId },
+          query: { limit: 50 },
+        }),
+      );
+      return parse(
+        z.object({
+          blogs: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  title: z.string().catch(""),
+                  handle: z.string().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listBlogs",
+      ).blogs.flatMap((b) => (b ? [{ id: b.id, title: b.title, handle: b.handle ?? null }] : []));
+    });
+  }
+
+  async listBlogArticles(input: {
+    accountId: string;
+    blogId: string;
+    cursor?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("listBlogArticles", async (withFetch) => {
+      const { data } = await this.zernio.blogs.listBlogArticles(
+        withFetch({
+          signal: input.signal,
+          path: { accountId: input.accountId, blogId: input.blogId },
+          query: { limit: 20, ...(input.cursor ? { cursor: input.cursor } : {}) },
+        }),
+      );
+      const r = parse(
+        z.object({
+          articles: z.array(blogArticleSchema.nullable().catch(null)).catch([]),
+          nextCursor: z.string().nullish(),
+        }),
+        data,
+        "listBlogArticles",
+      );
+      return {
+        articles: r.articles.flatMap((a) => (a ? [blogArticleView(a)] : [])),
+        nextCursor: r.nextCursor ?? null,
+      };
+    });
+  }
+
+  async createBlogArticle(input: {
+    accountId: string;
+    blogId: string;
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }) {
+    return call("createBlogArticle", async (withFetch) => {
+      const { data } = await this.zernio.blogs.createBlogArticle(
+        withFetch({
+          signal: input.signal,
+          path: { accountId: input.accountId, blogId: input.blogId },
+          body: input.body as never,
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      return blogArticleView(
+        parse(z.object({ article: blogArticleSchema }), data, "createBlogArticle").article,
       );
     });
   }

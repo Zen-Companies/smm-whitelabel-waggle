@@ -291,6 +291,27 @@ export type ImessageOrderResult =
   /** The provider refused the order; nothing was charged (502). */
   | { kind: "refused" };
 
+/** A blog on a connected site (T84a, `/v1/accounts/{id}/blogs`). */
+export interface BlogView {
+  id: string;
+  title: string;
+  /** Slug, or the site's host name on WordPress. */
+  handle: string | null;
+}
+
+/** An article on a connected blog (T84a). */
+export interface BlogArticleView {
+  id: string;
+  title: string;
+  /** Public address while it's published (WordPress); null otherwise. */
+  url: string | null;
+  isPublished: boolean;
+  /** WordPress: `future` is scheduled. */
+  status: string | null;
+  /** When it went out, or when it's scheduled to. */
+  date: string | null;
+}
+
 /** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
 export interface VoiceSettings {
   enabled: boolean;
@@ -640,6 +661,24 @@ export interface SocialProvider {
   ): Promise<void>;
   /** Cancels the number at once; the started month isn't refunded. */
   cancelImessageSender(input: { senderId: string } & CallOptions): Promise<void>;
+  /** The blogs on a connected Shopify, WordPress or Webflow site (T84a). */
+  listBlogs(input: { accountId: string } & CallOptions): Promise<BlogView[]>;
+  /** A blog's latest articles, newest first as the platform returns them. */
+  listBlogArticles(
+    input: { accountId: string; blogId: string; cursor?: string } & CallOptions,
+  ): Promise<{ articles: BlogArticleView[]; nextCursor: string | null }>;
+  /**
+   * Creates an article: a draft, published now, or scheduled natively on the platform.
+   * `Idempotency-Key` makes a retry replay the first create instead of posting twice.
+   */
+  createBlogArticle(
+    input: {
+      accountId: string;
+      blogId: string;
+      body: Record<string, unknown>;
+      idempotencyKey: string;
+    } & CallOptions,
+  ): Promise<BlogArticleView>;
   /** The launch details carriers review (T83b). */
   requestRcsLaunch(
     input: { agentId: string; body: Record<string, unknown> } & CallOptions,
