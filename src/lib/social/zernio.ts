@@ -28,6 +28,8 @@ import {
   type SmsRegistration,
   RCS_AGENT_STATUSES,
   type BlogArticleView,
+  type OrderView,
+  type ProductView,
   IMESSAGE_SENDER_STATUSES,
   type ImessageSenderView,
   type ImessageOrderResult,
@@ -84,6 +86,8 @@ function blogArticleView(a: z.infer<typeof blogArticleSchema>): BlogArticleView 
     date: a.publishDate ?? a.publishedAt ?? null,
   };
 }
+
+const moneySchema = z.object({ amount: z.string(), currency: z.string() }).nullish().catch(null);
 
 // The SDK's 300 s default is the whole job route budget; inbox and profile calls are fast.
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -1067,6 +1071,237 @@ export class ZernioSocialProvider implements SocialProvider {
       await this.zernio.sms.resendSmsRegistrationOtp(
         withFetch({ signal: input.signal, path: { id: input.id } }),
       );
+    });
+  }
+
+  async getStore(input: { accountId: string; signal?: AbortSignal }) {
+    try {
+      return await call("getCommerceStore", async (withFetch) => {
+        const { data } = await this.zernio.commerce.getCommerceStore(
+          withFetch({ signal: input.signal, query: { accountId: input.accountId } }),
+        );
+        const s = parse(
+          z.object({
+            store: z.object({
+              accountId: z.string().min(1),
+              platform: z.enum(["shopify", "woocommerce"]),
+              name: z.string().catch(""),
+              domain: z.string().catch(""),
+              url: z.string().nullish(),
+              currency: z.string().catch(""),
+              capabilities: z.array(z.string()).catch([]),
+            }),
+          }),
+          data,
+          "getCommerceStore",
+        ).store;
+        return { ...s, url: s.url ?? null };
+      });
+    } catch (error) {
+      if (error instanceof SocialProviderError && error.details.status === 400) return null;
+      throw error;
+    }
+  }
+
+  async listProducts(input: { accountId: string; cursor?: string; signal?: AbortSignal }) {
+    return call("listCommerceProducts", async (withFetch) => {
+      const { data } = await this.zernio.commerce.listCommerceProducts(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            limit: 50,
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          products: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  title: z.string().catch(""),
+                  status: z.string().catch("active"),
+                  url: z.string().nullish(),
+                  featuredImage: z.object({ url: z.string().nullish() }).nullish().catch(null),
+                  variants: z
+                    .array(
+                      z
+                        .object({
+                          id: z.string().min(1),
+                          title: z.string().catch(""),
+                          price: moneySchema,
+                          inventoryQuantity: z.number().nullish(),
+                        })
+                        .nullable()
+                        .catch(null),
+                    )
+                    .catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+          nextCursor: z.string().nullish(),
+        }),
+        data,
+        "listCommerceProducts",
+      );
+      return {
+        products: r.products.flatMap((p): ProductView[] =>
+          p
+            ? [
+                {
+                  id: p.id,
+                  title: p.title,
+                  status: p.status,
+                  imageUrl: p.featuredImage?.url ?? null,
+                  url: p.url ?? null,
+                  variants: p.variants.flatMap((v) =>
+                    v
+                      ? [
+                          {
+                            id: v.id,
+                            title: v.title,
+                            price: v.price ?? null,
+                            stock: v.inventoryQuantity ?? null,
+                          },
+                        ]
+                      : [],
+                  ),
+                },
+              ]
+            : [],
+        ),
+        nextCursor: r.nextCursor ?? null,
+      };
+    });
+  }
+
+  async listStockLocations(input: { accountId: string; signal?: AbortSignal }) {
+    return call("listCommerceLocations", async (withFetch) => {
+      const { data } = await this.zernio.commerce.listCommerceLocations(
+        withFetch({ signal: input.signal, query: { accountId: input.accountId } }),
+      );
+      return parse(
+        z.object({
+          locations: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  name: z.string().catch(""),
+                  isActive: z.boolean().catch(true),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listCommerceLocations",
+      ).locations.flatMap((l) => (l && l.isActive ? [{ id: l.id, name: l.name }] : []));
+    });
+  }
+
+  async setStock(input: {
+    accountId: string;
+    productId: string;
+    variantId: string;
+    locationId: string;
+    quantity: number;
+    signal?: AbortSignal;
+  }) {
+    await call("changeCommerceInventory", async (withFetch) => {
+      await this.zernio.commerce.changeCommerceInventory(
+        withFetch({
+          signal: input.signal,
+          path: { productId: input.productId },
+          body: {
+            accountId: input.accountId,
+            mode: "set",
+            changes: [
+              {
+                variantId: input.variantId,
+                locationId: input.locationId,
+                quantity: input.quantity,
+              },
+            ],
+          },
+        }),
+      );
+    });
+  }
+
+  async listOrders(input: { accountId: string; cursor?: string; signal?: AbortSignal }) {
+    return call("listCommerceOrders", async (withFetch) => {
+      const { data } = await this.zernio.commerce.listCommerceOrders(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            limit: 25,
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          orders: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  number: z.string().catch(""),
+                  status: z.string().nullish(),
+                  paymentStatus: z.string().nullish(),
+                  total: moneySchema,
+                  createdAt: z.string().nullish(),
+                  customer: z
+                    .object({ firstName: z.string().nullish(), lastName: z.string().nullish() })
+                    .nullish()
+                    .catch(null),
+                  lineItems: z
+                    .array(
+                      z
+                        .object({ title: z.string().catch(""), quantity: z.number().catch(1) })
+                        .nullable()
+                        .catch(null),
+                    )
+                    .catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+          nextCursor: z.string().nullish(),
+        }),
+        data,
+        "listCommerceOrders",
+      );
+      return {
+        orders: r.orders.flatMap((o): OrderView[] => {
+          if (!o) return [];
+          const name = [o.customer?.firstName, o.customer?.lastName].filter(Boolean).join(" ");
+          return [
+            {
+              id: o.id,
+              number: o.number,
+              status: o.status ?? null,
+              paymentStatus: o.paymentStatus ?? null,
+              total: o.total ?? null,
+              createdAt: o.createdAt ?? null,
+              items: o.lineItems
+                .flatMap((l) => (l ? [l.quantity > 1 ? `${l.title} ×${l.quantity}` : l.title] : []))
+                .join(", "),
+              customerName: name || null,
+            },
+          ];
+        }),
+        nextCursor: r.nextCursor ?? null,
+      };
     });
   }
 

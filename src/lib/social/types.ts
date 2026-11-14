@@ -312,6 +312,51 @@ export interface BlogArticleView {
   date: string | null;
 }
 
+export interface Money {
+  /** Decimal string in the store currency, e.g. "24.00". */
+  amount: string;
+  currency: string;
+}
+
+/** A connected Shopify or WooCommerce store (T84b, `GET /v1/commerce/store`). */
+export interface StoreView {
+  accountId: string;
+  platform: "shopify" | "woocommerce";
+  name: string;
+  domain: string;
+  url: string | null;
+  currency: string;
+  capabilities: string[];
+}
+
+export interface ProductView {
+  id: string;
+  title: string;
+  status: string;
+  imageUrl: string | null;
+  url: string | null;
+  variants: {
+    id: string;
+    title: string;
+    price: Money | null;
+    /** Units on hand; null when the store doesn't track it. */
+    stock: number | null;
+  }[];
+}
+
+/** An order, with only what the shop list shows (customer details stay on the platform). */
+export interface OrderView {
+  id: string;
+  number: string;
+  status: string | null;
+  paymentStatus: string | null;
+  total: Money | null;
+  createdAt: string | null;
+  /** "Ube cheesecake ×2, Office coffee box" */
+  items: string;
+  customerName: string | null;
+}
+
 /** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
 export interface VoiceSettings {
   enabled: boolean;
@@ -661,6 +706,32 @@ export interface SocialProvider {
   ): Promise<void>;
   /** Cancels the number at once; the started month isn't refunded. */
   cancelImessageSender(input: { senderId: string } & CallOptions): Promise<void>;
+  /**
+   * A connected site as a store (T84b): currency and what it allows. Null when the site isn't a
+   * store (a WordPress site without WooCommerce, 400 platform_not_supported).
+   */
+  getStore(input: { accountId: string } & CallOptions): Promise<StoreView | null>;
+  listProducts(
+    input: { accountId: string; cursor?: string } & CallOptions,
+  ): Promise<{ products: ProductView[]; nextCursor: string | null }>;
+  /** The store's stock locations (where units are counted). */
+  listStockLocations(
+    input: { accountId: string } & CallOptions,
+  ): Promise<{ id: string; name: string }[]>;
+  /** Sets a variant's units at one location (`mode: set`, safe to repeat). */
+  setStock(
+    input: {
+      accountId: string;
+      productId: string;
+      variantId: string;
+      locationId: string;
+      quantity: number;
+    } & CallOptions,
+  ): Promise<void>;
+  /** The latest orders, newest first. */
+  listOrders(
+    input: { accountId: string; cursor?: string } & CallOptions,
+  ): Promise<{ orders: OrderView[]; nextCursor: string | null }>;
   /** The blogs on a connected Shopify, WordPress or Webflow site (T84a). */
   listBlogs(input: { accountId: string } & CallOptions): Promise<BlogView[]>;
   /** A blog's latest articles, newest first as the platform returns them. */

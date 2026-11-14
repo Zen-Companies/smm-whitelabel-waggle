@@ -123,6 +123,9 @@ export async function PostsView({
         <Link href="/posts/blog" className="text-honey-text text-sm font-medium underline">
           Blog
         </Link>
+        <Link href="/posts/shop" className="text-honey-text text-sm font-medium underline">
+          Shop
+        </Link>
         {view === "month" && (
           <div className="flex items-center gap-1">
             <Link

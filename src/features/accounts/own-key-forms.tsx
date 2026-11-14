@@ -18,7 +18,7 @@ const FORMS: Record<OwnKeyPlatform, { fields: Field[]; help: string; note?: stri
       { name: "shop", label: "Store address", placeholder: "harbour-bean.myshopify.com" },
       { name: "accessToken", label: "Admin API key", placeholder: "shpat_…", secret: true },
     ],
-    help: "In Shopify: Settings → Apps and sales channels → Develop apps → Create an app. Allow content and products (read and write), install it, then copy the Admin API access token.",
+    help: "In Shopify: Settings → Apps and sales channels → Develop apps → Create an app. Allow content, products and inventory (read and write), plus locations and orders (read), install it, then copy the Admin API access token.",
     note: "Tracking pixels for your ads need an app install instead; that comes later.",
   },
   wordpress: {

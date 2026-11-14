@@ -21,6 +21,7 @@ import type {
   SmsRegistration,
   RcsAgentView,
   BlogArticleView,
+  ProductView,
   ImessageSenderView,
   VoiceSettings,
   OwnedNumber,
@@ -256,6 +257,79 @@ export class MockSocialProvider implements SocialProvider {
 
   async resendSmsRegistrationCode(input: { id: string }) {
     void input.id;
+  }
+
+  /** Shop (T84b): every Shopify site is a store with two products and one order. */
+  stock = new Map<string, number>();
+
+  async getStore(input: { accountId: string }) {
+    if (!input.accountId.includes("shopify")) return null;
+    return {
+      accountId: input.accountId,
+      platform: "shopify" as const,
+      name: "Harbour Bean",
+      domain: "harbourbean.myshopify.com",
+      url: "https://harbourbean.example",
+      currency: "PHP",
+      capabilities: ["products.read", "inventory.read", "inventory.write", "orders.read"],
+    };
+  }
+
+  async listProducts(input: { accountId: string }) {
+    void input.accountId;
+    const v = (id: string, title: string, amount: string, start: number | null) => ({
+      id,
+      title,
+      price: { amount, currency: "PHP" },
+      stock: start === null ? null : (this.stock.get(id) ?? start),
+    });
+    const products: ProductView[] = [
+      {
+        id: "p1",
+        title: "Ube cheesecake (whole)",
+        status: "active",
+        imageUrl: null,
+        url: null,
+        variants: [v("v1", "Default Title", "1200.00", 6)],
+      },
+      {
+        id: "p2",
+        title: "Gift card",
+        status: "active",
+        imageUrl: null,
+        url: null,
+        variants: [v("v2", "Default Title", "500.00", null)],
+      },
+    ];
+    return { products, nextCursor: null };
+  }
+
+  async listStockLocations(input: { accountId: string }) {
+    void input.accountId;
+    return [{ id: "loc1", name: "Café" }];
+  }
+
+  async setStock(input: { variantId: string; quantity: number }) {
+    this.stock.set(input.variantId, input.quantity);
+  }
+
+  async listOrders(input: { accountId: string }) {
+    void input.accountId;
+    return {
+      orders: [
+        {
+          id: "o1",
+          number: "#1001",
+          status: "awaiting_fulfillment",
+          paymentStatus: "paid",
+          total: { amount: "2400.00", currency: "PHP" },
+          createdAt: "2026-11-14T09:00:00Z",
+          items: "Ube cheesecake (whole) ×2",
+          customerName: "Ana Cruz",
+        },
+      ],
+      nextCursor: null,
+    };
   }
 
   /** Blogs (T84a): one blog per site; articles kept per account and blog. */
