@@ -28,6 +28,7 @@ import {
   type SmsRegistration,
   RCS_AGENT_STATUSES,
   type BlogArticleView,
+  type DriveItem,
   type OrderView,
   type ProductView,
   IMESSAGE_SENDER_STATUSES,
@@ -936,7 +937,7 @@ export class ZernioSocialProvider implements SocialProvider {
     platform: "google" | "microsoft";
     profileId: string;
     redirectUrl: string;
-    scopes: readonly ("email" | "calendar")[];
+    scopes: readonly ("email" | "calendar" | "files")[];
     signal?: AbortSignal;
   }) {
     return call("getConnectUrl", async (withFetch) => {
@@ -1072,6 +1073,116 @@ export class ZernioSocialProvider implements SocialProvider {
         withFetch({ signal: input.signal, path: { id: input.id } }),
       );
     });
+  }
+
+  async listFiles(input: {
+    accountId: string;
+    folderId?: string;
+    q?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("listFiles", async (withFetch) => {
+      const { data } = await this.zernio.files.listFiles(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            limit: 100,
+            ...(input.folderId ? { folderId: input.folderId } : {}),
+            ...(input.q ? { q: input.q } : {}),
+          },
+        }),
+      );
+      return parse(
+        z.object({
+          data: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  name: z.string().catch(""),
+                  kind: z.enum(["file", "folder"]),
+                  mimeType: z.string().nullish(),
+                  size: z.number().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listFiles",
+      ).data.flatMap((f): DriveItem[] =>
+        f
+          ? [
+              {
+                id: f.id,
+                name: f.name,
+                kind: f.kind,
+                mimeType: f.mimeType ?? null,
+                size: f.size ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async copyFileToMedia(input: {
+    accountId: string;
+    fileId: string;
+    maxBytes: number;
+    signal?: AbortSignal;
+  }) {
+    const operation = "downloadFile";
+    let res: Response;
+    try {
+      res = await globalThis.fetch(
+        `${this.zernio.baseURL}/v1/files/${encodeURIComponent(input.fileId)}/download?accountId=${encodeURIComponent(input.accountId)}`,
+        { headers: { Authorization: `Bearer ${this.zernio.apiKey}` }, signal: input.signal },
+      );
+    } catch (error) {
+      throw toSocialError(error, operation);
+    }
+    if (!res.ok) {
+      const body: unknown = await res.json().catch(() => null);
+      const code = z.object({ code: z.string() }).safeParse(body);
+      throw new SocialProviderError(`Zernio ${operation} failed (${res.status})`, {
+        status: res.status,
+        ...(code.success ? { code: code.data.code } : {}),
+        ambiguous: false,
+      });
+    }
+    const declared = Number(res.headers.get("Content-Length") ?? "0");
+    if (declared > input.maxBytes) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new SocialProviderError(`Zernio ${operation} failed (413)`, {
+        status: 413,
+        ambiguous: false,
+      });
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > input.maxBytes) {
+      throw new SocialProviderError(`Zernio ${operation} failed (413)`, {
+        status: 413,
+        ambiguous: false,
+      });
+    }
+    const contentType = (res.headers.get("Content-Type") ?? "application/octet-stream")
+      .split(";")[0]
+      .trim();
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const name =
+      /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1] ??
+      /filename="?([^";]+)"?/i.exec(disposition)?.[1] ??
+      "file";
+    const { publicUrl } = await this.uploadMedia({
+      filename: decodeURIComponent(name),
+      contentType,
+      bytes,
+      signal: input.signal,
+    });
+    return { publicUrl, contentType, name: decodeURIComponent(name), size: bytes.byteLength };
   }
 
   async getStore(input: { accountId: string; signal?: AbortSignal }) {

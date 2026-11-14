@@ -10,6 +10,7 @@ import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./p
 import { BoardPicker } from "./board-picker";
 import { PostOptionsFields } from "./post-options-fields";
 import { VideoField, type VideoState } from "./video-field";
+import { OneDrivePicker } from "./onedrive-picker";
 
 export interface ComposeAccount {
   id: string;
@@ -99,6 +100,8 @@ function ComposeFields({
   const [text, setText] = useState("");
   const length = text.length;
   const [photo, setPhoto] = useState<string | null>(null);
+  // T84c: a photo picked from OneDrive, already copied into media storage.
+  const [drivePhoto, setDrivePhoto] = useState<{ url: string; size: number } | null>(null);
   const [video, setVideo] = useState<VideoState>({ step: "none" });
   // T64: boards chosen here (saved on the account), and whose picker is open.
   const [boards, setBoards] = useState<Record<string, { id: string; name: string }>>({});
@@ -170,7 +173,10 @@ function ComposeFields({
                 name="image"
                 type="file"
                 accept={POST_IMAGE_TYPES.join(",")}
-                onChange={(e) => setPhoto(e.target.files?.[0]?.name ?? null)}
+                onChange={(e) => {
+                  setPhoto(e.target.files?.[0]?.name ?? null);
+                  setDrivePhoto(null);
+                }}
                 className="sr-only"
               />
             </label>
@@ -183,6 +189,35 @@ function ComposeFields({
             </span>
           )}
         </div>
+        {drivePhoto && (
+          <>
+            <input type="hidden" name="imageUrl" value={drivePhoto.url} />
+            <input type="hidden" name="imageSize" value={drivePhoto.size} />
+          </>
+        )}
+        {video.step === "none" && (
+          <OneDrivePicker
+            disabled={pending}
+            allow={{ image: true, video: !photo }}
+            onPick={(pick) => {
+              if (pick.use === "image") {
+                // The OneDrive photo replaces one picked from the device.
+                const file = document.getElementById("post-image") as HTMLInputElement | null;
+                if (file) file.value = "";
+                setPhoto(pick.name);
+                setDrivePhoto({ url: pick.url, size: pick.size });
+              } else {
+                setVideo({
+                  step: "ready",
+                  name: pick.name,
+                  size: pick.size,
+                  seconds: null,
+                  url: pick.url,
+                });
+              }
+            }}
+          />
+        )}
         {fieldError("image")}
       </div>
 

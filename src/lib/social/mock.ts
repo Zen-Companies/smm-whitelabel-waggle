@@ -22,6 +22,7 @@ import type {
   RcsAgentView,
   BlogArticleView,
   ProductView,
+  DriveItem,
   ImessageSenderView,
   VoiceSettings,
   OwnedNumber,
@@ -257,6 +258,66 @@ export class MockSocialProvider implements SocialProvider {
 
   async resendSmsRegistrationCode(input: { id: string }) {
     void input.id;
+  }
+
+  /** OneDrive (T84c): a folder with a photo and a video. */
+  async listFiles(input: { accountId: string; folderId?: string; q?: string }) {
+    void input.accountId;
+    const all: DriveItem[] = input.folderId
+      ? [
+          {
+            id: "f_img",
+            name: "ube-cheesecake-hero.jpg",
+            kind: "file",
+            mimeType: "image/jpeg",
+            size: 2_100_000,
+          },
+          {
+            id: "f_vid",
+            name: "barista-latte-art.mp4",
+            kind: "file",
+            mimeType: "video/mp4",
+            size: 38_000_000,
+          },
+        ]
+      : [
+          { id: "d_mkt", name: "Marketing", kind: "folder", mimeType: null, size: null },
+          {
+            id: "f_menu",
+            name: "menu-board-nov.png",
+            kind: "file",
+            mimeType: "image/png",
+            size: 900_000,
+          },
+        ];
+    const q = input.q?.toLowerCase();
+    return q ? all.filter((f) => f.name.toLowerCase().includes(q)) : all;
+  }
+
+  async copyFileToMedia(input: { accountId: string; fileId: string; maxBytes: number }) {
+    const files = [
+      ...(await this.listFiles({ accountId: input.accountId })),
+      ...(await this.listFiles({ accountId: input.accountId, folderId: "x" })),
+    ];
+    const f = files.find((x) => x.id === input.fileId && x.kind === "file");
+    if (!f)
+      throw new SocialProviderError("mock downloadFile failed (404)", {
+        status: 404,
+        ambiguous: false,
+      });
+    if ((f.size ?? 0) > input.maxBytes) {
+      throw new SocialProviderError("mock downloadFile failed (413)", {
+        status: 413,
+        ambiguous: false,
+      });
+    }
+    const contentType = f.mimeType ?? "application/octet-stream";
+    const { publicUrl } = await this.uploadMedia({
+      filename: f.name,
+      contentType,
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    return { publicUrl, contentType, name: f.name, size: f.size ?? 3 };
   }
 
   /** Shop (T84b): every Shopify site is a store with two products and one order. */

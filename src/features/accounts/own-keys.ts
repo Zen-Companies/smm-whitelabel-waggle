@@ -42,7 +42,7 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
       {
         id: "outlook",
         label: "Outlook",
-        line: "Email, calendar",
+        line: "Email, calendar, OneDrive",
         how: "mail",
         platform: "microsoft",
       },

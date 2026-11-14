@@ -59,6 +59,8 @@ export function fakeZernio() {
     listRcsAgents: notImplemented,
     listBlogs: notImplemented,
     getStore: notImplemented,
+    listFiles: notImplemented,
+    copyFileToMedia: notImplemented,
     listProducts: notImplemented,
     listStockLocations: notImplemented,
     setStock: notImplemented,

@@ -357,6 +357,15 @@ export interface OrderView {
   customerName: string | null;
 }
 
+/** A OneDrive item (T84c, `GET /v1/files`). */
+export interface DriveItem {
+  id: string;
+  name: string;
+  kind: "file" | "folder";
+  mimeType: string | null;
+  size: number | null;
+}
+
 /** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
 export interface VoiceSettings {
   enabled: boolean;
@@ -636,7 +645,7 @@ export interface SocialProvider {
       platform: "google" | "microsoft";
       profileId: string;
       redirectUrl: string;
-      scopes: readonly ("email" | "calendar")[];
+      scopes: readonly ("email" | "calendar" | "files")[];
     } & CallOptions,
   ): Promise<{ authUrl: string }>;
   /** Turns texting on for a number (T82c); receiving works at once, US sending after approval. */
@@ -732,6 +741,20 @@ export interface SocialProvider {
   listOrders(
     input: { accountId: string; cursor?: string } & CallOptions,
   ): Promise<{ orders: OrderView[]; nextCursor: string | null }>;
+  /**
+   * A folder of a Microsoft account's OneDrive, or a search by name (T84c). Needs the `files`
+   * area; without it Zernio answers 412 `account_scope_missing`.
+   */
+  listFiles(
+    input: { accountId: string; folderId?: string; q?: string } & CallOptions,
+  ): Promise<DriveItem[]>;
+  /**
+   * Copies a OneDrive file into post media storage and returns its public URL, so a post uses it
+   * like an upload. Refuses files over `maxBytes` (413) without storing anything.
+   */
+  copyFileToMedia(
+    input: { accountId: string; fileId: string; maxBytes: number } & CallOptions,
+  ): Promise<{ publicUrl: string; contentType: string; name: string; size: number }>;
   /** The blogs on a connected Shopify, WordPress or Webflow site (T84a). */
   listBlogs(input: { accountId: string } & CallOptions): Promise<BlogView[]>;
   /** A blog's latest articles, newest first as the platform returns them. */

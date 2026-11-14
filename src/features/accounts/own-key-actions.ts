@@ -314,8 +314,9 @@ export async function connectLineAction(
 }
 
 /**
- * Gmail or Outlook sign-in (T81c): mailbox and calendar areas. The account arrives with
- * account.connected; Settings shows "connecting" until then.
+ * Gmail or Outlook sign-in (T81c): mailbox and calendar areas, plus OneDrive files on Outlook
+ * (T84c; Google Drive is held). Signing in again widens an existing account. The account arrives
+ * with account.connected; Settings shows "connecting" until then.
  */
 export async function connectMailAction(formData: FormData): Promise<void> {
   const platform = formData.get("platform");
@@ -323,6 +324,10 @@ export async function connectMailAction(formData: FormData): Promise<void> {
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) redirect("/settings?section=accounts&connect_error=not_allowed");
   const db = getServiceClient();
+  const scopes =
+    platform === "microsoft"
+      ? (["email", "calendar", "files"] as const)
+      : (["email", "calendar"] as const);
   let authUrl: string;
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
@@ -330,14 +335,14 @@ export async function connectMailAction(formData: FormData): Promise<void> {
       platform,
       profileId,
       redirectUrl: `${process.env.APP_URL}/settings?section=accounts&connecting=${platform}`,
-      scopes: ["email", "calendar"],
+      scopes,
       signal: AbortSignal.timeout(20_000),
     }));
     await writeAudit(db, {
       tenantId: tenant.id,
       action: "account_connect_started",
       actor: tenant.userId,
-      details: { platform, scopes: ["email", "calendar"] },
+      details: { platform, scopes: [...scopes] },
     });
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform } });

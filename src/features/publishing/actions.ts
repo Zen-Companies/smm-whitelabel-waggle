@@ -9,6 +9,7 @@ import { writeAudit } from "@/lib/audit";
 import { getSocialProvider, resolveSocialProviderMode } from "@/lib/social";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { isPlatformPaused } from "@/lib/social/zernio";
+import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MAX } from "./limits";
 import { imageMaxBytesFor } from "./post-rules";
@@ -16,6 +17,7 @@ import { publishPost } from "./publish";
 import { chooseBoardFor, listBoardsFor, type PinterestBoard } from "./pinterest";
 import { cancelScheduledPost, createPost, takeDownPost } from "./posts";
 import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./video";
+import { driveKind, isUploadedImageUrl, ONEDRIVE_VIDEO_MAX_BYTES, postableItems } from "./onedrive";
 import { parsePostOptions, type PostOptions } from "./post-options";
 import { platformLabel } from "@/lib/social/platforms";
 
@@ -44,6 +46,9 @@ const composeSchema = z.object({
   // T63: a video the browser already uploaded to Zernio, and its length if the browser read it.
   video: z.string().optional(),
   videoSeconds: z.coerce.number().positive().max(86_400).optional().catch(undefined),
+  // T84c: a photo already copied into media storage from OneDrive, and its size.
+  imageUrl: z.string().optional(),
+  imageSize: z.coerce.number().int().nonnegative().optional().catch(undefined),
 });
 
 export async function composePost(_prev: ComposeState, formData: FormData): Promise<ComposeState> {
@@ -55,6 +60,8 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     youtubeTitle: formData.get("youtubeTitle") || undefined,
     video: formData.get("video") || undefined,
     videoSeconds: formData.get("videoSeconds") || undefined,
+    imageUrl: formData.get("imageUrl") || undefined,
+    imageSize: formData.get("imageSize") || undefined,
   });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -89,6 +96,27 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
       return { error: "Upload the video again.", field: "image" };
     }
     media.push({ url: parsed.data.video, seconds: parsed.data.videoSeconds ?? null });
+  } else if (parsed.data.imageUrl && !(image instanceof File && image.size > 0)) {
+    const mock = resolveSocialProviderMode(process.env) === "mock";
+    if (!isUploadedImageUrl(parsed.data.imageUrl, { mock, appUrl: process.env.APP_URL })) {
+      return { error: "Pick the photo again.", field: "image" };
+    }
+    const { data: picked } = await db
+      .from("social_accounts")
+      .select("platform")
+      .eq("tenant_id", tenant.id)
+      .in("id", accounts);
+    const maxBytes = imageMaxBytesFor(
+      (picked ?? []).map((a) => a.platform),
+      POST_IMAGE_MAX_BYTES,
+    );
+    if ((parsed.data.imageSize ?? 0) > maxBytes) {
+      return {
+        error: `Use an image under ${Math.round(maxBytes / 100_000) / 10} MB.`,
+        field: "image",
+      };
+    }
+    media.push({ url: parsed.data.imageUrl });
   } else if (image instanceof File && image.size > 0) {
     if (!(POST_IMAGE_TYPES as readonly string[]).includes(image.type)) {
       return { error: "Use a JPG, PNG or WebP image.", field: "image" };
@@ -378,4 +406,100 @@ export async function takeDown(_prev: TakeDownState, formData: FormData): Promis
       .filter(Boolean)
       .join(" "),
   };
+}
+
+// --- OneDrive (T84c) --------------------------------------------------------------------------
+
+export type OneDriveList =
+  { items: ReturnType<typeof postableItems> } | { error: string; connect?: "outlook" | "files" };
+
+/** The brand's Outlook account (OneDrive lives on it). */
+async function microsoftAccount(tenantId: string) {
+  const { data } = await getServiceClient()
+    .from("social_accounts")
+    .select("zernio_account_id")
+    .eq("tenant_id", tenantId)
+    .eq("platform", "microsoft")
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  return data?.zernio_account_id ?? null;
+}
+
+/** A OneDrive folder (or a search) with the photos and videos a post can use. */
+export async function listOneDriveAction(input: {
+  folderId?: string;
+  q?: string;
+}): Promise<OneDriveList> {
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const accountId = await microsoftAccount(tenant.id);
+  if (!accountId) {
+    return {
+      error: "Sign in with Microsoft in Settings → Accounts to use OneDrive.",
+      connect: "outlook",
+    };
+  }
+  const folderId = typeof input.folderId === "string" ? input.folderId.slice(0, 300) : undefined;
+  const q = typeof input.q === "string" ? input.q.trim().slice(0, 100) : undefined;
+  try {
+    const items = await getSocialProvider().listFiles({
+      accountId,
+      ...(folderId ? { folderId } : {}),
+      ...(q ? { q } : {}),
+      signal: AbortSignal.timeout(15_000),
+    });
+    return { items: postableItems(items) };
+  } catch (error) {
+    const s = error instanceof SocialProviderError ? error.details.status : undefined;
+    if (s === 412) {
+      return {
+        error: "Sign in with Microsoft again and allow files, so Waggle can see OneDrive.",
+        connect: "files",
+      };
+    }
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "listOneDrive" } });
+    return { error: "OneDrive couldn't be loaded right now. Try again in a moment." };
+  }
+}
+
+/** Copies a OneDrive photo or video into post media, for the composer to use like an upload. */
+export async function pickOneDriveAction(input: {
+  fileId: string;
+  use: "image" | "video";
+}): Promise<{ url: string; name: string; size: number } | { error: string }> {
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const accountId = await microsoftAccount(tenant.id);
+  if (!accountId || typeof input.fileId !== "string" || !input.fileId) {
+    return { error: "Reload the page and pick the file again." };
+  }
+  try {
+    const copy = await getSocialProvider().copyFileToMedia({
+      accountId,
+      fileId: input.fileId.slice(0, 300),
+      maxBytes: input.use === "video" ? ONEDRIVE_VIDEO_MAX_BYTES : POST_IMAGE_MAX_BYTES,
+      signal: AbortSignal.timeout(120_000),
+    });
+    const kind = driveKind({ kind: "file", mimeType: copy.contentType });
+    if (kind !== input.use) return { error: "Pick a JPG, PNG or WebP photo, or an MP4 video." };
+    return { url: copy.publicUrl, name: copy.name, size: copy.size };
+  } catch (error) {
+    const s = error instanceof SocialProviderError ? error.details.status : undefined;
+    if (s === 413) {
+      return {
+        error:
+          input.use === "video"
+            ? "That video is over 100 MB. Upload it from your device instead."
+            : "That photo is over 5 MB.",
+      };
+    }
+    if (s === 404) return { error: "That file isn't in OneDrive any more." };
+    if (isPlatformPaused(error)) {
+      await recordPlatformPause(getServiceClient());
+      return { error: "Posting is paused on our side right now. Try again later." };
+    }
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "pickOneDrive" } });
+    return { error: "The file couldn't be copied. Try again." };
+  }
 }
