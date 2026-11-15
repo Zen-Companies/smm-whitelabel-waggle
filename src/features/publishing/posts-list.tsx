@@ -1,6 +1,7 @@
 import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Loader } from "lucide-react";
+import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { needsNewTime } from "./calendar";
+import { needsNewTime, postStatusWord } from "./calendar";
 import { CancelPostButton, RetryPostForm, TakeDownButton } from "./post-actions";
 import { platformLabel } from "@/lib/social/platforms";
 
@@ -18,6 +19,8 @@ export interface PostRow {
   last_error: string | null;
   failure_reason: string | null;
   target_account_ids: string[];
+  /** Zernio's id once the post was sent (T74a: reach from analytics). */
+  zernio_post_id?: string | null;
   platform_results: {
     platform: string;
     status: string;
@@ -170,7 +173,7 @@ export async function loadPosts(tenantId: string) {
     supabase
       .from("posts")
       .select(
-        "id, content, media, status, scheduled_for, queued, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results",
+        "id, content, media, status, scheduled_for, queued, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results, zernio_post_id",
       )
       .eq("tenant_id", tenantId)
       .neq("status", "draft")
@@ -185,6 +188,124 @@ export async function loadPosts(tenantId: string) {
     posts: (posts ?? []) as unknown as PostRow[],
     accounts: accounts ?? [],
   };
+}
+
+/**
+ * People reached per post (T74a), summed over its platforms, from the analytics sync (T48).
+ * Missing until the next sync after the post goes out.
+ */
+export async function loadReach(tenantId: string, posts: PostRow[]): Promise<Map<string, number>> {
+  const ids = [...new Set(posts.flatMap((p) => p.zernio_post_id ?? []))];
+  const out = new Map<string, number>();
+  if (!ids.length) return out;
+  const supabase = await createServerSupabase();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await supabase
+      .from("post_metrics")
+      .select("zernio_post_id, reach")
+      .eq("tenant_id", tenantId)
+      .in("zernio_post_id", ids.slice(i, i + 200));
+    for (const m of data ?? []) {
+      if (m.zernio_post_id) out.set(m.zernio_post_id, (out.get(m.zernio_post_id) ?? 0) + m.reach);
+    }
+  }
+  return out;
+}
+
+const STATUS_TONE: Record<string, string> = {
+  Posted: "bg-success-soft text-success",
+  Planned: "bg-subtle text-ink-2",
+  Posting: "bg-subtle text-ink-2",
+  "Needs you": "bg-honey-tint text-honey-text",
+};
+
+/**
+ * The List view (design "Posts · Month and List", T74a): When, Post, Where, Status, People
+ * reached, and the next step. Needs-you posts first, then upcoming, then the latest posted.
+ */
+export function PostsTable({
+  posts,
+  platforms,
+  reach,
+  openHref,
+}: {
+  posts: PostRow[];
+  /** Account id → platform label. */
+  platforms: Map<string, string>;
+  reach: Map<string, number>;
+  openHref: (postId: string) => string;
+}) {
+  const attention = posts.filter(needsNewTime);
+  const upcoming = posts
+    .filter((p) => ["queued", "scheduled", "publishing"].includes(p.status))
+    .sort((a, b) =>
+      (a.scheduled_for ?? a.created_at).localeCompare(b.scheduled_for ?? b.created_at),
+    );
+  const published = posts.filter((p) => p.status === "published").slice(0, 30);
+  const rows = [...attention, ...upcoming, ...published];
+  if (!rows.length) {
+    return (
+      <p className="card text-ink-2 p-5">Nothing yet. Plan your first post with the composer.</p>
+    );
+  }
+  return (
+    <div className="card overflow-x-auto">
+      <table className="w-full min-w-[640px] text-sm">
+        <thead className="text-ink-3 border-line border-b text-left text-[13px]">
+          <tr>
+            <th className="px-4 py-2.5 font-medium">When</th>
+            <th className="px-4 py-2.5 font-medium">Post</th>
+            <th className="px-4 py-2.5 font-medium">Where</th>
+            <th className="px-4 py-2.5 font-medium">Status</th>
+            <th className="px-4 py-2.5 text-right font-medium">People reached</th>
+            <th className="px-4 py-2.5">
+              <span className="sr-only">Action</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => {
+            const word = postStatusWord(p);
+            const at = p.published_at ?? p.scheduled_for;
+            const where = [
+              ...new Set(p.target_account_ids.map((id) => platforms.get(id)).filter(Boolean)),
+            ].join(", ");
+            const reached = p.zernio_post_id ? reach.get(p.zernio_post_id) : undefined;
+            return (
+              <tr key={p.id} className="border-line border-b last:border-b-0">
+                <td className="text-ink-2 px-4 py-3 whitespace-nowrap">
+                  {at ? fmt(at) : p.queued ? "Next free time" : "Not set"}
+                </td>
+                <td className="max-w-[280px] truncate px-4 py-3">
+                  {p.content.split("\n")[0] || "Photo"}
+                </td>
+                <td className="text-ink-2 px-4 py-3">{where || "–"}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_TONE[word]}`}
+                  >
+                    {word}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right tabular-nums">
+                  {word === "Posted"
+                    ? reached !== undefined
+                      ? reached.toLocaleString()
+                      : "Soon"
+                    : "–"}
+                </td>
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <Link href={openHref(p.id)} className="text-honey-text font-medium underline">
+                    {word === "Needs you" ? "Pick a new time" : "Open"}
+                  </Link>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 /** The List view: needs attention, upcoming, published. */

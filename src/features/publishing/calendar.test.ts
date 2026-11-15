@@ -7,7 +7,13 @@ import {
   parseTime,
   parseMonth,
   postDay,
+  postStatusWord,
   shiftMonth,
+  shiftWeek,
+  weekDays,
+  weekLabel,
+  weekStart,
+  weekSummary,
 } from "./calendar";
 
 describe("calendar", () => {
@@ -71,5 +77,36 @@ describe("calendar", () => {
     expect(needsNewTime({ status: "cancelled", failure_reason: "zernio_paused" })).toBe(true);
     expect(needsNewTime({ status: "cancelled", failure_reason: null })).toBe(false);
     expect(needsNewTime({ status: "scheduled", failure_reason: null })).toBe(false);
+  });
+});
+
+describe("week view (T74a)", () => {
+  it("finds the week's Sunday and its days", () => {
+    expect(weekStart("2026-11-13")).toBe("2026-11-08");
+    expect(weekStart("2026-11-08")).toBe("2026-11-08");
+    expect(weekDays("2026-11-29")).toEqual([
+      "2026-11-29",
+      "2026-11-30",
+      "2026-12-01",
+      "2026-12-02",
+      "2026-12-03",
+      "2026-12-04",
+      "2026-12-05",
+    ]);
+    expect(shiftWeek("2026-12-27", 1)).toBe("2027-01-03");
+  });
+
+  it("labels the week and sums it up", () => {
+    expect(weekLabel("2026-11-08")).toBe("Nov 8 to 14");
+    expect(weekLabel("2026-11-29")).toBe("Nov 29 to Dec 5");
+    const p = (status: string, failure_reason: string | null = null) => ({
+      status,
+      failure_reason,
+    });
+    expect(
+      weekSummary([p("published"), p("published"), p("published"), p("scheduled"), p("failed")]),
+    ).toBe("3 posted · 1 planned · 1 needs you");
+    expect(weekSummary([])).toBe("Nothing planned yet");
+    expect(postStatusWord(p("cancelled", "payment"))).toBe("Needs you");
   });
 });

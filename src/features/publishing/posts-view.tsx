@@ -11,22 +11,33 @@ import {
   parseTime,
   parseMonth,
   postDay,
+  postStatusWord,
   shiftMonth,
+  shiftWeek,
+  weekDays,
+  weekLabel,
+  weekStart,
+  weekSummary,
   type Month,
 } from "./calendar";
 import { ComposeCard } from "./compose-card";
-import { accountNames, loadPosts, Post, PostsList, type PostRow } from "./posts-list";
+import { platformLabel } from "@/lib/social/platforms";
+import { accountNames, loadPosts, loadReach, Post, PostsTable, type PostRow } from "./posts-list";
 
-// Posts (design v2): a month calendar, because posting is about dates. Each post is a chip on its
-// day (check = published, clock = scheduled, amber = needs a new time); click an empty day to
-// plan a post for it. The composer is always on the right. List keeps the text view.
+// Posts (design "5 · Posts", T74a): the week by default (each day a column with its posts and
+// "+ Plan a post"), a month calendar, or the list with people reached. The composer is always on
+// the right.
 
-type View = "month" | "list";
+type View = "week" | "month" | "list";
 
-function url(p: { view: View; month: Month; day?: string; post?: string }) {
+const clockOf = (iso: string) =>
+  new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+function url(p: { view: View; month: Month; week?: string; day?: string; post?: string }) {
   const q = new URLSearchParams();
-  if (p.view === "list") q.set("view", "list");
-  q.set("month", monthParam(p.month));
+  if (p.view !== "week") q.set("view", p.view);
+  if (p.view === "week" && p.week) q.set("week", p.week);
+  else q.set("month", monthParam(p.month));
   if (p.day) q.set("day", p.day);
   if (p.post) q.set("post", p.post);
   return `/posts?${q}`;
@@ -84,15 +95,16 @@ export async function PostsView({
   const tenant = await getCurrentTenant();
   const { posts, accounts } = await loadPosts(tenant.id);
   const str = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
-  const view: View = str("view") === "list" ? "list" : "month";
-  const month = parseMonth(str("month"));
+  const view: View = str("view") === "list" ? "list" : str("view") === "month" ? "month" : "week";
   const day = parseDay(str("day"));
+  const today = dayKey(new Date());
+  const week = weekStart(parseDay(str("week")) ?? day ?? today);
+  const month = view === "week" ? parseMonth(week.slice(0, 7)) : parseMonth(str("month"));
   const time = day ? parseTime(str("time")) : null;
   const postId = str("post");
   const names = accountNames(accounts);
   const selectedPost = postId ? posts.find((p) => p.id === postId) : undefined;
   const attention = posts.filter(needsNewTime);
-  const today = dayKey(new Date());
   const byDay = new Map<string, PostRow[]>();
   for (const p of posts) {
     if (p.status === "cancelled" && !p.failure_reason) continue;
@@ -109,11 +121,20 @@ export async function PostsView({
     new Date(`${d}T12:00`).toLocaleDateString(undefined, { weekday: "short" }),
   );
   const first = attention[0];
+  const days = weekDays(week);
+  const weekPosts = days.flatMap((d) => byDay.get(d) ?? []);
+  const platformOfAccount = new Map(accounts.map((a) => [a.id, platformLabel(a.platform)]));
+  const reach = view === "list" ? await loadReach(tenant.id, posts) : new Map<string, number>();
 
   return (
     <>
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
+      <header className="flex flex-col gap-1">
         <h1 className="page-title">Posts</h1>
+        <p className="text-ink-2">
+          Write once. Waggle posts it everywhere you pick, and answers the comments after.
+        </p>
+      </header>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <Link href="/posts/queue" className="text-honey-text text-sm font-medium underline">
           Posting times
         </Link>
@@ -126,6 +147,34 @@ export async function PostsView({
         <Link href="/posts/shop" className="text-honey-text text-sm font-medium underline">
           Shop
         </Link>
+        {view === "week" && (
+          <div className="flex flex-wrap items-center gap-1">
+            <Link
+              href={url({ view, month, week: shiftWeek(week, -1) })}
+              aria-label="Previous week"
+              className="border-line-strong bg-surface flex size-11 items-center justify-center rounded-md border"
+            >
+              <ChevronLeft className="size-5" strokeWidth={1.75} aria-hidden />
+            </Link>
+            <span className="min-w-[130px] text-center text-lg font-semibold">
+              {weekLabel(week)}
+            </span>
+            <Link
+              href={url({ view, month, week: shiftWeek(week, 1) })}
+              aria-label="Next week"
+              className="border-line-strong bg-surface flex size-11 items-center justify-center rounded-md border"
+            >
+              <ChevronRight className="size-5" strokeWidth={1.75} aria-hidden />
+            </Link>
+            <Link
+              href={url({ view, month, week: weekStart(today) })}
+              className="hover:text-ink text-ink-2 flex min-h-11 items-center px-3.5 text-sm font-medium"
+            >
+              This week
+            </Link>
+            <span className="meta">{weekSummary(weekPosts)}</span>
+          </div>
+        )}
         {view === "month" && (
           <div className="flex items-center gap-1">
             <Link
@@ -152,6 +201,12 @@ export async function PostsView({
           </div>
         )}
         <nav aria-label="View" className="segmented ml-auto">
+          <Link
+            href={url({ view: "week", month, week })}
+            data-active={view === "week" || undefined}
+          >
+            Week
+          </Link>
           <Link href={url({ view: "month", month })} data-active={view === "month" || undefined}>
             Month
           </Link>
@@ -159,7 +214,7 @@ export async function PostsView({
             List
           </Link>
         </nav>
-      </header>
+      </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
         <div className="flex min-w-0 flex-col gap-3">
@@ -192,7 +247,78 @@ export async function PostsView({
           )}
 
           {view === "list" ? (
-            <PostsList posts={posts} names={names} />
+            <PostsTable
+              posts={posts}
+              platforms={platformOfAccount}
+              reach={reach}
+              openHref={(id) => url({ view, month, post: id })}
+            />
+          ) : view === "week" ? (
+            <div className="grid gap-3 md:grid-cols-7" aria-label={`Week of ${weekLabel(week)}`}>
+              {days.map((d) => {
+                const list = byDay.get(d) ?? [];
+                const date = new Date(`${d}T12:00`);
+                return (
+                  <section
+                    key={d}
+                    aria-current={d === today ? "date" : undefined}
+                    className={cn(
+                      "card flex min-h-[180px] min-w-0 flex-col gap-2 p-2.5",
+                      d === day && "ring-honey ring-1",
+                    )}
+                  >
+                    <p className="flex items-baseline gap-1.5 text-[13px]">
+                      <span className="text-ink-3">
+                        {date.toLocaleDateString(undefined, { weekday: "short" })}
+                      </span>
+                      <span
+                        className={cn(
+                          "font-semibold",
+                          d === today &&
+                            "bg-honey text-ink inline-flex min-w-[22px] justify-center rounded-full px-1",
+                        )}
+                      >
+                        {date.getDate()}
+                      </span>
+                    </p>
+                    {list.map((p) => {
+                      const word = postStatusWord(p);
+                      const at = p.published_at ?? p.scheduled_for;
+                      return (
+                        <Link
+                          key={p.id}
+                          href={url({ view, month, week, post: p.id })}
+                          aria-current={p.id === postId ? "true" : undefined}
+                          className={cn(
+                            "text-ink flex flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-xs no-underline",
+                            word === "Needs you"
+                              ? "border-honey-border bg-honey-tint"
+                              : word === "Posted"
+                                ? "bg-subtle border-transparent"
+                                : "border-line-strong bg-surface",
+                            p.id === postId && "outline-ink outline-2",
+                          )}
+                        >
+                          <span className="line-clamp-2 font-medium">
+                            {p.content.split("\n")[0] || "Photo"}
+                          </span>
+                          <span className="text-ink-3">
+                            {word}
+                            {at && word !== "Needs you" ? ` · ${clockOf(at)}` : ""}
+                          </span>
+                        </Link>
+                      );
+                    })}
+                    <Link
+                      href={url({ view, month, week, day: d })}
+                      className="text-ink-3 hover:text-honey-text mt-auto text-xs font-medium"
+                    >
+                      + Plan a post
+                    </Link>
+                  </section>
+                );
+              })}
+            </div>
           ) : (
             <>
               <div role="grid" aria-label={monthName} className="card overflow-hidden">

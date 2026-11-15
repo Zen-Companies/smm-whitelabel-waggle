@@ -11,6 +11,7 @@ import { BoardPicker } from "./board-picker";
 import { PostOptionsFields } from "./post-options-fields";
 import { VideoField, type VideoState } from "./video-field";
 import { OneDrivePicker } from "./onedrive-picker";
+import { PostPreview } from "./post-preview";
 
 export interface ComposeAccount {
   id: string;
@@ -54,8 +55,14 @@ export function ComposeForm({
   day = null,
   time = null,
   nextSlot = null,
+  brandName = "",
+  disconnected = [],
 }: {
   accounts: ComposeAccount[];
+  /** T74a: the name the preview shows. */
+  brandName?: string;
+  /** T74a: accounts that stopped connecting, shown as "Reconnect to post here". */
+  disconnected?: { platform: string; username: string | null }[];
   day?: string | null;
   time?: string | null;
   /** T75: the brand's next free posting time (ISO), or null when it has no posting times. */
@@ -70,6 +77,8 @@ export function ComposeForm({
       day={day}
       initialTime={time}
       nextSlot={nextSlot}
+      brandName={brandName}
+      disconnected={disconnected}
       state={state}
       action={action}
       pending={pending}
@@ -82,11 +91,15 @@ function ComposeFields({
   day,
   initialTime,
   nextSlot,
+  brandName,
+  disconnected,
   state,
   action,
   pending,
 }: {
   accounts: ComposeAccount[];
+  brandName: string;
+  disconnected: { platform: string; username: string | null }[];
   day: string | null;
   initialTime: string | null;
   nextSlot: string | null;
@@ -100,6 +113,8 @@ function ComposeFields({
   const [text, setText] = useState("");
   const length = text.length;
   const [photo, setPhoto] = useState<string | null>(null);
+  // T74a: a local link to the picked photo, for the preview only.
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   // T84c: a photo picked from OneDrive, already copied into media storage.
   const [drivePhoto, setDrivePhoto] = useState<{ url: string; size: number } | null>(null);
   const [video, setVideo] = useState<VideoState>({ step: "none" });
@@ -174,8 +189,13 @@ function ComposeFields({
                 type="file"
                 accept={POST_IMAGE_TYPES.join(",")}
                 onChange={(e) => {
-                  setPhoto(e.target.files?.[0]?.name ?? null);
+                  const file = e.target.files?.[0];
+                  setPhoto(file?.name ?? null);
                   setDrivePhoto(null);
+                  setPhotoUrl((old) => {
+                    if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
+                    return file ? URL.createObjectURL(file) : null;
+                  });
                 }}
                 className="sr-only"
               />
@@ -206,6 +226,7 @@ function ComposeFields({
                 if (file) file.value = "";
                 setPhoto(pick.name);
                 setDrivePhoto({ url: pick.url, size: pick.size });
+                setPhotoUrl(pick.url);
               } else {
                 setVideo({
                   step: "ready",
@@ -268,8 +289,29 @@ function ComposeFields({
             {platformLabel(a.platform)} @{a.username ?? "account"}
           </label>
         ))}
+        {disconnected.map((a) => (
+          <p
+            key={`down-${a.platform}-${a.username ?? ""}`}
+            className="text-ink-3 flex min-h-11 flex-wrap items-center gap-3 text-sm"
+          >
+            <input type="checkbox" disabled className="size-4" aria-hidden />
+            <PlatformMark platform={a.platform} size={24} />
+            {platformLabel(a.platform)} @{a.username ?? "account"}
+            <a href="/settings?section=accounts" className="text-honey-text font-medium underline">
+              Reconnect to post here
+            </a>
+          </p>
+        ))}
         {fieldError("accounts")}
       </fieldset>
+
+      <PostPreview
+        platforms={pickedPlatforms}
+        brandName={brandName}
+        text={text}
+        photoUrl={hasVideo ? null : photoUrl}
+        hasVideo={hasVideo}
+      />
 
       {(checks.some((c) => c.level !== "ok") ||
         serverProblems.length > 0 ||

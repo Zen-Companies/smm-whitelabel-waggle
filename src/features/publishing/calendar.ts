@@ -77,3 +77,55 @@ export function needsNewTime(post: { status: string; failure_reason: string | nu
     (post.status === "cancelled" && !!post.failure_reason)
   );
 }
+
+// --- Week view (T74a, design "5 · Posts: week view") -----------------------------------------
+
+/** The Sunday that starts the week of `day` ("YYYY-MM-DD"). */
+export function weekStart(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  date.setDate(d - date.getDay());
+  return dayKey(date);
+}
+
+/** Seven days from a Sunday. */
+export function weekDays(start: string): string[] {
+  const [y, m, d] = start.split("-").map(Number);
+  return Array.from({ length: 7 }, (_, i) => dayKey(new Date(y, m - 1, d + i)));
+}
+
+export function shiftWeek(start: string, by: number): string {
+  const [y, m, d] = start.split("-").map(Number);
+  return dayKey(new Date(y, m - 1, d + by * 7));
+}
+
+/** "Nov 9 to 15", "Nov 29 to Dec 5". */
+export function weekLabel(start: string): string {
+  const days = weekDays(start);
+  const first = new Date(`${days[0]}T12:00`);
+  const last = new Date(`${days[6]}T12:00`);
+  const month = (dt: Date) => dt.toLocaleDateString("en", { month: "short" });
+  return first.getMonth() === last.getMonth()
+    ? `${month(first)} ${first.getDate()} to ${last.getDate()}`
+    : `${month(first)} ${first.getDate()} to ${month(last)} ${last.getDate()}`;
+}
+
+/** A post's state in owner words: Posted, Planned, Needs you, Posting. */
+export function postStatusWord(post: { status: string; failure_reason: string | null }): string {
+  if (needsNewTime(post)) return "Needs you";
+  if (post.status === "published") return "Posted";
+  if (post.status === "publishing") return "Posting";
+  return "Planned";
+}
+
+/** "3 posted · 1 planned · 1 needs you" (only the parts that aren't zero). */
+export function weekSummary(posts: { status: string; failure_reason: string | null }[]): string {
+  const count = (w: string) => posts.filter((p) => postStatusWord(p) === w).length;
+  const parts = [
+    [count("Posted"), "posted"],
+    [count("Planned") + count("Posting"), "planned"],
+    [count("Needs you"), "needs you"],
+  ] as const;
+  const shown = parts.filter(([n]) => n > 0).map(([n, w]) => `${n} ${w}`);
+  return shown.length ? shown.join(" · ") : "Nothing planned yet";
+}

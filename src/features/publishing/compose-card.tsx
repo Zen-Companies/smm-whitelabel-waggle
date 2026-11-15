@@ -18,12 +18,21 @@ export async function ComposeCard({
 }) {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
-  const { data: accounts } = await supabase
-    .from("social_accounts")
-    .select("id, platform, username, pinterest_board_id, pinterest_board_name")
-    .eq("tenant_id", tenant.id)
-    .eq("status", "active")
-    .order("created_at");
+  const [{ data: accounts }, { data: down }] = await Promise.all([
+    supabase
+      .from("social_accounts")
+      .select("id, platform, username, pinterest_board_id, pinterest_board_name")
+      .eq("tenant_id", tenant.id)
+      .eq("status", "active")
+      .order("created_at"),
+    // T74a: accounts that stopped connecting show as "Reconnect to post here".
+    supabase
+      .from("social_accounts")
+      .select("platform, username")
+      .eq("tenant_id", tenant.id)
+      .eq("status", "disconnected")
+      .order("created_at"),
+  ]);
   const queue = await loadQueue(tenant.zernioProfileId);
   return (
     <section className="card-lifted flex flex-col gap-4 p-5" aria-labelledby="compose-heading">
@@ -59,6 +68,8 @@ export async function ComposeCard({
           day={day}
           time={time}
           nextSlot={queue?.nextSlots[0] ?? null}
+          brandName={tenant.name}
+          disconnected={(down ?? []).filter((a) => platformOf(a.platform)?.post)}
         />
       ) : (
         <ReadOnlyNote role={tenant.role} what="the posts" />
