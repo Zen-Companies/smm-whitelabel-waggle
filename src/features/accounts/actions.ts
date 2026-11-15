@@ -28,6 +28,8 @@ export async function connectAccount(formData: FormData): Promise<void> {
     redirect("/settings?connect_error=unavailable");
   }
   const platform = parsed.data.platform;
+  // T73b: the first-time setup asks to come back to its Connect step.
+  const back = formData.get("back") === "setup" ? `/setup?step=2&connecting=${platform}` : null;
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) redirect("/settings?connect_error=not_allowed");
   const db = getServiceClient();
@@ -39,7 +41,7 @@ export async function connectAccount(formData: FormData): Promise<void> {
     ({ authUrl } = await getSocialProvider().getConnectUrl({
       platform,
       profileId,
-      redirectUrl: `${process.env.APP_URL}/settings?connecting=${platform}`,
+      redirectUrl: `${process.env.APP_URL}${back ?? `/settings?connecting=${platform}`}`,
     }));
     await writeAudit(db, {
       tenantId: tenant.id,

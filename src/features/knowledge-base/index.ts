@@ -10,7 +10,7 @@ export {
 export type { KbDeps } from "./embeddings";
 export { KbList } from "./kb-list";
 export { groupGaps, loadGaps } from "./gaps";
-export { answerQuestionAction } from "./actions";
+export { addStarterAnswers, answerQuestionAction } from "./actions";
 export type { AnswerState } from "./actions";
 export { usageByEntry, usageText } from "./usage";
 export type { GapRow } from "./gaps";

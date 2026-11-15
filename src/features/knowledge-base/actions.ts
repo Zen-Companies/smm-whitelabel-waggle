@@ -144,6 +144,49 @@ export async function answerQuestionAction(
   return { saved: parsed.data.question, savedAt: Date.now() };
 }
 
+/**
+ * First-time setup (T73b): the owner's answers to the questions their kind of business gets most,
+ * saved as answers titled with the question. One already there with the same title is left alone,
+ * so going back through setup never doubles them. Returns how many were saved.
+ */
+export async function addStarterAnswers(
+  pairs: { question: string; answer: string }[],
+): Promise<{ saved: number } | { error: string }> {
+  const parsed = z.array(answerSchema).max(10).safeParse(pairs);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const supabase = await createServerSupabase();
+  const { data: existing } = await supabase
+    .from("kb_entries")
+    .select("title")
+    .eq("tenant_id", tenant.id);
+  const have = new Set((existing ?? []).map((e) => e.title.trim().toLowerCase()));
+  let saved = 0;
+  for (const p of parsed.data) {
+    const title = p.question.slice(0, KB_TITLE_MAX);
+    if (have.has(title.toLowerCase())) continue;
+    const { data, error } = await supabase
+      .from("kb_entries")
+      .insert({ tenant_id: tenant.id, title, content: p.answer })
+      .select("id")
+      .single();
+    if (error) return { error: "Couldn't save. Please try again." };
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "kb_entry_created",
+      actor: tenant.userId,
+      details: { kbEntryId: data.id, from: "setup" },
+    });
+    embedLater(data.id);
+    have.add(title.toLowerCase());
+    saved += 1;
+  }
+  revalidatePath("/teach");
+  revalidatePath("/knowledge-base");
+  return { saved };
+}
+
 export async function updateKbEntry(_prev: KbFormState, formData: FormData): Promise<KbFormState> {
   const parsed = entrySchema.merge(idSchema).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };

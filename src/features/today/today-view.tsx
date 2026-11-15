@@ -122,6 +122,18 @@ export async function TodayView() {
         </Link>
       </div>
 
+      {data.accounts.length === 0 && (
+        <section className="border-honey-border bg-honey-tint flex flex-wrap items-center gap-3 rounded-2xl border p-5">
+          <p className="min-w-0 flex-[1_1_320px]">
+            <b className="font-semibold">Finish setting up.</b> Four short steps: your business,
+            your accounts, your top answers and how replies go out.
+          </p>
+          <Link href="/setup" className={buttonVariants({ variant: "primary" })}>
+            Set up Waggle
+          </Link>
+        </section>
+      )}
+
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
         <Tile
           href="/leads"

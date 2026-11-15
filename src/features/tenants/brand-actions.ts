@@ -82,5 +82,6 @@ export async function addBrand(_prev: AddBrandState, formData: FormData): Promis
     Sentry.captureException(e, { extra: { tenantId } });
   }
   await openBrand(tenantId);
-  redirect("/inbox");
+  // T73b: a new brand starts with the 4-step setup.
+  redirect("/setup");
 }
