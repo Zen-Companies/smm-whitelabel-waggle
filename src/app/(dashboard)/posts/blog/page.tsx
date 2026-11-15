@@ -5,13 +5,19 @@ export const metadata = { title: "Blog" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-export default async function Page({ searchParams }: Props) {
+const pick = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
+
+// The address is read inside Suspense, so the page shell can prerender (Cache Components).
+async function Blog({ searchParams }: Props) {
   const params = await searchParams;
-  const pick = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
+  return <BlogPage site={pick(params.site)} blog={pick(params.blog)} />;
+}
+
+export default function Page({ searchParams }: Props) {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-4 py-6 md:px-8">
       <Suspense fallback={<div className="skeleton h-[600px] rounded-xl" />}>
-        <BlogPage site={pick(params.site)} blog={pick(params.blog)} />
+        <Blog searchParams={searchParams} />
       </Suspense>
     </main>
   );
