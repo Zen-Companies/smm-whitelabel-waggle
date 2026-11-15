@@ -17,7 +17,7 @@ import {
 } from "./data";
 import { LocalClock } from "./local-time";
 import { OverviewSection, parseMeasure } from "./overview-section";
-import { AccountProblems, CollectingNumbers } from "./parts";
+import { AccountProblems, CollectingNumbers, Tile } from "./parts";
 import {
   analyticsHref,
   param,
@@ -32,6 +32,8 @@ import { parseDir, parseMade, parseSort, parseType } from "./posts";
 import { PostsSection } from "./posts-section";
 import { ANALYTICS_PERIODS } from "./sync";
 import { WorkSection } from "./work-section";
+import { compact, duration } from "./format";
+import { workHeadline } from "./work";
 import { isAnalyticsLive } from "@/lib/social/platforms";
 import { NO_NUMBERS } from "./platform-words";
 
@@ -100,6 +102,51 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
     );
   const controlHref = (change: Record<string, string | number>) =>
     analyticsHref(current, { ...keep, post: undefined, ...change });
+
+  // T74b (design "6 · Insights"): the Overview opens with what Waggle did, from our own tables.
+  let waggleDid: React.ReactNode = null;
+  if (section === "overview") {
+    const accountIds =
+      platform === "all" ? null : accounts.filter((a) => a.platform === platform).map((a) => a.id);
+    const w = windowFor(period, now);
+    let hiddenQuery = supabase
+      .from("inbound_items")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenant.id)
+      .gte("hidden_on_platform_at", w.from.toISOString())
+      .lt("hidden_on_platform_at", w.to.toISOString());
+    if (accountIds) hiddenQuery = hiddenQuery.in("social_account_id", accountIds);
+    const [work, { count: hidden }] = await Promise.all([
+      loadWork(supabase, tenant.id, { period, accountIds, now }),
+      hiddenQuery,
+    ]);
+    const reply = work.firstReplyWaggle ?? work.firstReplyYou;
+    waggleDid = (
+      <section className="card flex flex-col gap-4 p-5" aria-labelledby="waggle-did">
+        <div>
+          <h2 id="waggle-did" className="section-title">
+            What Waggle did for you
+          </h2>
+          <p className="text-ink-2 mt-1">{workHeadline(work)}</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Tile
+            label="Messages and comments answered"
+            value={compact(work.byWaggle + work.byYou)}
+          />
+          <Tile label="Typical time to answer" value={reply === null ? "–" : duration(reply)} />
+          <Tile label="Leads saved and emailed to you" value={compact(work.leads)} />
+          <Tile label="Spam comments hidden" value={compact(hidden ?? 0)} />
+        </div>
+        <Link
+          href={analyticsHref(current, { section: "work" })}
+          className="text-honey-text self-start text-sm font-medium underline"
+        >
+          See Waggle&apos;s work
+        </Link>
+      </section>
+    );
+  }
 
   let body: React.ReactNode;
   if (section !== "work" && !syncedAt) {
@@ -184,6 +231,7 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <h1 className="page-title">Insights</h1>
+          <span className="text-ink-2">The last {period} days, in plain words.</span>
           <span className="meta">{accountsLine(accounts)}</span>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -233,8 +281,8 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
         {asOf && <p className="meta">{asOf}</p>}
         {section !== "work" && noNumbers.length > 0 && (
           <p className="meta">
-            {noNumbers.map(platformName).join(", ")}{" "}
-            {noNumbers.length > 1 ? "don't" : "doesn't"} share numbers with apps.
+            {noNumbers.map(platformName).join(", ")} {noNumbers.length > 1 ? "don't" : "doesn't"}{" "}
+            share numbers with apps.
           </p>
         )}
         {section !== "work" && later.length > 0 && (
@@ -245,7 +293,17 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
         )}
       </div>
       <AccountProblems accounts={accounts} />
-      {body}
+      {waggleDid}
+      {waggleDid ? (
+        <section className="flex flex-col gap-3" aria-labelledby="posts-did">
+          <h2 id="posts-did" className="section-title">
+            How your posts did
+          </h2>
+          {body}
+        </section>
+      ) : (
+        body
+      )}
     </>
   );
 }

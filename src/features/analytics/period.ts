@@ -7,11 +7,12 @@ import {
 
 // The page's controls as searchParams (?section=overview&period=30&platform=all). Pure.
 
+// T74b: Waggle's work comes right after the Overview (design "6 · Insights").
 export const SECTIONS = [
   { key: "overview", label: "Overview" },
+  { key: "work", label: "Waggle's work" },
   { key: "posts", label: "Posts" },
   { key: "audience", label: "Audience" },
-  { key: "work", label: "Waggle's work" },
 ] as const;
 export type Section = (typeof SECTIONS)[number]["key"];
 
