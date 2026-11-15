@@ -2328,6 +2328,45 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async connectSameTokenAds(input: {
+    profileId: string;
+    platform: "linkedin" | "pinterest";
+    postingAccountId: string;
+    redirectUrl: string;
+    signal?: AbortSignal;
+  }) {
+    try {
+      return await call("connectAds", async (withFetch) => {
+        const { data } = await this.zernio.connect.connectAds(
+          withFetch({
+            signal: input.signal,
+            path: { platform: input.platform },
+            query: {
+              profileId: input.profileId,
+              accountId: input.postingAccountId,
+              redirect_url: input.redirectUrl,
+            },
+          }),
+        );
+        const r = parse(
+          z.object({ accountId: z.string().nullish(), authUrl: z.url().nullish() }),
+          data,
+          "connectAds",
+        );
+        // An authUrl means a full sign-in on the partner's app: the owner reconnects the
+        // posting account through our own connect flow instead.
+        if (r.accountId && !r.authUrl) return { connectionId: r.accountId };
+        return { needsReconnect: true as const };
+      });
+    } catch (error) {
+      // 400 reconnect_required: the posting account's token can't reach ad accounts.
+      if (error instanceof SocialProviderError && error.details.status === 400) {
+        return { needsReconnect: true as const };
+      }
+      throw error;
+    }
+  }
+
   async listAdConnections(input: { profileId: string; signal?: AbortSignal }) {
     return call("listAdConnections", async (withFetch) => {
       const { data } = await this.zernio.accounts.listAccounts(

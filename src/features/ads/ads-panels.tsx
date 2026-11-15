@@ -2,12 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type {
-  AdAccount,
-  AdCampaignStatus,
-  AdCampaignSummary,
-  AdRuleSummary,
-} from "@/lib/social/types";
+import type { AdCampaignStatus, AdCampaignSummary, AdRuleSummary } from "@/lib/social/types";
 import {
   addCpcRuleAction,
   boostPostAction,
@@ -16,6 +11,8 @@ import {
   type AdsState,
 } from "./actions";
 import { BOOST_GOALS, MAX_BOOST_DAYS, money, type BoostGoal } from "./boost";
+import type { NetworkAdAccount } from "./connection";
+import { AD_NETWORKS, minDailyFor, networkOfCampaign, type AdNetwork } from "./networks";
 
 const STATUS: Record<AdCampaignStatus, { label: string; tone: string }> = {
   active: { label: "Running", tone: "bg-success-soft text-success" },
@@ -46,6 +43,8 @@ const n = (v: number) => v.toLocaleString("en");
 export function CampaignRow({ c, canEdit }: { c: AdCampaignSummary; canEdit: boolean }) {
   const [state, act, pending] = useActionState<AdsState, FormData>(setCampaignStatusAction, {});
   const s = STATUS[c.status];
+  const network = networkOfCampaign(c.platform);
+  const reviewer = network ? AD_NETWORKS[network].label : "the network";
   const cur = c.currency ?? "USD";
   const budget = c.budget
     ? `${money(c.budget.amount, cur)}${c.budget.type === "daily" ? "/day" : " total"}`
@@ -54,13 +53,16 @@ export function CampaignRow({ c, canEdit }: { c: AdCampaignSummary; canEdit: boo
     c.spend > 0 || c.reach > 0
       ? `${money(c.spend, cur)} spent · ${n(c.reach)} reached · ${n(c.clicks)} clicks`
       : c.status === "pending_review"
-        ? "Waiting for Meta to review"
+        ? `Waiting for ${reviewer} to review`
         : null;
   const next = c.status === "active" ? "paused" : c.status === "paused" ? "active" : null;
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3.5">
       <div className="flex min-w-0 flex-1 flex-col">
-        <b className="truncate font-semibold">{c.name}</b>
+        <b className="truncate font-semibold">
+          {network && network !== "meta" ? `${reviewer} · ` : ""}
+          {c.name}
+        </b>
         <span className="meta">{[budget, results].filter(Boolean).join(" · ")}</span>
         {state.error && (
           <span role="alert" className="text-danger text-sm">
@@ -84,7 +86,7 @@ export function CampaignRow({ c, canEdit }: { c: AdCampaignSummary; canEdit: boo
   );
 }
 
-export type BoostablePost = { value: string; label: string };
+export type BoostablePost = { value: string; label: string; network: AdNetwork };
 
 /** Boost a post (design "Boost this post"): goal, who, budget, then confirm in place. */
 export function BoostForm({
@@ -92,20 +94,29 @@ export function BoostForm({
   accounts,
   leadForms,
   idempotencyKey,
+  networks,
 }: {
   posts: BoostablePost[];
-  accounts: AdAccount[];
+  accounts: NetworkAdAccount[];
   leadForms: { id: string; name: string }[];
   idempotencyKey: string;
+  /** The networks connected, for the empty-state copy. */
+  networks: AdNetwork[];
 }) {
   const [state, action, pending] = useActionState<AdsState, FormData>(boostPostAction, {});
-  const usable = accounts.filter((a) => a.usable);
+  const [postValue, setPostValue] = useState(posts[0]?.value ?? "");
+  const network = posts.find((p) => p.value === postValue)?.network ?? posts[0]?.network ?? "meta";
+  const net = AD_NETWORKS[network];
+  const usable = accounts.filter((a) => a.usable && a.network === network);
   const [accountId, setAccountId] = useState(usable[0]?.id ?? "");
   const [goal, setGoal] = useState<BoostGoal>("reach");
   const [daily, setDaily] = useState("");
   const [days, setDays] = useState("3");
   const [sure, setSure] = useState(false);
-  const account = usable.find((a) => a.id === accountId);
+  const account = usable.find((a) => a.id === accountId) ?? usable[0];
+  const min = account ? minDailyFor(network, account) : 1;
+  const goals = net.goals as readonly BoostGoal[];
+  const activeGoal = goals.includes(goal) ? goal : "reach";
   const total = Number(daily) * Number(days);
   const err = (f: string) =>
     state.field === f && state.error ? (
@@ -115,17 +126,19 @@ export function BoostForm({
     ) : null;
 
   if (state.savedAt && !state.error) {
+    const sent = AD_NETWORKS[state.network ?? "meta"].label;
     return (
       <p role="status" className="card p-5">
-        Sent to Meta for review. It starts once Meta approves it, usually within a day.
+        Sent to {sent} for review. It starts once {sent} approves it, usually within a day.
       </p>
     );
   }
   if (!posts.length) {
+    const where = networks
+      .flatMap((n) => (n === "meta" ? ["Facebook", "Instagram"] : [AD_NETWORKS[n].label]))
+      .join(", ");
     return (
-      <p className="card text-ink-2 p-5">
-        Publish a post on Facebook or Instagram first, then boost it here.
-      </p>
+      <p className="card text-ink-2 p-5">Publish a post on {where} first, then boost it here.</p>
     );
   }
   return (
@@ -134,21 +147,39 @@ export function BoostForm({
       <input type="hidden" name="idempotencyKey" value={idempotencyKey} />
       <label className="flex flex-col gap-1.5 text-sm font-medium">
         Post
-        <select name="post" className="field">
+        <select
+          name="post"
+          className="field"
+          value={postValue}
+          onChange={(e) => {
+            const next = posts.find((p) => p.value === e.target.value);
+            setPostValue(e.target.value);
+            if (next && next.network !== network) {
+              setAccountId(accounts.find((a) => a.usable && a.network === next.network)?.id ?? "");
+              setGoal("reach");
+            }
+          }}
+        >
           {posts.map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
             </option>
           ))}
         </select>
+        {network === "linkedin" && (
+          <span className="meta font-normal">
+            Only posts from your Company Page can be boosted. LinkedIn may ask the Page to allow
+            sponsoring the post first.
+          </span>
+        )}
         {err("post")}
       </label>
       <label className="flex flex-col gap-1.5 text-sm font-medium">
-        Ad account
+        {net.label} ad account
         <select
           name="adAccountId"
           className="field"
-          value={accountId}
+          value={account?.id ?? ""}
           onChange={(e) => setAccountId(e.target.value)}
         >
           {usable.map((a) => (
@@ -157,21 +188,26 @@ export function BoostForm({
             </option>
           ))}
         </select>
+        {!usable.length && (
+          <span className="text-danger font-normal">
+            No {net.label} ad account can be used right now. Check it in {net.label}.
+          </span>
+        )}
         {err("adAccountId")}
       </label>
       <fieldset className="flex flex-col gap-1.5">
         <legend className="mb-1 text-sm font-medium">What do you want</legend>
         <div className="flex flex-wrap gap-2">
-          {(Object.keys(BOOST_GOALS) as BoostGoal[]).map((g) => (
+          {goals.map((g) => (
             <label
               key={g}
-              className={`flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-sm ${goal === g ? "border-ink bg-ink text-surface" : "border-line-strong"}`}
+              className={`flex cursor-pointer items-center gap-2 rounded-full border px-3.5 py-2 text-sm ${activeGoal === g ? "border-ink bg-ink text-surface" : "border-line-strong"}`}
             >
               <input
                 type="radio"
                 name="goal"
                 value={g}
-                checked={goal === g}
+                checked={activeGoal === g}
                 onChange={() => setGoal(g)}
                 className="sr-only"
               />
@@ -181,19 +217,23 @@ export function BoostForm({
         </div>
         {err("goal")}
       </fieldset>
-      {goal === "visits" && (
+      {activeGoal === "visits" && network === "meta" && (
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Page to send people to
           <input name="linkUrl" placeholder="https://harbourbean.ph/menu" className="field" />
           {err("linkUrl")}
         </label>
       )}
-      {goal === "messages" && (
+      {activeGoal === "visits" && network !== "meta" && (
+        <p className="meta">People go to the link in your post.</p>
+      )}
+      {activeGoal === "video" && <p className="meta">The post needs a video.</p>}
+      {activeGoal === "messages" && (
         <p className="meta">
           The ad opens a chat with you on Messenger or Instagram, wherever the post is.
         </p>
       )}
-      {goal === "leads" && (
+      {activeGoal === "leads" && (
         <label className="flex flex-col gap-1.5 text-sm font-medium">
           Lead form
           <select name="leadFormId" className="field">
@@ -221,28 +261,32 @@ export function BoostForm({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1.5 text-sm">
-          Age from
-          <input
-            name="ageMin"
-            type="number"
-            min={18}
-            max={65}
-            defaultValue={18}
-            className="field w-24"
-          />
-        </label>
-        <label className="flex flex-col gap-1.5 text-sm">
-          to
-          <input
-            name="ageMax"
-            type="number"
-            min={18}
-            max={65}
-            defaultValue={65}
-            className="field w-24"
-          />
-        </label>
+        {net.ages && (
+          <>
+            <label className="flex flex-col gap-1.5 text-sm">
+              Age from
+              <input
+                name="ageMin"
+                type="number"
+                min={18}
+                max={65}
+                defaultValue={18}
+                className="field w-24"
+              />
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm">
+              to
+              <input
+                name="ageMax"
+                type="number"
+                min={18}
+                max={65}
+                defaultValue={65}
+                className="field w-24"
+              />
+            </label>
+          </>
+        )}
       </fieldset>
       {err("country")}
       {err("age")}
@@ -252,11 +296,11 @@ export function BoostForm({
           <input
             name="daily"
             type="number"
-            min={account?.minDailyBudget ?? 1}
+            min={min}
             step={1}
             value={daily}
             onChange={(e) => setDaily(e.target.value)}
-            placeholder={String(account?.minDailyBudget ?? 300)}
+            placeholder={String(account?.minDailyBudget ?? (network === "meta" ? 300 : min))}
             className="field w-36"
           />
         </label>
@@ -274,21 +318,26 @@ export function BoostForm({
         </label>
         {account && total > 0 && (
           <p className="text-sm">
-            Total up to <b>{money(total, account.currency)}</b>, charged by Meta to your ad account.
-            Waggle adds nothing on top.
+            Total up to <b>{money(total, account.currency)}</b>, charged by {net.label} to your ad
+            account. Waggle adds nothing on top.
           </p>
         )}
       </div>
+      {account && min > 1 && (
+        <p className="meta">
+          {net.label} needs at least {money(min, account.currency)} a day.
+        </p>
+      )}
       {err("daily")}
       {err("days")}
       {sure ? (
         <div className="border-honey-border bg-honey-tint flex flex-wrap items-center gap-2 rounded-xl border p-3 text-sm">
           <b className="font-semibold">
-            Send this boost to Meta? Up to {account ? money(total, account.currency) : ""} will be
-            charged once it runs.
+            Send this boost to {net.label}? Up to {account ? money(total, account.currency) : ""}{" "}
+            will be charged once it runs.
           </b>
           <Button type="submit" variant="primary" disabled={pending}>
-            {pending ? "Sending…" : "Send to Meta for review"}
+            {pending ? "Sending…" : `Send to ${net.label} for review`}
           </Button>
           <Button type="button" variant="quiet" onClick={() => setSure(false)}>
             Not yet
@@ -305,7 +354,9 @@ export function BoostForm({
           Boost this post
         </Button>
       )}
-      <p className="meta">Meta reviews every ad, usually within a day. It starts once approved.</p>
+      <p className="meta">
+        {net.label} reviews every ad, usually within a day. It starts once approved.
+      </p>
       {state.error && !state.field && (
         <p role="alert" className="text-danger text-sm">
           {state.error}
@@ -322,12 +373,15 @@ export function SafetyRules({
   canEdit,
 }: {
   rules: AdRuleSummary[];
-  accounts: AdAccount[];
+  accounts: NetworkAdAccount[];
   canEdit: boolean;
 }) {
   const [state, add, adding] = useActionState<AdsState, FormData>(addCpcRuleAction, {});
   const [change, act, changing] = useActionState<AdsState, FormData>(changeRuleAction, {});
-  const currency = accounts[0]?.currency ?? "";
+  const [picked, setPicked] = useState(
+    accounts[0] ? `${accounts[0].network}|${accounts[0].id}` : "",
+  );
+  const currency = accounts.find((a) => `${a.network}|${a.id}` === picked)?.currency ?? "";
   return (
     <section className="card flex flex-col gap-3 p-5" aria-labelledby="rules-title">
       <h2 id="rules-title" className="section-title">
@@ -379,7 +433,25 @@ export function SafetyRules({
       )}
       {canEdit && accounts.length > 0 && (
         <form action={add} className="flex flex-wrap items-end gap-2">
-          <input type="hidden" name="adAccountId" value={accounts[0].id} />
+          {accounts.length > 1 ? (
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              Ad account
+              <select
+                name="adAccount"
+                className="field"
+                value={picked}
+                onChange={(e) => setPicked(e.target.value)}
+              >
+                {accounts.map((a) => (
+                  <option key={`${a.network}|${a.id}`} value={`${a.network}|${a.id}`}>
+                    {AD_NETWORKS[a.network].label}: {a.name} ({a.currency})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <input type="hidden" name="adAccount" value={picked} />
+          )}
           <label className="flex flex-col gap-1.5 text-sm font-medium">
             Pause a boost if a click costs more than{currency ? ` (${currency})` : ""}
             <input

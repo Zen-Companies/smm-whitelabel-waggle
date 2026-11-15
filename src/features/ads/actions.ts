@@ -8,33 +8,40 @@ import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
-import { cpcRuleBody, parseBoostForm, toBoostBody } from "./boost";
-import { metaAdsConnection } from "./connection";
+import { cpcRuleBody, parseBoostForm, readBoostPost, toBoostBody } from "./boost";
+import { adConnections, networkAdAccounts } from "./connection";
+import { AD_NETWORKS, isAdNetwork, minDailyFor, type AdNetwork } from "./networks";
 
-export type AdsState = { error?: string; field?: string; savedAt?: number };
+export type AdsState = { error?: string; field?: string; savedAt?: number; network?: AdNetwork };
 
 const ADS = "/posts/ads";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The brand's active posting account on a platform (its Zernio id). */
+async function postingAccount(tenantId: string, platform: string) {
+  const { data } = await getServiceClient()
+    .from("social_accounts")
+    .select("zernio_account_id")
+    .eq("tenant_id", tenantId)
+    .eq("platform", platform)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+  return data?.zernio_account_id ?? null;
+}
 
 /** Connect Meta ads from the brand's Facebook account; Meta's consent page if it's needed. */
 export async function connectMetaAdsAction(): Promise<void> {
   const tenant = await getTenantFor("brand.settings");
   if (!tenant?.zernioProfileId) redirect(`${ADS}?ads_error=not_allowed`);
-  const db = getServiceClient();
-  const { data: fb } = await db
-    .from("social_accounts")
-    .select("zernio_account_id")
-    .eq("tenant_id", tenant.id)
-    .eq("platform", "facebook")
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
+  const fb = await postingAccount(tenant.id, "facebook");
   if (!fb) redirect(`${ADS}?ads_error=no_facebook`);
+  const db = getServiceClient();
   let target: string;
   try {
     const r = await getSocialProvider().connectMetaAds({
       profileId: tenant.zernioProfileId,
-      facebookAccountId: fb.zernio_account_id,
+      facebookAccountId: fb,
       redirectUrl: `${process.env.APP_URL}${ADS}?ads=connected`,
       signal: AbortSignal.timeout(20_000),
     });
@@ -54,17 +61,66 @@ export async function connectMetaAdsAction(): Promise<void> {
 }
 
 /**
- * Boost a post (T79). Spends the brand's money: owner/admin only, confirmed in place, and sent
- * once with the form's idempotency key (a double submit replays the same boost, never a second).
+ * Connect LinkedIn or Pinterest ads (T79b). Reuses the brand's posting sign-in, so no screen is
+ * shown; when that sign-in can't reach ad accounts the owner reconnects the posting account in
+ * Settings → Accounts (our own connect flow), never on the partner's page.
+ */
+export async function connectNetworkAdsAction(formData: FormData): Promise<void> {
+  const network = formData.get("network");
+  if (network !== "linkedin" && network !== "pinterest") redirect(ADS);
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant?.zernioProfileId) redirect(`${ADS}?ads_error=not_allowed`);
+  const posting = await postingAccount(tenant.id, network);
+  if (!posting) redirect(`${ADS}?ads_error=no_${network}`);
+  let target = `${ADS}?ads=connected&network=${network}`;
+  try {
+    const r = await getSocialProvider().connectSameTokenAds({
+      profileId: tenant.zernioProfileId,
+      platform: network,
+      postingAccountId: posting,
+      redirectUrl: `${process.env.APP_URL}${ADS}?ads=connected&network=${network}`,
+      signal: AbortSignal.timeout(20_000),
+    });
+    if ("needsReconnect" in r) target = `${ADS}?ads_error=reconnect_${network}`;
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "ads_connect_started",
+      actor: tenant.userId,
+      details: { platform: `${network}ads`, needsReconnect: "needsReconnect" in r },
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "connectNetworkAds" } });
+    const planLimit = error instanceof SocialProviderError && error.details.status === 402;
+    target = `${ADS}?ads_error=${planLimit ? "plan_limit" : "unavailable"}`;
+  }
+  redirect(target);
+}
+
+const boostRefused = (network: AdNetwork, error: unknown) => {
+  const label = AD_NETWORKS[network].label;
+  const s = error instanceof SocialProviderError ? error.details.status : undefined;
+  if (network === "linkedin" && s === 422) {
+    return "LinkedIn only boosts posts from your Company Page, and the Page may need to allow sponsoring that post first (LinkedIn → Sponsorship permissions).";
+  }
+  return `${label} didn't take the boost. Check the ad account has a payment method in ${label}, then try again in a few minutes.`;
+};
+
+/**
+ * Boost a post (T79, T79b). Spends the brand's money: owner/admin only, confirmed in place, and
+ * sent once with the form's idempotency key (a double submit replays the same boost).
  */
 export async function boostPostAction(_prev: AdsState, formData: FormData): Promise<AdsState> {
   const tenant = await getTenantFor("brand.settings");
   if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
   const key = String(formData.get("idempotencyKey") ?? "");
   if (!UUID.test(key)) return { error: "Something went wrong. Reload the page." };
+  const picked = readBoostPost(formData.get("post"));
+  if (!picked) return { error: "Pick a post to boost.", field: "post" };
+  const network = picked.network;
+  const label = AD_NETWORKS[network].label;
   try {
-    const conn = await metaAdsConnection(tenant.zernioProfileId);
-    if (!conn) return { error: "Connect Meta ads first." };
+    const conn = (await adConnections(tenant.zernioProfileId))[network];
+    if (!conn) return { error: `Connect ${label} ads first.` };
     const social = getSocialProvider();
     const accounts = await social.listAdAccounts({
       connectionId: conn.id,
@@ -72,28 +128,46 @@ export async function boostPostAction(_prev: AdsState, formData: FormData): Prom
     });
     const account = accounts.find((a) => a.id === formData.get("adAccountId") && a.usable);
     if (!account) return { error: "Pick one of your ad accounts.", field: "adAccountId" };
-    const parsed = parseBoostForm(formData, { minDailyBudget: account.minDailyBudget });
+    const parsed = parseBoostForm(formData, { minDailyBudget: minDailyFor(network, account) });
     if (!parsed.ok) return { error: parsed.error, field: parsed.field };
-    const { data: post } = await getServiceClient()
+
+    const db = getServiceClient();
+    const { data: post } = await db
       .from("posts")
-      .select("content")
+      .select("content, target_account_ids")
       .eq("tenant_id", tenant.id)
       .eq("zernio_post_id", parsed.value.postId)
       .eq("status", "published")
       .maybeSingle();
     if (!post) return { error: "Pick one of your published posts.", field: "post" };
+    // Meta boosts name the ads connection (T79a); LinkedIn and Pinterest name the posting
+    // account the post went out on, which must be one of this post's targets.
+    let accountId = conn.id;
+    if (network !== "meta") {
+      const { data: target } = await db
+        .from("social_accounts")
+        .select("zernio_account_id")
+        .eq("tenant_id", tenant.id)
+        .eq("platform", parsed.value.postPlatform)
+        .in("id", post.target_account_ids)
+        .limit(1)
+        .maybeSingle();
+      if (!target) return { error: "Pick one of your published posts.", field: "post" };
+      accountId = target.zernio_account_id;
+    }
     const name = `Boost: ${post.content.replace(/\s+/g, " ").trim().slice(0, 40) || "post"}`;
     const ad = await social.boostPost({
-      body: toBoostBody(parsed.value, { connectionId: conn.id, name, now: new Date() }),
+      body: toBoostBody(parsed.value, { accountId, name, now: new Date() }),
       idempotencyKey: key,
       signal: AbortSignal.timeout(120_000),
     });
-    await writeAudit(getServiceClient(), {
+    await writeAudit(db, {
       tenantId: tenant.id,
       action: "post_boosted",
       actor: tenant.userId,
       details: {
         adId: ad.id,
+        network,
         goal: parsed.value.goal,
         daily: parsed.value.daily,
         days: parsed.value.days,
@@ -101,17 +175,14 @@ export async function boostPostAction(_prev: AdsState, formData: FormData): Prom
       },
     });
   } catch (error) {
-    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "boostPost" } });
-    return {
-      error:
-        "Meta didn't take the boost. Check the ad account has a payment method in Meta, then try again in a few minutes.",
-    };
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "boostPost", network } });
+    return { error: boostRefused(network, error) };
   }
   revalidatePath(ADS);
-  return { savedAt: Date.now() };
+  return { savedAt: Date.now(), network };
 }
 
-/** Pause or resume a boost; only campaigns on this brand's own ads connection. */
+/** Pause or resume a boost; only campaigns on this brand's own ads connections. */
 export async function setCampaignStatusAction(
   _prev: AdsState,
   formData: FormData,
@@ -121,11 +192,12 @@ export async function setCampaignStatusAction(
   const id = String(formData.get("id") ?? "");
   const status = formData.get("status") === "active" ? "active" : "paused";
   try {
-    const conn = await metaAdsConnection(tenant.zernioProfileId);
+    const conns = Object.values(await adConnections(tenant.zernioProfileId));
     const social = getSocialProvider();
-    const campaigns = conn
-      ? await social.listAdCampaigns({ connectionId: conn.id, signal: AbortSignal.timeout(15_000) })
-      : [];
+    const signal = AbortSignal.timeout(15_000);
+    const campaigns = (
+      await Promise.all(conns.map((c) => social.listAdCampaigns({ connectionId: c.id, signal })))
+    ).flat();
     const campaign = campaigns.find((c) => c.id === id);
     if (!campaign) return { error: "Something went wrong. Reload the page." };
     await social.setAdCampaignStatus({
@@ -156,18 +228,20 @@ export async function addCpcRuleAction(_prev: AdsState, formData: FormData): Pro
   if (!(Number.isFinite(maxCpc) && maxCpc > 0 && maxCpc <= 100_000)) {
     return { error: "Give the most a click may cost, like 25.", field: "maxCpc" };
   }
+  // `<network>|<ad account id>`
+  const [network, adAccountId] = String(formData.get("adAccount") ?? "").split("|");
+  if (!isAdNetwork(network) || !adAccountId) {
+    return { error: "Pick one of your ad accounts.", field: "adAccount" };
+  }
   try {
-    const conn = await metaAdsConnection(tenant.zernioProfileId);
-    if (!conn) return { error: "Connect Meta ads first." };
-    const social = getSocialProvider();
-    const accounts = await social.listAdAccounts({
-      connectionId: conn.id,
-      signal: AbortSignal.timeout(15_000),
-    });
-    const account = accounts.find((a) => a.id === formData.get("adAccountId"));
-    if (!account) return { error: "Pick one of your ad accounts.", field: "adAccountId" };
+    const conns = await adConnections(tenant.zernioProfileId);
+    const conn = conns[network];
+    if (!conn) return { error: `Connect ${AD_NETWORKS[network].label} ads first.` };
+    const accounts = await networkAdAccounts({ [network]: conn }, AbortSignal.timeout(15_000));
+    const account = accounts.find((a) => a.id === adAccountId);
+    if (!account) return { error: "Pick one of your ad accounts.", field: "adAccount" };
     // Not idempotent upstream: one attempt.
-    const rule = await social.createAdRule({
+    const rule = await getSocialProvider().createAdRule({
       body: cpcRuleBody({
         connectionId: conn.id,
         adAccountId: account.id,
@@ -180,7 +254,7 @@ export async function addCpcRuleAction(_prev: AdsState, formData: FormData): Pro
       tenantId: tenant.id,
       action: "ad_rule_created",
       actor: tenant.userId,
-      details: { ruleId: rule.id, kind: "max_cpc", maxCpc, currency: account.currency },
+      details: { ruleId: rule.id, kind: "max_cpc", network, maxCpc, currency: account.currency },
     });
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "addCpcRule" } });
@@ -199,11 +273,12 @@ export async function changeRuleAction(_prev: AdsState, formData: FormData): Pro
   if (!["on", "off", "delete"].includes(op))
     return { error: "Something went wrong. Reload the page." };
   try {
-    const conn = await metaAdsConnection(tenant.zernioProfileId);
+    const conns = Object.values(await adConnections(tenant.zernioProfileId));
     const social = getSocialProvider();
-    const rules = conn
-      ? await social.listAdRules({ connectionId: conn.id, signal: AbortSignal.timeout(15_000) })
-      : [];
+    const signal = AbortSignal.timeout(15_000);
+    const rules = (
+      await Promise.all(conns.map((c) => social.listAdRules({ connectionId: c.id, signal })))
+    ).flat();
     if (!rules.some((r) => r.id === id)) return { error: "Something went wrong. Reload the page." };
     if (op === "delete") await social.deleteAdRule({ id, signal: AbortSignal.timeout(15_000) });
     else

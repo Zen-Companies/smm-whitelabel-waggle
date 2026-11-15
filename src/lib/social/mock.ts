@@ -805,14 +805,17 @@ export class MockSocialProvider implements SocialProvider {
     };
   }
 
-  /** Ads (T79): connecting makes one Meta ads connection with one ad account (PHP). */
+  /**
+   * Ads (T79): each connection has one ad account (Meta in PHP; LinkedIn and Pinterest, T79b,
+   * in USD). Connections are kept per profile and network.
+   */
   private adConnections = new Map<string, AdConnection>();
   private adCampaigns = new Map<string, AdCampaignSummary & { connectionId: string }>();
   private adRules = new Map<string, AdRuleSummary & { connectionId: string }>();
 
   async connectMetaAds(input: { profileId: string; facebookAccountId: string }) {
     const id = idFrom("mock_metaads", input.profileId);
-    this.adConnections.set(input.profileId, {
+    this.adConnections.set(`${input.profileId}|metaads`, {
       id,
       platform: "metaads",
       name: "Meta ads",
@@ -822,19 +825,38 @@ export class MockSocialProvider implements SocialProvider {
     return { connectionId: id };
   }
 
+  async connectSameTokenAds(input: {
+    profileId: string;
+    platform: "linkedin" | "pinterest";
+    postingAccountId: string;
+  }) {
+    const platform = `${input.platform}ads`;
+    const id = idFrom(`mock_${platform}`, input.profileId);
+    this.adConnections.set(`${input.profileId}|${platform}`, {
+      id,
+      platform,
+      name: input.platform === "linkedin" ? "LinkedIn ads" : "Pinterest ads",
+      parentAccountId: input.postingAccountId,
+      active: true,
+    });
+    return { connectionId: id };
+  }
+
   async listAdConnections(input: { profileId: string }): Promise<AdConnection[]> {
-    const c = this.adConnections.get(input.profileId);
-    return c ? [c] : [];
+    return [...this.adConnections.entries()]
+      .filter(([key]) => key.startsWith(`${input.profileId}|`))
+      .map(([, c]) => c);
   }
 
   async listAdAccounts(input: { connectionId: string }): Promise<AdAccount[]> {
+    const meta = input.connectionId.startsWith("mock_metaads");
     return [
       {
-        id: `act_${input.connectionId.slice(-8)}`,
+        id: meta ? `act_${input.connectionId.slice(-8)}` : input.connectionId.slice(-9),
         name: "Your ad account",
-        currency: "PHP",
-        minDailyBudget: 50,
-        billing: "ok",
+        currency: meta ? "PHP" : "USD",
+        minDailyBudget: meta ? 50 : null,
+        billing: meta ? "ok" : "unknown",
         usable: true,
       },
     ];
@@ -843,14 +865,25 @@ export class MockSocialProvider implements SocialProvider {
   async boostPost(input: { body: Record<string, unknown>; idempotencyKey: string }) {
     const id = idFrom("mock_campaign", input.idempotencyKey);
     const budget = input.body.budget as { amount: number; type: "daily" | "lifetime" } | undefined;
+    // Meta boosts name the ads connection; LinkedIn and Pinterest name the posting account.
+    const accountId = String(input.body.accountId ?? "");
+    const conn = [...this.adConnections.values()].find(
+      (c) => c.id === accountId || c.parentAccountId === accountId,
+    );
+    const platform =
+      conn?.platform === "linkedinads"
+        ? "linkedin"
+        : conn?.platform === "pinterestads"
+          ? "pinterest"
+          : "facebook";
     this.adCampaigns.set(id, {
       id,
-      connectionId: String(input.body.accountId ?? ""),
-      platform: "facebook",
+      connectionId: conn?.id ?? accountId,
+      platform,
       name: String(input.body.name ?? "Boost"),
       status: "pending_review",
       budget: budget ?? null,
-      currency: "PHP",
+      currency: platform === "facebook" ? "PHP" : "USD",
       spend: 0,
       reach: 0,
       clicks: 0,

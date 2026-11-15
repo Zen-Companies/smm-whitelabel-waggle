@@ -872,6 +872,19 @@ export interface SocialProvider {
   connectMetaAds(
     input: { profileId: string; facebookAccountId: string; redirectUrl: string } & CallOptions,
   ): Promise<{ connectionId: string } | { authUrl: string }>;
+  /**
+   * Connects LinkedIn or Pinterest ads (T79b). The ads connection reuses the posting account's
+   * sign-in, so normally no screen is shown; `needsReconnect` when the posting account has to
+   * sign in again first (its token can't reach ad accounts). We never follow a partner link here.
+   */
+  connectSameTokenAds(
+    input: {
+      profileId: string;
+      platform: "linkedin" | "pinterest";
+      postingAccountId: string;
+      redirectUrl: string;
+    } & CallOptions,
+  ): Promise<{ connectionId: string } | { needsReconnect: true }>;
   /** The profile's ads connections. */
   listAdConnections(input: { profileId: string } & CallOptions): Promise<AdConnection[]>;
   listAdAccounts(input: { connectionId: string } & CallOptions): Promise<AdAccount[]>;

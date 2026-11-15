@@ -1,10 +1,15 @@
 // Boost a post (T79, design "Posts · Ads"): the owner picks what they want, who sees it, a daily
-// budget and how many days; Waggle sends Meta one boost (`POST /v1/ads/boost`) that Meta reviews
-// before it runs. Money is whole units of the ad account's currency, billed by Meta, never us.
+// budget and how many days; Waggle sends the network one boost (`POST /v1/ads/boost`) that it
+// reviews before it runs. Money is whole units of the ad account's currency, billed by the
+// network, never us. T79b adds LinkedIn (Company Page posts) and Pinterest (Pins).
+
+import { AD_NETWORKS, networkOfPlatform, type AdNetwork } from "./networks";
 
 export const BOOST_GOALS = {
   reach: "More people see it",
   visits: "Visits to my site",
+  engage: "Likes and comments",
+  video: "Video views",
   messages: "Messages",
   leads: "Leads (a form)",
 } as const;
@@ -12,18 +17,22 @@ export type BoostGoal = keyof typeof BOOST_GOALS;
 
 export const MAX_BOOST_DAYS = 30;
 
+export type BoostPlatform = "facebook" | "instagram" | "linkedin" | "pinterest";
+
 export type BoostInput = {
   /** The Zernio post id. */
   postId: string;
-  postPlatform: "facebook" | "instagram";
+  postPlatform: BoostPlatform;
+  network: AdNetwork;
   adAccountId: string;
   goal: BoostGoal;
   linkUrl: string | null;
   leadFormId: string | null;
   /** ISO 3166-1 alpha-2. */
   country: string;
-  ageMin: number;
-  ageMax: number;
+  /** Null where the network doesn't target by age (LinkedIn). */
+  ageMin: number | null;
+  ageMax: number | null;
   daily: number;
   days: number;
 };
@@ -35,18 +44,31 @@ const int = (v: FormDataEntryValue | null) => {
   return Number.isInteger(n) ? n : NaN;
 };
 
-export function parseBoostForm(f: FormData, opts: { minDailyBudget: number | null }): Parsed {
-  const [postId, platform] = String(f.get("post") ?? "").split("|");
-  if (!postId || (platform !== "facebook" && platform !== "instagram")) {
-    return { ok: false, field: "post", error: "Pick a post to boost." };
-  }
+/** The post field is `<zernio post id>|<platform>`; null when it isn't one we boost. */
+export function readBoostPost(
+  v: FormDataEntryValue | null,
+): { postId: string; platform: BoostPlatform; network: AdNetwork } | null {
+  const [postId, platform] = String(v ?? "").split("|");
+  const network = platform ? networkOfPlatform(platform) : null;
+  if (!postId || !network) return null;
+  return { postId, platform: platform as BoostPlatform, network };
+}
+
+export function parseBoostForm(f: FormData, opts: { minDailyBudget: number }): Parsed {
+  const post = readBoostPost(f.get("post"));
+  if (!post) return { ok: false, field: "post", error: "Pick a post to boost." };
+  const net = AD_NETWORKS[post.network];
   const adAccountId = String(f.get("adAccountId") ?? "");
   if (!adAccountId) return { ok: false, field: "adAccountId", error: "Pick an ad account." };
   const goal = String(f.get("goal") ?? "") as BoostGoal;
-  if (!(goal in BOOST_GOALS)) return { ok: false, field: "goal", error: "Pick what you want." };
+  if (!(net.goals as readonly string[]).includes(goal)) {
+    return { ok: false, field: "goal", error: "Pick what you want." };
+  }
 
+  // Only Meta takes a separate link; LinkedIn and Pinterest send people to the post's own link.
   const linkUrl = String(f.get("linkUrl") ?? "").trim();
-  if (goal === "visits" && !/^https:\/\/\S+\.\S+/.test(linkUrl)) {
+  const needsLink = goal === "visits" && post.network === "meta";
+  if (needsLink && !/^https:\/\/\S+\.\S+/.test(linkUrl)) {
     return {
       ok: false,
       field: "linkUrl",
@@ -64,13 +86,17 @@ export function parseBoostForm(f: FormData, opts: { minDailyBudget: number | nul
   const country = String(f.get("country") ?? "").toUpperCase();
   if (!/^[A-Z]{2}$/.test(country)) return { ok: false, field: "country", error: "Pick a country." };
 
-  const ageMin = int(f.get("ageMin"));
-  const ageMax = int(f.get("ageMax"));
-  if (!(ageMin >= 18 && ageMax <= 65 && ageMin <= ageMax)) {
-    return { ok: false, field: "age", error: "Ages go from 18 to 65, youngest first." };
+  let ageMin: number | null = null;
+  let ageMax: number | null = null;
+  if (net.ages) {
+    ageMin = int(f.get("ageMin"));
+    ageMax = int(f.get("ageMax"));
+    if (!(ageMin >= 18 && ageMax <= 65 && ageMin <= ageMax)) {
+      return { ok: false, field: "age", error: "Ages go from 18 to 65, youngest first." };
+    }
   }
   const daily = int(f.get("daily"));
-  const min = opts.minDailyBudget ?? 1;
+  const min = opts.minDailyBudget;
   if (!(daily >= min)) {
     return {
       ok: false,
@@ -85,11 +111,12 @@ export function parseBoostForm(f: FormData, opts: { minDailyBudget: number | nul
   return {
     ok: true,
     value: {
-      postId,
-      postPlatform: platform,
+      postId: post.postId,
+      postPlatform: post.platform,
+      network: post.network,
       adAccountId,
       goal,
-      linkUrl: goal === "visits" ? linkUrl : null,
+      linkUrl: needsLink ? linkUrl : null,
       leadFormId: goal === "leads" ? leadFormId : null,
       country,
       ageMin,
@@ -100,28 +127,37 @@ export function parseBoostForm(f: FormData, opts: { minDailyBudget: number | nul
   };
 }
 
-/** The boost request (Meta shape: nested budget, schedule and targeting). */
+/**
+ * The boost request (nested budget, schedule and targeting). `accountId` is the Meta ads
+ * connection on Meta (T79a), and the posting account (LinkedIn Page, Pinterest) elsewhere:
+ * docs.zernio.com/platforms/linkedin-ads/boost.
+ */
 export function toBoostBody(
   v: BoostInput,
-  ctx: { connectionId: string; name: string; now: Date },
+  ctx: { accountId: string; name: string; now: Date },
 ): Record<string, unknown> {
   const end = new Date(ctx.now.getTime() + v.days * 24 * 60 * 60 * 1000);
   const goal = {
     reach: "awareness",
     visits: "traffic",
+    engage: "engagement",
+    video: "video_views",
     messages: "engagement",
     leads: "lead_generation",
   }[v.goal];
   return {
     postId: v.postId,
-    accountId: ctx.connectionId,
+    accountId: ctx.accountId,
     adAccountId: v.adAccountId,
     name: ctx.name.slice(0, 100),
     goal,
     budget: { amount: v.daily, type: "daily" },
     schedule: { startDate: ctx.now.toISOString(), endDate: end.toISOString() },
-    targeting: { ageMin: v.ageMin, ageMax: v.ageMax, countries: [v.country] },
-    ...(v.goal === "visits" ? { linkUrl: v.linkUrl, callToAction: "LEARN_MORE" } : {}),
+    targeting: {
+      ...(v.ageMin !== null && v.ageMax !== null ? { ageMin: v.ageMin, ageMax: v.ageMax } : {}),
+      countries: [v.country],
+    },
+    ...(v.linkUrl ? { linkUrl: v.linkUrl, callToAction: "LEARN_MORE" } : {}),
     ...(v.goal === "messages"
       ? { callToAction: v.postPlatform === "instagram" ? "INSTAGRAM_MESSAGE" : "MESSAGE_PAGE" }
       : {}),
