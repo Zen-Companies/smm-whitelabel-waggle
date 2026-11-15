@@ -5,11 +5,17 @@ import { Button } from "@/components/ui/button";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
-import type { AdCampaignSummary, AdConnection, AdRuleSummary } from "@/lib/social/types";
+import type { AdAccount, AdCampaignSummary, AdConnection, AdRuleSummary } from "@/lib/social/types";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { connectMetaAdsAction, connectNetworkAdsAction } from "./actions";
 import { BoostForm, CampaignRow, SafetyRules, type BoostablePost } from "./ads-panels";
-import { adConnections, networkAdAccounts, type NetworkAdAccount } from "./connection";
+import { ChatGptAdForm, ChatGptBudgetForm, ChatGptConnectForm } from "./chatgpt-panels";
+import {
+  adConnections,
+  networkAdAccounts,
+  openAiConnection,
+  type NetworkAdAccount,
+} from "./connection";
 import {
   AD_NETWORK_IDS,
   AD_NETWORKS,
@@ -65,13 +71,19 @@ export async function AdsView({
   let campaigns: AdCampaignSummary[] = [];
   let rules: AdRuleSummary[] = [];
   let leadForms: { id: string; name: string }[] = [];
+  // T79c: ChatGPT ads, connected with a key; campaigns join the list above.
+  let openai: AdConnection | null = null;
+  let openaiAccount: AdAccount | null = null;
   let unavailable = false;
   if (tenant.zernioProfileId) {
     try {
-      conns = await adConnections(tenant.zernioProfileId);
+      [conns, openai] = await Promise.all([
+        adConnections(tenant.zernioProfileId),
+        openAiConnection(tenant.zernioProfileId),
+      ]);
       const social = getSocialProvider();
       const signal = AbortSignal.timeout(15_000);
-      const list = Object.values(conns);
+      const list = [...Object.values(conns), ...(openai ? [openai] : [])];
       const [a, c, r, f] = await Promise.all([
         networkAdAccounts(conns, signal),
         Promise.all(list.map((x) => social.listAdCampaigns({ connectionId: x.id, signal }))),
@@ -82,6 +94,10 @@ export async function AdsView({
       ]);
       accounts = a;
       campaigns = c.flat();
+      if (openai) {
+        const oa = await social.listAdAccounts({ connectionId: openai.id, signal });
+        openaiAccount = oa.find((x) => x.usable) ?? oa[0] ?? null;
+      }
       rules = r.flat();
       leadForms = f;
     } catch (error) {
@@ -138,17 +154,26 @@ export async function AdsView({
         <p className="danger-box">Ads couldn&apos;t be loaded right now. Try again in a moment.</p>
       )}
 
+      {(connected.length > 0 || openai) &&
+        (campaigns.length ? (
+          <ul className="card divide-line flex flex-col divide-y" aria-label="Your ads">
+            {campaigns.map((c) => (
+              <CampaignRow key={`${c.platform}:${c.id}`} c={c} canEdit={canEdit}>
+                {c.platform === "openai" && (
+                  <ChatGptBudgetForm id={c.id} current={c.budget?.amount ?? null} />
+                )}
+              </CampaignRow>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-ink-2">No ads yet.</p>
+        ))}
+      {openai && canEdit && openaiAccount && (
+        <ChatGptAdForm currency={openaiAccount.currency} account={openaiAccount.name} />
+      )}
+
       {connected.length > 0 && (
         <>
-          {campaigns.length ? (
-            <ul className="card divide-line flex flex-col divide-y" aria-label="Your boosts">
-              {campaigns.map((c) => (
-                <CampaignRow key={`${c.platform}:${c.id}`} c={c} canEdit={canEdit} />
-              ))}
-            </ul>
-          ) : (
-            <p className="text-ink-2">No boosts yet.</p>
-          )}
           {canEdit && (
             <BoostForm
               posts={boostable}
@@ -222,6 +247,30 @@ export async function AdsView({
               </li>
             );
           })}
+          <li className="flex flex-col gap-2 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <b className="flex-1 font-semibold">ChatGPT ads</b>
+              {openai ? (
+                <span className="text-success font-semibold">Connected</span>
+              ) : !canEdit ? (
+                <span className="text-ink-3">Ask an owner or admin to connect it</span>
+              ) : null}
+            </div>
+            {openai && openaiAccount && (
+              <div className="flex flex-wrap items-center gap-2 pl-3">
+                <span>
+                  {openaiAccount.name} ({openaiAccount.currency})
+                </span>
+                <span className="text-ink-3">
+                  {openaiAccount.usable ? "Ready" : "Can't be used right now"}
+                </span>
+              </div>
+            )}
+            {!openai && canEdit && !unavailable && <ChatGptConnectForm />}
+            <span className="meta">
+              Small ads inside ChatGPT answers. You write them here; there&apos;s no post to boost.
+            </span>
+          </li>
           {ADS_COMING_SOON.map((label) => (
             <li key={label} className="flex flex-wrap items-center gap-2 py-3">
               <b className="flex-1 font-semibold">{label}</b>

@@ -40,11 +40,21 @@ const COUNTRIES: [string, string][] = [
 const n = (v: number) => v.toLocaleString("en");
 
 /** One boost: budget, results so far, and Pause / Resume. */
-export function CampaignRow({ c, canEdit }: { c: AdCampaignSummary; canEdit: boolean }) {
+export function CampaignRow({
+  c,
+  canEdit,
+  children,
+}: {
+  c: AdCampaignSummary;
+  canEdit: boolean;
+  /** T79c: extra controls for the row (ChatGPT's daily budget). */
+  children?: React.ReactNode;
+}) {
   const [state, act, pending] = useActionState<AdsState, FormData>(setCampaignStatusAction, {});
   const s = STATUS[c.status];
   const network = networkOfCampaign(c.platform);
-  const reviewer = network ? AD_NETWORKS[network].label : "the network";
+  const reviewer =
+    c.platform === "openai" ? "ChatGPT" : network ? AD_NETWORKS[network].label : "the network";
   const cur = c.currency ?? "USD";
   const budget = c.budget
     ? `${money(c.budget.amount, cur)}${c.budget.type === "daily" ? "/day" : " total"}`
@@ -60,7 +70,7 @@ export function CampaignRow({ c, canEdit }: { c: AdCampaignSummary; canEdit: boo
     <li className="flex flex-wrap items-center gap-3 px-4 py-3.5">
       <div className="flex min-w-0 flex-1 flex-col">
         <b className="truncate font-semibold">
-          {network && network !== "meta" ? `${reviewer} · ` : ""}
+          {(network && network !== "meta") || c.platform === "openai" ? `${reviewer} · ` : ""}
           {c.name}
         </b>
         <span className="meta">{[budget, results].filter(Boolean).join(" · ")}</span>
@@ -82,6 +92,7 @@ export function CampaignRow({ c, canEdit }: { c: AdCampaignSummary; canEdit: boo
           </Button>
         </form>
       )}
+      {canEdit && children}
     </li>
   );
 }

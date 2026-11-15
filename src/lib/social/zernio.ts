@@ -2391,6 +2391,58 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async connectOpenAiAds(input: { profileId: string; apiKey: string; signal?: AbortSignal }) {
+    return call("connectOpenAIAdsCredentials", async (withFetch) => {
+      const { data } = await this.zernio.connect.connectOpenAIAdsCredentials(
+        withFetch({
+          signal: input.signal,
+          body: { apiKey: input.apiKey, profileId: input.profileId },
+        }),
+      );
+      const r = parse(
+        z.object({ accountId: z.string().min(1), adAccountName: z.string().nullish() }),
+        data,
+        "connectOpenAIAdsCredentials",
+      );
+      return { connectionId: r.accountId, name: r.adAccountName ?? "ChatGPT ads" };
+    });
+  }
+
+  async createAd(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("createStandaloneAd", async (withFetch) => {
+      const { data } = await this.zernio.adcampaigns.createStandaloneAd(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      const ad = parse(
+        z.object({ ad: z.object({ _id: z.string().min(1), status: adCampaignStatusSchema }) }),
+        data,
+        "createStandaloneAd",
+      ).ad;
+      return { id: ad._id, status: ad.status };
+    });
+  }
+
+  async setAdCampaignBudget(input: {
+    campaignId: string;
+    platform: string;
+    amount: number;
+    type: "daily";
+    signal?: AbortSignal;
+  }) {
+    await call("updateAdCampaign", async (withFetch) => {
+      await this.zernio.adcampaigns.updateAdCampaign(
+        withFetch({
+          signal: input.signal,
+          path: { campaignId: input.campaignId },
+          body: {
+            platform: input.platform as never,
+            budget: { amount: input.amount, type: input.type },
+          },
+        } as never),
+      );
+    });
+  }
+
   async listAdConnections(input: { profileId: string; signal?: AbortSignal }) {
     return call("listAdConnections", async (withFetch) => {
       const { data } = await this.zernio.accounts.listAccounts(

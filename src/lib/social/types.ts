@@ -897,6 +897,26 @@ export interface SocialProvider {
       index: number;
     } & CallOptions,
   ): Promise<string | null>;
+  /**
+   * T79c: connects ChatGPT ads with a key from ChatGPT Ads Manager (no sign-in screen). The key is
+   * passed straight through and never kept or logged by Waggle.
+   */
+  connectOpenAiAds(
+    input: { profileId: string; apiKey: string } & CallOptions,
+  ): Promise<{ connectionId: string; name: string }>;
+  /** T79c: creates an ad from scratch (`POST /v1/ads/create`); sent once, never retried. */
+  createAd(
+    input: { body: Record<string, unknown> } & CallOptions,
+  ): Promise<{ id: string; status: AdCampaignStatus }>;
+  /** T79c: replaces a campaign's spend cap (`PUT /v1/ads/campaigns/{id}`, `budget`). */
+  setAdCampaignBudget(
+    input: {
+      campaignId: string;
+      platform: string;
+      amount: number;
+      type: "daily";
+    } & CallOptions,
+  ): Promise<void>;
   /** The profile's ads connections. */
   listAdConnections(input: { profileId: string } & CallOptions): Promise<AdConnection[]>;
   listAdAccounts(input: { connectionId: string } & CallOptions): Promise<AdAccount[]>;

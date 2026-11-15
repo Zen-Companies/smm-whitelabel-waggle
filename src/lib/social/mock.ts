@@ -848,6 +848,56 @@ export class MockSocialProvider implements SocialProvider {
     return `${process.env.APP_URL ?? "http://localhost:3000"}/brands/instagram.png`;
   }
 
+  /** T79c: any key of 10+ characters connects; "bad-key…" is refused like a wrong key. */
+  async connectOpenAiAds(input: { profileId: string; apiKey: string }) {
+    if (input.apiKey.startsWith("bad-key")) {
+      throw new SocialProviderError("Zernio connectOpenAIAdsCredentials: 401", {
+        ambiguous: false,
+        status: 401,
+      });
+    }
+    const id = idFrom("mock_openaiads", input.profileId);
+    this.adConnections.set(`${input.profileId}|openaiads`, {
+      id,
+      platform: "openaiads",
+      name: "Your ChatGPT ad account",
+      parentAccountId: null,
+      active: true,
+    });
+    return { connectionId: id, name: "Your ChatGPT ad account" };
+  }
+
+  async createAd(input: { body: Record<string, unknown> }) {
+    const accountId = String(input.body.accountId ?? "");
+    const id = idFrom(
+      "mock_campaign",
+      accountId,
+      String(input.body.name),
+      String(this.adCampaigns.size),
+    );
+    this.adCampaigns.set(id, {
+      id,
+      connectionId: accountId,
+      platform: "openai",
+      name: String(input.body.name ?? "Ad"),
+      status: "pending_review",
+      budget: {
+        amount: Number(input.body.budgetAmount ?? 1),
+        type: input.body.budgetType === "lifetime" ? "lifetime" : "daily",
+      },
+      currency: "USD",
+      spend: 0,
+      reach: 0,
+      clicks: 0,
+    });
+    return { id, status: "pending_review" as const };
+  }
+
+  async setAdCampaignBudget(input: { campaignId: string; amount: number; type: "daily" }) {
+    const c = this.adCampaigns.get(input.campaignId);
+    if (c) c.budget = { amount: input.amount, type: input.type };
+  }
+
   async listAdConnections(input: { profileId: string }): Promise<AdConnection[]> {
     return [...this.adConnections.entries()]
       .filter(([key]) => key.startsWith(`${input.profileId}|`))
@@ -855,6 +905,18 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   async listAdAccounts(input: { connectionId: string }): Promise<AdAccount[]> {
+    if (input.connectionId.startsWith("mock_openaiads")) {
+      return [
+        {
+          id: `acct_${input.connectionId.slice(-8)}`,
+          name: "Your ChatGPT ad account",
+          currency: "USD",
+          minDailyBudget: null,
+          billing: "unknown",
+          usable: true,
+        },
+      ];
+    }
     const meta = input.connectionId.startsWith("mock_metaads");
     return [
       {

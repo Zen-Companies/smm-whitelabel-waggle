@@ -9,7 +9,13 @@ import { getSocialProvider } from "@/lib/social";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cpcRuleBody, parseBoostForm, readBoostPost, toBoostBody } from "./boost";
-import { adConnections, networkAdAccounts } from "./connection";
+import {
+  CHATGPT_IMAGE_MAX_BYTES,
+  CHATGPT_IMAGE_TYPES,
+  parseChatGptAd,
+  toChatGptAdBody,
+} from "./chatgpt";
+import { adConnections, networkAdAccounts, openAiConnection } from "./connection";
 import { AD_NETWORKS, isAdNetwork, minDailyFor, type AdNetwork } from "./networks";
 
 export type AdsState = { error?: string; field?: string; savedAt?: number; network?: AdNetwork };
@@ -192,7 +198,12 @@ export async function setCampaignStatusAction(
   const id = String(formData.get("id") ?? "");
   const status = formData.get("status") === "active" ? "active" : "paused";
   try {
-    const conns = Object.values(await adConnections(tenant.zernioProfileId));
+    const [byNetwork, openai] = await Promise.all([
+      adConnections(tenant.zernioProfileId),
+      openAiConnection(tenant.zernioProfileId),
+    ]);
+    // T79c: ChatGPT campaigns pause and resume here too.
+    const conns = [...Object.values(byNetwork), ...(openai ? [openai] : [])];
     const social = getSocialProvider();
     const signal = AbortSignal.timeout(15_000);
     const campaigns = (
@@ -297,6 +308,175 @@ export async function changeRuleAction(_prev: AdsState, formData: FormData): Pro
     actor: tenant.userId,
     details: { ruleId: id, op },
   });
+  revalidatePath(ADS);
+  return { savedAt: Date.now() };
+}
+
+// --- ChatGPT ads (T79c, board "Ads · ChatGPT") -------------------------------------------------
+
+/**
+ * Connect ChatGPT ads with a key from ChatGPT Ads Manager. Owners and admins only, because the
+ * key can change campaigns. The key goes straight to the provider; it is never stored, logged or
+ * put in the audit row.
+ */
+export async function connectChatGptAdsAction(
+  _prev: AdsState,
+  formData: FormData,
+): Promise<AdsState> {
+  const apiKey = String(formData.get("apiKey") ?? "").trim();
+  if (apiKey.length < 10 || apiKey.length > 500) {
+    return { error: "Paste the key from ChatGPT Ads Manager → Settings.", field: "apiKey" };
+  }
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  try {
+    const r = await getSocialProvider().connectOpenAiAds({
+      profileId: tenant.zernioProfileId,
+      apiKey,
+      signal: AbortSignal.timeout(20_000),
+    });
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "ads_connect_started",
+      actor: tenant.userId,
+      details: { platform: "openaiads", connectionId: r.connectionId },
+    });
+  } catch (error) {
+    const s = error instanceof SocialProviderError ? error.details.status : undefined;
+    if (s === 401 || s === 400) {
+      return {
+        error: "That key didn't work. Copy it again from ChatGPT Ads Manager → Settings.",
+        field: "apiKey",
+      };
+    }
+    if (s === 402) {
+      return {
+        error: "Connecting ads needs a payment method on file. Contact us and we'll sort it out.",
+      };
+    }
+    // Ids only: never the key (rule 10 and T79c).
+    Sentry.captureException(new Error("connectChatGptAds failed"), {
+      extra: { tenantId: tenant.id, status: s ?? null },
+    });
+    return { error: "ChatGPT ads couldn't be connected right now. Try again in a moment." };
+  }
+  revalidatePath(ADS);
+  return { savedAt: Date.now() };
+}
+
+/** A new ChatGPT chat card ad: visits, a daily budget, runs until paused. Sent once. */
+export async function createChatGptAdAction(
+  _prev: AdsState,
+  formData: FormData,
+): Promise<AdsState> {
+  const parsed = parseChatGptAd(formData);
+  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+  const photo = formData.get("photo");
+  if (!(photo instanceof File) || photo.size === 0) {
+    return { error: "Add a photo for the ad.", field: "photo" };
+  }
+  if (!(CHATGPT_IMAGE_TYPES as readonly string[]).includes(photo.type)) {
+    return { error: "Use a JPG, PNG or WebP photo.", field: "photo" };
+  }
+  if (photo.size > CHATGPT_IMAGE_MAX_BYTES) {
+    return { error: "Use a photo under 5 MB.", field: "photo" };
+  }
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  try {
+    const conn = await openAiConnection(tenant.zernioProfileId);
+    if (!conn) return { error: "Connect ChatGPT ads first." };
+    const social = getSocialProvider();
+    const accounts = await social.listAdAccounts({
+      connectionId: conn.id,
+      signal: AbortSignal.timeout(15_000),
+    });
+    const account = accounts.find((a) => a.usable);
+    if (!account) return { error: "Your ChatGPT ad account can't be used right now." };
+    const { publicUrl } = await social.uploadMedia({
+      filename: photo.name || "ad.png",
+      contentType: photo.type,
+      bytes: new Uint8Array(await photo.arrayBuffer()),
+      signal: AbortSignal.timeout(60_000),
+    });
+    // One attempt: a create isn't safe to repeat (it could make a second ad).
+    const ad = await social.createAd({
+      body: toChatGptAdBody(parsed.value, {
+        connectionId: conn.id,
+        adAccountId: account.id,
+        imageUrl: publicUrl,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    });
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "ad_created",
+      actor: tenant.userId,
+      details: {
+        adId: ad.id,
+        network: "openai",
+        daily: parsed.value.daily,
+        country: parsed.value.country,
+        currency: account.currency,
+      },
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "createChatGptAd" } });
+    const s = error instanceof SocialProviderError ? error.details.status : undefined;
+    return {
+      error:
+        s === 422
+          ? "ChatGPT didn't take that budget. It may need a higher daily amount; try again with more."
+          : "ChatGPT didn't take the ad. Check the ad account in ChatGPT Ads Manager, then try again.",
+    };
+  }
+  revalidatePath(ADS);
+  return { savedAt: Date.now() };
+}
+
+/** Change a ChatGPT ad's daily budget (one of only two edits ChatGPT allows after creation). */
+export async function setChatGptBudgetAction(
+  _prev: AdsState,
+  formData: FormData,
+): Promise<AdsState> {
+  const id = String(formData.get("id") ?? "");
+  const daily = Number(String(formData.get("daily") ?? "").trim());
+  if (!(Number.isInteger(daily) && daily >= 1 && daily <= 100_000)) {
+    return { error: "Use a whole amount of at least 1.", field: "daily" };
+  }
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant?.zernioProfileId) return { error: NOT_ALLOWED };
+  try {
+    const conn = await openAiConnection(tenant.zernioProfileId);
+    const social = getSocialProvider();
+    const campaigns = conn
+      ? await social.listAdCampaigns({ connectionId: conn.id, signal: AbortSignal.timeout(15_000) })
+      : [];
+    const campaign = campaigns.find((c) => c.id === id && c.platform === "openai");
+    if (!campaign) return { error: "Something went wrong. Reload the page." };
+    await social.setAdCampaignBudget({
+      campaignId: id,
+      platform: "openai",
+      amount: daily,
+      type: "daily",
+      signal: AbortSignal.timeout(15_000),
+    });
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "ad_budget_changed",
+      actor: tenant.userId,
+      details: { campaignId: id, daily },
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "setChatGptBudget" } });
+    const s = error instanceof SocialProviderError ? error.details.status : undefined;
+    return {
+      error:
+        s === 422
+          ? "ChatGPT keeps this ad's budget as it was set. Make a new ad for a different kind of budget."
+          : "Couldn't change it right now. Try again.",
+    };
+  }
   revalidatePath(ADS);
   return { savedAt: Date.now() };
 }

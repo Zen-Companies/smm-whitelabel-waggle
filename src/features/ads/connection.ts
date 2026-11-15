@@ -21,6 +21,15 @@ export async function adConnections(
   return out;
 }
 
+/** T79c: the brand's ChatGPT ads connection (`openaiads`); null until a key is connected. */
+export async function openAiConnection(profileId: string): Promise<AdConnection | null> {
+  const all = await getSocialProvider().listAdConnections({
+    profileId,
+    signal: AbortSignal.timeout(15_000),
+  });
+  return all.find((c) => c.platform === "openaiads" && c.active) ?? null;
+}
+
 /** The brand's Meta ads connection; null until Meta ads is connected. */
 export async function metaAdsConnection(profileId: string): Promise<AdConnection | null> {
   return (await adConnections(profileId)).meta ?? null;
