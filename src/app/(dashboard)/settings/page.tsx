@@ -1,9 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AccountSection } from "@/features/account";
 import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
-import { AutonomyCard } from "@/features/approvals";
 import { AssistantsCard } from "@/features/mcp";
 import { listMyOrgs, OrgBillingSection, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { BusinessSettings, getCurrentTenant } from "@/features/tenants";
@@ -16,17 +16,17 @@ import { cn } from "cn";
 export const metadata = { title: "Settings" };
 
 // Design v2: sections, not one long scroll. T54–T57 (design v3 "Organizations"): two groups,
-// the organization's (general, team, billing) and the open brand's.
+// the organization's (general, team, plan) and the open brand's. T74c (design "7 · Settings"):
+// the redesign's names; how Waggle replies lives in Teach Waggle (?section=replies goes there).
 const ORG_SECTIONS = [
   { key: "general", label: "General" },
   { key: "team", label: "Team" },
-  { key: "billing", label: "Billing" },
+  { key: "billing", label: "Your plan" },
 ] as const;
 const BRAND_SECTIONS = [
-  { key: "accounts", label: "Accounts" },
-  { key: "replies", label: "Replies" },
-  { key: "notifications", label: "Notifications" },
-  { key: "business", label: "Business" },
+  { key: "accounts", label: "Connected accounts" },
+  { key: "notifications", label: "Tell me when" },
+  { key: "business", label: "Business profile" },
   // MCP (docs/mcp/PLAN.md §4.2): per login, not per brand.
   { key: "ai-assistants", label: "AI assistants" },
   // T67: only listed while the brand has WhatsApp connected.
@@ -68,6 +68,7 @@ function NavLink({
 
 async function Body({ searchParams }: PageProps<"/settings">) {
   const params = await searchParams;
+  if (params.section === "replies") redirect("/teach#replies");
   const section: Section = ALL.find((s) => s === params.section) ?? "accounts";
   const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
   const org = orgs.find((o) => o.id === tenant.organizationId);
@@ -81,7 +82,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
       <nav aria-label="Settings sections" className="flex flex-col gap-0.5 md:w-56 md:shrink-0">
         <span className="text-ink-4 truncate px-3 pt-1 pb-1 text-xs">You</span>
         <NavLink href="/settings?section=account" active={section === "account"}>
-          Account
+          Your account
         </NavLink>
         <span className="text-ink-4 truncate px-3 pt-4 pb-1 text-xs">
           Organization · {org?.name}
@@ -114,9 +115,15 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         {section === "team" && <TeamSection orgId={tenant.organizationId} />}
         {section === "billing" && <OrgBillingSection orgId={tenant.organizationId} />}
         {section === "accounts" && <AccountsCard searchParams={searchParams} />}
-        {section === "replies" && <AutonomyCard />}
         {section === "notifications" && <NotificationSettings />}
-        {section === "business" && <BusinessSettings />}
+        {section === "business" && (
+          <div className="flex flex-col gap-4">
+            <BusinessSettings />
+            <Link href="/teach" className="text-honey-text text-sm font-medium underline">
+              Write answers in Teach Waggle
+            </Link>
+          </div>
+        )}
         {section === "ai-assistants" && <AssistantsCard />}
         {section === "whatsapp" && <WhatsAppTemplatesSection />}
         {section === "phone" && hasPhone && <PhoneSection />}
@@ -129,7 +136,16 @@ async function Body({ searchParams }: PageProps<"/settings">) {
 export default function SettingsPage(props: PageProps<"/settings">) {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8">
-      <h1 className="page-title">Settings</h1>
+      <div className="flex flex-col gap-1">
+        <h1 className="page-title">Settings</h1>
+        <p className="text-ink-2">
+          How Waggle replies lives in{" "}
+          <Link href="/teach" className="text-honey-text font-medium underline">
+            Teach Waggle
+          </Link>
+          . Everything else is here.
+        </p>
+      </div>
       <Suspense fallback={<div className="skeleton h-96 rounded-xl" />}>
         <Body {...props} />
       </Suspense>

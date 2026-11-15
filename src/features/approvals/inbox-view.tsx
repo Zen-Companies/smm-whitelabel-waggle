@@ -438,8 +438,8 @@ export async function InboxView({
       {settings?.replies_paused && (
         <p role="status" className="banner">
           Replies are paused. Nothing is sent until you turn them back on in{" "}
-          <Link href="/settings?section=replies" className="font-semibold underline">
-            Settings → Replies
+          <Link href="/teach" className="font-semibold underline">
+            Teach Waggle
           </Link>
           .
         </p>
