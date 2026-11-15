@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PostsHeader } from "@/features/publishing";
 import * as Sentry from "@sentry/nextjs";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
@@ -192,12 +193,7 @@ export async function ShopPage({ site, tab: tabParam }: { site?: string; tab?: s
   const href = (s: string, t: Tab) => `/posts/shop?site=${encodeURIComponent(s)}&tab=${t}`;
   return (
     <>
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <h1 className="page-title">Shop</h1>
-        <Link href="/posts" className="text-honey-text text-sm font-medium underline">
-          Social posts
-        </Link>
-      </header>
+      <PostsHeader />
       {failed ? (
         <p className="danger-box">
           Your shop couldn&apos;t be loaded right now. Try again in a moment.

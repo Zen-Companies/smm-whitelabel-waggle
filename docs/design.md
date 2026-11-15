@@ -76,6 +76,16 @@ Text on honey is always `#17140F`, in both themes.
 - **Reconnect bar:** one thin bar that says what it costs ("3 messages waiting"), never a big card on every page.
 - **Conversation:** customer bubbles `--subtle`; the draft card shows the reason chip, "Waggle's reply · from your answer …", Send / Edit / I'll answer it.
 
+### Beyond text (approved 16 Nov)
+
+Nothing is told apart by bold, size or underline alone. Five rules, shared pieces in `src/components/app/` (canvas: Built page, "Design decision (approved 16 Nov)"):
+
+1. **A card's action has an arrow** (`ActionLink`, `.action-link`): ink, semibold, `→`; a soft pill and a nudge on hover. "Plan posts →", "See all →". Never underlined.
+2. **Places are tabs** (`SectionTabs`, the `.tabs` style): a page's parts sit as tabs under its title (Posts: Calendar · Posting times · Ads · Blog · Shop). View controls (dates, Week · Month · List) get their own row. No rows of underlined links, no "← Back" links.
+3. **States are honeycomb cells** (`StateMark`, `StateLabel`): the word stays plain, a small hexagon beside it carries the meaning. Full honey = working, half = waiting, red outline with a bar = needs you (word in red), empty outline = off, dashed outline = coming soon. No pastel pills for states. Problems keep their action next to them ("Reconnect →").
+4. **Empty spots are an empty cell with one next step** (`EmptySpot`, `EmptyCell`, `.empty-slot`): the dashed hexagon with a plus, one sentence, at most one real button. Where it can be filled in place (a day in the week), the cell fills with honey on hover and says what it does. A whole empty page uses the bee.
+5. **A link inside a sentence sits on a honey highlight** (`.link-inline`): ink, semibold, a honey strip under the lower half; the strip fills the word on hover. Only inside sentences.
+
 ## 5. Feedback without toasts
 
 - **Sending:** the button shows "Sending…" and is disabled.

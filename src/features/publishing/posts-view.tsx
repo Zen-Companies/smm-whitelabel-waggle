@@ -21,6 +21,9 @@ import {
   type Month,
 } from "./calendar";
 import { ComposeCard } from "./compose-card";
+import { EmptyCell } from "@/components/app/empty-spot";
+import { StateLabel } from "@/components/app/state-mark";
+import { PostsHeader } from "./posts-header";
 import { platformLabel } from "@/lib/social/platforms";
 import { accountNames, loadPosts, loadReach, Post, PostsTable, type PostRow } from "./posts-list";
 
@@ -128,25 +131,8 @@ export async function PostsView({
 
   return (
     <>
-      <header className="flex flex-col gap-1">
-        <h1 className="page-title">Posts</h1>
-        <p className="text-ink-2">
-          Write once. Waggle posts it everywhere you pick, and answers the comments after.
-        </p>
-      </header>
+      <PostsHeader />
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <Link href="/posts/queue" className="text-honey-text text-sm font-medium underline">
-          Posting times
-        </Link>
-        <Link href="/posts/ads" className="text-honey-text text-sm font-medium underline">
-          Ads
-        </Link>
-        <Link href="/posts/blog" className="text-honey-text text-sm font-medium underline">
-          Blog
-        </Link>
-        <Link href="/posts/shop" className="text-honey-text text-sm font-medium underline">
-          Shop
-        </Link>
         {view === "week" && (
           <div className="flex flex-wrap items-center gap-1">
             <Link
@@ -172,7 +158,11 @@ export async function PostsView({
             >
               This week
             </Link>
-            <span className="meta">{weekSummary(weekPosts)}</span>
+            {weekPosts.length ? (
+              <span className="meta">{weekSummary(weekPosts)}</span>
+            ) : (
+              <StateLabel state="off">Nothing planned yet</StateLabel>
+            )}
           </div>
         )}
         {view === "month" && (
@@ -309,12 +299,26 @@ export async function PostsView({
                         </Link>
                       );
                     })}
-                    <Link
-                      href={url({ view, month, week, day: d })}
-                      className="text-ink-3 hover:text-honey-text mt-auto text-xs font-medium"
-                    >
-                      + Plan a post
-                    </Link>
+                    {list.length === 0 ? (
+                      // Rule 4 (option B): an empty day is one empty cell that fills on hover.
+                      <Link
+                        href={url({ view, month, week, day: d })}
+                        aria-label={`Plan a post for ${date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`}
+                        className="empty-slot"
+                      >
+                        <EmptyCell size={36} />
+                        <span className="empty-slot-text">Plan a post</span>
+                      </Link>
+                    ) : (
+                      <Link
+                        href={url({ view, month, week, day: d })}
+                        aria-label={`Plan another post for ${date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`}
+                        className="empty-slot mt-auto flex-none flex-row py-1.5"
+                      >
+                        <EmptyCell size={18} />
+                        <span className="empty-slot-text">Plan</span>
+                      </Link>
+                    )}
                   </section>
                 );
               })}

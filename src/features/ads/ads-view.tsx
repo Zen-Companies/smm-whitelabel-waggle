@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
 import { Button } from "@/components/ui/button";
 import { can } from "@/features/orgs";
+import { PostsHeader } from "@/features/publishing";
 import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { AdAccount, AdCampaignSummary, AdConnection, AdRuleSummary } from "@/lib/social/types";
@@ -133,13 +133,8 @@ export async function AdsView({
 
   return (
     <div className="flex max-w-[960px] flex-col gap-5">
+      <PostsHeader />
       <div className="flex flex-col gap-1">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <h1 className="page-title">Ads</h1>
-          <Link href="/posts" className="text-honey-text text-sm font-medium underline">
-            Back to posts
-          </Link>
-        </div>
         <p className="text-ink-2">
           Boost a post. Money goes to each network from your own ad account, not to Waggle.
         </p>

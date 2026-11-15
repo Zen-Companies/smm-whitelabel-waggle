@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { PostsHeader } from "@/features/publishing";
 import Link from "next/link";
 import * as Sentry from "@sentry/nextjs";
 import { can } from "@/features/orgs";
@@ -89,12 +90,7 @@ export async function BlogPage({
 
   return (
     <>
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <h1 className="page-title">Blog</h1>
-        <Link href="/posts" className="text-honey-text text-sm font-medium underline">
-          Social posts
-        </Link>
-      </header>
+      <PostsHeader />
       {failed ? (
         <p className="danger-box">
           Your blog couldn&apos;t be loaded right now. Try again in a moment.

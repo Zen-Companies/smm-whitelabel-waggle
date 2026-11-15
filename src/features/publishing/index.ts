@@ -10,3 +10,4 @@ export { PostsView } from "./posts-view";
 export { POST_MAX_ATTEMPTS, postErrorMessage, publishPost, publishQueuedPosts } from "./publish";
 export type { PublishResult } from "./publish";
 export { QueueView } from "./queue-view";
+export { PostsHeader } from "./posts-header";

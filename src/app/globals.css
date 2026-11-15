@@ -344,6 +344,105 @@
     font-weight: 500;
   }
 
+  /* Beyond text (design.md §4, approved 16 Nov). Rule 1: a card's action has an arrow. */
+  .action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: -6px -10px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 150ms ease-out;
+  }
+  .action-link:hover,
+  .action-link:focus-visible {
+    background: var(--subtle);
+  }
+  .action-link-arrow {
+    transition: transform 150ms ease-out;
+  }
+  .action-link:hover .action-link-arrow {
+    transform: translateX(3px);
+  }
+  /* Rule 5 (option B): a link inside a sentence sits on a honey highlight. */
+  .link-inline {
+    color: var(--ink);
+    font-weight: 600;
+    text-decoration: none;
+    padding: 0 2px;
+    border-radius: 3px;
+    background: linear-gradient(
+      transparent 58%,
+      color-mix(in srgb, var(--honey) 45%, transparent) 58%
+    );
+    transition: background 150ms ease-out;
+  }
+  .link-inline:hover,
+  .link-inline:focus-visible {
+    background: color-mix(in srgb, var(--honey) 45%, transparent);
+  }
+  /* Rule 4 (option B): the empty honeycomb cell; it fills with honey where it can be filled. */
+  .empty-cell-hex {
+    fill: none;
+    stroke: var(--ink-3);
+    transition:
+      fill 150ms ease-out,
+      stroke 150ms ease-out;
+  }
+  .empty-cell-plus {
+    stroke: var(--ink-2);
+  }
+  .empty-slot {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 12px;
+    color: var(--ink-3);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 150ms ease-out;
+  }
+  .empty-slot:hover,
+  .empty-slot:focus-visible {
+    color: var(--honey-text);
+  }
+  .empty-slot:hover .empty-cell-hex,
+  .empty-slot:focus-visible .empty-cell-hex {
+    fill: var(--honey-tint);
+    stroke: var(--honey);
+    stroke-dasharray: none;
+  }
+  .empty-slot .empty-slot-text {
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+  }
+  .empty-slot:hover .empty-slot-text,
+  .empty-slot:focus-visible .empty-slot-text {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .action-link,
+    .action-link-arrow,
+    .link-inline,
+    .empty-cell-hex,
+    .empty-slot,
+    .empty-slot .empty-slot-text {
+      transition: none;
+    }
+    .action-link:hover .action-link-arrow {
+      transform: none;
+    }
+  }
+
   /* Account-wide banner (design.md §4) */
   .banner {
     display: flex;
