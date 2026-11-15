@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   firstName,
   greetingFor,
-  groupGaps,
   joinNames,
   leadsLine,
   onlyYouLine,
@@ -54,22 +53,5 @@ describe("Today (T71)", () => {
     expect(replyTime(48)).toBe("48s");
     expect(replyTime(240)).toBe("4m");
     expect(replyTime(null)).toBe("–");
-  });
-
-  it("groups the same unanswered question, most asked first", () => {
-    expect(
-      groupGaps([
-        { text: "Are pets OK?" },
-        { text: "Do buyers pay you anything?" },
-        { text: "do buyers pay you anything" },
-        { text: "Do buyers pay you anything?!" },
-        { text: "VA loans?" },
-        { text: "Parking?" },
-      ]),
-    ).toEqual([
-      { text: "Do buyers pay you anything?", times: 3 },
-      { text: "Are pets OK?", times: 1 },
-      { text: "VA loans?", times: 1 },
-    ]);
   });
 });

@@ -14,8 +14,13 @@ import { AutonomyForm } from "./autonomy-form";
 import { PauseForm } from "./pause-form";
 import type { AutonomyMode } from "./policy";
 
-/** Reply autonomy (PRD F9) in Settings: the switches only. Practice and readiness: /lab (T35). */
-export async function AutonomyCard() {
+/**
+ * Reply autonomy (PRD F9): the switches. In Settings with the pause and a Lab link; in Teach
+ * Waggle (T73) under "How Waggle replies", where the pause sits in the page header and Try it is
+ * on the same page.
+ */
+export async function AutonomyCard({ variant = "settings" }: { variant?: "settings" | "teach" }) {
+  const teach = variant === "teach";
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
   const [{ data }, { data: settings }] = await Promise.all([
@@ -28,10 +33,12 @@ export async function AutonomyCard() {
     <section className="flex flex-col gap-4" aria-labelledby="autonomy-heading">
       <div>
         <h2 id="autonomy-heading" className="section-title">
-          Replies
+          {teach ? "How Waggle replies" : "Replies"}
         </h2>
         <p className="text-ink-2">
-          What Waggle does with each kind of message. Changes apply to the next message.
+          {teach
+            ? "Start with Ask me first. Switch once you trust it."
+            : "What Waggle does with each kind of message. Changes apply to the next message."}
         </p>
       </div>
       <RoleGate
@@ -39,7 +46,7 @@ export async function AutonomyCard() {
         role={tenant.role}
         what="the reply rules"
       >
-        <PauseForm paused={settings?.replies_paused ?? false} />
+        {!teach && <PauseForm paused={settings?.replies_paused ?? false} />}
         <div className="card flex flex-col divide-y">
           {CONFIGURABLE_CATEGORIES.map((category) => (
             <AutonomyForm
@@ -68,18 +75,20 @@ export async function AutonomyCard() {
         </div>
         <AutoHideForm on={settings?.auto_hide_spam ?? false} />
       </RoleGate>
-      <Link
-        href="/lab"
-        className="card hover:bg-subtle flex items-center gap-3 p-5 transition-colors duration-150"
-      >
-        <FlaskConical strokeWidth={1.75} className="size-5 shrink-0" aria-hidden />
-        <span className="flex flex-col">
-          <span className="font-semibold">Not sure yet? Try it in Lab</span>
-          <span className="text-ink-2 text-sm">
-            Try a message and see whether Waggle is ready to reply on its own.
+      {!teach && (
+        <Link
+          href="/lab"
+          className="card hover:bg-subtle flex items-center gap-3 p-5 transition-colors duration-150"
+        >
+          <FlaskConical strokeWidth={1.75} className="size-5 shrink-0" aria-hidden />
+          <span className="flex flex-col">
+            <span className="font-semibold">Not sure yet? Try it in Lab</span>
+            <span className="text-ink-2 text-sm">
+              Try a message and see whether Waggle is ready to reply on its own.
+            </span>
           </span>
-        </span>
-      </Link>
+        </Link>
+      )}
     </section>
   );
 }

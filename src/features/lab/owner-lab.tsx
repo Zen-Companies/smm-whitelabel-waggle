@@ -86,3 +86,23 @@ export async function OwnerLab() {
     </div>
   );
 }
+
+/** Teach Waggle's "Try it" (T73): the practice box on its own; nothing gets posted. */
+export async function TryIt() {
+  const tenant = await getCurrentTenant();
+  const page = await loadPracticePage(getServiceClient(), tenant.id);
+  return (
+    <RoleGate
+      allowed={can(tenant.role, "brand.settings")}
+      role={tenant.role}
+      what="the practice box"
+    >
+      <PracticeBox
+        triesLeft={page.triesLeft}
+        examples={page.examples}
+        examplesFromTopics={page.examplesFromTopics}
+        recentTries={page.recentTries}
+      />
+    </RoleGate>
+  );
+}

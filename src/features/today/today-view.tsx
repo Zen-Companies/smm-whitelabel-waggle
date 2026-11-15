@@ -233,7 +233,7 @@ export async function TodayView() {
                   ))}
                 </ul>
                 <Link
-                  href="/knowledge-base"
+                  href="/teach#questions"
                   className={`${buttonVariants({ variant: "primary" })} mt-4`}
                 >
                   Write the answers

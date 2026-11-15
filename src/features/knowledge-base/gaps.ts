@@ -63,3 +63,29 @@ export async function loadPendingSuggestions(
     questions: s.item_ids.length,
   }));
 }
+
+/**
+ * Questions the owner's answers don't cover, the same question once with how often it was
+ * asked, most asked first ("Do buyers pay you anything?" · asked 3 times).
+ */
+export function groupGaps(rows: { text: string }[], limit = 3): { text: string; times: number }[] {
+  const groups = new Map<string, { text: string; times: number; order: number }>();
+  rows.forEach((r, order) => {
+    const text = r.text.trim();
+    if (!text) return;
+    const key = text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}]+/gu, " ")
+      .trim();
+    const g = groups.get(key);
+    if (g) g.times += 1;
+    else groups.set(key, { text, times: 1, order });
+  });
+  return [...groups.values()]
+    .sort((a, b) => b.times - a.times || a.order - b.order)
+    .slice(0, limit)
+    .map(({ text, times }) => ({
+      text: text.length > 120 ? `${text.slice(0, 117)}…` : text,
+      times,
+    }));
+}

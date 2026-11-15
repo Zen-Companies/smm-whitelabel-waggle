@@ -71,6 +71,7 @@ export async function updateAutonomyMode(
     });
   }
   revalidatePath("/settings");
+  revalidatePath("/teach");
   return { saved: true };
 }
 
@@ -374,6 +375,7 @@ export async function setAutoHideSpam(
     details: {},
   });
   revalidatePath("/settings");
+  revalidatePath("/teach");
   return { saved: true };
 }
 
@@ -403,6 +405,7 @@ export async function setRepliesPaused(
     actor: tenant.userId,
   });
   revalidatePath("/settings");
+  revalidatePath("/teach");
   revalidatePath("/inbox");
   return {};
 }

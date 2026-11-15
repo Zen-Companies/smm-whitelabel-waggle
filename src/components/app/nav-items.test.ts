@@ -25,6 +25,7 @@ describe("nav items", () => {
 
   it("Teach Waggle is active on Business info and the Lab", () => {
     const teach = tab("Teach Waggle");
+    expect(isActive(teach, "/teach")).toBe(true);
     expect(isActive(teach, "/knowledge-base")).toBe(true);
     expect(isActive(teach, "/lab")).toBe(true);
     expect(isActive(teach, "/leads")).toBe(false);

@@ -1,9 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadWork } from "@/features/analytics";
 import { loadInbox, loadNextPost, type InboxEntry, type NextPost } from "@/features/approvals";
-import { loadGaps } from "@/features/knowledge-base";
+import { groupGaps, loadGaps } from "@/features/knowledge-base";
 import type { Database } from "@/lib/supabase/database.types";
-import { groupGaps } from "./today";
 
 type Db = SupabaseClient<Database>;
 const DAY_MS = 86_400_000;

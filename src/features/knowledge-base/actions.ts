@@ -89,8 +89,59 @@ export async function createKbEntry(_prev: KbFormState, formData: FormData): Pro
   }
   embedLater(data.id);
   revalidatePath("/knowledge-base");
+  revalidatePath("/teach");
   // Open the new topic in the editor (design v2: one topic at a time).
   redirect(`/knowledge-base?topic=${data.id}`);
+}
+
+export interface AnswerState {
+  error?: string;
+  /** The question just answered, so the list can move on. */
+  saved?: string;
+  savedAt?: number;
+}
+
+const answerSchema = z.object({
+  question: z.string().trim().min(1).max(2000),
+  answer: z
+    .string()
+    .trim()
+    .min(1, "Write a short answer first.")
+    .max(KB_CONTENT_MAX, "Keep it shorter."),
+});
+
+/**
+ * Teach Waggle (T73): a customer's question the answers don't cover, answered in place. It
+ * becomes an answer titled with the question, so Waggle can use it next time.
+ */
+export async function answerQuestionAction(
+  _prev: AnswerState,
+  formData: FormData,
+): Promise<AnswerState> {
+  const parsed = answerSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const question = parsed.data.question.replace(/\s+/g, " ");
+  const title =
+    question.length > KB_TITLE_MAX ? `${question.slice(0, KB_TITLE_MAX - 1).trimEnd()}…` : question;
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase
+    .from("kb_entries")
+    .insert({ tenant_id: tenant.id, title, content: parsed.data.answer })
+    .select("id")
+    .single();
+  if (error) return { error: "Couldn't save. Please try again." };
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: "kb_entry_created",
+    actor: tenant.userId,
+    details: { kbEntryId: data.id, from: "teach_question" },
+  });
+  embedLater(data.id);
+  revalidatePath("/teach");
+  revalidatePath("/knowledge-base");
+  return { saved: parsed.data.question, savedAt: Date.now() };
 }
 
 export async function updateKbEntry(_prev: KbFormState, formData: FormData): Promise<KbFormState> {
@@ -118,6 +169,7 @@ export async function updateKbEntry(_prev: KbFormState, formData: FormData): Pro
   // Unchanged text keeps its embedding; changed text was cleared by the T1 trigger.
   if (data[0].embedding === null) embedLater(id);
   revalidatePath("/knowledge-base");
+  revalidatePath("/teach");
   return { saved: true };
 }
 
@@ -141,5 +193,6 @@ export async function deleteKbEntry(formData: FormData): Promise<void> {
     });
   }
   revalidatePath("/knowledge-base");
+  revalidatePath("/teach");
   redirect("/knowledge-base");
 }

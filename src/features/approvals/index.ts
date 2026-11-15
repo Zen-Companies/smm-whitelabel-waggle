@@ -36,6 +36,7 @@ export { tabForStatus } from "./conversation-data";
 export { INBOX_TABS } from "./inbox-data";
 export type { InboxData, InboxEntry, InboxTab } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";
+export { PauseForm } from "./pause-form";
 export { ReadinessCard } from "./readiness-card";
 export {
   AUTONOMY_MODES,

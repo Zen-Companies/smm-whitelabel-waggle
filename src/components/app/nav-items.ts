@@ -8,7 +8,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { href: "/inbox", label: "Inbox" },
   { href: "/contacts", label: "Contacts", also: ["/leads"] },
   { href: "/posts", label: "Posts" },
-  { href: "/knowledge-base", label: "Teach Waggle", also: ["/lab", "/automations"] },
+  { href: "/teach", label: "Teach Waggle", also: ["/knowledge-base", "/lab", "/automations"] },
   { href: "/analytics", label: "Insights" },
 ];
 
@@ -17,7 +17,7 @@ export const BOTTOM_TABS: readonly NavItem[] = [
   { href: "/today", label: "Today" },
   { href: "/inbox", label: "Inbox" },
   { href: "/contacts", label: "Contacts", also: ["/leads"] },
-  { href: "/knowledge-base", label: "Teach", also: ["/lab", "/automations"] },
+  { href: "/teach", label: "Teach", also: ["/knowledge-base", "/lab", "/automations"] },
   { href: "/more", label: "More", also: ["/posts", "/analytics", "/settings"] },
 ];
 
