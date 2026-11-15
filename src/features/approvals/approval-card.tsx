@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleCheck, Clock3, Globe } from "lucide-react";
+import { CircleAlert, CircleCheck, Clock3, Globe } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { BeeSending } from "@/components/app/bee";
@@ -11,6 +12,7 @@ import { privateReplyClosesAt, privateReplyLeft } from "./private-reply";
 import { decideDraft, undoApprovalAction, type DecisionFormState } from "./actions";
 import type { InboxEntry } from "./inbox-data";
 import { REPLY_MAX } from "./limits";
+import { draftReason } from "./reason-chip";
 import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Recently approved replies live outside the card: approving moves the item out of the list
@@ -123,8 +125,10 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
 }
 
 /**
- * The suggested reply as the composer under the conversation (design v2): the draft (editable),
- * what it's based on, "Approve and send", "Edit", "Don't reply", the DM window, and A / E / J.
+ * The suggested reply as the composer under the conversation (design "Inbox: approve in one tap",
+ * T72): the reason tag, Waggle's reply and the answer it came from, "Send on Instagram", "Edit
+ * reply", "I'll answer it myself" (write your own, or mark it handled), the DM window, A / E / J.
+ * When the account stopped connecting, the send button says so and offers Reconnect.
  */
 export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref: string | null }) {
   const router = useRouter();
@@ -136,6 +140,8 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
   const approveRef = useRef<HTMLButtonElement>(null);
   const textRef = useRef<HTMLTextAreaElement>(null);
   const [intent, setIntent] = useState<"approve" | "reject" | null>(null);
+  // "I'll answer it myself": the owner writes the reply (or marks it handled) instead.
+  const [own, setOwn] = useState(false);
   // T41: a comment can be answered under it or in the commenter's DMs (Waggle's pick first).
   const [via, setVia] = useState<"public" | "dm">(draft.replyVia);
   // The clock is read once, when the card opens (render must stay pure).
@@ -198,6 +204,8 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
   const rules = inboxRules(entry.platform);
   const sending = pending && intent === "approve";
   const google = entry.platform === "googlebusiness";
+  const reason = draftReason(entry);
+  const accountDown = entry.accountActive === false;
 
   return (
     <form
@@ -268,10 +276,23 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
           {entry.dmWindowClosesAt ? ` · window ends ${clockTime(entry.dmWindowClosesAt)}` : ""}.
         </p>
       )}
-      <label htmlFor={`reply-${entry.itemId}`} className="meta">
-        {draft.facts.length
-          ? `Waggle's reply, from ${draft.facts.join(", ")}`
-          : "Waggle's reply, written without business info"}
+      <p className="flex flex-wrap items-center gap-2 text-[13px]">
+        <span
+          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${reason.urgent ? "bg-danger-soft text-danger" : "bg-honey-tint text-honey-text"}`}
+        >
+          {reason.tag}
+        </span>
+        <span className="text-ink-2">{reason.why}</span>
+      </p>
+      <label
+        htmlFor={`reply-${entry.itemId}`}
+        className={own ? "text-sm font-semibold" : "text-honey-text text-xs font-semibold"}
+      >
+        {own
+          ? "Your reply"
+          : draft.facts.length
+            ? `Waggle's reply · from your answer${draft.facts.length > 1 ? "s" : ""} "${draft.facts.join('", "')}"`
+            : "Waggle's reply · written without your answers"}
       </label>
       {editing ? (
         <textarea
@@ -301,50 +322,98 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
         </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          ref={approveRef}
-          type="submit"
-          name="intent"
-          value="approve"
-          variant="primary"
-          disabled={pending}
-          data-busy={sending || undefined}
-        >
-          {sending ? (
-            <>
-              <BeeSending />
-              Sending
-            </>
-          ) : entry.kind === "review" ? (
-            google ? (
-              "Reply on Google"
+        {accountDown ? (
+          // design.md §4: a button that can't work says why next to it.
+          <p className="text-danger flex flex-wrap items-center gap-2 text-sm">
+            <CircleAlert className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+            <span>
+              <b className="font-semibold">Can&apos;t send on {platform}.</b> {platform} stopped
+              connecting.
+            </span>
+            <Link
+              href="/settings?section=accounts"
+              className="bg-honey text-ink hover:bg-honey-hover inline-flex min-h-9 items-center rounded-md px-3.5 font-semibold no-underline"
+            >
+              Reconnect
+            </Link>
+          </p>
+        ) : (
+          <Button
+            ref={approveRef}
+            type="submit"
+            name="intent"
+            value="approve"
+            variant="primary"
+            disabled={pending || (own && !text.trim())}
+            data-busy={sending || undefined}
+          >
+            {sending ? (
+              <>
+                <BeeSending />
+                Sending
+              </>
+            ) : entry.kind === "review" ? (
+              google ? (
+                "Reply on Google"
+              ) : (
+                "Post reply"
+              )
+            ) : via === "dm" && entry.kind === "comment" ? (
+              "Send in DM"
             ) : (
-              "Post reply"
-            )
-          ) : via === "dm" && entry.kind === "comment" ? (
-            "Send in DM"
-          ) : (
-            "Approve and send"
-          )}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          onClick={() => setEditing((v) => !v)}
-          disabled={pending}
-        >
-          {editing ? "Done editing" : "Edit"}
-        </Button>
-        <Button
-          type="submit"
-          name="intent"
-          value="reject"
-          variant="quiet"
-          disabled={pending}
-          formNoValidate
-        >
-          Don&apos;t reply
-        </Button>
+              `Send on ${platform}`
+            )}
+          </Button>
+        )}
+        {own ? (
+          <>
+            <Button
+              type="submit"
+              name="intent"
+              value="reject"
+              variant="secondary"
+              disabled={pending}
+              formNoValidate
+            >
+              Mark as handled
+            </Button>
+            <Button
+              type="button"
+              variant="quiet"
+              disabled={pending}
+              onClick={() => {
+                setOwn(false);
+                setEditing(false);
+                setText(draft.editedBody ?? draft.body);
+              }}
+            >
+              Use Waggle&apos;s reply
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setEditing((v) => !v)}
+              disabled={pending}
+            >
+              {editing ? "Done editing" : "Edit reply"}
+            </Button>
+            <Button
+              type="button"
+              variant="quiet"
+              disabled={pending}
+              onClick={() => {
+                setOwn(true);
+                setText("");
+                setEditing(true);
+              }}
+            >
+              I&apos;ll answer it myself
+            </Button>
+          </>
+        )}
         <span className="meta ml-auto flex items-center gap-2">
           {left && (
             <span className="inline-flex items-center gap-1.5">

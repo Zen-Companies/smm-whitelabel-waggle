@@ -68,3 +68,8 @@ export {
 export type { ReplyVia } from "./private-reply";
 export type { HideOutcome } from "./hide-spam";
 export { DM_WINDOW_WARNING_MS, escalateClosingDmWindows } from "./sweeps";
+export { draftReason, reasonChip, URGENT_CHIPS } from "./reason-chip";
+export type { ReasonChip } from "./reason-chip";
+export { mediaLabel, messageWords, parseAttachments, previewIndex } from "./attachments";
+export type { Attachment } from "./attachments";
+export { attachmentPreviewUrl } from "./attachment-preview";

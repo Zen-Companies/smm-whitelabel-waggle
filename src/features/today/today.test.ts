@@ -6,33 +6,12 @@ import {
   joinNames,
   leadsLine,
   onlyYouLine,
-  reasonChip,
   replyTime,
   shortAgo,
   sinceYesterdayLine,
 } from "./today";
 
-const entry = (over: Partial<Parameters<typeof reasonChip>[0]>) => ({
-  status: "escalated",
-  kind: "dm",
-  text: "Hello?",
-  category: null,
-  draft: null,
-  ...over,
-});
-
 describe("Today (T71)", () => {
-  it("says why a message came to the owner", () => {
-    expect(reasonChip(entry({ category: "complaint" }))).toBe("Upset customer");
-    expect(reasonChip(entry({ status: "failed", category: "complaint" }))).toBe("Couldn't send");
-    expect(reasonChip(entry({ text: "  " }))).toBe("Sent a photo");
-    expect(reasonChip(entry({ draft: { needsHuman: true } }))).toBe("Not in your answers");
-    expect(reasonChip(entry({ kind: "review", reviewRating: 1 }))).toBe("Upset customer");
-    expect(reasonChip(entry({ kind: "call", call: { voicemail: true } }))).toBe("Voicemail");
-    expect(reasonChip(entry({ category: "unclear" }))).toBe("Not sure what they want");
-    expect(reasonChip(entry({}))).toBe("For you");
-  });
-
   it("sums up what only the owner can answer", () => {
     expect(onlyYouLine(["Upset customer", "Sent a photo"])).toBe(
       "One upset customer and one photo Waggle couldn't read.",

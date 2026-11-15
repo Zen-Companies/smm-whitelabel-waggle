@@ -96,6 +96,7 @@ export function fakeZernio() {
     connectWhatsAppWithKeys: notImplemented,
     connectMetaAds: notImplemented,
     connectSameTokenAds: notImplemented,
+    getMessageAttachmentUrl: notImplemented,
     listAdConnections: notImplemented,
     listAdAccounts: notImplemented,
     boostPost: notImplemented,

@@ -572,8 +572,13 @@ async function mapMessage(
     socialAccountId: resolved.accountId,
     zernioMessageId: e.message.id,
     conversationId: conversation.id,
+    platformMessageId: e.message.platformMessageId ?? null,
+    attachments: (e.message.attachments ?? []).map((a) => ({
+      type: a.type,
+      ...(a.originalType ? { originalType: a.originalType } : {}),
+    })),
     authorName: participantName,
-    // Attachment-only messages have no text.
+    // Attachment-only messages have no text ("Sent a photo", T72).
     text: e.message.text ?? "",
     receivedAt: e.message.sentAt,
   });

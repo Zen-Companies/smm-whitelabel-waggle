@@ -35,7 +35,7 @@ export function CaughtUpCard({ activity }: { activity: ActivityEntry[] }) {
               >
                 <span className="meta w-16 shrink-0 tabular-nums">{clockTime(a.at)}</span>
                 <span className="min-w-0 flex-1">
-                  <b className="font-semibold">{a.what === "answered" ? "Answered" : "Ignored"}</b>{" "}
+                  <b className="font-semibold">{a.what === "answered" ? "Answered" : "Hidden"}</b>{" "}
                   {activitySubject(a)}
                   {a.what === "answered" && <span className="text-ink-2">: {snippet(a.text)}</span>}
                 </span>

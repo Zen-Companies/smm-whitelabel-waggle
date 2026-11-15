@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  answeredBy,
   INBOX_TABS,
+  normalizeAnsweredBy,
   needsOwner,
   normalizeTab,
   todayLine,
@@ -9,12 +11,12 @@ import {
   startOfTodayUtc,
 } from "./inbox-data";
 
-describe("inbox tabs (Waggle: For you / Answered / Ignored)", () => {
+describe("inbox tabs (Waggle: For you / Answered / Hidden)", () => {
   it("For you holds everything that needs the owner", () => {
     expect(INBOX_TABS.map((t) => [t.label, t.statuses])).toEqual([
       ["For you", ["awaiting_approval", "escalated", "failed"]],
       ["Answered", ["sending", "sent"]],
-      ["Ignored", ["ignored", "handled", "rejected"]],
+      ["Hidden", ["ignored", "handled", "rejected"]],
     ]);
     expect(needsOwner("escalated")).toBe(true);
     expect(needsOwner("sent")).toBe(false);
@@ -63,5 +65,37 @@ describe("todayLine (T40)", () => {
     expect(todayLine({ answered: 12, ignored: 3, hidden: 2 })).toBe(
       "Today Waggle answered 12, ignored 3 and hid 2 spam comments.",
     );
+  });
+});
+
+describe("Answered filter and Hidden (T72)", () => {
+  const draft = (over: Record<string, unknown>) =>
+    ({
+      id: "d",
+      body: "Hi! We open at 8.",
+      editedBody: null,
+      needsHuman: false,
+      needsHumanReason: null,
+      facts: [],
+      status: "sent",
+      sentAt: null,
+      decidedByOwner: true,
+      replyVia: "public",
+      ...over,
+    }) as never;
+
+  it("says who answered", () => {
+    expect(answeredBy({ draft: draft({ decidedByOwner: false }) })).toBe("auto");
+    expect(answeredBy({ draft: draft({}) })).toBe("approved");
+    expect(answeredBy({ draft: draft({ editedBody: "Hi! We open at 8. " }) })).toBe("approved");
+    expect(answeredBy({ draft: draft({ editedBody: "Yes, at 8 sharp!" }) })).toBe("wrote");
+    expect(answeredBy({ draft: null })).toBeNull();
+  });
+
+  it("reads ?by= and ?tab=hidden", () => {
+    expect(normalizeAnsweredBy("auto")).toBe("auto");
+    expect(normalizeAnsweredBy("wrote")).toBe("wrote");
+    expect(normalizeAnsweredBy("x")).toBe("all");
+    expect(normalizeTab("hidden")).toBe("ignored");
   });
 });

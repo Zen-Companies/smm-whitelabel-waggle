@@ -21,6 +21,8 @@ export type ReadyItem = {
   where: string;
   ago: string;
   text: string;
+  /** What they sent when there are no words ("Sent a photo"). */
+  media: string;
   reply: string;
   /** The answer it was written from, when there is one. */
   source: string | null;
@@ -208,7 +210,7 @@ function ReadyCard({
       {item.text.trim() ? (
         <p className="text-[15px]">&ldquo;{item.text}&rdquo;</p>
       ) : (
-        <p className="text-ink-3 text-[15px]">Sent a photo</p>
+        <p className="text-ink-3 text-[15px]">{item.media}</p>
       )}
       <form action={send} className="flex flex-col gap-3">
         <input type="hidden" name="intent" value="approve" />

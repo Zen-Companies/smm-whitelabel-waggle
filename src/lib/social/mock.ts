@@ -842,6 +842,12 @@ export class MockSocialProvider implements SocialProvider {
     return { connectionId: id };
   }
 
+  /** T72: a placeholder picture, served by the app itself, so previews work offline. */
+  async getMessageAttachmentUrl(_input: { index: number }) {
+    void _input;
+    return `${process.env.APP_URL ?? "http://localhost:3000"}/brands/instagram.png`;
+  }
+
   async listAdConnections(input: { profileId: string }): Promise<AdConnection[]> {
     return [...this.adConnections.entries()]
       .filter(([key]) => key.startsWith(`${input.profileId}|`))

@@ -885,6 +885,18 @@ export interface SocialProvider {
       redirectUrl: string;
     } & CallOptions,
   ): Promise<{ connectionId: string } | { needsReconnect: true }>;
+  /**
+   * T72: a fresh link to one attachment of an inbound message (Instagram, Facebook, Telegram:
+   * a short-lived platform CDN link). Null when the platform has nothing to give back.
+   */
+  getMessageAttachmentUrl(
+    input: {
+      accountId: string;
+      conversationId: string;
+      platformMessageId: string;
+      index: number;
+    } & CallOptions,
+  ): Promise<string | null>;
   /** The profile's ads connections. */
   listAdConnections(input: { profileId: string } & CallOptions): Promise<AdConnection[]>;
   listAdAccounts(input: { connectionId: string } & CallOptions): Promise<AdAccount[]>;

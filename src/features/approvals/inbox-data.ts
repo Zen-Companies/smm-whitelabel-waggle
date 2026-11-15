@@ -1,5 +1,6 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseAttachments, type Attachment } from "./attachments";
 import { dmWindowClosesAt, dmWindowFor } from "./policy";
 import { type ActivityEntry, mergeActivity } from "./today-activity";
 
@@ -49,6 +50,10 @@ export interface InboxEntry {
   reviewRating?: number | null;
   /** T65: the owner answered on the platform itself (Google), so Waggle's draft wasn't sent. */
   answeredOnPlatformAt?: string | null;
+  /** T72: what the message carried besides words (kinds only). */
+  attachments?: Attachment[];
+  /** T72: false when the account it came in on stopped connecting (sending can't work). */
+  accountActive?: boolean;
 }
 
 export interface InboxData {
@@ -65,14 +70,37 @@ export type InboxTab = "for_you" | "answered" | "ignored";
 export const INBOX_TABS: { key: InboxTab; label: string; statuses: string[] }[] = [
   { key: "for_you", label: "For you", statuses: [...NEEDS_OWNER] },
   { key: "answered", label: "Answered", statuses: ["sending", "sent"] },
-  // Spam, plus messages the owner marked as handled or chose not to answer.
-  { key: "ignored", label: "Ignored", statuses: ["ignored", "handled", "rejected"] },
+  // T72 "Hidden": spam, plus messages the owner marked as handled or chose not to answer.
+  { key: "ignored", label: "Hidden", statuses: ["ignored", "handled", "rejected"] },
 ];
+
+/** T72: who answered, for the Answered filter (All, Waggle on its own, You approved, You wrote). */
+export type AnsweredBy = "auto" | "approved" | "wrote";
+export const ANSWERED_FILTERS: { key: AnsweredBy | "all"; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "auto", label: "Waggle on its own" },
+  { key: "approved", label: "You approved" },
+  { key: "wrote", label: "You wrote" },
+];
+
+/** Pure: who answered a reply that went out (null when there's no draft). */
+export function answeredBy(entry: Pick<InboxEntry, "draft">): AnsweredBy | null {
+  const d = entry.draft;
+  if (!d) return null;
+  if (!d.decidedByOwner) return "auto";
+  return d.editedBody !== null && d.editedBody.trim() !== d.body.trim() ? "wrote" : "approved";
+}
+
+/** Pure: the ?by= value, including the older "auto" links. */
+export function normalizeAnsweredBy(param: string | undefined): AnsweredBy | "all" {
+  return param === "auto" || param === "approved" || param === "wrote" ? param : "all";
+}
 
 /** Pure: a ?tab= value, including the old To approve / Needs you / Sent links (emails, bookmarks). */
 export function normalizeTab(param: string | undefined): InboxTab {
   if (param === "waiting" || param === "needs") return "for_you";
   if (param === "sent") return "answered";
+  if (param === "hidden") return "ignored";
   return INBOX_TABS.some((t) => t.key === param) ? (param as InboxTab) : "for_you";
 }
 
@@ -330,8 +358,8 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, call_voicemail, call_duration_seconds, " +
-        "social_accounts (platform), conversations (last_customer_message_at, subject)",
+      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, call_voicemail, call_duration_seconds, attachments, " +
+        "social_accounts (platform, status), conversations (last_customer_message_at, subject)",
     )
     .eq("tenant_id", tenantId);
   if (filter.statuses) query = query.in("status", filter.statuses);
@@ -359,7 +387,8 @@ export async function loadEntries(
     answered_on_platform_at: string | null;
     call_voicemail: boolean | null;
     call_duration_seconds: number | null;
-    social_accounts: { platform: string } | null;
+    attachments: unknown;
+    social_accounts: { platform: string; status: string } | null;
     conversations: { last_customer_message_at: string | null; subject: string | null } | null;
   }[];
   if (rows.length === 0) return [];
@@ -421,6 +450,8 @@ export async function loadEntries(
       reviewRecommends: r.review_recommends,
       reviewRating: r.review_rating,
       answeredOnPlatformAt: r.answered_on_platform_at,
+      attachments: parseAttachments(r.attachments),
+      accountActive: (r.social_accounts?.status ?? "active") === "active",
       subject: r.conversations?.subject ?? null,
       call:
         r.kind === "call"

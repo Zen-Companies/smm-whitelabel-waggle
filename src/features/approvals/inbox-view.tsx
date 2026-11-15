@@ -12,6 +12,7 @@ import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
 import { allowanceNotice } from "./allowance-notice";
+import { messageWords } from "./attachments";
 import { CaughtUpCard } from "./caught-up-card";
 import { ApprovalCard, RecentSends } from "./approval-card";
 import { loadConversation } from "./conversation-data";
@@ -22,8 +23,12 @@ import { loadTemplateChoices, whatsappWindowClosed } from "./whatsapp-window";
 import { WhatsAppWindowCard } from "./whatsapp-window-card";
 import { CallCard } from "./call-card";
 import {
+  answeredBy,
+  ANSWERED_FILTERS,
   countInboxTabs,
   heldReason,
+  normalizeAnsweredBy,
+  type AnsweredBy,
   INBOX_TABS,
   loadInboxTab,
   loadNextPost,
@@ -46,8 +51,8 @@ import { AddBooking, calendarAccount } from "@/features/calendar";
 // reply composer | side panel on desktop; list → conversation on phones. Rows follow the ten rules:
 // no boxes or stripes, a honey dot when the owner must act, three lines per row.
 
-const href = (tab: InboxTab, item?: string, autoOnly = false) =>
-  `/inbox?tab=${tab}${autoOnly ? "&by=auto" : ""}${item ? `&item=${item}` : ""}`;
+const href = (tab: InboxTab, item?: string, by: AnsweredBy | "all" = "all") =>
+  `/inbox?tab=${tab}${by !== "all" ? `&by=${by}` : ""}${item ? `&item=${item}` : ""}`;
 
 const NOTE_ICON: Record<RowTone, React.ReactNode> = {
   lead: <UserPlus className="text-honey-text size-3.5" strokeWidth={2} aria-hidden />,
@@ -62,19 +67,19 @@ function Row({
   entry,
   tab,
   selected,
-  autoOnly,
+  by,
 }: {
   entry: InboxEntry & { status: string };
   tab: InboxTab;
   selected: boolean;
-  autoOnly: boolean;
+  by: AnsweredBy | "all";
 }) {
   const needs = needsOwner(entry.status);
   const note = rowNote(entry);
   return (
     <li className="border-line border-t first:border-t-0">
       <Link
-        href={href(tab, entry.itemId, autoOnly)}
+        href={href(tab, entry.itemId, by)}
         aria-current={selected ? "true" : undefined}
         className={cn(
           "-mx-3 flex gap-3 rounded-md px-3 py-3.5 transition-colors duration-150",
@@ -105,7 +110,7 @@ function Row({
             <span className="truncate text-[14px] font-medium">{entry.subject}</span>
           )}
           <span className={cn("truncate", needs ? "text-ink-2" : "text-ink-3")}>
-            {entry.text || "(no text)"}
+            {messageWords(entry.text, entry.attachments ?? [])}
           </span>
           <span className="text-ink-3 flex items-center gap-1.5 text-[13px]">
             {NOTE_ICON[note.tone]}
@@ -270,8 +275,11 @@ export async function InboxView({
   // Old links (?tab=waiting / needs / sent) land on the tab that now holds those items.
   const tab = normalizeTab(typeof params.tab === "string" ? params.tab : undefined);
   const itemParam = typeof params.item === "string" ? params.item : undefined;
-  // Answered tab: all, or only the replies that went out on their own (T27).
-  const autoOnly = tab === "answered" && params.by === "auto";
+  // Answered tab (T27, T72): all, or by who answered.
+  const by =
+    tab === "answered"
+      ? normalizeAnsweredBy(typeof params.by === "string" ? params.by : undefined)
+      : "all";
 
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
@@ -290,9 +298,12 @@ export async function InboxView({
       loadNextPost(supabase, tenant.id),
     ]);
   const allowance = allowanceNotice(spend);
-  const entries = autoOnly
-    ? tabEntries.filter((e) => e.draft && !e.draft.decidedByOwner)
-    : tabEntries;
+  const entries = by === "all" ? tabEntries : tabEntries.filter((e) => answeredBy(e) === by);
+  const byCounts = new Map<string, number>([["all", tabEntries.length]]);
+  for (const e of tabEntries) {
+    const who = answeredBy(e);
+    if (who) byCounts.set(who, (byCounts.get(who) ?? 0) + 1);
+  }
 
   const selected = entries.find((e) => e.itemId === itemParam) ?? entries[0];
   const index = selected ? entries.indexOf(selected) : -1;
@@ -312,15 +323,12 @@ export async function InboxView({
         ))}
       </nav>
       {tab === "answered" && (
-        <nav aria-label="Answered filter" className="flex gap-4 pt-2 text-[13px]">
-          {[
-            { label: "All answered", href: href("answered"), active: !autoOnly },
-            {
-              label: "Answered on its own",
-              href: href("answered", undefined, true),
-              active: autoOnly,
-            },
-          ].map((f) => (
+        <nav aria-label="Answered filter" className="flex flex-wrap gap-x-4 pt-2 text-[13px]">
+          {ANSWERED_FILTERS.map((f) => ({
+            label: `${f.label} ${byCounts.get(f.key) ?? 0}`,
+            href: href("answered", undefined, f.key),
+            active: by === f.key,
+          })).map((f) => (
             <Link
               key={f.label}
               href={f.href}
@@ -344,10 +352,12 @@ export async function InboxView({
   const empty = (
     <p className="meta py-6">
       {tab === "ignored"
-        ? "Spam and messages that need no reply show up here."
-        : autoOnly
+        ? "Spam Waggle hid and messages that needed no reply show up here. Anything here can go back to For you."
+        : by === "auto"
           ? "Nothing has gone out on its own yet."
-          : "Replies that went out show up here."}
+          : by !== "all"
+            ? "Nothing here yet."
+            : "Replies that went out show up here."}
     </p>
   );
 
@@ -462,7 +472,7 @@ export async function InboxView({
                     key={e.itemId}
                     entry={e}
                     tab={tab}
-                    autoOnly={autoOnly}
+                    by={by}
                     selected={e.itemId === selected?.itemId}
                   />
                 ))}
@@ -473,10 +483,7 @@ export async function InboxView({
           {selected && (
             <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
               {itemParam && (
-                <Link
-                  href={href(tab, undefined, autoOnly)}
-                  className="text-ink-2 text-sm lg:hidden"
-                >
+                <Link href={href(tab, undefined, by)} className="text-ink-2 text-sm lg:hidden">
                   ← All messages
                 </Link>
               )}

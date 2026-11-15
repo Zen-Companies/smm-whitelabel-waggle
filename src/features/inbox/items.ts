@@ -9,7 +9,14 @@ export type NewInboundItem = {
   receivedAt: string;
 } & (
   | { kind: "comment"; zernioCommentId: string; zernioPostId: string; permalink?: string | null }
-  | { kind: "dm"; zernioMessageId: string; conversationId: string }
+  | {
+      kind: "dm";
+      zernioMessageId: string;
+      conversationId: string;
+      /** T72: the platform's message id and what it carried besides text (kinds only). */
+      platformMessageId?: string | null;
+      attachments?: { type: string; originalType?: string }[];
+    }
   /** T42: a Facebook Page review (polled); T61: a Google review (webhook), with its stars. */
   | {
       kind: "review";
@@ -57,6 +64,8 @@ export async function insertInboundItem(
             ...common,
             zernio_message_id: item.zernioMessageId,
             conversation_id: item.conversationId,
+            platform_message_id: item.platformMessageId ?? null,
+            attachments: item.attachments ?? [],
           },
           "zernio_message_id" as const,
           item.zernioMessageId,

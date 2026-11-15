@@ -1,42 +1,6 @@
 // Today, the home page (T71, design "1 · Today"): pure wording, tested next to it.
 
-/** The chip on a message only the owner can answer: why it came to them, in plain words. */
-export type ReasonChip =
-  | "Upset customer"
-  | "Couldn't send"
-  | "Missed call"
-  | "Voicemail"
-  | "Not in your answers"
-  | "Sent a photo"
-  | "Not sure what they want"
-  | "Wants to buy or book"
-  | "For you";
-
-export function reasonChip(entry: {
-  status: string;
-  kind: string;
-  text: string;
-  category: string | null;
-  reviewRating?: number | null;
-  reviewRecommends?: boolean | null;
-  call?: { voicemail: boolean } | null;
-  draft: { needsHuman: boolean } | null;
-}): ReasonChip {
-  if (entry.status === "failed") return "Couldn't send";
-  if (entry.kind === "call") return entry.call?.voicemail ? "Voicemail" : "Missed call";
-  const badReview =
-    entry.kind === "review" &&
-    ((entry.reviewRating != null && entry.reviewRating <= 2) || entry.reviewRecommends === false);
-  if (entry.category === "complaint" || badReview) return "Upset customer";
-  if (entry.draft?.needsHuman) return "Not in your answers";
-  if (!entry.text.trim()) return "Sent a photo";
-  if (entry.category === "unclear") return "Not sure what they want";
-  if (entry.category === "lead") return "Wants to buy or book";
-  return "For you";
-}
-
-/** Chips that are bad news get the danger tone; the rest stay calm. */
-export const URGENT_CHIPS: ReadonlySet<ReasonChip> = new Set(["Upset customer", "Couldn't send"]);
+import type { ReasonChip } from "@/features/approvals";
 
 const NOUNS: Record<ReasonChip, [string, string]> = {
   "Upset customer": ["upset customer", "upset customers"],

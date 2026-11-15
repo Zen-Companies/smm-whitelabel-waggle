@@ -4,10 +4,13 @@ import { PlatformMark } from "@/components/app/platform-mark";
 import { buttonVariants } from "@/components/ui/button";
 import {
   decideDraft,
+  messageWords,
+  reasonChip,
   REPLY_MAX,
   sendAllReadyAction,
   undoApprovalAction,
   UNDO_WINDOW_MS,
+  URGENT_CHIPS,
 } from "@/features/approvals";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
@@ -20,11 +23,9 @@ import {
   firstName,
   leadsLine,
   onlyYouLine,
-  reasonChip,
   replyTime,
   shortAgo,
   sinceYesterdayLine,
-  URGENT_CHIPS,
 } from "./today";
 
 const SHOWN = 8;
@@ -91,6 +92,7 @@ export async function TodayView() {
             where: where(e.platform, e.kind),
             ago: shortAgo(e.receivedAt, now),
             text: e.text,
+            media: messageWords(e.text, e.attachments ?? []),
             reply: e.draft.editedBody ?? e.draft.body,
             source: e.draft.facts[0] ?? null,
           },
@@ -187,7 +189,9 @@ export async function TodayView() {
                           </span>
                         </span>
                         <span className="text-ink-2 mt-1 block truncate text-sm">
-                          {e.text.trim() ? `"${e.text}"` : "No words, just a photo."}
+                          {e.text.trim()
+                            ? `"${e.text}"`
+                            : messageWords(e.text, e.attachments ?? [])}
                         </span>
                       </span>
                       <span className="text-ink-3 shrink-0 text-[13px]">

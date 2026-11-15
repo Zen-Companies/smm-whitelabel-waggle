@@ -637,6 +637,7 @@ export type Database = {
       inbound_items: {
         Row: {
           answered_on_platform_at: string | null
+          attachments: Json
           attempts: number
           author_name: string | null
           call_duration_seconds: number | null
@@ -654,6 +655,7 @@ export type Database = {
           locked_at: string | null
           next_run_at: string | null
           permalink: string | null
+          platform_message_id: string | null
           received_at: string
           review_recommends: boolean | null
           review_rating: number | null
@@ -670,6 +672,7 @@ export type Database = {
         ComputedFields: never
         Insert: {
           answered_on_platform_at?: string | null
+          attachments?: Json
           attempts?: number
           author_name?: string | null
           call_duration_seconds?: number | null
@@ -687,6 +690,7 @@ export type Database = {
           locked_at?: string | null
           next_run_at?: string | null
           permalink?: string | null
+          platform_message_id?: string | null
           received_at: string
           review_recommends?: boolean | null
           review_rating?: number | null
@@ -702,6 +706,7 @@ export type Database = {
         }
         Update: {
           answered_on_platform_at?: string | null
+          attachments?: Json
           attempts?: number
           author_name?: string | null
           call_duration_seconds?: number | null
@@ -719,6 +724,7 @@ export type Database = {
           locked_at?: string | null
           next_run_at?: string | null
           permalink?: string | null
+          platform_message_id?: string | null
           received_at?: string
           review_recommends?: boolean | null
           review_rating?: number | null

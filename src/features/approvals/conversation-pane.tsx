@@ -5,6 +5,7 @@ import { clockTime, dayLabel, platformName, shortTime } from "@/components/app/t
 import type { ConversationContext, ThreadMessage } from "./conversation-data";
 import { inboxRules } from "@/lib/social/platforms";
 import type { InboxEntry } from "./inbox-data";
+import { mediaLabel, previewIndex } from "./attachments";
 
 // Paper (design.md §4): the conversation sits on the page, no box. A header line, the thread
 // (customer on subtle gray, the business in ink), then the footer: the composer (the one boxed
@@ -66,6 +67,9 @@ export function ConversationPane({
           const day = dayLabel(m.at);
           const showDay = i === 0 || dayLabel(thread[i - 1].at) !== day;
           const mine = m.from === "business";
+          // T72: a photo shows as itself; words for anything else that came without text.
+          const preview = mine ? null : previewIndex(entry.platform, m.attachments ?? []);
+          const media = mine ? null : mediaLabel(m.attachments ?? []);
           return (
             <li key={m.key} className="flex flex-col gap-3">
               {showDay && <p className="label self-center">{day}</p>}
@@ -76,15 +80,34 @@ export function ConversationPane({
                     : "flex max-w-[80%] flex-col gap-1 self-start md:max-w-[70%]"
                 }
               >
-                <p
-                  className={
-                    mine
-                      ? "bg-ink rounded-xl rounded-br-[4px] px-3.5 py-2 whitespace-pre-wrap text-white"
-                      : "bg-subtle rounded-xl rounded-bl-[4px] px-3.5 py-2 whitespace-pre-wrap"
-                  }
-                >
-                  {m.text || "(no text)"}
-                </p>
+                {preview !== null && (
+                  // A fresh link each time (platform links expire), served through our route.
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`/inbox/items/${m.itemId}/attachments/${preview}`}
+                    alt={media ?? "Photo"}
+                    loading="lazy"
+                    className="border-line bg-subtle max-h-64 max-w-full rounded-xl border object-contain"
+                  />
+                )}
+                {(m.text || preview === null) && (
+                  <p
+                    className={
+                      mine
+                        ? "bg-ink rounded-xl rounded-br-[4px] px-3.5 py-2 whitespace-pre-wrap text-white"
+                        : "bg-subtle rounded-xl rounded-bl-[4px] px-3.5 py-2 whitespace-pre-wrap"
+                    }
+                  >
+                    {m.text || (
+                      <span className="text-ink-2 italic">
+                        {media ?? "Sent something without words"}
+                      </span>
+                    )}
+                  </p>
+                )}
+                {m.text && media && preview === null && (
+                  <span className="text-ink-3 text-xs">{media}</span>
+                )}
                 <span className="text-ink-3 text-xs">
                   <time dateTime={m.at}>{clockTime(m.at)}</time>
                   {mine && (m.by === "you" ? " · Sent by you" : " · Auto")}

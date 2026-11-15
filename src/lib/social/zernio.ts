@@ -2367,6 +2367,30 @@ export class ZernioSocialProvider implements SocialProvider {
     }
   }
 
+  async getMessageAttachmentUrl(input: {
+    accountId: string;
+    conversationId: string;
+    platformMessageId: string;
+    index: number;
+    signal?: AbortSignal;
+  }) {
+    return call("getMessageAttachment", async (withFetch) => {
+      const { data } = await this.zernio.messages.getMessageAttachment(
+        withFetch({
+          signal: input.signal,
+          path: {
+            conversationId: input.conversationId,
+            messageId: input.platformMessageId,
+            index: input.index,
+          },
+          query: { accountId: input.accountId, format: "json" },
+        }),
+      );
+      const r = parse(z.object({ url: z.url().nullish() }), data, "getMessageAttachment");
+      return r.url ?? null;
+    });
+  }
+
   async listAdConnections(input: { profileId: string; signal?: AbortSignal }) {
     return call("listAdConnections", async (withFetch) => {
       const { data } = await this.zernio.accounts.listAccounts(

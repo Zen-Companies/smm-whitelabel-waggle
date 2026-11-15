@@ -53,8 +53,22 @@ export const messageEventSchema = z.object({
     id: z.string().min(1),
     conversationId: z.string().min(1),
     platform: z.string(),
+    // T72: the platform's own id, which the attachment endpoint takes.
+    platformMessageId: z.string().optional(),
     direction: z.enum(["incoming", "outgoing"]),
     text: z.string().nullable(),
+    // T72: only the kind of each attachment is kept; its url expires
+    // (docs.zernio.com/webhooks/inbox/message-received).
+    attachments: z
+      .array(
+        z.object({
+          type: z.string().max(40),
+          originalType: z.string().max(40).optional(),
+        }),
+      )
+      .max(20)
+      .optional()
+      .catch([]),
     sender: z.object({
       id: z.string(),
       name: z.string().optional(),

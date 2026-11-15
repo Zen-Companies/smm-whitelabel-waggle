@@ -19,6 +19,7 @@ import {
   rejectDraft,
   REPLY_MAX,
   undoApproval,
+  writeOwnerReply,
   writeTemplateReply,
   type DecisionResult,
 } from "./decisions";
@@ -168,6 +169,37 @@ export async function sendAllReadyAction(
   revalidatePath("/today");
   revalidatePath("/inbox", "layout");
   return { sent, skipped };
+}
+
+export interface OwnerReplyState {
+  error?: string;
+  sent?: { at: string };
+}
+
+/**
+ * T72: on a message Waggle handed to the owner, "Your reply" sends the owner's own words from the
+ * Inbox (same send step, policy and undo window as an approval; `writeOwnerReply`).
+ */
+export async function ownerReplyAction(
+  _prev: OwnerReplyState,
+  formData: FormData,
+): Promise<OwnerReplyState> {
+  const parsed = z
+    .object({ itemId: z.uuid(), body: z.string() })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const db = getServiceClient();
+  const result = await writeOwnerReply(db, {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    itemId: parsed.data.itemId,
+    body: parsed.data.body,
+  });
+  if (!result.ok) return { error: DECISION_ERRORS[result.error] };
+  after(() => sendApprovedReplyAfterUndoWindow(db, parsed.data.itemId));
+  return { sent: { at: new Date().toISOString() } };
 }
 
 /** Undo within the window: the reply goes back to waiting (design.md §4). */
