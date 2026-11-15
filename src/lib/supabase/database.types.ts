@@ -948,6 +948,8 @@ export type Database = {
           item_id: string
           name: string | null
           request: string | null
+          stage: string | null
+          stage_changed_at: string | null
           tenant_id: string
         }
         ComputedFields: never
@@ -958,6 +960,8 @@ export type Database = {
           item_id: string
           name?: string | null
           request?: string | null
+          stage?: string | null
+          stage_changed_at?: string | null
           tenant_id: string
         }
         Update: {
@@ -967,6 +971,8 @@ export type Database = {
           item_id?: string
           name?: string | null
           request?: string | null
+          stage?: string | null
+          stage_changed_at?: string | null
           tenant_id?: string
         }
         Relationships: [
