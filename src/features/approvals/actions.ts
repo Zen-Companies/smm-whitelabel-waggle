@@ -121,6 +121,55 @@ export async function decideDraft(
   return { approved: { at: new Date().toISOString() } };
 }
 
+export interface SendAllState {
+  error?: string;
+  sent?: number;
+  /** Already handled elsewhere (sent, edited or answered) since the page loaded. */
+  skipped?: number;
+}
+
+const pairSchema = z
+  .array(z.tuple([z.uuid(), z.uuid()]))
+  .min(1)
+  .max(50);
+
+/**
+ * Today's "Send all" (T71): approves every reply the owner was shown, as is, after the owner
+ * confirmed in place (design.md §4 bulk actions). Each goes through the same approval as a
+ * single Send, so policy and the undo window still apply before it leaves.
+ */
+export async function sendAllReadyAction(
+  _prev: SendAllState,
+  formData: FormData,
+): Promise<SendAllState> {
+  const parsed = pairSchema.safeParse(formData.getAll("pair").map((v) => String(v).split(":")));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const db = getServiceClient();
+  let sent = 0;
+  let skipped = 0;
+  const approved: string[] = [];
+  for (const [itemId, draftId] of parsed.data) {
+    const result = await approveDraft(db, {
+      tenantId: tenant.id,
+      userId: tenant.userId,
+      itemId,
+      draftId,
+      editedBody: null,
+    });
+    if (result.ok) {
+      sent += 1;
+      approved.push(itemId);
+    } else skipped += 1;
+  }
+  // Each waits out the undo window and claims only its own item, so they run side by side.
+  after(() => Promise.all(approved.map((itemId) => sendApprovedReplyAfterUndoWindow(db, itemId))));
+  revalidatePath("/today");
+  revalidatePath("/inbox", "layout");
+  return { sent, skipped };
+}
+
 /** Undo within the window: the reply goes back to waiting (design.md §4). */
 export async function undoApprovalAction(
   _prev: DecisionFormState,

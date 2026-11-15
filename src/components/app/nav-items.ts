@@ -1,9 +1,10 @@
-// The app's tabs (design.md §4). Today joins with T71; Teach Waggle and Insights keep their old
+// The app's tabs (design.md §4). Today is the home (T71); Teach Waggle and Insights keep their old
 // paths until their pages are redesigned (T73, T74). Contacts covers /contacts and /leads (T78).
 
 export type NavItem = { href: string; label: string; also?: readonly string[] };
 
 export const NAV_ITEMS: readonly NavItem[] = [
+  { href: "/today", label: "Today" },
   { href: "/inbox", label: "Inbox" },
   { href: "/contacts", label: "Contacts", also: ["/leads"] },
   { href: "/posts", label: "Posts" },
@@ -13,6 +14,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
 
 /** Phone bottom tabs: the daily ones; Posts, Insights and Settings live under More. */
 export const BOTTOM_TABS: readonly NavItem[] = [
+  { href: "/today", label: "Today" },
   { href: "/inbox", label: "Inbox" },
   { href: "/contacts", label: "Contacts", also: ["/leads"] },
   { href: "/knowledge-base", label: "Teach", also: ["/lab", "/automations"] },

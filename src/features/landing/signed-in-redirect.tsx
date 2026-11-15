@@ -3,8 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /**
- * A signed-in owner who lands on `/` goes straight to the inbox, as before the landing page
- * existed. Renders nothing; the page itself stays static (Cache Components), so the caller wraps
+ * A signed-in owner who lands on `/` goes straight to Today (T71). Renders nothing; the page itself stays static (Cache Components), so the caller wraps
  * this in a Suspense boundary.
  */
 export async function SignedInRedirect() {
@@ -13,6 +12,6 @@ export async function SignedInRedirect() {
   }
   const supabase = await createServerSupabase();
   const { data } = await supabase.auth.getUser();
-  if (data.user) redirect("/inbox");
+  if (data.user) redirect("/today");
   return null;
 }

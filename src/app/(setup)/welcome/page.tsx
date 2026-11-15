@@ -45,7 +45,7 @@ async function Content({ beta }: { beta: boolean }) {
     .from("tenants")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", org.id);
-  if ((count ?? 0) > 0) redirect("/inbox");
+  if ((count ?? 0) > 0) redirect("/today");
 
   const mayAdd = can(org.role, "brands.add");
   const invites = await loadInvites(user.id);

@@ -1,12 +1,13 @@
 "use client";
 
-import { BookOpen, Inbox, MoreHorizontal, Users, type LucideIcon } from "lucide-react";
+import { BookOpen, House, Inbox, MoreHorizontal, Users, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "cn";
 import { BOTTOM_TABS, isActive } from "./nav-items";
 
 const ICONS: Record<string, LucideIcon> = {
+  Today: House,
   Inbox,
   Contacts: Users,
   Teach: BookOpen,
