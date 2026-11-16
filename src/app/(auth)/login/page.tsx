@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { AuthWall } from "@/features/auth";
+import { AuthSplit } from "@/features/auth";
 import { AuthForm } from "@/features/tenants";
 export const metadata = { title: "Sign in" };
 
@@ -17,15 +17,10 @@ async function Form({ searchParams }: PageProps<"/login">) {
 
 export default function LoginPage(props: PageProps<"/login">) {
   return (
-    <div className="grid w-full max-w-[1180px] items-center gap-10 lg:grid-cols-[minmax(0,1fr)_448px]">
-      <div className="hidden lg:block">
-        <AuthWall kind="signin" />
-      </div>
-      <div className="flex justify-center">
-        <Suspense fallback={<AuthForm mode="login" />}>
-          <Form {...props} />
-        </Suspense>
-      </div>
-    </div>
+    <AuthSplit kind="signin">
+      <Suspense fallback={<AuthForm mode="login" />}>
+        <Form {...props} />
+      </Suspense>
+    </AuthSplit>
   );
 }

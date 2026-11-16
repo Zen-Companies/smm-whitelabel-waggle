@@ -3,3 +3,4 @@ export { signInNext } from "./sign-in-next";
 export { continueWithGoogle } from "./google-actions";
 export { GoogleButton, OrDivider } from "./google-button";
 export { AuthWall } from "./auth-wall";
+export { AuthSplit } from "./auth-split";

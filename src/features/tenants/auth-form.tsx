@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { Brand } from "@/components/app/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
@@ -35,8 +36,9 @@ export function AuthForm({
   const isSignup = mode === "signup";
 
   return (
-    <div className="card w-full max-w-md p-6 md:p-8">
-      <div className="mb-6 flex flex-col gap-2">
+    <div className="card w-full max-w-[420px] rounded-3xl px-6 pt-8 pb-6 shadow-[0_24px_60px_rgba(60,40,0,0.12)] md:px-[34px] md:pt-9">
+      <Brand />
+      <div className="mt-6 mb-6 flex flex-col gap-2">
         <h1 className="display-title">
           {isSignup ? "Answer every message in under a minute, in your words" : "Welcome back"}
         </h1>
