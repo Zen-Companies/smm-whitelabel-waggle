@@ -334,12 +334,14 @@
     color: var(--ink-4);
     font-variant-numeric: tabular-nums;
   }
-  .tabs > [data-active] {
+  .tabs > [data-active],
+  .tabs > [aria-current="page"] {
     color: var(--ink);
     font-weight: 600;
     box-shadow: inset 0 -2px 0 var(--ink);
   }
-  .tabs > [data-active] > span {
+  .tabs > [data-active] > span,
+  .tabs > [aria-current="page"] > span {
     color: var(--ink-3);
     font-weight: 500;
   }
