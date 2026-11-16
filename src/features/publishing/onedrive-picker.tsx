@@ -70,7 +70,10 @@ export function OneDrivePicker({
             setQ("");
             load();
           }}
+          className="gap-2"
         >
+          {/* eslint-disable-next-line @next/next/no-img-element -- tiny static logo */}
+          <img src="/brands/onedrive.svg" alt="" width={18} height={18} className="shrink-0" />
           OneDrive
         </Button>
         {showSoon && <StateLabel state="soon">Google Drive, coming soon</StateLabel>}
@@ -81,6 +84,8 @@ export function OneDrivePicker({
   return (
     <div className="border-line flex w-full flex-col gap-3 rounded-xl border p-4">
       <div className="flex flex-wrap items-center gap-2">
+        {/* eslint-disable-next-line @next/next/no-img-element -- tiny static logo */}
+        <img src="/brands/onedrive.svg" alt="" width={18} height={18} className="shrink-0" />
         <b className="text-sm">OneDrive</b>
         <span className="meta flex-1 truncate">
           {["My files", ...trail.map((t) => t.name)].join(" / ")}
