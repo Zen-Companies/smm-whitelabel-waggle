@@ -54,3 +54,6 @@ design_files.zip
 # Local hand-off and tooling output (not part of the app)
 waggle-design-kit.zip
 .archify/
+
+# Agent worktrees (temporary copies of the repo): keep them out of the dev watcher and Tailwind
+.claude/worktrees/
