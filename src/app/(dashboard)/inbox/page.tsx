@@ -5,7 +5,10 @@ export const metadata = { title: "Inbox" };
 
 export default function InboxPage({ searchParams }: PageProps<"/inbox">) {
   return (
-    <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8">
+    <main
+      data-fit-screen
+      className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8 lg:min-h-0 lg:flex-1"
+    >
       <Suspense fallback={<InboxSkeleton />}>
         <InboxView searchParams={searchParams} />
       </Suspense>

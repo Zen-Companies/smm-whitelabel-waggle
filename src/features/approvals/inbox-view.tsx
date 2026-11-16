@@ -484,7 +484,7 @@ export async function InboxView({
   );
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 lg:min-h-0 lg:flex-1">
       <InboxLive tenantId={tenant.id} />
       <InboxHeadline today={today} />
       {settings?.replies_paused && (
@@ -515,7 +515,7 @@ export async function InboxView({
           <CaughtUpCard activity={activity} />
         </div>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)] xl:h-[calc(100dvh-220px)] xl:min-h-[560px] xl:grid-rows-[minmax(0,1fr)]">
+        <div className="grid gap-4 lg:min-h-[460px] lg:flex-1 lg:grid-cols-[minmax(280px,340px)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
           {listCard(
             <>
               {entries.length === 0 ? (
@@ -543,7 +543,7 @@ export async function InboxView({
           {selected && (
             <div
               className={cn(
-                "card grid min-h-0 min-w-0 overflow-hidden xl:grid-cols-[minmax(0,1fr)_260px]",
+                "card grid min-h-0 min-w-0 overflow-hidden lg:grid-cols-[minmax(0,1fr)_230px] xl:grid-cols-[minmax(0,1fr)_260px]",
                 !itemParam && "hidden lg:grid",
               )}
             >
@@ -580,7 +580,7 @@ export async function InboxView({
                 />
               </div>
               {conversation && (
-                <div className="border-line min-h-0 overflow-y-auto border-t p-5 xl:border-t-0 xl:border-l">
+                <div className="border-line min-h-0 overflow-y-auto border-t p-5 lg:border-t-0 lg:border-l">
                   <ContextPanel context={conversation.context} />
                 </div>
               )}
