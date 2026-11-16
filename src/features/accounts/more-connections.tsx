@@ -18,6 +18,7 @@ import {
   MORE_CONNECTIONS,
   withSettingsLinks,
 } from "./own-keys";
+import { StateLabel } from "@/components/app/state-mark";
 
 /**
  * Settings → Accounts → More connections (T80): groups under the social tiles. Sites connect
@@ -72,7 +73,7 @@ export async function MoreConnections() {
                       <b className="font-semibold">{item.label}</b>
                       <span className="text-ink-2 text-[13px]">{item.line}</span>
                     </span>
-                    {item.how === "soon" && <span className="text-ink-3 text-sm">Coming soon</span>}
+                    {item.how === "soon" && <StateLabel state="soon">Coming soon</StateLabel>}
                     {item.how === "mail" && item.platform && (
                       <form action={connectMailAction}>
                         <input type="hidden" name="platform" value={item.platform} />
@@ -84,10 +85,7 @@ export async function MoreConnections() {
                       </form>
                     )}
                     {item.how === "link" && item.href && (
-                      <Link
-                        href={item.href}
-                        className="text-honey-text text-sm font-medium underline"
-                      >
+                      <Link href={item.href} className="action-link with-arrow">
                         Open
                       </Link>
                     )}

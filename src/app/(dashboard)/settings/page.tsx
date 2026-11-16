@@ -119,7 +119,7 @@ async function Body({ searchParams }: PageProps<"/settings">) {
         {section === "business" && (
           <div className="flex flex-col gap-4">
             <BusinessSettings />
-            <Link href="/teach" className="text-honey-text text-sm font-medium underline">
+            <Link href="/teach" className="action-link with-arrow">
               Write answers in Teach Waggle
             </Link>
           </div>
@@ -140,7 +140,7 @@ export default function SettingsPage(props: PageProps<"/settings">) {
         <h1 className="page-title">Settings</h1>
         <p className="text-ink-2">
           How Waggle replies lives in{" "}
-          <Link href="/teach" className="text-honey-text font-medium underline">
+          <Link href="/teach" className="link-inline">
             Teach Waggle
           </Link>
           . Everything else is here.

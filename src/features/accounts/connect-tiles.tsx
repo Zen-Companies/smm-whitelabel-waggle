@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { hasSetupCard, PLATFORM_IDS, PLATFORMS, type Platform } from "@/lib/social/platforms";
 import { connectAccount } from "./actions";
+import { StateLabel } from "@/components/app/state-mark";
 
 /**
  * Where a tile's platform stands today: Zernio's sign-in, a form in Waggle (Bluesky), or later
@@ -49,9 +50,9 @@ function Tile({ p }: { p: Platform }) {
           </Button>
         </form>
       ) : (
-        <span className="bg-subtle text-ink-2 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap">
+        <StateLabel state="soon" className="text-xs">
           Coming soon
-        </span>
+        </StateLabel>
       )}
     </li>
   );

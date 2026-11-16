@@ -14,6 +14,7 @@ import { isChatLink, LINK_PLATFORMS } from "./links";
 import { LinksSection, type LinkFlow } from "./links-section";
 import { SEQUENCE_PLATFORMS } from "./sequence";
 import { SequencesSection, type SequenceTemplate } from "./sequences-section";
+import { TeachHeader } from "@/components/app/teach-header";
 
 const KINDS = [
   { key: "comment", label: "Comment to DM" },
@@ -64,11 +65,18 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
             .catch(() => []);
           templates[a.zernioId] = list
             .filter((t) => t.status === "APPROVED" && t.variables <= 1)
-            .map((t) => ({ name: t.name, language: t.language, variables: t.variables, body: t.body }));
+            .map((t) => ({
+              name: t.name,
+              language: t.language,
+              variables: t.variables,
+              body: t.body,
+            }));
         }
       }
     } catch (error) {
-      Sentry.captureException(error, { extra: { tenantId: tenant.id, step: `automations:${kind}` } });
+      Sentry.captureException(error, {
+        extra: { tenantId: tenant.id, step: `automations:${kind}` },
+      });
       unavailable = true;
     }
   }
@@ -77,17 +85,18 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
   const links: LinkFlow[] = await Promise.all(
     flows
       .filter((f) => isChatLink(f.description))
-      .map(async (f) => ({ ...f, qrSvg: await QRCode.toString(f.description, { type: "svg", margin: 1 }) })),
+      .map(async (f) => ({
+        ...f,
+        qrSvg: await QRCode.toString(f.description, { type: "svg", margin: 1 }),
+      })),
   );
   const plainFlows = flows.filter((f) => !isChatLink(f.description));
 
   return (
     <div className="flex max-w-[860px] flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <Link href="/knowledge-base" className="text-honey-text text-sm font-medium">
-          ← Teach Waggle
-        </Link>
-        <h1 className="page-title">Automations</h1>
+        <TeachHeader />
+        <h2 className="section-title mt-2">Automations</h2>
         <p className="text-ink-2">Replies that happen on their own, set up once.</p>
       </div>
       <nav aria-label="Automation kinds" className="tabs">
@@ -102,7 +111,9 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
         ))}
       </nav>
       {unavailable ? (
-        <p className="danger-box">Your automations couldn&apos;t be loaded right now. Try again in a moment.</p>
+        <p className="danger-box">
+          Your automations couldn&apos;t be loaded right now. Try again in a moment.
+        </p>
       ) : kind === "comment" ? (
         <>
           <AutomationsList

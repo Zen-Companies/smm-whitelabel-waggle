@@ -297,7 +297,7 @@ function ComposeFields({
             <input type="checkbox" disabled className="size-4" aria-hidden />
             <PlatformMark platform={a.platform} size={24} />
             {platformLabel(a.platform)} @{a.username ?? "account"}
-            <a href="/settings?section=accounts" className="text-honey-text font-medium underline">
+            <a href="/settings?section=accounts" className="action-link with-arrow">
               Reconnect to post here
             </a>
           </p>
@@ -343,11 +343,7 @@ function ComposeFields({
                   <span className="text-ink-2">
                     <b className="text-ink font-semibold">Pinterest</b>:{" "}
                     {board ? `pins to “${board.name}”.` : "pins to your first board."}{" "}
-                    <button
-                      type="button"
-                      onClick={() => setBoardFor(a.id)}
-                      className="text-honey-text font-medium underline"
-                    >
+                    <button type="button" onClick={() => setBoardFor(a.id)} className="action-link">
                       Change board
                     </button>
                   </span>
@@ -420,14 +416,14 @@ function ComposeFields({
           when === "queue" && (
             <p className="meta">
               Next free slot: {slotLabel(nextSlot)}.{" "}
-              <a href="/posts/queue" className="text-honey-text underline">
+              <a href="/posts/queue" className="link-inline">
                 Change posting times
               </a>
             </p>
           )
         ) : (
           <p className="meta">
-            <a href="/posts/queue" className="text-honey-text underline">
+            <a href="/posts/queue" className="link-inline">
               Set posting times
             </a>{" "}
             to post at your usual times with one tap.

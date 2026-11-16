@@ -24,6 +24,7 @@ import {
   networkOfPlatform,
   type AdNetwork,
 } from "./networks";
+import { StateLabel } from "@/components/app/state-mark";
 
 const ERRORS: Record<string, string> = {
   no_facebook: "Connect your Facebook Page in Settings → Accounts first.",
@@ -269,7 +270,7 @@ export async function AdsView({
           {ADS_COMING_SOON.map((label) => (
             <li key={label} className="flex flex-wrap items-center gap-2 py-3">
               <b className="flex-1 font-semibold">{label}</b>
-              <span className="text-ink-3">Coming soon</span>
+              <StateLabel state="soon">Coming soon</StateLabel>
             </li>
           ))}
         </ul>

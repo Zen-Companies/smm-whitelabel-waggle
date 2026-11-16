@@ -155,7 +155,7 @@ function NextPostNote({ post }: { post: NextPost }) {
   return (
     <Link
       href="/posts"
-      className="border-line mt-2 flex flex-col gap-0.5 border-t pt-4 text-[13px] hover:underline"
+      className="border-line hover:bg-subtle -mx-2 mt-2 flex flex-col gap-0.5 rounded-lg border-t px-2 pt-4 pb-2 text-[13px] no-underline"
     >
       <span className="label">Next post</span>
       <span className="text-ink text-sm">{post.title}</span>
@@ -438,7 +438,7 @@ export async function InboxView({
       {settings?.replies_paused && (
         <p role="status" className="banner">
           Replies are paused. Nothing is sent until you turn them back on in{" "}
-          <Link href="/teach" className="font-semibold underline">
+          <Link href="/teach" className="link-inline">
             Teach Waggle
           </Link>
           .

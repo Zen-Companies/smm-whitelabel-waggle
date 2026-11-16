@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { OwnerLab } from "@/features/lab";
+import { TeachHeader } from "@/components/app/teach-header";
 
 export const metadata = { title: "Lab" };
 
@@ -7,12 +8,10 @@ export const metadata = { title: "Lab" };
 export default function LabPage() {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8">
+      <TeachHeader />
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <a href="/teach" className="text-honey-text text-sm font-medium underline">
-            ← Teach Waggle
-          </a>
-          <h1 className="page-title">Lab</h1>
+          <h2 className="section-title">Lab</h2>
           <p className="text-ink-2">Check Waggle before it replies on its own.</p>
         </div>
         <span className="bg-subtle text-ink-2 flex min-h-9 items-center rounded-full px-3.5 text-sm">

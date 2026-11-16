@@ -8,6 +8,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { loadBoardLeads } from "./data";
 import { LEAD_STAGES, moveLabel, nextLine, nextStage } from "./lead-stage";
 import { MoveLeadButton } from "./move-lead-button";
+import { StateLabel } from "@/components/app/state-mark";
 
 /**
  * Leads (T74d, design "4 · Leads"): everyone who asked to book or buy, on a board: New, Talking,
@@ -35,9 +36,9 @@ export async function LeadsBoard() {
               Download list
             </a>
           )}
-          <span className="text-ink-3 flex min-h-11 items-center px-2 text-sm">
-            Send to my CRM · Coming soon
-          </span>
+          <StateLabel state="soon" className="min-h-11 px-2">
+            Send to my CRM, coming soon
+          </StateLabel>
         </div>
       </header>
       {leads.length === 0 ? (
@@ -80,10 +81,7 @@ export async function LeadsBoard() {
                       )}
                       {next && <p className="text-honey-text text-[13px] font-medium">{next}</p>}
                       <div className="flex flex-wrap items-center gap-2 pt-1">
-                        <Link
-                          href={`/inbox/items/${l.itemId}`}
-                          className="text-ink text-sm font-medium underline"
-                        >
+                        <Link href={`/inbox/items/${l.itemId}`} className="action-link with-arrow">
                           Open chat
                         </Link>
                         {canMove && (

@@ -15,6 +15,7 @@ import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { QuestionAnswers } from "./question-answers";
 import { unansweredQuestions } from "./teach";
+import { TeachHeader } from "@/components/app/teach-header";
 
 const SHOWN_ANSWERS = 12;
 const weekAgo = () => new Date(Date.now() - 7 * 86_400_000).toISOString();
@@ -48,23 +49,7 @@ export async function TeachView() {
 
   return (
     <main className="mx-auto flex w-full max-w-[1320px] flex-col gap-6 px-4 py-6 md:px-6 md:py-9">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="page-title">Teach Waggle</h1>
-          <p className="text-ink-2 mt-1">
-            Waggle only says what you write here. If a customer asks something else, it comes to
-            you.
-          </p>
-        </div>
-        <nav aria-label="More in Teach Waggle" className="flex gap-4 text-sm font-medium">
-          <Link href="/automations" className="text-honey-text underline">
-            Automations
-          </Link>
-          <Link href="/lab" className="text-honey-text underline">
-            The Lab
-          </Link>
-        </nav>
-      </header>
+      <TeachHeader />
       {canEdit && <PauseForm paused={paused} />}
 
       <div className="flex flex-wrap items-start gap-6">
@@ -96,7 +81,7 @@ export async function TeachView() {
                     </span>
                     <Link
                       href={`/knowledge-base?topic=${a.id}`}
-                      className="text-honey-text shrink-0 text-sm font-medium underline"
+                      className="action-link with-arrow shrink-0"
                     >
                       {canEdit ? "Edit" : "Open"}
                     </Link>
@@ -110,7 +95,7 @@ export async function TeachView() {
               </p>
             )}
             {answers.length > SHOWN_ANSWERS && (
-              <Link href="/knowledge-base" className="text-honey-text text-sm underline">
+              <Link href="/knowledge-base" className="action-link with-arrow self-start">
                 See all {answers.length} answers
               </Link>
             )}

@@ -141,7 +141,7 @@ export function ReadyList({
         ))}
       </div>
       {more > 0 && (
-        <Link href="/inbox" className="text-honey-text self-start text-sm font-medium underline">
+        <Link href="/inbox" className="action-link with-arrow self-start">
           {more} more in the Inbox
         </Link>
       )}
@@ -242,7 +242,7 @@ function ReadyCard({
                 type="submit"
                 formAction={undoAction}
                 variant="quiet"
-                className="h-auto px-1 font-medium underline"
+                className="h-auto px-1 font-medium"
                 disabled={undoing}
               >
                 {undoing ? "Undoing…" : "Undo"}
@@ -250,7 +250,7 @@ function ReadyCard({
             )}
           </p>
         ) : !canSend ? (
-          <Link href={`/inbox/items/${item.itemId}`} className="text-honey-text text-sm underline">
+          <Link href={`/inbox/items/${item.itemId}`} className="action-link with-arrow">
             Open in the Inbox
           </Link>
         ) : (

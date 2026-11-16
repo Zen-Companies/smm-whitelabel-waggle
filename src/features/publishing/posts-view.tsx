@@ -435,10 +435,7 @@ export async function PostsView({
             <section aria-label="Selected post" className="card flex flex-col px-5 pt-1">
               <div className="flex items-center justify-between pt-3">
                 <h2 className="meta">This post</h2>
-                <Link
-                  href={url({ view, month })}
-                  className="text-ink-2 text-sm underline underline-offset-4"
-                >
+                <Link href={url({ view, month })} className="action-link">
                   Close
                 </Link>
               </div>

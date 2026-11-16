@@ -106,11 +106,7 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
         <form action={undo}>
           <input type="hidden" name="itemId" value={entry.itemId} />
           <input type="hidden" name="draftId" value={entry.draft!.id} />
-          <button
-            type="submit"
-            disabled={undoing}
-            className="hover:text-ink text-ink-2 min-h-11 px-2 text-sm font-medium underline underline-offset-4"
-          >
+          <button type="submit" disabled={undoing} className="action-link mx-0">
             {undoing ? "Undoing…" : "Undo"}
           </button>
         </form>

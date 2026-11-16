@@ -140,7 +140,7 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
         </div>
         <Link
           href={analyticsHref(current, { section: "work" })}
-          className="text-honey-text self-start text-sm font-medium underline"
+          className="action-link with-arrow self-start"
         >
           See Waggle&apos;s work
         </Link>

@@ -363,10 +363,13 @@
   .action-link:focus-visible {
     background: var(--subtle);
   }
-  .action-link-arrow {
+  .action-link.with-arrow::after {
+    content: "→";
+    display: inline-block;
     transition: transform 150ms ease-out;
   }
-  .action-link:hover .action-link-arrow {
+  .action-link.with-arrow:hover::after,
+  .action-link.with-arrow:focus-visible::after {
     transform: translateX(3px);
   }
   /* Rule 5 (option B): a link inside a sentence sits on a honey highlight. */
@@ -431,14 +434,14 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .action-link,
-    .action-link-arrow,
+    .action-link.with-arrow::after,
     .link-inline,
     .empty-cell-hex,
     .empty-slot,
     .empty-slot .empty-slot-text {
       transition: none;
     }
-    .action-link:hover .action-link-arrow {
+    .action-link.with-arrow:hover::after {
       transform: none;
     }
   }

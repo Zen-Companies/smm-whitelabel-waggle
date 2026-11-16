@@ -81,7 +81,7 @@ export function AddBrandForm({
             href={cancelHref}
             className={buttonVariants({
               variant: "quiet",
-              className: cancelLabel === "Cancel" ? undefined : "underline underline-offset-4",
+              className: cancelLabel === "Cancel" ? undefined : "action-link",
             })}
           >
             {cancelLabel}

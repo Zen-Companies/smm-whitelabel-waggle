@@ -82,7 +82,7 @@ export function EmailConnectForm() {
                       href={p.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-honey-text underline"
+                      className="action-link with-arrow"
                     >
                       How
                     </a>
@@ -99,12 +99,7 @@ export function EmailConnectForm() {
             </ol>
           )}
           {d.helpUrl && (
-            <a
-              href={d.helpUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-honey-text text-sm underline"
-            >
+            <a href={d.helpUrl} target="_blank" rel="noreferrer" className="action-link with-arrow">
               Open {d.providerName ?? "your provider"}&apos;s settings
             </a>
           )}
@@ -125,7 +120,7 @@ export function EmailConnectForm() {
                   href={state.info.helpUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-honey-text underline"
+                  className="action-link with-arrow"
                 >
                   Fix it at your provider
                 </a>

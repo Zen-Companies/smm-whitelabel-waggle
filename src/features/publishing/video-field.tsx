@@ -119,7 +119,7 @@ export function VideoField({
           ) : (
             <span className="text-ink-2 truncate text-xs">
               {video.name} ·{" "}
-              <button type="button" onClick={remove} className="underline">
+              <button type="button" onClick={remove} className="action-link mx-0">
                 Remove
               </button>
             </span>

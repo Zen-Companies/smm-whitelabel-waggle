@@ -27,12 +27,7 @@ export function BlogForm({
       <div role="status" className="flex flex-col gap-2">
         <p className="text-success text-sm font-medium">{state.done}</p>
         {state.url && (
-          <a
-            href={state.url}
-            target="_blank"
-            rel="noreferrer"
-            className="text-honey-text text-sm underline"
-          >
+          <a href={state.url} target="_blank" rel="noreferrer" className="action-link with-arrow">
             Open the post
           </a>
         )}

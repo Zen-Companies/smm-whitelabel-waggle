@@ -123,7 +123,7 @@ export function Post({
             {post.target_account_ids.map((id) => accounts.get(id) ?? "account").join(", ")}
           </span>
           {live && (
-            <a href={live} target="_blank" rel="noreferrer" className="underline">
+            <a href={live} target="_blank" rel="noreferrer" className="action-link with-arrow">
               View post
             </a>
           )}
@@ -295,7 +295,7 @@ export function PostsTable({
                     : "–"}
                 </td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  <Link href={openHref(p.id)} className="text-honey-text font-medium underline">
+                  <Link href={openHref(p.id)} className="action-link with-arrow">
                     {word === "Needs you" ? "Pick a new time" : "Open"}
                   </Link>
                 </td>

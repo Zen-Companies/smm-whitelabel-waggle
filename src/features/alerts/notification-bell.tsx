@@ -161,7 +161,7 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
             <span className="flex items-center gap-1">
               <button
                 type="button"
-                className="hover:text-ink text-ink-2 min-h-11 px-2 text-sm font-medium underline underline-offset-4"
+                className="action-link mx-0"
                 onClick={() =>
                   startTransition(async () => {
                     await markAllNotificationsRead();

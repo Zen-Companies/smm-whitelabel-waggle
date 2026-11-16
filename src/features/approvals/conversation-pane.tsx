@@ -167,10 +167,7 @@ export function ContextPanel({ context }: { context: ConversationContext }) {
               </>
             )}
           </dl>
-          <Link
-            href={`/leads?lead=${lead.id}`}
-            className="text-honey-text font-medium underline underline-offset-4"
-          >
+          <Link href={`/leads?lead=${lead.id}`} className="action-link with-arrow">
             View in Leads
           </Link>
         </section>

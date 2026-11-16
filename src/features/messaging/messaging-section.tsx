@@ -18,6 +18,7 @@ import { launchDefaults, launchDue } from "./launch";
 import { LaunchForm, TestPhones } from "./launch-forms";
 import { RcsRequestForm } from "./rcs-forms";
 import { canFix, currentAgent, filedDefaults, isClosed, RCS_PRICES, rcsSteps } from "./rcs";
+import { StateLabel } from "@/components/app/state-mark";
 
 const usd = (cents: number) =>
   `$${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -233,12 +234,7 @@ function ImessageCard({
             </p>
           )}
           {mayEdit && <ImessageOrder purchaseIntentId={randomUUID()} businessName={businessName} />}
-          <p className="meta flex flex-wrap items-center gap-2">
-            Try it free first
-            <span className="bg-subtle rounded-full px-2 py-0.5 text-xs font-medium">
-              Coming soon
-            </span>
-          </p>
+          <StateLabel state="soon">Try it free first, coming soon</StateLabel>
         </>
       )}
       <details className="text-sm">

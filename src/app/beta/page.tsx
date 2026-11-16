@@ -58,10 +58,7 @@ async function Gate() {
         </span>
         <form action={signOut}>
           Signed in as {user.email} ·{" "}
-          <button
-            type="submit"
-            className="text-honey-text font-medium underline-offset-4 hover:underline"
-          >
+          <button type="submit" className="link-inline">
             Sign out
           </button>
         </form>

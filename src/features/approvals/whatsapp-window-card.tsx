@@ -70,7 +70,7 @@ export function WhatsAppWindowCard({
       ) : templates.length === 0 ? (
         <p className="text-ink-2 text-sm">
           No approved templates yet. Add one in{" "}
-          <a href="/settings?section=whatsapp" className="font-medium underline">
+          <a href="/settings?section=whatsapp" className="link-inline">
             Settings → WhatsApp templates
           </a>
           ; Meta reviews it, usually within a day.

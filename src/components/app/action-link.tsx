@@ -15,11 +15,8 @@ export function ActionLink({
   className?: string;
 }) {
   return (
-    <Link href={href} className={cn("action-link", className)}>
+    <Link href={href} className={cn("action-link with-arrow", className)}>
       {children}
-      <span aria-hidden className="action-link-arrow">
-        →
-      </span>
     </Link>
   );
 }

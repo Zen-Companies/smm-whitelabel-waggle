@@ -36,7 +36,7 @@ export function BrandSetup({ brandName }: { brandName: string }) {
         <p className="text-ink-2 text-[15px]">
           Two steps and Waggle starts answering for this brand.
         </p>
-        <Link href="/setup" className="text-honey-text mt-1 text-sm font-semibold underline">
+        <Link href="/setup" className="action-link with-arrow mt-1 self-start">
           Or follow the 4-step setup
         </Link>
       </div>

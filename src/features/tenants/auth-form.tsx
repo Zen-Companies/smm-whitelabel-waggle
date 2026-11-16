@@ -138,11 +138,11 @@ export function AuthForm({
         )}
         <p className="text-ink-3 text-center text-xs">
           By continuing you agree to the{" "}
-          <a href="https://gowaggle.ai/terms" className="underline underline-offset-2">
+          <a href="https://gowaggle.ai/terms" className="link-inline">
             Terms
           </a>{" "}
           and{" "}
-          <a href="https://gowaggle.ai/privacy" className="underline underline-offset-2">
+          <a href="https://gowaggle.ai/privacy" className="link-inline">
             Privacy Policy
           </a>
           .
@@ -151,14 +151,14 @@ export function AuthForm({
           {isSignup ? (
             <>
               Already have an account?{" "}
-              <Link href="/login" className="text-ink font-medium underline underline-offset-4">
+              <Link href="/login" className="link-inline">
                 Sign in
               </Link>
             </>
           ) : (
             <>
               New to Waggle?{" "}
-              <Link href="/signup" className="text-ink font-medium underline underline-offset-4">
+              <Link href="/signup" className="link-inline">
                 Start with your beta code
               </Link>
             </>

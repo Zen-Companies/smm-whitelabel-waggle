@@ -171,7 +171,7 @@ export async function SetupView({
           {connecting && !connected.has(connecting) && (
             <p role="status" className="card p-4 text-sm">
               {platformLabel(connecting)} is connecting. It shows up here in a moment.{" "}
-              <Link href="/setup?step=2" className="font-medium underline">
+              <Link href="/setup?step=2" className="link-inline">
                 Check again
               </Link>
             </p>
@@ -200,7 +200,7 @@ export async function SetupView({
               </li>
             ))}
           </ul>
-          <Link href="/settings?section=accounts" className="text-honey-text text-sm underline">
+          <Link href="/settings?section=accounts" className="action-link with-arrow self-start">
             More: TikTok, WhatsApp, YouTube, LinkedIn and others
           </Link>
           <div className="flex items-center justify-between gap-3">
@@ -212,7 +212,7 @@ export async function SetupView({
                 Next
               </Link>
             ) : (
-              <Link href="/setup?step=3" className="text-ink-2 text-sm underline">
+              <Link href="/setup?step=3" className="action-link">
                 Skip for now
               </Link>
             )}

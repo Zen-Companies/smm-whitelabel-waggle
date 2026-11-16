@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { listOneDriveAction, pickOneDriveAction, type OneDriveList } from "./actions";
+import { StateLabel } from "@/components/app/state-mark";
 
 const mb = (bytes: number | null) =>
   bytes === null
@@ -68,7 +69,7 @@ export function OneDrivePicker({
         >
           OneDrive
         </Button>
-        <span className="text-ink-3 text-sm">Google Drive · Coming soon</span>
+        <StateLabel state="soon">Google Drive, coming soon</StateLabel>
       </div>
     );
   }
@@ -121,7 +122,7 @@ export function OneDrivePicker({
         <p className="text-danger text-sm">
           {list.error}{" "}
           {list.connect && (
-            <a href="/settings?section=accounts" className="underline">
+            <a href="/settings?section=accounts" className="action-link with-arrow">
               Open Accounts
             </a>
           )}

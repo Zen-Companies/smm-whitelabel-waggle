@@ -102,10 +102,7 @@ export async function BlogPage({
             Write blog posts here for a WordPress, Shopify or Webflow site. Connect it in Settings →
             Accounts → More connections. Wix is coming soon.
           </p>
-          <Link
-            href="/settings?section=accounts"
-            className="text-honey-text text-sm font-medium underline"
-          >
+          <Link href="/settings?section=accounts" className="action-link with-arrow self-start">
             Open Accounts
           </Link>
         </div>
@@ -184,7 +181,7 @@ export async function BlogPage({
                             href={a.url}
                             target="_blank"
                             rel="noreferrer"
-                            className="font-medium underline"
+                            className="text-ink hover:text-honey-text font-medium no-underline"
                           >
                             {a.title || "Untitled"}
                           </a>
