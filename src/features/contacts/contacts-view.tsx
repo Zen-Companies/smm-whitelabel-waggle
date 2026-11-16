@@ -4,6 +4,7 @@ import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
 import type { Contact } from "@/lib/social/types";
+import { contactsProblem, type ContactsProblem } from "./contacts-problem";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ContactRow, ContactsActions } from "./contacts-panels";
 import { ContactsTabs } from "./contacts-tabs";
@@ -23,7 +24,7 @@ export async function ContactsView({ q, tag, page }: { q?: string; tag?: string;
     .eq("status", "active");
   let contacts: Contact[] = [];
   let total = 0;
-  let unavailable = false;
+  let problem: ContactsProblem | null = null;
   if (tenant.zernioProfileId) {
     try {
       ({ contacts, total } = await getSocialProvider().listContacts({
@@ -34,13 +35,19 @@ export async function ContactsView({ q, tag, page }: { q?: string; tag?: string;
         signal: AbortSignal.timeout(10_000),
       }));
     } catch (error) {
-      Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "listContacts" } });
-      unavailable = true;
+      problem = contactsProblem(error);
+      if (problem === "down") {
+        Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "listContacts" } });
+      }
     }
   }
   const canEdit = can(tenant.role, "replies.approve");
   const href = (p: number) => {
-    const s = new URLSearchParams({ ...(q ? { q } : {}), ...(tag ? { tag } : {}), ...(p ? { page: String(p) } : {}) });
+    const s = new URLSearchParams({
+      ...(q ? { q } : {}),
+      ...(tag ? { tag } : {}),
+      ...(p ? { page: String(p) } : {}),
+    });
     return `/contacts${s.size ? `?${s}` : ""}`;
   };
 
@@ -48,7 +55,9 @@ export async function ContactsView({ q, tag, page }: { q?: string; tag?: string;
     <div className="flex max-w-[960px] flex-col gap-5">
       <div className="flex flex-col gap-1">
         <h1 className="page-title">Contacts</h1>
-        <p className="text-ink-2">Everyone you can message. People who message you are added on their own.</p>
+        <p className="text-ink-2">
+          Everyone you can message. People who message you are added on their own.
+        </p>
       </div>
       <ContactsTabs active="/contacts" />
       {canEdit && <ContactsActions hasWhatsApp={(wa ?? 0) > 0} />}
@@ -56,22 +65,52 @@ export async function ContactsView({ q, tag, page }: { q?: string; tag?: string;
         <label htmlFor="contacts-q" className="sr-only">
           Search by name
         </label>
-        <input id="contacts-q" name="q" defaultValue={q} placeholder="Search by name" className="field max-w-64" />
+        <input
+          id="contacts-q"
+          name="q"
+          defaultValue={q}
+          placeholder="Search by name"
+          className="field max-w-64"
+        />
         <label htmlFor="contacts-tag" className="sr-only">
           Tag
         </label>
-        <input id="contacts-tag" name="tag" defaultValue={tag} placeholder="Tag" className="field max-w-40" />
-        <button type="submit" className="border-line-strong hover:bg-subtle rounded-xl border px-4 text-sm font-medium">
+        <input
+          id="contacts-tag"
+          name="tag"
+          defaultValue={tag}
+          placeholder="Tag"
+          className="field max-w-40"
+        />
+        <button
+          type="submit"
+          className="border-line-strong hover:bg-subtle rounded-xl border px-4 text-sm font-medium"
+        >
           Search
         </button>
       </form>
-      {unavailable ? (
-        <p className="danger-box">Your contacts couldn&apos;t be loaded right now. Try again in a moment.</p>
+      {problem === "not_set_up" ? (
+        <p className="card text-ink-2 p-5">
+          <b className="text-ink font-semibold">
+            Contacts aren&apos;t set up for this business yet.
+          </b>{" "}
+          They appear once an account is connected and people message you.
+        </p>
+      ) : problem === "down" ? (
+        <p className="danger-box">
+          Your contacts couldn&apos;t be loaded right now. Try again in a moment.
+        </p>
       ) : contacts.length === 0 ? (
-        <p className="text-ink-2">{q || tag ? "No one matches." : "No contacts yet. They appear as people message you, or add them above."}</p>
+        <p className="text-ink-2">
+          {q || tag
+            ? "No one matches."
+            : "No contacts yet. They appear as people message you, or add them above."}
+        </p>
       ) : (
         <>
-          <p className="meta">{total.toLocaleString("en-US")} {total === 1 ? "person" : "people"}</p>
+          <p className="meta">
+            {total.toLocaleString("en-US")} {total === 1 ? "person" : "people"}
+          </p>
           <ul className="card divide-line flex flex-col divide-y">
             {contacts.map((c) => (
               <ContactRow key={c.id} c={c} canEdit={canEdit} />

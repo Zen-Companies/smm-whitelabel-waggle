@@ -92,6 +92,56 @@ const MEDIA_EXT: Record<string, string> = {
   "video/x-m4v": "m4v",
 };
 
+const DEMO_PROFILE_PREFIX = "demo_profile_";
+
+/** The demo café's customers (scripts/demo-seed.ts), as contacts. Oldest last. */
+const DEMO_CONTACTS: Omit<Contact, "id" | "email" | "lastMessageAt">[] = [
+  {
+    name: "Liza Tan",
+    tags: ["regular"],
+    subscribed: true,
+    platform: "instagram",
+    identifier: "@lizatan",
+  },
+  { name: "aisha.k", tags: [], subscribed: true, platform: "instagram", identifier: "@aisha.k" },
+  {
+    name: "Rico Villanueva",
+    tags: ["regular"],
+    subscribed: true,
+    platform: "facebook",
+    identifier: "Rico Villanueva",
+  },
+  { name: "jen.dc", tags: [], subscribed: false, platform: "instagram", identifier: "@jen.dc" },
+  {
+    name: "Carlo Mendoza",
+    tags: ["events"],
+    subscribed: true,
+    platform: "instagram",
+    identifier: "@carlo.mendoza",
+  },
+  {
+    name: "mika.reyes",
+    tags: [],
+    subscribed: true,
+    platform: "instagram",
+    identifier: "@mika.reyes",
+  },
+  {
+    name: "Ana Gomez",
+    tags: ["events", "regular"],
+    subscribed: true,
+    platform: "whatsapp",
+    identifier: "+639175550142",
+  },
+  {
+    name: "Joel Ramos",
+    tags: ["regular"],
+    subscribed: true,
+    platform: "whatsapp",
+    identifier: "+639175550187",
+  },
+];
+
 export class MockSocialProvider implements SocialProvider {
   readonly sends: MockSend[] = [];
   readonly posts = new Map<string, CreatePostInput & { status: ProviderPostStatus | "deleted" }>();
@@ -1123,8 +1173,29 @@ export class MockSocialProvider implements SocialProvider {
 
   /** Contacts (T78a), kept in memory per profile. */
   private contacts = new Map<string, Contact & { profileId: string }>();
+  private demoSeeded = new Set<string>();
+
+  /**
+   * A demo business (`pnpm demo:seed`, profile ids starting `demo_profile_`) starts with the
+   * people from its Inbox, so the Contacts page has something to show locally.
+   */
+  private seedDemoContacts(profileId: string) {
+    if (!profileId.startsWith(DEMO_PROFILE_PREFIX) || this.demoSeeded.has(profileId)) return;
+    this.demoSeeded.add(profileId);
+    DEMO_CONTACTS.forEach((c, i) => {
+      const id = `${profileId}_contact_${i + 1}`;
+      this.contacts.set(id, {
+        ...c,
+        id,
+        profileId,
+        email: null,
+        lastMessageAt: new Date(Date.now() - (i + 1) * 5 * 3_600_000).toISOString(),
+      });
+    });
+  }
 
   async listContacts(input: { profileId: string; search?: string; tag?: string; skip?: number }) {
+    this.seedDemoContacts(input.profileId);
     const all = [...this.contacts.values()]
       .filter((c) => c.profileId === input.profileId)
       .filter((c) => !input.tag || c.tags.includes(input.tag))
