@@ -85,15 +85,11 @@ export async function KbList({
             The only facts Waggle uses in replies. If it isn&apos;t here, it asks you.
           </p>
         </div>
-        {mayEdit && (
-          <Link href={href({ topic: "new", q })} className={buttonVariants({ variant: "primary" })}>
-            Add a topic
-          </Link>
-        )}
       </header>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,320px)]">
-        <div className="flex flex-col gap-2">
+      {/* Each area scrolls on its own; on a wide screen the page fits it (approved 16 Nov). */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,320px)] xl:grid-rows-[minmax(0,1fr)]">
+        <div className="card flex min-h-0 flex-col gap-2 p-3">
           {entries.length > 0 ? (
             <>
               <form action="/teach/business-info" className="flex flex-col gap-2" role="search">
@@ -109,7 +105,13 @@ export async function KbList({
                   className="field"
                 />
               </form>
-              <ul aria-label="Topics" className="mt-1 flex flex-col">
+              <p className="meta px-1">
+                {entries.length === 1 ? "1 topic" : `${entries.length} topics`}
+              </p>
+              <ul
+                aria-label="Topics"
+                className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-1"
+              >
                 {shown.map((e) => (
                   <li key={e.id}>
                     <Link
@@ -135,33 +137,43 @@ export async function KbList({
               No topics yet. Start with the basics: hours, location, prices and what you offer.
             </p>
           )}
+          {mayEdit && (
+            <Link
+              href={href({ topic: "new", q })}
+              className={cn(buttonVariants({ variant: "primary" }), "mt-auto w-full")}
+            >
+              + Add a topic
+            </Link>
+          )}
         </div>
 
-        <RoleGate allowed={mayEdit} role={tenant.role} what="the business info">
-          {selected ? (
-            <KbEntryForm
-              key={selected.id}
-              entry={{
-                id: selected.id,
-                title: selected.title,
-                content: selected.content,
-                searchable: selected.embedding !== null,
-              }}
-              changed={dayOnly(shortTime(selected.updated_at))}
-            />
-          ) : (
-            <KbEntryForm
-              key={`new-${from ?? ""}-${suggestion?.id ?? ""}`}
-              prefillTitle={prefill}
-              prefillContent={suggestion?.content}
-              suggestionId={suggestion?.id}
-            />
-          )}
-        </RoleGate>
+        <div className="min-h-0 overflow-y-auto">
+          <RoleGate allowed={mayEdit} role={tenant.role} what="the business info">
+            {selected ? (
+              <KbEntryForm
+                key={selected.id}
+                entry={{
+                  id: selected.id,
+                  title: selected.title,
+                  content: selected.content,
+                  searchable: selected.embedding !== null,
+                }}
+                changed={dayOnly(shortTime(selected.updated_at))}
+              />
+            ) : (
+              <KbEntryForm
+                key={`new-${from ?? ""}-${suggestion?.id ?? ""}`}
+                prefillTitle={prefill}
+                prefillContent={suggestion?.content}
+                suggestionId={suggestion?.id}
+              />
+            )}
+          </RoleGate>
+        </div>
 
         <aside
           aria-labelledby="gaps"
-          className="card flex flex-col gap-3 p-4 lg:col-start-2 xl:col-start-3"
+          className="card flex min-h-0 flex-col gap-3 overflow-y-auto p-4 lg:col-start-2 xl:col-start-3"
         >
           <h2 id="gaps" className="font-semibold">
             Questions your info didn&apos;t answer

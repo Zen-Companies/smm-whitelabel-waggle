@@ -1,6 +1,8 @@
 "use client";
 
 import { ArrowDown, ArrowUp, X } from "lucide-react";
+import { SidePanel } from "@/components/app/side-panel";
+import { EmptySpot } from "@/components/app/empty-spot";
 import { useActionState, useState } from "react";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
@@ -35,9 +37,10 @@ export function FlowsSection({
   accounts: AutomationAccount[];
   canEdit: boolean;
 }) {
-  const [open, setOpen] = useState(flows.length === 0);
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-5">
+      {flows.length === 0 && <EmptySpot>No chat flows yet. A flow runs a short conversation on its own, then hands over to you.</EmptySpot>}
       {flows.length > 0 && (
         <ul className="card divide-line flex flex-col divide-y">
           {flows.map((f) => (
@@ -51,13 +54,10 @@ export function FlowsSection({
         </Button>
       )}
       {canEdit && open && accounts.length > 0 && (
-        <section className="card flex flex-col gap-4 p-5" aria-labelledby="flow-form-title">
-          <h2 id="flow-form-title" className="section-title">
-            New chat flow
-          </h2>
+        <SidePanel label="New chat flow" onClose={() => setOpen(false)}>
           <p className="text-ink-2 text-sm">A short conversation that runs on its own, then hands over to you.</p>
           <FlowForm accounts={accounts} onDone={() => setOpen(false)} />
-        </section>
+        </SidePanel>
       )}
       {!accounts.length && <p className="meta">Connect WhatsApp, Instagram, Facebook, Telegram, Bluesky or TikTok first.</p>}
     </div>

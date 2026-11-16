@@ -37,10 +37,10 @@ export function QuestionAnswers({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 id="q-title" className="section-title">
-            Customers asked things you haven&apos;t answered yet
+            Questions to answer
           </h2>
           <p className="text-ink-3 mt-1 text-sm">
-            Write a short answer once. Next time Waggle can reply for you.
+            Customers asked these. Answer once and Waggle can reply next time.
           </p>
         </div>
         {left.length > 0 && (

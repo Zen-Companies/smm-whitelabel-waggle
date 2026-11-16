@@ -137,6 +137,8 @@ function ResultCard({ tried }: { tried: PracticeTry }) {
   );
 }
 
+const SHOWN_TRIES = 5;
+
 function RecentTries({
   tries,
   onTryAgain,
@@ -145,44 +147,52 @@ function RecentTries({
   onTryAgain: (t: PracticeTry) => void;
 }) {
   if (tries.length === 0) return null;
+  // Newest 5 on the page; the rest open with See all (Teach Waggle, approved 16 Nov).
+  const row = (t: PracticeTry) => (
+    <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
+      <span className="flex min-w-0 flex-[1_1_240px] flex-col">
+        <span className="truncate text-sm font-medium">&ldquo;{t.text}&rdquo;</span>
+        <span className="meta">
+          {t.kind === "dm" ? "DM" : "Comment"} · {shortTime(t.at)}
+        </span>
+      </span>
+      <span
+        className={cn(
+          "text-sm",
+          t.card.tone === "owner" ? "text-honey-text font-medium" : "text-ink-2",
+        )}
+      >
+        {t.card.offerAddAnswer ? "Your info doesn't answer it" : t.card.next.split(":")[0]}
+      </span>
+      {t.card.offerAddAnswer ? (
+        <Link
+          href="/teach/business-info?topic=new"
+          className="text-honey-text flex min-h-11 items-center text-sm font-medium"
+        >
+          Add an answer
+        </Link>
+      ) : (
+        <Button variant="quiet" onClick={() => onTryAgain(t)}>
+          Try again
+        </Button>
+      )}
+    </li>
+  );
   return (
     <section aria-labelledby="recent-tries" className="card flex flex-col gap-1 p-5">
       <h2 id="recent-tries" className="font-semibold">
         Your recent tries
       </h2>
       <p className="meta">Try one again after you add business info to see the difference.</p>
-      <ul className="flex flex-col divide-y">
-        {tries.map((t) => (
-          <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-            <span className="flex min-w-0 flex-[1_1_240px] flex-col">
-              <span className="truncate text-sm font-medium">&ldquo;{t.text}&rdquo;</span>
-              <span className="meta">
-                {t.kind === "dm" ? "DM" : "Comment"} · {shortTime(t.at)}
-              </span>
-            </span>
-            <span
-              className={cn(
-                "text-sm",
-                t.card.tone === "owner" ? "text-honey-text font-medium" : "text-ink-2",
-              )}
-            >
-              {t.card.offerAddAnswer ? "Your info doesn't answer it" : t.card.next.split(":")[0]}
-            </span>
-            {t.card.offerAddAnswer ? (
-              <Link
-                href="/teach/business-info?topic=new"
-                className="text-honey-text flex min-h-11 items-center text-sm font-medium"
-              >
-                Add an answer
-              </Link>
-            ) : (
-              <Button variant="quiet" onClick={() => onTryAgain(t)}>
-                Try again
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
+      <ul className="flex flex-col divide-y">{tries.slice(0, SHOWN_TRIES).map(row)}</ul>
+      {tries.length > SHOWN_TRIES && (
+        <details className="group">
+          <summary className="action-link with-arrow mt-1 cursor-pointer list-none text-sm group-open:hidden [&::-webkit-details-marker]:hidden">
+            See all {tries.length}
+          </summary>
+          <ul className="flex flex-col divide-y">{tries.slice(SHOWN_TRIES).map(row)}</ul>
+        </details>
+      )}
     </section>
   );
 }

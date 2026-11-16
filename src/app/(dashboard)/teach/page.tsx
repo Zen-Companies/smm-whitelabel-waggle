@@ -3,7 +3,15 @@ import { TeachView } from "@/features/teach";
 
 export const metadata = { title: "Teach Waggle" };
 
-export default function TeachPage() {
+// Plain props type: the generated route types need `next typegen`.
+type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
+
+async function View({ searchParams }: Props) {
+  const { replies } = await searchParams;
+  return <TeachView replies={replies === "1"} />;
+}
+
+export default function TeachPage(props: Props) {
   return (
     <Suspense
       fallback={
@@ -12,7 +20,7 @@ export default function TeachPage() {
         </div>
       }
     >
-      <TeachView />
+      <View {...props} />
     </Suspense>
   );
 }

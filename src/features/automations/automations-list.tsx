@@ -1,6 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { SidePanel } from "@/components/app/side-panel";
+import { EmptySpot } from "@/components/app/empty-spot";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
 import type { CommentAutomation } from "@/lib/social/types";
@@ -17,10 +19,13 @@ export function AutomationsList({
   accounts: AutomationAccount[];
   canEdit: boolean;
 }) {
-  const [open, setOpen] = useState<"new" | string | null>(automations.length ? null : "new");
+  const [open, setOpen] = useState<"new" | string | null>(null);
   const editing = open && open !== "new" ? (automations.find((a) => a.id === open) ?? null) : null;
   return (
     <div className="flex flex-col gap-5">
+      {automations.length === 0 && (
+        <EmptySpot>No comment to DM yet. Pick a word; when someone comments it, Waggle sends them a message.</EmptySpot>
+      )}
       {automations.length > 0 && (
         <ul className="card divide-line flex flex-col divide-y">
           {automations.map((a) => (
@@ -34,13 +39,13 @@ export function AutomationsList({
         </Button>
       )}
       {canEdit && open !== null && (
-        <section className="card flex flex-col gap-4 p-5" aria-labelledby="ca-form-title">
-          <h2 id="ca-form-title" className="section-title">
-            {editing ? `Edit “${editing.name}”` : "New comment to DM"}
-          </h2>
+        <SidePanel
+          label={editing ? `Edit “${editing.name}”` : "New comment to DM"}
+          onClose={() => setOpen(null)}
+        >
           <p className="text-ink-2 text-sm">When someone comments a word, Waggle sends them a message.</p>
           <CommentDmForm key={open} accounts={accounts} editing={editing} onDone={() => setOpen(null)} />
-        </section>
+        </SidePanel>
       )}
       {!accounts.length && (
         <p className="meta">Connect Instagram, Facebook, TikTok, Threads, LinkedIn or YouTube first.</p>

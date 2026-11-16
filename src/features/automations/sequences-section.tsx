@@ -1,6 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
+import { SidePanel } from "@/components/app/side-panel";
+import { EmptySpot } from "@/components/app/empty-spot";
 import { useActionState, useState } from "react";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
@@ -31,9 +33,10 @@ export function SequencesSection({
   templates: Record<string, SequenceTemplate[]>;
   canEdit: boolean;
 }) {
-  const [open, setOpen] = useState(sequences.length === 0);
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-5">
+      {sequences.length === 0 && <EmptySpot>No sequences yet. A sequence sends timed follow-up messages to the people you add.</EmptySpot>}
       {sequences.length > 0 && (
         <ul className="card divide-line flex flex-col divide-y">
           {sequences.map((s) => (
@@ -47,13 +50,10 @@ export function SequencesSection({
         </Button>
       )}
       {canEdit && open && accounts.length > 0 && (
-        <section className="card flex flex-col gap-4 p-5" aria-labelledby="seq-form-title">
-          <h2 id="seq-form-title" className="section-title">
-            New sequence
-          </h2>
+        <SidePanel label="New sequence" onClose={() => setOpen(false)}>
           <p className="text-ink-2 text-sm">Timed follow-up messages to the people you add.</p>
           <SequenceForm accounts={accounts} templates={templates} onDone={() => setOpen(false)} />
-        </section>
+        </SidePanel>
       )}
       {!accounts.length && <p className="meta">Connect WhatsApp, Instagram, Facebook, Telegram or Bluesky first.</p>}
     </div>

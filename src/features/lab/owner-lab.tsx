@@ -15,15 +15,31 @@ import { setupComplete, type SetupStep } from "./setup";
 function SetupChecklist({ steps }: { steps: SetupStep[] }) {
   const done = steps.filter((s) => s.done).length;
   return (
-    <section aria-labelledby="setup-heading" className="card flex flex-col gap-2 p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <h2 id="setup-heading" className="section-title">
+    // One line until opened (Teach Waggle, approved 16 Nov): a progress bar and Show steps.
+    <details aria-labelledby="setup-heading" className="card group flex flex-col gap-2 px-5 py-3">
+      <summary className="flex min-h-10 cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 [&::-webkit-details-marker]:hidden">
+        <h2 id="setup-heading" className="font-semibold">
           Get Waggle ready
         </h2>
-        <span className="meta">
+        <span
+          className="bg-subtle h-2 min-w-24 flex-1 overflow-hidden rounded-full"
+          role="progressbar"
+          aria-label="Setup progress"
+          aria-valuenow={done}
+          aria-valuemin={0}
+          aria-valuemax={steps.length}
+        >
+          <span
+            className="bg-honey block h-full"
+            style={{ width: `${Math.round((done / steps.length) * 100)}%` }}
+          />
+        </span>
+        <span className="text-sm">
           {done} of {steps.length} done
         </span>
-      </div>
+        <span className="action-link with-arrow text-sm group-open:hidden">Show steps</span>
+        <span className="action-link hidden text-sm group-open:inline-flex">Hide steps</span>
+      </summary>
       <ol className="grid gap-x-6 gap-y-1 sm:grid-cols-2 xl:grid-cols-3">
         {steps.map((s, i) => (
           <li key={s.key} className="flex min-h-13 items-center gap-3">
@@ -56,7 +72,7 @@ function SetupChecklist({ steps }: { steps: SetupStep[] }) {
           </li>
         ))}
       </ol>
-    </section>
+    </details>
   );
 }
 

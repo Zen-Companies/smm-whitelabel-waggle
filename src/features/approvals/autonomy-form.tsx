@@ -34,9 +34,9 @@ export function AutonomyForm({
   const formRef = useRef<HTMLFormElement>(null);
 
   return (
-    <form ref={formRef} action={action} className="p-5">
+    <form ref={formRef} action={action} className="@container p-5">
       <input type="hidden" name="category" value={category} />
-      <fieldset className="grid grid-cols-1 items-center gap-x-6 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+      <fieldset className="grid grid-cols-1 items-center gap-x-6 gap-y-3 @xl:grid-cols-[minmax(0,1fr)_auto]">
         <legend className="sr-only">{label}</legend>
         <span className="flex flex-col" aria-hidden>
           <span className="font-semibold">{label}</span>

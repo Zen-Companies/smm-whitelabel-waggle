@@ -1,6 +1,8 @@
 "use client";
 
 import QRCode from "qrcode";
+import { SidePanel } from "@/components/app/side-panel";
+import { EmptySpot } from "@/components/app/empty-spot";
 import { useActionState, useState } from "react";
 import { CopyButton } from "@/components/app/copy-button";
 import { PlatformMark } from "@/components/app/platform-mark";
@@ -25,9 +27,10 @@ export function LinksSection({
   accounts: AutomationAccount[];
   canEdit: boolean;
 }) {
-  const [open, setOpen] = useState(links.length === 0);
+  const [open, setOpen] = useState(false);
   return (
     <div className="flex flex-col gap-5">
+      {links.length === 0 && <EmptySpot>No links yet. A link or QR code opens a chat with you and starts a short conversation.</EmptySpot>}
       {links.length > 0 && (
         <ul className="card divide-line flex flex-col divide-y">
           {links.map((l) => (
@@ -41,15 +44,12 @@ export function LinksSection({
         </Button>
       )}
       {canEdit && open && accounts.length > 0 && (
-        <section className="card flex flex-col gap-4 p-5" aria-labelledby="link-form-title">
-          <h2 id="link-form-title" className="section-title">
-            New link
-          </h2>
+        <SidePanel label="New link" onClose={() => setOpen(false)}>
           <p className="text-ink-2 text-sm">
             Opens a chat with you and starts a short conversation. Print the QR code on tables, flyers and receipts.
           </p>
           <FlowForm mode="link" accounts={accounts} onDone={() => setOpen(false)} />
-        </section>
+        </SidePanel>
       )}
       {!accounts.length && <p className="meta">Connect Instagram or Facebook first.</p>}
       <p className="meta">Instagram and Facebook conversations can only continue within 24 hours of the person&apos;s last message.</p>

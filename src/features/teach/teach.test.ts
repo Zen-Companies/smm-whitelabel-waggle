@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { unansweredQuestions } from "./teach";
+import { unansweredQuestions, repliesSummary } from "./teach";
 
 describe("Teach Waggle (T73)", () => {
   it("drops questions the owner already answered here", () => {
@@ -17,5 +17,20 @@ describe("Teach Waggle (T73)", () => {
     expect(
       unansweredQuestions([{ text: long }], [{ title: "Can I bring my two dogs to the open…" }]),
     ).toEqual([]);
+  });
+});
+
+describe("repliesSummary", () => {
+  it("reads each setting, Off when none is saved, complaints always to the owner", () => {
+    expect(repliesSummary([{ category: "faq", mode: "auto" }])).toEqual([
+      { label: "Questions", mode: "Reply on its own", state: "working" },
+      { label: "Leads", mode: "Off", state: "off" },
+      { label: "Complaints", mode: "Always to you", state: "waiting" },
+    ]);
+    expect(repliesSummary([{ category: "lead", mode: "approve" }])[1]).toEqual({
+      label: "Leads",
+      mode: "Ask me first",
+      state: "waiting",
+    });
   });
 });
