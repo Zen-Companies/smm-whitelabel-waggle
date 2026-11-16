@@ -388,7 +388,7 @@ export async function InboxView({
           <div className="[&_.tabs]:border-b-0">{tabs}</div>
         )}
       </div>
-      <div className="scroll-modern min-h-0 flex-1 overflow-y-auto p-2">{body}</div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">{body}</div>
     </div>
   );
 
@@ -580,7 +580,7 @@ export async function InboxView({
                 />
               </div>
               {conversation && (
-                <div className="border-line scroll-modern min-h-0 overflow-y-auto border-t p-5 lg:border-t-0 lg:border-l">
+                <div className="border-line min-h-0 overflow-y-auto border-t p-5 lg:border-t-0 lg:border-l">
                   <ContextPanel context={conversation.context} />
                 </div>
               )}
