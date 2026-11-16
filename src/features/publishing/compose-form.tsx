@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, ChevronDown } from "lucide-react";
+import { Camera, Check, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useRef, useState } from "react";
 import { cn } from "cn";
@@ -388,34 +388,70 @@ function ComposeFields({
           {accounts.length === 0 && (
             <p className="text-ink-3 text-sm">Connect an account in Settings first.</p>
           )}
-          {accounts.map((a) => (
-            <label key={a.id} className="flex min-h-11 items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                name="accounts"
-                value={a.id}
-                checked={picked.includes(a.id)}
-                onChange={(e) =>
-                  setPicked((p) =>
-                    e.target.checked ? [...p, a.id] : p.filter((id) => id !== a.id),
-                  )
-                }
-                className="size-4"
-              />
-              <PlatformMark platform={a.platform} size={24} />
-              {platformLabel(a.platform)} @{a.username ?? "account"}
-            </label>
-          ))}
+          {/* Account tiles (approved 16 Nov, option A): tap to pick; picked is honey with a check,
+              unpicked goes grey. The checkbox stays (hidden) for the form and screen readers. */}
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {accounts.map((a) => {
+              const on = picked.includes(a.id);
+              return (
+                <label
+                  key={a.id}
+                  className={cn(
+                    "flex min-h-14 cursor-pointer items-center gap-2.5 rounded-[14px] border px-3 py-2 transition-colors duration-150 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2",
+                    on
+                      ? "border-honey bg-honey-tint border-[1.5px]"
+                      : "border-line bg-surface hover:bg-subtle",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    name="accounts"
+                    value={a.id}
+                    checked={on}
+                    onChange={(e) =>
+                      setPicked((p) =>
+                        e.target.checked ? [...p, a.id] : p.filter((id) => id !== a.id),
+                      )
+                    }
+                    className="sr-only"
+                  />
+                  <span className={cn("flex transition", !on && "opacity-45 grayscale")}>
+                    <PlatformMark platform={a.platform} size={28} />
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <b className="text-sm font-semibold">{platformLabel(a.platform)}</b>
+                    <span className="text-ink-3 truncate text-xs">@{a.username ?? "account"}</span>
+                  </span>
+                  {on ? (
+                    <span
+                      aria-hidden
+                      className="bg-honey text-ink flex size-5 shrink-0 items-center justify-center rounded-full"
+                    >
+                      <Check className="size-3" strokeWidth={3} />
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="border-line-strong size-5 shrink-0 rounded-full border-[1.5px]"
+                    />
+                  )}
+                </label>
+              );
+            })}
+          </div>
           {disconnected.map((a) => (
             <p
               key={`down-${a.platform}-${a.username ?? ""}`}
-              className="text-ink-3 flex min-h-11 flex-wrap items-center gap-3 text-sm"
+              className="text-ink-3 flex min-h-10 flex-wrap items-center gap-2.5 text-[13px]"
             >
-              <input type="checkbox" disabled className="size-4" aria-hidden />
-              <PlatformMark platform={a.platform} size={24} />
-              {platformLabel(a.platform)} @{a.username ?? "account"}
+              <span className="flex opacity-45 grayscale">
+                <PlatformMark platform={a.platform} size={20} />
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                {platformLabel(a.platform)} · @{a.username ?? "account"} stopped connecting
+              </span>
               <Link href="/settings/accounts" className="action-link with-arrow">
-                Reconnect to post here
+                Reconnect
               </Link>
             </p>
           ))}
