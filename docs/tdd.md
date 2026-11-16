@@ -82,6 +82,21 @@ supabase/
 
 Rules: features expose a public API via `index.ts` and never import another feature's internals. Code moves to `lib/` only when a second feature needs it.
 
+### Routes (16 Nov)
+
+Places are paths; filters and selections stay as query (`?item=`, `?q=`, `?by=`, `?period=`, `?topic=`, page numbers). `src/lib/routes.ts` builds the links and maps old addresses.
+
+| Page | Paths |
+|---|---|
+| Contacts | `/contacts` (People), `/contacts/people`, `/contacts/leads` (+ `/export`), `/contacts/ad-leads`, `/contacts/broadcasts` |
+| Teach Waggle | `/teach` (Overview), `/teach/business-info`, `/teach/automations` (Comment to DM), `/teach/automations/<kind>`, `/teach/lab` |
+| Inbox | `/inbox` (For you), `/inbox/answered`, `/inbox/hidden`, `/inbox/items/<id>` (redirects to its tab) |
+| Insights | `/insights` (Overview), `/insights/<work, posts, audience>`, `/insights/posts.csv` |
+| Settings | `/settings` (Connected accounts), `/settings/<section>` (account, general, team, billing, accounts, notifications, business, ai-assistants, whatsapp, phone, messaging) |
+| Organization settings | `/orgs/settings` (Team), `/orgs/settings/<account, general, team, billing>` |
+
+Old addresses forward permanently (308) from `src/proxy.ts` through `legacyPath`: `/leads`, `/knowledge-base`, `/automations?kind=`, `/lab`, `/analytics?section=`, `/settings?section=` (`replies` goes to `/teach#replies`), `/orgs/settings?section=`, `/inbox?tab=` (including the older `waiting`, `needs`, `sent`), keeping the rest of the query. Feedback keeps its old page keys for moved pages (`features/feedback/pages.ts`). Section mentions below that predate this (`/leads`, `/knowledge-base`, `/lab`, `/analytics`, `?tab=`) are history.
+
 ## 4. Multi-tenancy
 
 - One `tenant` per business; one Zernio **profile** per tenant with `externalId = tenant.id`.

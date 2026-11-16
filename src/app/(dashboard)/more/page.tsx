@@ -6,7 +6,7 @@ export const metadata = { title: "More" };
 
 const LINKS = [
   { href: "/posts", label: "Posts", Icon: Send },
-  { href: "/analytics", label: "Insights", Icon: BarChart3 },
+  { href: "/insights", label: "Insights", Icon: BarChart3 },
   { href: "/settings", label: "Settings", Icon: Settings },
 ] as const;
 

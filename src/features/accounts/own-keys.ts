@@ -91,9 +91,9 @@ export function withSettingsLinks(
   on: { phone: boolean; messaging: boolean },
 ): typeof MORE_CONNECTIONS {
   const links: Record<string, string | null> = {
-    sms: on.phone ? "/settings?section=phone" : null,
-    rcs: on.messaging ? "/settings?section=messaging" : null,
-    imessage: on.messaging ? "/settings?section=messaging" : null,
+    sms: on.phone ? "/settings/phone" : null,
+    rcs: on.messaging ? "/settings/messaging" : null,
+    imessage: on.messaging ? "/settings/messaging" : null,
   };
   return groups.map((g) => ({
     ...g,

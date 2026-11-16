@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { PlatformMark } from "@/components/app/platform-mark";
@@ -70,9 +71,9 @@ export function WhatsAppWindowCard({
       ) : templates.length === 0 ? (
         <p className="text-ink-2 text-sm">
           No approved templates yet. Add one in{" "}
-          <a href="/settings?section=whatsapp" className="link-inline">
+          <Link href="/settings/whatsapp" className="link-inline">
             Settings → WhatsApp templates
-          </a>
+          </Link>
           ; Meta reviews it, usually within a day.
         </p>
       ) : (

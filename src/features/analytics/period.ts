@@ -1,3 +1,4 @@
+import { insightsHref } from "@/lib/routes";
 import {
   ANALYTICS_PERIODS,
   periodWindow,
@@ -5,7 +6,8 @@ import {
   type AnalyticsPlatform,
 } from "./sync";
 
-// The page's controls as searchParams (?section=overview&period=30&platform=all). Pure.
+// The page's section is its path (/insights/posts); the controls are searchParams
+// (?period=30&platform=all). Pure.
 
 // T74b: Waggle's work comes right after the Overview (design "6 · Insights").
 export const SECTIONS = [
@@ -73,13 +75,6 @@ export function analyticsHref(
     Record<string, string | number | undefined> = {},
 ): string {
   const { section, period, platform, ...rest } = { ...current, ...change };
-  const q = new URLSearchParams({
-    section: String(section),
-    period: String(period),
-    platform: String(platform),
-  });
-  for (const [k, v] of Object.entries(rest)) {
-    if (v !== undefined && v !== "") q.set(k, String(v));
-  }
-  return `/analytics?${q.toString()}`;
+  // The section is the path (/insights/posts); the controls stay as query.
+  return insightsHref(section, { period, platform, ...rest });
 }

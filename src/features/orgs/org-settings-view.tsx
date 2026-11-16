@@ -74,7 +74,7 @@ export async function OrgGeneralSection({ orgId }: { orgId: string }) {
           <h3 className="text-base font-semibold">You&apos;re the only Owner</h3>
           <p className="text-ink-2">
             Make another member Owner on the{" "}
-            <Link href="/settings?section=team" className="font-medium">
+            <Link href="/settings/team" className="font-medium">
               Team page
             </Link>{" "}
             before you leave, or close the organization.

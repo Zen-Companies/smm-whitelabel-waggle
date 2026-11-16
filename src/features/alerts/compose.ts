@@ -149,11 +149,11 @@ export function composeAlert(
           `${account} is no longer connected, so Waggle can't see or answer its messages.`,
           "Messages that arrive meanwhile wait until you reconnect.",
         ],
-        { href: `${appUrl}/settings`, label: "Reconnect" },
+        { href: `${appUrl}/settings/accounts`, label: "Reconnect" },
       );
     }
     case "rcs_status": {
-      const href = `${appUrl}/settings?section=messaging`;
+      const href = `${appUrl}/settings/messaging`;
       const note = content.reason ? [`The note: “${content.reason}”`] : [];
       switch (content.status) {
         case "changes_requested":

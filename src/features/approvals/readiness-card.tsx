@@ -86,7 +86,9 @@ function CategoryCard({ category, r }: { category: ConfigurableCategory; r: Cate
                 </span>
                 <Link
                   href={
-                    c.topicId ? `/knowledge-base?topic=${c.topicId}` : "/knowledge-base?topic=new"
+                    c.topicId
+                      ? `/teach/business-info?topic=${c.topicId}`
+                      : "/teach/business-info?topic=new"
                   }
                   className="text-honey-text text-sm font-medium whitespace-nowrap"
                 >

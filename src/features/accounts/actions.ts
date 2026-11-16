@@ -25,13 +25,13 @@ const connectSchema = z.object({
 export async function connectAccount(formData: FormData): Promise<void> {
   const parsed = connectSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success || !isConnectable(parsed.data.platform)) {
-    redirect("/settings?connect_error=unavailable");
+    redirect("/settings/accounts?connect_error=unavailable");
   }
   const platform = parsed.data.platform;
   // T73b: the first-time setup asks to come back to its Connect step.
   const back = formData.get("back") === "setup" ? `/setup?step=2&connecting=${platform}` : null;
   const tenant = await getTenantFor("accounts.manage");
-  if (!tenant) redirect("/settings?connect_error=not_allowed");
+  if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
   const db = getServiceClient();
 
   let authUrl: string;
@@ -41,7 +41,7 @@ export async function connectAccount(formData: FormData): Promise<void> {
     ({ authUrl } = await getSocialProvider().getConnectUrl({
       platform,
       profileId,
-      redirectUrl: `${process.env.APP_URL}${back ?? `/settings?connecting=${platform}`}`,
+      redirectUrl: `${process.env.APP_URL}${back ?? `/settings/accounts?connecting=${platform}`}`,
     }));
     await writeAudit(db, {
       tenantId: tenant.id,
@@ -60,7 +60,7 @@ export async function connectAccount(formData: FormData): Promise<void> {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform } });
     const planLimit = error instanceof SocialProviderError && error.details.status === 402;
     redirect(
-      `/settings?connect_error=${planLimit ? "plan_limit" : "unavailable"}&platform=${platform}`,
+      `/settings/accounts?connect_error=${planLimit ? "plan_limit" : "unavailable"}&platform=${platform}`,
     );
   }
   redirect(authUrl);
@@ -112,7 +112,7 @@ export async function connectBluesky(
     return { error: blueskyErrorText(result.error) };
   }
   // Without an account in Zernio's answer, the webhook lists it a moment later.
-  redirect(`/settings?section=accounts&${result.username ? "connected" : "connecting"}=bluesky`);
+  redirect(`/settings/accounts?${result.username ? "connected" : "connecting"}=bluesky`);
 }
 
 /** Settings → Accounts → Connect Telegram (T60): a fresh code for Zernio's bot. */

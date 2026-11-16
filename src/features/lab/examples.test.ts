@@ -51,7 +51,7 @@ describe("setupSteps", () => {
     expect(steps.map((s) => s.done)).toEqual([true, false, false, false, false]);
     expect(steps[1]).toMatchObject({
       detail: "1 of 3: hours, prices, how to buy or book",
-      action: { href: "/knowledge-base?topic=new" },
+      action: { href: "/teach/business-info?topic=new" },
     });
     expect(steps[4].detail).toBe("Day 1 of 7 · you check every reply");
     expect(setupComplete(steps)).toBe(false);

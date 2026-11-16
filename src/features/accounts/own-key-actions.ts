@@ -76,7 +76,7 @@ export async function connectSiteAction(
     actor: tenant.userId,
     details: { platform: kind, zernioAccountId: accountId, how: "own_keys" },
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { done: `${LABEL[kind]} is connected: ${name}.` };
 }
 
@@ -125,7 +125,7 @@ export async function connectWhatsAppKeysAction(
     actor: tenant.userId,
     details: { platform: "whatsapp", how: "own_keys" },
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { done: "WhatsApp is connected. Messages to this number now reach Waggle." };
 }
 
@@ -157,7 +157,7 @@ export async function disconnectSiteAction(
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "disconnectSite" } });
     return { error: "Couldn't disconnect it right now. Try again." };
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { done: "Disconnected." };
 }
 
@@ -255,7 +255,7 @@ export async function connectEmailAction(
     actor: tenant.userId,
     details: { platform: "imap", how: "own_keys" },
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { done: `${parsed.email} is connected.` };
 }
 
@@ -305,7 +305,7 @@ export async function connectLineAction(
       webhookReady: result.webhookReady,
     },
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return {
     done: result.webhookReady
       ? `${result.name} is connected. In LINE Official Account Manager, Settings, Response settings: turn on Webhooks, and turn off Auto-response and Greeting messages.`
@@ -320,9 +320,9 @@ export async function connectLineAction(
  */
 export async function connectMailAction(formData: FormData): Promise<void> {
   const platform = formData.get("platform");
-  if (platform !== "google" && platform !== "microsoft") redirect("/settings?section=accounts");
+  if (platform !== "google" && platform !== "microsoft") redirect("/settings/accounts");
   const tenant = await getTenantFor("accounts.manage");
-  if (!tenant) redirect("/settings?section=accounts&connect_error=not_allowed");
+  if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
   const db = getServiceClient();
   const scopes =
     platform === "microsoft"
@@ -334,7 +334,7 @@ export async function connectMailAction(formData: FormData): Promise<void> {
     ({ authUrl } = await getSocialProvider().getMailConnectUrl({
       platform,
       profileId,
-      redirectUrl: `${process.env.APP_URL}/settings?section=accounts&connecting=${platform}`,
+      redirectUrl: `${process.env.APP_URL}/settings/accounts?connecting=${platform}`,
       scopes,
       signal: AbortSignal.timeout(20_000),
     }));
@@ -347,7 +347,7 @@ export async function connectMailAction(formData: FormData): Promise<void> {
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform } });
     redirect(
-      `/settings?section=accounts&connect_error=${status(error) === 402 ? "plan_limit" : "unavailable"}&platform=${platform}`,
+      `/settings/accounts?connect_error=${status(error) === 402 ? "plan_limit" : "unavailable"}&platform=${platform}`,
     );
   }
   redirect(authUrl);

@@ -69,7 +69,7 @@ export async function saveCommentDm(
     actor: tenant.userId,
     details: { kind: "comment_dm", active: turnOn, keywords: parsed.value.keywords.length },
   });
-  revalidatePath("/automations");
+  revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now() };
 }
 
@@ -102,7 +102,7 @@ export async function toggleCommentDm(
     actor: tenant.userId,
     details: { kind: "comment_dm", automationId: parsed.data.id },
   });
-  revalidatePath("/automations");
+  revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now() };
 }
 
@@ -129,7 +129,7 @@ export async function deleteCommentDm(
     actor: tenant.userId,
     details: { kind: "comment_dm", automationId: id },
   });
-  revalidatePath("/automations");
+  revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now() };
 }
 
@@ -206,7 +206,7 @@ export async function saveFlow(
     actor: tenant.userId,
     details: { kind: link ? "chat_link" : "chat_flow", active: turnOn, steps: parsed.value.steps.length },
   });
-  revalidatePath("/automations");
+  revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now() };
 }
 
@@ -242,7 +242,7 @@ export async function changeFlow(
     actor: tenant.userId,
     details: { kind: "chat_flow", automationId: id },
   });
-  revalidatePath("/automations");
+  revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now() };
 }
 
@@ -290,7 +290,7 @@ export async function saveSequence(
     actor: tenant.userId,
     details: { kind: "sequence", active: turnOn, steps: parsed.value.steps.length },
   });
-  revalidatePath("/automations");
+  revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now() };
 }
 
@@ -351,6 +351,6 @@ export async function changeSequence(_prev: EnrollState, formData: FormData): Pr
     actor: tenant.userId,
     details: { kind: "sequence", automationId: id, ...(result ?? {}) },
   });
-  revalidatePath("/automations");
+  revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now(), ...(result ?? {}) };
 }

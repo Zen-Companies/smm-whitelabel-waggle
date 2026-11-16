@@ -88,10 +88,10 @@ export async function createKbEntry(_prev: KbFormState, formData: FormData): Pro
     }
   }
   embedLater(data.id);
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
   revalidatePath("/teach");
   // Open the new topic in the editor (design v2: one topic at a time).
-  redirect(`/knowledge-base?topic=${data.id}`);
+  redirect(`/teach/business-info?topic=${data.id}`);
 }
 
 export interface AnswerState {
@@ -140,7 +140,7 @@ export async function answerQuestionAction(
   });
   embedLater(data.id);
   revalidatePath("/teach");
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
   return { saved: parsed.data.question, savedAt: Date.now() };
 }
 
@@ -183,7 +183,7 @@ export async function addStarterAnswers(
     saved += 1;
   }
   revalidatePath("/teach");
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
   return { saved };
 }
 
@@ -211,7 +211,7 @@ export async function updateKbEntry(_prev: KbFormState, formData: FormData): Pro
   });
   // Unchanged text keeps its embedding; changed text was cleared by the T1 trigger.
   if (data[0].embedding === null) embedLater(id);
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
   revalidatePath("/teach");
   return { saved: true };
 }
@@ -235,7 +235,7 @@ export async function deleteKbEntry(formData: FormData): Promise<void> {
       details: { kbEntryId: id },
     });
   }
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
   revalidatePath("/teach");
-  redirect("/knowledge-base");
+  redirect("/teach/business-info");
 }

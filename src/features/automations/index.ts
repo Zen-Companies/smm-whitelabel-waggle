@@ -1,1 +1,1 @@
-export { AutomationsView } from "./automations-view";
+export { AutomationsView, isAutomationKind } from "./automations-view";

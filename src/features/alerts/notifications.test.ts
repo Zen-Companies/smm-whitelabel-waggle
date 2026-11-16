@@ -45,7 +45,7 @@ describe("describeNotification", () => {
     ).toMatchObject({
       tone: "attention",
       title: "Branded texts are ready to test",
-      href: "/settings?section=messaging",
+      href: "/settings/messaging",
     });
     expect(
       describeNotification(
@@ -81,7 +81,7 @@ describe("describeNotification", () => {
     ).toMatchObject({
       title: "Instagram @harbourbean disconnected",
       action: "Reconnect",
-      href: "/settings",
+      href: "/settings/accounts",
     });
     expect(
       describeNotification(

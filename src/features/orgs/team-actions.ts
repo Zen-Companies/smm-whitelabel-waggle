@@ -108,7 +108,7 @@ export async function inviteMember(_prev: InviteState, formData: FormData): Prom
     // The invite exists; the link can still be copied from the confirmation.
     Sentry.captureException(e, { extra: { inviteId } });
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return {
     sent: {
       email: email.data,
@@ -160,7 +160,7 @@ export async function resendInvite(
   } catch (e) {
     Sentry.captureException(e, { extra: { inviteId: inviteId.data } });
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { sent: { link: inviteLink(token), at: Date.now() } };
 }
 
@@ -177,7 +177,7 @@ export async function cancelInvite(
     p_actor: ctx.user.id,
   });
   if (error) return { error: errorOf(error) };
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return {};
 }
 
@@ -202,7 +202,7 @@ export async function changeMemberRole(
     p_role: role.data,
   });
   if (error) return { error: errorOf(error) };
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { saved: Date.now() };
 }
 
@@ -225,7 +225,7 @@ export async function changeMemberBrands(
     p_tenant_ids: tenantIds,
   });
   if (error) return { error: errorOf(error) };
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { saved: Date.now() };
 }
 
@@ -241,6 +241,6 @@ export async function removeMember(_prev: MemberState, formData: FormData): Prom
     p_user: parsed.data.userId,
   });
   if (error) return { error: errorOf(error) };
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { removed: true };
 }

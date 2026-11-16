@@ -88,7 +88,7 @@ describe("composeAlert", () => {
     );
     expect(fix.subject).toBe("Harbour Bean: your branded texts request needs a fix");
     expect(fix.text).toContain("The note: “Use the IRS name.”");
-    expect(fix.text).toContain("https://app.test/settings?section=messaging");
+    expect(fix.text).toContain("https://app.test/settings/messaging");
     expect(composeAlert({ kind: "rcs_status", status: "testing", reason: null }, ctx).subject).toBe(
       "Harbour Bean: branded texts are ready to test",
     );

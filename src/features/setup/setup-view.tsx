@@ -107,7 +107,7 @@ export async function SetupView({
     <main className="mx-auto flex w-full max-w-[680px] flex-col gap-7 px-4 py-8 md:py-12">
       <div className="flex flex-wrap items-center justify-between gap-3">
         {step <= 4 ? <Stepper step={step} /> : <span />}
-        <Link href="/settings?section=account" className="text-ink-3 text-sm">
+        <Link href="/settings/account" className="text-ink-3 text-sm">
           Need help?
         </Link>
       </div>
@@ -200,7 +200,7 @@ export async function SetupView({
               </li>
             ))}
           </ul>
-          <Link href="/settings?section=accounts" className="action-link with-arrow self-start">
+          <Link href="/settings/accounts" className="action-link with-arrow self-start">
             More: TikTok, WhatsApp, YouTube, LinkedIn and others
           </Link>
           <div className="flex items-center justify-between gap-3">

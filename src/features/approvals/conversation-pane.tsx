@@ -193,7 +193,7 @@ export function ContextPanel({ context }: { context: ConversationContext }) {
               </>
             )}
           </dl>
-          <Link href={`/leads?lead=${lead.id}`} className="action-link with-arrow">
+          <Link href={`/contacts/leads?lead=${lead.id}`} className="action-link with-arrow">
             View in Leads
           </Link>
         </section>
@@ -213,7 +213,7 @@ export function ContextPanel({ context }: { context: ConversationContext }) {
                     {a.text.startsWith(WRITTEN_FROM) ? (
                       <>
                         {WRITTEN_FROM}
-                        <Link href="/knowledge-base" className="link-inline">
+                        <Link href="/teach/business-info" className="link-inline">
                           {a.text.slice(WRITTEN_FROM.length)}
                         </Link>
                       </>

@@ -11,7 +11,7 @@ export interface PageInfo {
 const PAGES: Record<string, Omit<PageInfo, "page">> = {
   inbox: { name: "Inbox", prompt: "Anything slowing you down in the inbox?" },
   posts: { name: "Posts", prompt: "Anything unclear about writing or scheduling posts?" },
-  analytics: { name: "Analytics", prompt: "Anything unclear or missing here?" },
+  analytics: { name: "Insights", prompt: "Anything unclear or missing here?" },
   leads: { name: "Leads", prompt: "Anything you'd want to see about your leads?" },
   "knowledge-base": {
     name: "Business info",
@@ -24,8 +24,20 @@ const PAGES: Record<string, Omit<PageInfo, "page">> = {
   admin: { name: "Staff pages", prompt: "Anything to fix on this staff page?" },
 };
 
+/**
+ * The paths that moved under another page (routes, 16 Nov) keep their old keys, so feedback and
+ * nudges stay grouped as before: /contacts/leads is "leads", /insights is "analytics".
+ */
+const MOVED: Record<string, string> = {
+  "contacts/leads": "leads",
+  "teach/business-info": "knowledge-base",
+  "teach/lab": "lab",
+  insights: "analytics",
+};
+
 export function pageInfo(pathname: string): PageInfo {
-  const section = pathname.split(/[?#]/)[0].split("/")[1] || "inbox";
+  const [, first = "", second = ""] = pathname.split(/[?#]/)[0].split("/");
+  const section = MOVED[`${first}/${second}`] ?? MOVED[first] ?? (first || "inbox");
   const known = PAGES[section];
   return known
     ? { page: section, ...known }

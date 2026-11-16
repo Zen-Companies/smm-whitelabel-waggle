@@ -102,7 +102,7 @@ export async function BlogPage({
             Write blog posts here for a WordPress, Shopify or Webflow site. Connect it in Settings →
             Accounts → More connections. Wix is coming soon.
           </p>
-          <Link href="/settings?section=accounts" className="action-link with-arrow self-start">
+          <Link href="/settings/accounts" className="action-link with-arrow self-start">
             Open Accounts
           </Link>
         </div>

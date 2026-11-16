@@ -140,7 +140,7 @@ async function Content({ beta }: { beta: boolean }) {
             <AddBrandForm
               orgId={org.id}
               orgName={org.name}
-              cancelHref="/orgs/settings?section=team"
+              cancelHref="/orgs/settings/team"
               cancelLabel="Skip for now"
               submitLabel="Add your first brand"
               autoFocus={false}

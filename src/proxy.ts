@@ -1,9 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { legacyPath } from "@/lib/routes";
 
 // Refreshes the Supabase session cookie on page requests. Authorization happens close to the
-// data (getCurrentUser, Server Actions), not here.
+// data (getCurrentUser, Server Actions), not here. Old addresses (emails, bookmarks) forward to
+// where the page lives now (src/lib/routes.ts).
 export async function proxy(request: NextRequest) {
+  const moved = legacyPath(request.nextUrl.pathname, request.nextUrl.searchParams);
+  if (moved) return NextResponse.redirect(new URL(moved, request.url), 308);
+
   let response = NextResponse.next({ request });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;

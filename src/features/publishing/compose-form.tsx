@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
@@ -297,9 +298,9 @@ function ComposeFields({
             <input type="checkbox" disabled className="size-4" aria-hidden />
             <PlatformMark platform={a.platform} size={24} />
             {platformLabel(a.platform)} @{a.username ?? "account"}
-            <a href="/settings?section=accounts" className="action-link with-arrow">
+            <Link href="/settings/accounts" className="action-link with-arrow">
               Reconnect to post here
-            </a>
+            </Link>
           </p>
         ))}
         {fieldError("accounts")}

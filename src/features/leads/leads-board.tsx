@@ -32,7 +32,11 @@ export async function LeadsBoard() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {leads.length > 0 && (
-            <a href="/leads/export" className={buttonVariants({ variant: "secondary" })} download>
+            <a
+              href="/contacts/leads/export"
+              className={buttonVariants({ variant: "secondary" })}
+              download
+            >
               Download list
             </a>
           )}

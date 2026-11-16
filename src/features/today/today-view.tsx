@@ -142,10 +142,7 @@ export async function TodayView() {
           )}
         </div>
         {!noAccounts && !quiet && (
-          <Link
-            href="/analytics?section=work&period=7"
-            className={buttonVariants({ variant: "secondary" })}
-          >
+          <Link href="/insights/work?period=7" className={buttonVariants({ variant: "secondary" })}>
             See everything Waggle did
           </Link>
         )}
@@ -170,10 +167,7 @@ export async function TodayView() {
               <Link href="/setup" className={buttonVariants({ variant: "primary" })}>
                 Set up Waggle
               </Link>
-              <Link
-                href="/settings?section=accounts"
-                className={buttonVariants({ variant: "secondary" })}
-              >
+              <Link href="/settings/accounts" className={buttonVariants({ variant: "secondary" })}>
                 Just connect an account
               </Link>
             </div>
@@ -184,7 +178,7 @@ export async function TodayView() {
           {!quiet && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[repeat(auto-fit,minmax(260px,1fr))]">
               <Tile
-                href="/leads"
+                href="/contacts/leads"
                 chip="New leads"
                 tone="bg-success-soft text-success"
                 count={data.newLeads.length}
@@ -348,7 +342,7 @@ export async function TodayView() {
 
               {quietWeek ? (
                 <Line
-                  href="/analytics?section=work&period=7"
+                  href="/insights/work?period=7"
                   title="This week"
                   text="Nothing yet this week."
                 />
@@ -389,7 +383,7 @@ export async function TodayView() {
                       ) : (
                         <span className="inline-flex flex-wrap items-center justify-end gap-3">
                           <StateLabel state="needs">Stopped connecting</StateLabel>
-                          <ActionLink href="/settings?section=accounts">Reconnect</ActionLink>
+                          <ActionLink href="/settings/accounts">Reconnect</ActionLink>
                         </span>
                       )}
                     </li>

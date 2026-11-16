@@ -35,7 +35,7 @@ function href(filter: Filter, lead?: string) {
   if (filter === "open") q.set("filter", "open");
   if (lead) q.set("lead", lead);
   const s = q.toString();
-  return s ? `/leads?${s}` : "/leads";
+  return s ? `/contacts/leads?${s}` : "/contacts/leads";
 }
 
 const source = (l: Lead) =>

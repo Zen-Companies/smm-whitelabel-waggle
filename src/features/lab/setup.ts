@@ -30,7 +30,7 @@ export function setupSteps(f: SetupFacts): SetupStep[] {
       title: "Connect Instagram or Facebook",
       detail: f.accountsConnected ? "Connected" : "So messages reach Waggle",
       done: f.accountsConnected > 0,
-      action: f.accountsConnected ? null : { label: "Connect", href: "/settings?section=accounts" },
+      action: f.accountsConnected ? null : { label: "Connect", href: "/settings/accounts" },
     },
     {
       key: "basics",
@@ -43,14 +43,14 @@ export function setupSteps(f: SetupFacts): SetupStep[] {
       action:
         f.topics >= BASIC_TOPICS
           ? null
-          : { label: "Add business info", href: "/knowledge-base?topic=new" },
+          : { label: "Add business info", href: "/teach/business-info?topic=new" },
     },
     {
       key: "profile",
       title: "Describe your business",
       detail: f.hasProfile ? "Written" : "A few sentences help it tell a question from a buyer",
       done: f.hasProfile,
-      action: f.hasProfile ? null : { label: "Write it", href: "/settings?section=business" },
+      action: f.hasProfile ? null : { label: "Write it", href: "/settings/business" },
     },
     {
       key: "practice",

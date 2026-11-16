@@ -2,6 +2,7 @@ import { CircleCheck, Clock3 } from "lucide-react";
 import Link from "next/link";
 import { ActionLink } from "@/components/app/action-link";
 import { Avatar } from "@/components/app/avatar";
+import { inboxHref } from "@/lib/routes";
 import { EmptySpot } from "@/components/app/empty-spot";
 import { StateLabel } from "@/components/app/state-mark";
 import { clockTime, shortTime } from "@/components/app/time";
@@ -42,7 +43,6 @@ import {
   tabOf,
   todayLine,
   needsOwner,
-  normalizeTab,
   type InboxEntry,
   type InboxTab,
   type NextPost,
@@ -60,8 +60,10 @@ import { AddBooking, calendarAccount } from "@/features/calendar";
 // the conversation with the customer beside it. List → conversation on phones. Rows: a honey dot
 // when the owner must act, three lines, the channel's logo in colour and a honeycomb state.
 
+// Each tab is a place (/inbox, /inbox/answered, /inbox/hidden); the open message and filters
+// stay as query (routes, 16 Nov).
 const href = (tab: InboxTab, item?: string, by: AnsweredBy | "all" = "all") =>
-  `/inbox?tab=${tab}${by !== "all" ? `&by=${by}` : ""}${item ? `&item=${item}` : ""}`;
+  inboxHref(tab, { by: by !== "all" ? by : undefined, item });
 
 /** One list row (design.md §1 rules 2 and 4): who · what they said · what happens next. */
 function Row({
@@ -280,13 +282,15 @@ function SentFooter({ entry }: { entry: InboxEntry & { status: string } }) {
 }
 
 export async function InboxView({
+  tab = "for_you",
   searchParams,
 }: {
+  /** From the path: /inbox, /inbox/answered or /inbox/hidden. */
+  tab?: InboxTab;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  // Old links (?tab=waiting / needs / sent) land on the tab that now holds those items.
-  const tab = normalizeTab(typeof params.tab === "string" ? params.tab : undefined);
+  // Old links (?tab=waiting / needs / sent) are forwarded to the tab's path by the proxy.
   const itemParam = typeof params.item === "string" ? params.item : undefined;
   // Search (Inbox polish, approved 16 Nov): names and words across all three tabs.
   const q = typeof params.q === "string" ? params.q.slice(0, 80) : "";

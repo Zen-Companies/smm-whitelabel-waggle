@@ -279,7 +279,7 @@ function OwnReply({ entry }: { entry: InboxEntry }) {
             connecting.
           </span>
           <Link
-            href="/settings?section=accounts"
+            href="/settings/accounts"
             className="bg-honey text-ink hover:bg-honey-hover inline-flex min-h-9 items-center rounded-md px-3.5 font-semibold no-underline"
           >
             Reconnect

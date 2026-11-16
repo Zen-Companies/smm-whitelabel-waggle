@@ -98,7 +98,7 @@ export async function AccountSection({ emailNotice }: { emailNotice?: string }) 
             You&apos;re the only Owner of{" "}
             <b className="font-semibold">{blockers.map((b) => b.organization_name).join(", ")}</b>.
             Make another member Owner on its{" "}
-            <Link href="/settings?section=team" className="font-medium">
+            <Link href="/settings/team" className="font-medium">
               Team page
             </Link>{" "}
             first, or close it.

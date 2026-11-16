@@ -133,7 +133,7 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
           tone: row.details.status === "live" ? "post" : "attention",
           title: titles[String(row.details.status)] ?? "Branded texts changed",
           meta: "Settings · Messaging",
-          href: "/settings?section=messaging",
+          href: "/settings/messaging",
           action: "Open",
         };
       }
@@ -143,7 +143,7 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
         tone: "attention",
         title: `${platform(a?.platform)}${a?.username ? ` @${a.username}` : ""} disconnected`,
         meta: "New messages wait until you reconnect.",
-        href: "/settings",
+        href: "/settings/accounts",
         action: "Reconnect",
       };
     }
@@ -188,7 +188,7 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
         tone: "success",
         title: n === 1 ? "1 reply sent automatically" : `${n} replies sent automatically`,
         meta: "From your business info, on auto-reply",
-        href: "/inbox?tab=answered",
+        href: "/inbox/answered",
         action: null,
       };
     }

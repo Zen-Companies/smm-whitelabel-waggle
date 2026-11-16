@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { listOneDriveAction, pickOneDriveAction, type OneDriveList } from "./actions";
@@ -122,9 +123,9 @@ export function OneDrivePicker({
         <p className="text-danger text-sm">
           {list.error}{" "}
           {list.connect && (
-            <a href="/settings?section=accounts" className="action-link with-arrow">
+            <Link href="/settings/accounts" className="action-link with-arrow">
               Open Accounts
-            </a>
+            </Link>
           )}
         </p>
       )}

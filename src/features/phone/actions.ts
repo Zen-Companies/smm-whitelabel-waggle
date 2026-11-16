@@ -130,7 +130,7 @@ export async function buyNumberAction(_prev: PhoneState, f: FormData): Promise<P
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "buyNumber" } });
     return { error: "The number couldn't be bought right now. Reload before trying again." };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Your number is ready." };
 }
 
@@ -157,7 +157,7 @@ export async function releaseNumberAction(_prev: PhoneState, f: FormData): Promi
     actor: tenant.userId,
     details: { numberId: id },
   });
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "The number was released." };
 }
 
@@ -204,7 +204,7 @@ export async function saveVoiceAction(_prev: VoiceState, f: FormData): Promise<V
       days: parsed.value.businessHours.length,
     },
   });
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { savedAt: Date.now() };
 }
 
@@ -254,7 +254,7 @@ export async function enableTextingAction(_prev: TextingState, f: FormData): Pro
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "enableTexting" } });
     return { error: "Texting couldn't be turned on right now. Try again." };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Texting is on." };
 }
 
@@ -300,7 +300,7 @@ export async function registerTextingAction(
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "registerTexting" } });
     return { error: "It couldn't be sent right now. Reload before trying again." };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Sent to the carriers for review." };
 }
 
@@ -340,7 +340,7 @@ export async function textingCodeAction(_prev: TextingState, f: FormData): Promi
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "textingCode" } });
     return { error: "Couldn't do that right now. Try again." };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return {
     done: resend ? "A new code is on its way." : "Confirmed. The carriers are reviewing it now.",
   };

@@ -37,6 +37,6 @@ export async function moveLeadAction(
     actor: tenant.userId,
     details: { leadId: parsed.data.leadId, stage: parsed.data.stage },
   });
-  revalidatePath("/leads");
+  revalidatePath("/contacts/leads");
   return {};
 }

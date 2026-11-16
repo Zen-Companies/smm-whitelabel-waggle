@@ -70,7 +70,7 @@ export async function updateAutonomyMode(
       details: { category, from: before?.mode ?? null, to: mode },
     });
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/teach");
   return { saved: true };
 }
@@ -374,7 +374,7 @@ export async function setAutoHideSpam(
     actor: tenant.userId,
     details: {},
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/teach");
   return { saved: true };
 }
@@ -404,7 +404,7 @@ export async function setRepliesPaused(
     action: paused ? "replies_paused" : "replies_resumed",
     actor: tenant.userId,
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   revalidatePath("/teach");
   revalidatePath("/inbox");
   return {};

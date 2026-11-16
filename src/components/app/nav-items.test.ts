@@ -13,7 +13,7 @@ describe("nav items", () => {
       "Teach Waggle",
       "Insights",
     ]);
-    expect(isActive(tab("Contacts"), "/leads")).toBe(true);
+    expect(isActive(tab("Contacts"), "/contacts/leads")).toBe(true);
     expect(BOTTOM_TABS.map((i) => i.label)).toEqual([
       "Today",
       "Inbox",
@@ -26,14 +26,16 @@ describe("nav items", () => {
   it("Teach Waggle is active on Business info and the Lab", () => {
     const teach = tab("Teach Waggle");
     expect(isActive(teach, "/teach")).toBe(true);
-    expect(isActive(teach, "/knowledge-base")).toBe(true);
-    expect(isActive(teach, "/lab")).toBe(true);
-    expect(isActive(teach, "/leads")).toBe(false);
+    expect(isActive(teach, "/teach/business-info")).toBe(true);
+    expect(isActive(teach, "/teach/lab")).toBe(true);
+    expect(isActive(teach, "/teach/automations/comments")).toBe(true);
+    expect(isActive(teach, "/contacts/leads")).toBe(false);
+    expect(isActive(tab("Insights"), "/insights/work")).toBe(true);
   });
 
   it("More covers Posts, Insights and Settings on the phone", () => {
     const more = BOTTOM_TABS.find((i) => i.label === "More")!;
-    for (const p of ["/more", "/posts", "/analytics", "/settings"])
+    for (const p of ["/more", "/posts", "/insights/posts", "/settings/team"])
       expect(isActive(more, p)).toBe(true);
     expect(isActive(more, "/inbox")).toBe(false);
   });

@@ -30,7 +30,7 @@ function href(p: { topic?: string; q?: string; from?: string; suggestion?: strin
   if (p.from) s.set("from", p.from);
   if (p.suggestion) s.set("suggestion", p.suggestion);
   const out = s.toString();
-  return out ? `/knowledge-base?${out}` : "/knowledge-base";
+  return out ? `/teach/business-info?${out}` : "/teach/business-info";
 }
 
 export async function KbList({
@@ -96,7 +96,7 @@ export async function KbList({
         <div className="flex flex-col gap-2">
           {entries.length > 0 ? (
             <>
-              <form action="/knowledge-base" className="flex flex-col gap-2" role="search">
+              <form action="/teach/business-info" className="flex flex-col gap-2" role="search">
                 <label htmlFor="find" className="meta">
                   Find a topic
                 </label>

@@ -23,7 +23,6 @@ import {
   param,
   parsePeriod,
   parsePlatform,
-  parseSection,
   SECTIONS,
   windowFor,
   type Section,
@@ -68,7 +67,14 @@ function sectionParams(section: Section, params: Params): Record<string, string 
   return {};
 }
 
-export async function AnalyticsView({ searchParams }: { searchParams: Promise<Params> }) {
+export async function AnalyticsView({
+  searchParams,
+  section = "overview",
+}: {
+  searchParams: Promise<Params>;
+  /** From the path: /insights is the Overview, /insights/<section> the rest. */
+  section?: Section;
+}) {
   const params = await searchParams;
   // Tenant (cookies) first: the periods read the current date, which needs a request.
   const tenant = await getCurrentTenant();
@@ -88,7 +94,6 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
   // Google Business Profile has its own report ("By platform"); some apps share nothing.
   const noNumbers = notCovered.filter((p) => NO_NUMBERS.has(p));
   const later = notCovered.filter((p) => !NO_NUMBERS.has(p) && p !== "googlebusiness");
-  const section = parseSection(param(params, "section"));
   const period = parsePeriod(param(params, "period"));
   const platform = parsePlatform(param(params, "platform"), platforms);
   const current = { section, period, platform };
@@ -194,7 +199,7 @@ export async function AnalyticsView({ searchParams }: { searchParams: Promise<Pa
         comments={comments}
         period={period}
         hrefFor={hrefFor}
-        csvHref={`/analytics/posts.csv?${csv.toString()}`}
+        csvHref={`/insights/posts.csv?${csv.toString()}`}
         now={now}
       />
     );

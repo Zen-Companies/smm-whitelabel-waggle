@@ -205,7 +205,7 @@ export async function ShopPage({ site, tab: tabParam }: { site?: string; tab?: s
             See products, stock and orders from a Shopify store or a WordPress site with
             WooCommerce. Connect it in Settings → Accounts → More connections.
           </p>
-          <Link href="/settings?section=accounts" className="action-link with-arrow self-start">
+          <Link href="/settings/accounts" className="action-link with-arrow self-start">
             Open Accounts
           </Link>
         </div>

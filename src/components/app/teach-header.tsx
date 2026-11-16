@@ -5,19 +5,25 @@ import { SectionTabs } from "./section-tabs";
 
 const TABS = [
   { key: "/teach", href: "/teach", label: "Overview" },
-  { key: "/knowledge-base", href: "/knowledge-base", label: "Business info" },
-  { key: "/automations", href: "/automations", label: "Automations" },
-  { key: "/lab", href: "/lab", label: "Lab" },
+  { key: "/teach/business-info", href: "/teach/business-info", label: "Business info" },
+  { key: "/teach/automations", href: "/teach/automations", label: "Automations" },
+  { key: "/teach/lab", href: "/teach/lab", label: "Lab" },
 ] as const;
+
+/** Pure: the tab for a path. Overview only on /teach itself; the parts own their sub-paths. */
+export function teachTab(pathname: string): (typeof TABS)[number]["key"] {
+  return (
+    TABS.find((t) => t.key !== "/teach" && (pathname === t.key || pathname.startsWith(`${t.key}/`)))
+      ?.key ?? "/teach"
+  );
+}
 
 /**
  * The top of every Teach Waggle part (design.md §4 "Beyond text", rule 2): the title, one line,
  * and the parts as tabs instead of "← Teach Waggle" and underlined links.
  */
 export function TeachHeader({ line }: { line?: string }) {
-  const pathname = usePathname();
-  const active =
-    TABS.find((t) => pathname === t.key || pathname.startsWith(`${t.key}/`))?.key ?? "/teach";
+  const active = teachTab(usePathname());
   return (
     <header className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">

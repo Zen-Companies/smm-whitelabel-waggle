@@ -38,6 +38,6 @@ export async function createTemplate(
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "waTemplate" } });
     return { error: "Couldn't reach WhatsApp just now. Try again in a minute." };
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { savedAt: Date.now() };
 }

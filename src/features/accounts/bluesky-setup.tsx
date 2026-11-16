@@ -69,7 +69,7 @@ export function BlueskySetup() {
           <Button type="submit" variant="primary" disabled={pending}>
             {pending ? "Connecting…" : "Connect Bluesky"}
           </Button>
-          <Link href="/settings?section=accounts" className={buttonVariants({ variant: "ghost" })}>
+          <Link href="/settings/accounts" className={buttonVariants({ variant: "ghost" })}>
             Cancel
           </Link>
         </div>

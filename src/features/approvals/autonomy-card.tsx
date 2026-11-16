@@ -77,7 +77,7 @@ export async function AutonomyCard({ variant = "settings" }: { variant?: "settin
       </RoleGate>
       {!teach && (
         <Link
-          href="/lab"
+          href="/teach/lab"
           className="card hover:bg-subtle flex items-center gap-3 p-5 transition-colors duration-150"
         >
           <FlaskConical strokeWidth={1.75} className="size-5 shrink-0" aria-hidden />

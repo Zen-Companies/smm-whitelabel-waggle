@@ -24,6 +24,11 @@ const KINDS = [
 ] as const;
 type Kind = (typeof KINDS)[number]["key"];
 
+/** /teach/automations/<kind>: only these. */
+export function isAutomationKind(value: string): value is Kind {
+  return KINDS.some((k) => k.key === value);
+}
+
 /**
  * Teach Waggle → Automations (T77, design "Automations"): replies that happen on their own, set
  * up once: comment to DM, chat flows, sequences, and links with QR codes.
@@ -103,7 +108,7 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
         {KINDS.map((k) => (
           <Link
             key={k.key}
-            href={`/automations?kind=${k.key}`}
+            href={`/teach/automations/${k.key}`}
             aria-current={k.key === kind ? "page" : undefined}
           >
             {k.label}

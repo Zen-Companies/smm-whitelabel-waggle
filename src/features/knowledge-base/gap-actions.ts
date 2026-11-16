@@ -30,7 +30,7 @@ export async function suggestTopics(): Promise<SuggestState> {
     { tenantId: tenant.id, businessName: tenant.name, actor: tenant.userId },
   );
   if (!result.ok) return { error: REASONS[result.reason] };
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
   return { added: result.added, at: Date.now() };
 }
 
@@ -56,5 +56,5 @@ export async function dismissSuggestion(formData: FormData): Promise<void> {
       details: { suggestionId: id },
     });
   }
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
 }

@@ -108,7 +108,7 @@ function Outcome({ card }: { card: PracticeCard }) {
         {card.tone === "reply" && <Clock3 className="size-4" strokeWidth={1.75} aria-hidden />}
         {card.next}
         {card.offerAddAnswer && (
-          <Link href="/knowledge-base?topic=new" className="text-honey-text">
+          <Link href="/teach/business-info?topic=new" className="text-honey-text">
             Add an answer
           </Link>
         )}
@@ -170,7 +170,7 @@ function RecentTries({
             </span>
             {t.card.offerAddAnswer ? (
               <Link
-                href="/knowledge-base?topic=new"
+                href="/teach/business-info?topic=new"
                 className="text-honey-text flex min-h-11 items-center text-sm font-medium"
               >
                 Add an answer

@@ -113,7 +113,7 @@ export async function requestRcsAction(_prev: RcsState, f: FormData): Promise<Rc
   } catch (error) {
     return { ...providerError(error, tenant.id, "requestRcs"), values: typed(f) };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Request sent. We'll show each step here." };
 }
 
@@ -150,7 +150,7 @@ export async function fixRcsAction(_prev: RcsState, f: FormData): Promise<RcsSta
   } catch (error) {
     return { ...providerError(error, tenant.id, "fixRcs"), values: typed(f) };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Sent back for review." };
 }
 
@@ -194,7 +194,7 @@ export async function addTestPhoneAction(_prev: RcsState, f: FormData): Promise<
     }
     return providerError(error, tenant.id, "addTestPhone");
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Invite sent. Accept it in the phone's messaging app." };
 }
 
@@ -222,7 +222,7 @@ export async function removeTestPhoneAction(_prev: RcsState, f: FormData): Promi
   } catch (error) {
     return providerError(error, tenant.id, "removeTestPhone");
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Removed." };
 }
 
@@ -269,7 +269,7 @@ export async function sendLaunchAction(_prev: RcsState, f: FormData): Promise<Rc
   } catch (error) {
     return { ...providerError(error, tenant.id, "sendLaunch"), values: typed(f) };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Launch details sent for review." };
 }
 
@@ -346,7 +346,7 @@ export async function orderImessageAction(_prev: RcsState, f: FormData): Promise
     // Retrying with the same purchaseIntentId returns this order rather than a second number.
     return { error: "We couldn't confirm the order. Reload the page before trying again." };
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Ordered. It turns on within minutes to a few hours." };
 }
 
@@ -385,7 +385,7 @@ export async function renameImessageAction(_prev: RcsState, f: FormData): Promis
   } catch (error) {
     return providerError(error, tenant.id, "renameImessage");
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Saved." };
 }
 
@@ -410,6 +410,6 @@ export async function cancelImessageAction(_prev: RcsState, f: FormData): Promis
   } catch (error) {
     return providerError(error, tenant.id, "cancelImessage");
   }
-  revalidatePath(SETTINGS);
+  revalidatePath(SETTINGS, "layout");
   return { done: "Canceled." };
 }

@@ -57,7 +57,7 @@ export function BrandSetup({ brandName }: { brandName: string }) {
                 </Button>
               </form>
             ))}
-            <Link href="/settings?section=accounts" className="text-sm font-medium">
+            <Link href="/settings/accounts" className="text-sm font-medium">
               TikTok, Google, YouTube and more
             </Link>
           </span>
@@ -68,7 +68,7 @@ export function BrandSetup({ brandName }: { brandName: string }) {
             <span className="text-ink-2">
               Hours, prices, delivery, how to order. Waggle only answers from what you write here.
             </span>
-            <Link href="/knowledge-base" className="mt-1.5 font-medium">
+            <Link href="/teach/business-info" className="mt-1.5 font-medium">
               Fill in Business info
             </Link>
           </span>

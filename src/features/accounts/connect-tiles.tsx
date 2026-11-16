@@ -36,7 +36,7 @@ function Tile({ p }: { p: Platform }) {
       </span>
       {availability(p) === "form" ? (
         <Link
-          href={`/settings?section=accounts&setup=${p.id}#setup`}
+          href={`/settings/accounts?setup=${p.id}#setup`}
           className={buttonVariants({ variant: "secondary" })}
           aria-label={`Connect ${p.label}`}
         >

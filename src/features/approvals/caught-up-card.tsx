@@ -1,3 +1,4 @@
+import { inboxHref } from "@/lib/routes";
 import Link from "next/link";
 import { Bee } from "@/components/app/bee";
 import { clockTime } from "@/components/app/time";
@@ -40,7 +41,7 @@ export function CaughtUpCard({ activity }: { activity: ActivityEntry[] }) {
                   {a.what === "answered" && <span className="text-ink-2">: {snippet(a.text)}</span>}
                 </span>
                 <Link
-                  href={`/inbox?tab=${a.what}&item=${a.itemId}`}
+                  href={inboxHref(a.what, { item: a.itemId })}
                   className="action-link with-arrow text-[13px]"
                 >
                   Open
@@ -49,7 +50,7 @@ export function CaughtUpCard({ activity }: { activity: ActivityEntry[] }) {
             ))}
           </ul>
           <Link
-            href="/inbox?tab=answered"
+            href="/inbox/answered"
             className="action-link with-arrow mt-2 self-start text-[13px]"
           >
             All answered

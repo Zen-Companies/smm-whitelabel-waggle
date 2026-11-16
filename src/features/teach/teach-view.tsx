@@ -63,7 +63,7 @@ export async function TeachView() {
               </h2>
               {canEdit && (
                 <Link
-                  href="/knowledge-base?topic=new"
+                  href="/teach/business-info?topic=new"
                   className={buttonVariants({ variant: "secondary" })}
                 >
                   + Add an answer
@@ -80,7 +80,7 @@ export async function TeachView() {
                       <span className="meta">{usageText(usage.get(a.id) ?? 0)}</span>
                     </span>
                     <Link
-                      href={`/knowledge-base?topic=${a.id}`}
+                      href={`/teach/business-info?topic=${a.id}`}
                       className="action-link with-arrow shrink-0"
                     >
                       {canEdit ? "Edit" : "Open"}
@@ -95,7 +95,7 @@ export async function TeachView() {
               </p>
             )}
             {answers.length > SHOWN_ANSWERS && (
-              <Link href="/knowledge-base" className="action-link with-arrow self-start">
+              <Link href="/teach/business-info" className="action-link with-arrow self-start">
                 See all {answers.length} answers
               </Link>
             )}
