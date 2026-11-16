@@ -1,38 +1,18 @@
 import { Phone, Star, User } from "lucide-react";
 import { cn } from "cn";
-import { platformOf } from "@/lib/social/platforms";
+import { BrandMark } from "./platform-mark";
 
-/** The small platform mark on an avatar (design.md §1 rule 7): words stay out of the row. */
-function PlatformMark({ platform }: { platform: string }) {
-  const glyph =
-    platform === "facebook" ? (
-      <svg width="10" height="10" viewBox="0 0 24 24" className="fill-ink-2">
-        <path d="M14 8h3V4h-3c-2.8 0-5 2.2-5 5v2H7v4h2v7h4v-7h3l1-4h-4V9c0-.6.4-1 1-1z" />
-      </svg>
-    ) : platform === "instagram" ? (
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 24 24"
-        fill="none"
-        strokeWidth="2.4"
-        className="stroke-ink-2"
-      >
-        <rect x="3" y="3" width="18" height="18" rx="5" />
-        <circle cx="12" cy="12" r="4" />
-      </svg>
-    ) : (
-      // Every other platform: its neutral letter mark (design v3 "Platforms": no logos).
-      <span className="text-ink-2 text-[8px] leading-none font-bold">
-        {(platformOf(platform)?.mark.text ?? "?").slice(0, 2)}
-      </span>
-    );
+/**
+ * The channel on an avatar (Inbox polish, approved 16 Nov): its own logo in colour, the same as
+ * Connect an account, so the app reads before the name.
+ */
+function PlatformBadge({ platform }: { platform: string }) {
   return (
     <span
       aria-hidden
-      className="bg-page absolute -right-[3px] -bottom-[3px] inline-flex size-4 items-center justify-center rounded-full"
+      className="bg-surface absolute -right-1 -bottom-1 inline-flex rounded-[6px] p-px"
     >
-      {glyph}
+      <BrandMark brand={platform} size={16} />
     </span>
   );
 }
@@ -75,7 +55,7 @@ export function Avatar({
           )}
         </span>
       )}
-      {platform && <PlatformMark platform={platform} />}
+      {platform && <PlatformBadge platform={platform} />}
     </span>
   );
 }

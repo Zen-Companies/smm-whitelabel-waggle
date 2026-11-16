@@ -129,12 +129,73 @@ export interface TodaySummary {
   hidden: number;
 }
 
-/** Pure: the gray line under the headline (design.md §4). */
+/** Pure: the gray line under the headline (design.md §4); no zeros (rule 4, 16 Nov). */
 export function todayLine(today: Pick<TodaySummary, "answered" | "ignored" | "hidden">): string {
-  const hid = today.hidden === 1 ? "hid 1 spam comment" : `hid ${today.hidden} spam comments`;
-  return today.hidden > 0
-    ? `Today Waggle answered ${today.answered}, ignored ${today.ignored} and ${hid}.`
-    : `Today Waggle answered ${today.answered} and ignored ${today.ignored}.`;
+  const parts: string[] = [];
+  if (today.answered) parts.push(`answered ${today.answered}`);
+  if (today.ignored) parts.push(`ignored ${today.ignored}`);
+  if (today.hidden)
+    parts.push(today.hidden === 1 ? "hid 1 spam comment" : `hid ${today.hidden} spam comments`);
+  if (parts.length === 0) return "Nothing answered on its own yet today.";
+  const list =
+    parts.length === 1
+      ? parts[0]
+      : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return `Today Waggle ${list}.`;
+}
+
+/**
+ * Pure: the search box's words as an ilike pattern, safe inside a PostgREST or() filter (no
+ * commas, brackets, quotes or wildcards of its own). Null under two letters.
+ */
+export function searchPattern(q: string | undefined): string | null {
+  const words = (q ?? "")
+    .replace(/[%_*,()"\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return words.length >= 2 ? `%${words}%` : null;
+}
+
+/** Pure: which tab a status lives in (search results say where each one is). */
+export function tabOf(status: string): InboxTab | null {
+  return INBOX_TABS.find((t) => t.statuses.includes(status))?.key ?? null;
+}
+
+/**
+ * Search (Inbox polish, approved 16 Nov): names, the customer's words and Waggle's replies,
+ * across all three tabs, newest first.
+ */
+export async function searchInbox(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  pattern: string,
+): Promise<(InboxEntry & { status: string })[]> {
+  const statuses = INBOX_TABS.flatMap((t) => t.statuses);
+  const quoted = `"${pattern}"`;
+  const [{ data: items }, { data: drafts }] = await Promise.all([
+    supabase
+      .from("inbound_items")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .in("status", statuses)
+      .or(`text.ilike.${quoted},author_name.ilike.${quoted}`)
+      .order("received_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("drafts")
+      .select("item_id")
+      .eq("tenant_id", tenantId)
+      .or(`body.ilike.${quoted},edited_body.ilike.${quoted}`)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
+  const ids = [
+    ...new Set([...(items ?? []).map((i) => i.id), ...(drafts ?? []).map((d) => d.item_id)]),
+  ];
+  if (ids.length === 0) return [];
+  const found = await loadEntries(supabase, tenantId, { itemIds: ids, statuses });
+  return found.reverse();
 }
 
 /** Pure: midnight UTC of `now`'s day ("today" until businesses have a time zone). */

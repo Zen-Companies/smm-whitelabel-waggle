@@ -86,6 +86,15 @@ Nothing is told apart by bold, size or underline alone. Five rules, shared piece
 4. **Empty spots are an empty cell with one next step** (`EmptySpot`, `EmptyCell`, `.empty-slot`): the dashed hexagon with a plus, one sentence, at most one real button. Where it can be filled in place (a day in the week), the cell fills with honey on hover and says what it does. A whole empty page uses the bee.
 5. **A link inside a sentence sits on a honey highlight** (`.link-inline`): ink, semibold, a honey strip under the lower half; the strip fills the word on hover. Only inside sentences.
 
+### Inbox polish (approved 16 Nov)
+
+- The Inbox is two cards that fill the screen on desktop: the list (search and tabs pinned on top, rows scroll under them) and the conversation with the customer column beside it, split by a hairline.
+- The open row has a soft honey tint and a thin honey outline; no side bar.
+- Channel logos are shown in colour wherever a customer appears (avatar badge, conversation header, customer panel), the same logos as Connect an account. This replaces the older "no logos" rule for avatars.
+- Search covers names, the customer's words and Waggle's replies across For you, Answered and Hidden; `/` jumps into it; results say which tab they're in and highlight the match.
+- "Couldn't send" is said once: one red box naming what closed and what to do. Open in <app> sits in the conversation header as an arrow action.
+- Activity is a honeycomb timeline with times; the answer a reply came from is a honey link.
+
 ## 5. Feedback without toasts
 
 - **Sending:** the button shows "Sending…" and is disabled.

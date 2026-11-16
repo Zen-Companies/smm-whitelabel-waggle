@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { lookedLike, openOnPlatformHref } from "./held-card";
+import { lookedLike } from "./held-card";
+import { openOnPlatformHref } from "./open-on-platform";
 
 describe("lookedLike", () => {
   it("names the best guess only for messages Waggle wasn't sure about", () => {

@@ -1,6 +1,9 @@
-import { BookOpen, Check, CircleAlert, CircleCheck, Clock3, UserPlus } from "lucide-react";
+import { CircleCheck, Clock3 } from "lucide-react";
 import Link from "next/link";
+import { ActionLink } from "@/components/app/action-link";
 import { Avatar } from "@/components/app/avatar";
+import { EmptySpot } from "@/components/app/empty-spot";
+import { StateLabel } from "@/components/app/state-mark";
 import { clockTime, shortTime } from "@/components/app/time";
 import { BrandSetup } from "@/features/accounts";
 import { MarkItemRead } from "@/features/alerts";
@@ -34,6 +37,9 @@ import {
   loadNextPost,
   loadTodayActivity,
   loadTodaySummary,
+  searchInbox,
+  searchPattern,
+  tabOf,
   todayLine,
   needsOwner,
   normalizeTab,
@@ -43,47 +49,45 @@ import {
   type TodaySummary,
 } from "./inbox-data";
 import { InboxLive } from "./inbox-live";
-import { rowNote, type RowTone } from "./row-note";
+import { InboxSearch } from "./inbox-search";
+import { rowNote, rowState } from "./row-note";
+import { highlightParts } from "./search-highlight";
 import { inboxRules, platformLabel } from "@/lib/social/platforms";
 import { AddBooking, calendarAccount } from "@/features/calendar";
 
-// Inbox (design.md v3 Paper): a headline ("4 things need you"), then list | conversation with the
-// reply composer | side panel on desktop; list → conversation on phones. Rows follow the ten rules:
-// no boxes or stripes, a honey dot when the owner must act, three lines per row.
+// Inbox (Inbox polish, approved 16 Nov): a headline ("4 things need you"), then two cards that
+// fill the screen on desktop: the list (search and tabs pinned on top, rows scroll under them) and
+// the conversation with the customer beside it. List → conversation on phones. Rows: a honey dot
+// when the owner must act, three lines, the channel's logo in colour and a honeycomb state.
 
 const href = (tab: InboxTab, item?: string, by: AnsweredBy | "all" = "all") =>
   `/inbox?tab=${tab}${by !== "all" ? `&by=${by}` : ""}${item ? `&item=${item}` : ""}`;
 
-const NOTE_ICON: Record<RowTone, React.ReactNode> = {
-  lead: <UserPlus className="text-honey-text size-3.5" strokeWidth={2} aria-hidden />,
-  complaint: <CircleAlert className="text-danger size-3.5" strokeWidth={2} aria-hidden />,
-  info: <BookOpen className="size-3.5" strokeWidth={2} aria-hidden />,
-  done: <Check className="text-success size-3.5" strokeWidth={2.2} aria-hidden />,
-  none: null,
-};
-
 /** One list row (design.md §1 rules 2 and 4): who · what they said · what happens next. */
 function Row({
   entry,
-  tab,
+  link,
   selected,
-  by,
+  q,
 }: {
   entry: InboxEntry & { status: string };
-  tab: InboxTab;
+  link: string;
   selected: boolean;
-  by: AnsweredBy | "all";
+  /** While searching: the words to highlight, and the row says which tab it's in. */
+  q?: string;
 }) {
   const needs = needsOwner(entry.status);
   const note = rowNote(entry);
+  const words = messageWords(entry.text, entry.attachments ?? []);
+  const inTab = q ? INBOX_TABS.find((t) => t.key === tabOf(entry.status))?.label : undefined;
   return (
-    <li className="border-line border-t first:border-t-0">
+    <li>
       <Link
-        href={href(tab, entry.itemId, by)}
+        href={link}
         aria-current={selected ? "true" : undefined}
         className={cn(
-          "-mx-3 flex gap-3 rounded-md px-3 py-3.5 transition-colors duration-150",
-          selected ? "bg-subtle" : "hover:bg-subtle/60",
+          "flex gap-3 rounded-[14px] px-3 py-3 no-underline transition-colors duration-150",
+          selected ? "bg-honey-tint ring-honey-border ring-1 ring-inset" : "hover:bg-subtle/70",
         )}
       >
         <Avatar
@@ -105,26 +109,35 @@ function Row({
             >
               {shortTime(entry.receivedAt)}
             </time>
+            {inTab && (
+              <span className="bg-subtle text-ink-2 shrink-0 rounded-md px-1.5 text-xs font-semibold">
+                {inTab}
+              </span>
+            )}
           </span>
           {entry.subject && (
             <span className="truncate text-[14px] font-medium">{entry.subject}</span>
           )}
           <span className={cn("truncate", needs ? "text-ink-2" : "text-ink-3")}>
-            {messageWords(entry.text, entry.attachments ?? [])}
+            {q
+              ? highlightParts(words, q).map((part, i) =>
+                  part.hit ? (
+                    <mark key={i} className="bg-honey/45 text-ink rounded-sm font-semibold">
+                      {part.text}
+                    </mark>
+                  ) : (
+                    part.text
+                  ),
+                )
+              : words}
           </span>
-          <span className="text-ink-3 flex items-center gap-1.5 text-[13px]">
-            {NOTE_ICON[note.tone]}
-            {note.label && (
-              <span
-                className={cn(
-                  "font-medium",
-                  note.tone === "lead" ? "text-honey-text" : "text-danger",
-                )}
-              >
-                {note.label}
-              </span>
-            )}
-            {note.label ? `· ${note.text}` : note.text}
+          <span className="mt-0.5 flex min-w-0">
+            <StateLabel
+              state={rowState(entry.status, note.tone)}
+              className="min-w-0 text-[13px] whitespace-normal"
+            >
+              {note.label ? `${note.label} · ${note.text}` : note.text}
+            </StateLabel>
           </span>
         </span>
       </Link>
@@ -275,6 +288,9 @@ export async function InboxView({
   // Old links (?tab=waiting / needs / sent) land on the tab that now holds those items.
   const tab = normalizeTab(typeof params.tab === "string" ? params.tab : undefined);
   const itemParam = typeof params.item === "string" ? params.item : undefined;
+  // Search (Inbox polish, approved 16 Nov): names and words across all three tabs.
+  const q = typeof params.q === "string" ? params.q.slice(0, 80) : "";
+  const pattern = searchPattern(q);
   // Answered tab (T27, T72): all, or by who answered.
   const by =
     tab === "answered"
@@ -298,7 +314,14 @@ export async function InboxView({
       loadNextPost(supabase, tenant.id),
     ]);
   const allowance = allowanceNotice(spend);
-  const entries = by === "all" ? tabEntries : tabEntries.filter((e) => answeredBy(e) === by);
+  const found = pattern ? await searchInbox(supabase, tenant.id, pattern) : null;
+  const entries = found
+    ? found
+    : by === "all"
+      ? tabEntries
+      : tabEntries.filter((e) => answeredBy(e) === by);
+  const link = (item?: string) =>
+    found ? `/inbox?q=${encodeURIComponent(q)}${item ? `&item=${item}` : ""}` : href(tab, item, by);
   const byCounts = new Map<string, number>([["all", tabEntries.length]]);
   for (const e of tabEntries) {
     const who = answeredBy(e);
@@ -346,11 +369,40 @@ export async function InboxView({
     </div>
   );
 
+  const listCard = (body: React.ReactNode, hideOnPhone = false) => (
+    <div
+      className={cn(
+        "card flex min-h-0 min-w-0 flex-col overflow-hidden",
+        hideOnPhone && "hidden lg:flex",
+      )}
+    >
+      <div className="border-line flex flex-col gap-2 border-b px-3.5 pt-3.5">
+        <InboxSearch initial={q} />
+        {found ? (
+          <p className="text-ink-3 pt-1 pb-3 text-[13px]" role="status">
+            {found.length === 0
+              ? "Nothing found"
+              : `${found.length === 1 ? "1 conversation" : `${found.length} conversations`} with \u201c${q.trim()}\u201d, across all tabs`}
+          </p>
+        ) : (
+          <div className="[&_.tabs]:border-b-0">{tabs}</div>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2">{body}</div>
+    </div>
+  );
+
   // First run of a brand: nothing connected yet (T47 "Set up <brand>").
   if (!accounts) return <BrandSetup brandName={tenant.name} />;
 
-  const empty = (
-    <p className="meta py-6">
+  const empty = found ? (
+    <EmptySpot className="px-2 py-6" action={<ActionLink href="/inbox">Clear search</ActionLink>}>
+      <b className="text-ink font-semibold">No messages mention &ldquo;{q.trim()}&rdquo;</b>
+      <br />
+      Search looks at names, messages and Waggle&apos;s replies in all three tabs.
+    </EmptySpot>
+  ) : (
+    <p className="meta px-2 py-6">
       {tab === "ignored"
         ? "Spam Waggle hid and messages that needed no reply show up here. Anything here can go back to For you."
         : by === "auto"
@@ -362,7 +414,7 @@ export async function InboxView({
   );
 
   // Nothing for the owner: the space a conversation would take shows what Waggle did today.
-  const caughtUp = tab === "for_you" && entries.length === 0;
+  const caughtUp = !found && tab === "for_you" && entries.length === 0;
   const activity = caughtUp ? await loadTodayActivity(supabase, tenant.id) : [];
 
   const conversation = selected
@@ -380,7 +432,7 @@ export async function InboxView({
     <ApprovalCard
       key={selected.itemId}
       entry={selected}
-      nextHref={next ? href(tab, next.itemId) : null}
+      nextHref={next ? link(next.itemId) : null}
     />
   ) : held &&
     reason === "spam" &&
@@ -451,72 +503,87 @@ export async function InboxView({
       )}
       <RecentSends />
       {caughtUp ? (
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
-          <div className="flex min-w-0 flex-col gap-4">
-            {tabs}
-            <p className="meta text-[13px]">Nothing waiting. New messages show up here.</p>
-            {nextPost && <NextPostNote post={nextPost} />}
-          </div>
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)]">
+          {listCard(
+            <>
+              <p className="meta px-2 py-4 text-[13px]">
+                Nothing waiting. New messages show up here.
+              </p>
+              {nextPost && <NextPostNote post={nextPost} />}
+            </>,
+          )}
           <CaughtUpCard activity={activity} />
         </div>
       ) : (
-        <div className="grid items-start gap-8 lg:grid-cols-[minmax(280px,360px)_minmax(0,600px)] xl:grid-cols-[minmax(280px,360px)_minmax(0,600px)_220px]">
-          <div className={cn("flex min-w-0 flex-col", itemParam && "hidden lg:flex")}>
-            {tabs}
-            {entries.length === 0 ? (
-              empty
-            ) : (
-              <ul className="flex flex-col pt-1" aria-label="Messages">
-                {entries.map((e) => (
-                  <Row
-                    key={e.itemId}
-                    entry={e}
-                    tab={tab}
-                    by={by}
-                    selected={e.itemId === selected?.itemId}
-                  />
-                ))}
-              </ul>
-            )}
-            {nextPost && <NextPostNote post={nextPost} />}
-          </div>
-          {selected && (
-            <div className={cn("flex min-w-0 flex-col gap-3", !itemParam && "hidden lg:flex")}>
-              {itemParam && (
-                <Link href={href(tab, undefined, by)} className="text-ink-2 text-sm lg:hidden">
-                  ← All messages
-                </Link>
+        <div className="grid gap-4 lg:grid-cols-[minmax(300px,400px)_minmax(0,1fr)] xl:h-[calc(100dvh-220px)] xl:min-h-[560px] xl:grid-rows-[minmax(0,1fr)]">
+          {listCard(
+            <>
+              {entries.length === 0 ? (
+                empty
+              ) : (
+                <ul
+                  className="flex flex-col gap-0.5"
+                  aria-label={found ? "Search results" : "Messages"}
+                >
+                  {entries.map((e) => (
+                    <Row
+                      key={e.itemId}
+                      entry={e}
+                      link={link(e.itemId)}
+                      q={found ? q : undefined}
+                      selected={e.itemId === selected?.itemId}
+                    />
+                  ))}
+                </ul>
               )}
-              <MarkItemRead itemId={selected.itemId} />
-              <ConversationPane
-                entry={selected}
-                thread={
-                  conversation?.thread ?? [
-                    {
-                      key: selected.itemId,
-                      from: "customer",
-                      text: selected.text,
-                      at: selected.receivedAt,
-                      itemId: selected.itemId,
-                    },
-                  ]
-                }
-                footer={
-                  booking ? (
-                    <>
-                      {footer}
-                      {booking}
-                    </>
-                  ) : (
-                    footer
-                  )
-                }
-              />
-            </div>
+              {nextPost && !found && <NextPostNote post={nextPost} />}
+            </>,
+            !!itemParam,
           )}
-          {selected && conversation && (
-            <div className={cn("lg:col-start-2 xl:col-start-3", !itemParam && "hidden lg:block")}>
-              <ContextPanel context={conversation.context} />
+          {selected && (
+            <div
+              className={cn(
+                "card grid min-h-0 min-w-0 overflow-hidden xl:grid-cols-[minmax(0,1fr)_260px]",
+                !itemParam && "hidden lg:grid",
+              )}
+            >
+              <div className="flex min-h-0 min-w-0 flex-col">
+                {itemParam && (
+                  <Link href={link()} className="text-ink-2 px-5 pt-3 text-sm lg:hidden">
+                    ← All messages
+                  </Link>
+                )}
+                <MarkItemRead itemId={selected.itemId} />
+                <ConversationPane
+                  entry={selected}
+                  thread={
+                    conversation?.thread ?? [
+                      {
+                        key: selected.itemId,
+                        from: "customer",
+                        text: selected.text,
+                        at: selected.receivedAt,
+                        itemId: selected.itemId,
+                      },
+                    ]
+                  }
+                  footer={
+                    booking ? (
+                      <>
+                        {footer}
+                        {booking}
+                      </>
+                    ) : (
+                      footer
+                    )
+                  }
+                />
+              </div>
+              {conversation && (
+                <div className="border-line min-h-0 overflow-y-auto border-t p-5 xl:border-t-0 xl:border-l">
+                  <ContextPanel context={conversation.context} />
+                </div>
+              )}
             </div>
           )}
         </div>

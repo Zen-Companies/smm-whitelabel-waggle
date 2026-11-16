@@ -263,3 +263,11 @@ export async function loadConversation(
     },
   };
 }
+
+/** Pure: the honeycomb beside an activity line (Inbox polish, approved 16 Nov). */
+export function activityState(text: string): "needs" | "waiting" | "working" {
+  if (/^(Handed to you|Couldn't be sent|Reply not delivered)/.test(text)) return "needs";
+  if (/^(Waiting for your OK|Waiting for the account|Reply drafted, needs)/.test(text))
+    return "waiting";
+  return "working";
+}

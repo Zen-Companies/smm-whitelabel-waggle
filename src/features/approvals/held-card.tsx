@@ -15,6 +15,7 @@ import {
 import type { InboxEntry } from "./inbox-data";
 import { REPLY_MAX } from "./limits";
 import { reasonChip, URGENT_CHIPS } from "./reason-chip";
+import { StateLabel } from "@/components/app/state-mark";
 import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 /** Reasons that mean a reply was ready but couldn't go out (danger box, §4 "Couldn't send"). */
@@ -91,23 +92,6 @@ export function lookedLike(reason: string | null, entry: Pick<InboxEntry, "categ
   return guess ? `It looked most like ${guess}.` : null;
 }
 
-/** Each platform's own DM inbox on the web. */
-const DM_INBOX: Record<string, string> = {
-  instagram: "https://www.instagram.com/direct/inbox/",
-  facebook: "https://www.facebook.com/messages/",
-  tiktok: "https://www.tiktok.com/messages",
-  bluesky: "https://bsky.app/messages",
-  whatsapp: "https://web.whatsapp.com/",
-};
-
-/** Where to answer it yourself: the post for a comment, the platform's inbox for a DM. */
-export function openOnPlatformHref(
-  entry: Pick<InboxEntry, "kind" | "platform" | "permalink">,
-): string | null {
-  if (entry.kind === "comment" || entry.kind === "review") return entry.permalink;
-  return DM_INBOX[entry.platform] ?? null;
-}
-
 export function heldText(reason: string | null, entry: InboxEntry): string {
   if (reason && HELD[reason]) {
     const extra =
@@ -147,7 +131,6 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
   const canHide = entry.kind !== "comment" || inboxRules(entry.platform).hide;
   const unsure = !failed && !!reason && UNSURE.has(reason) && canHide;
   const guess = lookedLike(reason, entry);
-  const openHref = openOnPlatformHref(entry);
 
   const chip = reasonChip({ ...entry, status: failed ? "failed" : "escalated" });
   // T72: the owner can answer here in their own words (not after a send failed: that needs
@@ -160,31 +143,39 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
 
   return (
     <div id={`item-${entry.itemId}`} className="flex flex-col gap-3">
-      <p className="flex flex-wrap items-center gap-2 text-[13px]">
-        <span
-          className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${URGENT_CHIPS.has(chip) ? "bg-danger-soft text-danger" : "bg-subtle text-ink-2"}`}
-        >
-          {chip}
-        </span>
-        <span className="text-ink-2">Waggle never answers these on its own.</span>
-      </p>
+      {failed ? (
+        // One box (Inbox polish, approved 16 Nov): what went wrong and what to do, said once.
+        <div role="alert" className="danger-box flex flex-col gap-1">
+          <StateLabel state="needs" className="font-semibold">
+            Couldn&apos;t send
+          </StateLabel>
+          <p className="text-ink">
+            {failedText(reason, platform, failed)}{" "}
+            {reply
+              ? `Copy the reply, answer ${entry.authorName ?? "them"} on ${platform}, then mark it handled.`
+              : `Answer ${entry.authorName ?? "them"} on ${platform}, then mark it handled.`}
+          </p>
+        </div>
+      ) : (
+        <p className="flex flex-wrap items-center gap-2 text-[13px]">
+          <StateLabel
+            state={URGENT_CHIPS.has(chip) ? "needs" : "waiting"}
+            className="font-semibold"
+          >
+            {chip}
+          </StateLabel>
+          <span className="text-ink-2">Waggle never answers these on its own.</span>
+        </p>
+      )}
       {reply && (
-        <div className="border-line-strong flex flex-col gap-2 rounded-xl border p-4">
-          <p className="text-ink-2 text-sm font-medium">
+        <div className="border-line-strong flex flex-col gap-1.5 rounded-xl border p-4">
+          <p className="text-ink-3 text-xs font-semibold">
             {failed ? "The reply that couldn't go out" : "Suggested reply"}
           </p>
           <p className="whitespace-pre-wrap">{reply}</p>
         </div>
       )}
-      {failed ? (
-        <div role="alert" className="danger-box flex flex-col gap-1">
-          <p className="font-semibold">Couldn&apos;t send: {failed}</p>
-          <p>
-            Reply on {platform} yourself{reply ? " (copy the reply above)" : ""}, then mark it as
-            handled.
-          </p>
-        </div>
-      ) : (
+      {!failed && (
         <p className="bg-subtle text-ink-2 rounded-xl px-4 py-3">
           {heldText(reason, entry)} {guess ? `${guess} ` : ""}
           {canWrite
@@ -220,16 +211,6 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
             {copied ? "Copied" : "Copy reply"}
           </Button>
         )}
-        {openHref && (
-          <a
-            href={openHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-ink-2 hover:bg-subtle flex min-h-11 items-center rounded-md px-3 text-sm font-medium"
-          >
-            Open in {platform}
-          </a>
-        )}
         {state.error && (
           <p role="alert" className="text-danger text-sm">
             {state.error}
@@ -238,6 +219,12 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
       </form>
     </div>
   );
+}
+
+/** The first sentence of the "Couldn't send" box: which window closed, by name. */
+function failedText(reason: string | null, platform: string, fallback: string): string {
+  if (reason === "dm_window_closed") return `${platform}'s reply window closed before it went out.`;
+  return fallback;
 }
 
 /** A spam-looking comment the owner should hide, not answer. */

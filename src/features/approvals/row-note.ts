@@ -1,5 +1,5 @@
 import type { InboxEntry } from "./inbox-data";
-import { responseTime } from "./inbox-data";
+import { needsOwner, responseTime } from "./inbox-data";
 import { platformLabel } from "@/lib/social/platforms";
 
 /** The icon at the start of a row's third line (design.md §1 rule 4). */
@@ -100,4 +100,16 @@ export function rowNote(entry: InboxEntry & { status: string }): RowNote {
     default:
       return { tone: "none", text: "Being sorted" };
   }
+}
+
+/**
+ * Pure: the honeycomb state on a row's third line (Inbox polish, approved 16 Nov): red for
+ * complaints and failures, full for leads and replies that went out, half while it waits on the
+ * owner, empty for the rest.
+ */
+export function rowState(status: string, tone: RowTone): "needs" | "waiting" | "working" | "off" {
+  if (tone === "complaint") return "needs";
+  if (tone === "lead" || tone === "done") return "working";
+  if (needsOwner(status) || status === "sending") return "waiting";
+  return "off";
 }
