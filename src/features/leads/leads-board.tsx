@@ -23,13 +23,7 @@ export async function LeadsBoard() {
 
   return (
     <div className="flex flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="page-title">Leads</h1>
-          <p className="text-ink-2 mt-1">
-            Everyone who asked to book, buy or sell. Each one is also emailed to you.
-          </p>
-        </div>
+      <header className="flex flex-wrap items-center justify-end gap-4">
         <div className="flex flex-wrap items-center gap-2">
           {leads.length > 0 && (
             <a
