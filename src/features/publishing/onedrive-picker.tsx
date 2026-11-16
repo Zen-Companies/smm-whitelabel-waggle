@@ -23,7 +23,10 @@ export function OneDrivePicker({
   onPick,
   disabled,
   allow,
+  showSoon = true,
 }: {
+  /** False inside the drop zone, which shows Google Drive on its own line. */
+  showSoon?: boolean;
   onPick: (pick: DrivePick) => void;
   disabled?: boolean;
   /** What the post can still take (a photo post can't add a video, and the other way round). */
@@ -70,7 +73,7 @@ export function OneDrivePicker({
         >
           OneDrive
         </Button>
-        <StateLabel state="soon">Google Drive, coming soon</StateLabel>
+        {showSoon && <StateLabel state="soon">Google Drive, coming soon</StateLabel>}
       </div>
     );
   }

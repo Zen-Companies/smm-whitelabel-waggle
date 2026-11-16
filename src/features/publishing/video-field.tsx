@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
+import { Film } from "lucide-react";
 import { prepareVideoUpload } from "./actions";
 import { POST_VIDEO_TYPES } from "./limits";
 import { clockLength } from "./post-rules";
@@ -56,10 +57,13 @@ export function VideoField({
   video,
   onChange,
   disabled,
+  pickRef,
 }: {
   video: VideoState;
   onChange: (v: VideoState) => void;
   disabled?: boolean;
+  /** Lets the drop zone hand over a dropped video file. */
+  pickRef?: { current: ((file: File) => void) | null };
 }) {
   const input = useRef<HTMLInputElement>(null);
   // A newer pick (or Remove) cancels what an older upload reports.
@@ -92,68 +96,87 @@ export function VideoField({
     onChange({ step: "none" });
   };
 
+  useEffect(() => {
+    if (!pickRef) return;
+    pickRef.current = (file) => void pick(file);
+    return () => {
+      pickRef.current = null;
+    };
+  });
+
+  const busy = video.step === "uploading" || video.step === "ready";
   return (
-    <div className="flex flex-col gap-2">
-      {(video.step === "uploading" || video.step === "ready") && (
-        <div className="flex w-44 flex-col gap-1.5">
-          <span className="bg-ink flex h-24 items-end justify-between rounded-xl px-2.5 py-2 text-xs text-white">
-            <span>{video.seconds ? `▶ ${clockLength(video.seconds)}` : "▶ Video"}</span>
-            <span>{mb(video.size)}</span>
+    <>
+      {/* Always mounted, so Replace and a fresh pick reuse the same input. */}
+      <input
+        ref={input}
+        id="post-video"
+        type="file"
+        accept={POST_VIDEO_TYPES.join(",")}
+        disabled={disabled}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void pick(file);
+        }}
+        className="sr-only"
+      />
+      {busy ? (
+        // The drop zone becomes the video (Posts media, approved 16 Nov).
+        <div className="border-line bg-surface flex w-full items-center gap-3 rounded-2xl border p-2.5">
+          <span className="bg-ink flex size-[72px] shrink-0 items-center justify-center rounded-xl text-sm text-white">
+            ▶
           </span>
-          {video.step === "uploading" ? (
-            <>
-              <span
-                className="bg-subtle h-1.5 overflow-hidden rounded-full"
-                role="progressbar"
-                aria-label="Uploading video"
-                aria-valuenow={video.progress}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <span className="bg-honey block h-full" style={{ width: `${video.progress}%` }} />
+          <span className="flex min-w-0 flex-1 flex-col gap-1">
+            <b className="truncate text-sm font-semibold">{video.name}</b>
+            {video.step === "uploading" ? (
+              <>
+                <span className="text-ink-3 text-xs" role="status">
+                  Uploading · {video.progress}% ·{" "}
+                  {mb(Math.round((video.size * video.progress) / 100))} of {mb(video.size)}
+                </span>
+                <span
+                  className="bg-subtle h-1.5 overflow-hidden rounded-full"
+                  role="progressbar"
+                  aria-label="Uploading video"
+                  aria-valuenow={video.progress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <span className="bg-honey block h-full" style={{ width: `${video.progress}%` }} />
+                </span>
+              </>
+            ) : (
+              <span className="text-ink-3 text-xs">
+                Video{video.seconds ? ` · ${clockLength(video.seconds)}` : ""} · {mb(video.size)}
               </span>
-              <span className="text-ink-2 text-xs" role="status">
-                Uploading video · {video.progress}%
-              </span>
-            </>
-          ) : (
-            <span className="text-ink-2 truncate text-xs">
-              {video.name} ·{" "}
-              <button type="button" onClick={remove} className="action-link mx-0">
-                Remove
-              </button>
-            </span>
+            )}
+          </span>
+          {video.step === "ready" && (
+            <label htmlFor="post-video" className="action-link cursor-pointer text-[13px]">
+              Replace
+            </label>
           )}
+          <button type="button" onClick={remove} className="action-link text-danger text-[13px]">
+            {video.step === "uploading" ? "Cancel" : "Remove"}
+          </button>
         </div>
-      )}
-      {video.step !== "uploading" && video.step !== "ready" && (
+      ) : (
         <label
           htmlFor="post-video"
-          className="border-line-strong text-ink-3 hover:bg-subtle flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed text-center text-xs has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:outline-2"
+          className="border-line-strong bg-surface hover:bg-subtle inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-sm font-semibold has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50"
         >
-          Add video
-          <input
-            ref={input}
-            id="post-video"
-            type="file"
-            accept={POST_VIDEO_TYPES.join(",")}
-            disabled={disabled}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) void pick(file);
-            }}
-            className="sr-only"
-          />
+          <Film className="size-[18px]" strokeWidth={1.8} aria-hidden />
+          Video
         </label>
       )}
       {video.step === "uploading" && (
-        <span className="meta">
+        <span className="meta w-full">
           Schedule stays off until the upload finishes. Keep this page open; a large video can take
           a minute.
         </span>
       )}
       {video.step === "error" && (
-        <p role="alert" className="text-danger text-sm">
+        <p role="alert" className="text-danger w-full text-sm">
           {video.message}
         </p>
       )}
@@ -161,6 +184,6 @@ export function VideoField({
       {video.step === "ready" && video.seconds && (
         <input type="hidden" name="videoSeconds" value={String(video.seconds)} />
       )}
-    </div>
+    </>
   );
 }

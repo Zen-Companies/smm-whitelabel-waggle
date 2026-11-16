@@ -1,8 +1,11 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { Camera, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
+import { cn } from "cn";
+import { EmptyCell } from "@/components/app/empty-spot";
+import { StateLabel } from "@/components/app/state-mark";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
 import { platformLabel } from "@/lib/social/platforms";
@@ -115,6 +118,10 @@ function ComposeFields({
   const [text, setText] = useState("");
   const length = text.length;
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoSize, setPhotoSize] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
+  const pickVideo = useRef<((file: File) => void) | null>(null);
   // T74a: a local link to the picked photo, for the preview only.
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   // T84c: a photo picked from OneDrive, already copied into media storage.
@@ -126,6 +133,42 @@ function ComposeFields({
   const [picked, setPicked] = useState<string[]>(() => accounts.map((a) => a.id));
   const pinterest = accounts.filter((a) => a.platform === "pinterest" && picked.includes(a.id));
   const hasVideo = video.step === "ready" || video.step === "uploading";
+  const hasMedia = !!photo || hasVideo;
+  /** A photo from the device (or null to clear it), from the picker, Replace, Remove or a drop. */
+  const choosePhoto = (file: File | null) => {
+    setDropError(null);
+    if (!file) {
+      const input = document.getElementById("post-image") as HTMLInputElement | null;
+      if (input) input.value = "";
+    }
+    setPhoto(file?.name ?? null);
+    setPhotoSize(file?.size ?? null);
+    setDrivePhoto(null);
+    setPhotoUrl((old) => {
+      if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  };
+  /** A file dropped on the zone: photos go in the form's file field, videos start uploading. */
+  const dropFile = (file: File | null) => {
+    if (!file) return;
+    if ((POST_IMAGE_TYPES as readonly string[]).includes(file.type)) {
+      const input = document.getElementById("post-image") as HTMLInputElement | null;
+      if (input) {
+        const list = new DataTransfer();
+        list.items.add(file);
+        input.files = list.files;
+      }
+      choosePhoto(file);
+    } else if (file.type.startsWith("video/")) {
+      setDropError(null);
+      pickVideo.current?.(file);
+    } else {
+      setDropError(
+        "That file can't be posted. Use a JPG, PNG or WebP photo, or an MP4, MOV or WebM video.",
+      );
+    }
+  };
   // What each ticked platform will do with this post (design v3 "Before it goes out").
   const pickedPlatforms = [
     ...new Set(accounts.filter((a) => picked.includes(a.id)).map((a) => a.platform)),
@@ -185,38 +228,141 @@ function ComposeFields({
         {fieldError("content")}
       </div>
 
+      {/* Photo or video (Posts media, approved 16 Nov): one drop zone; once something is added
+          it becomes that file. A post carries a photo or a video, not both. */}
       <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-start gap-3">
-          {!hasVideo && (
-            <label
-              htmlFor="post-image"
-              className="border-line-strong text-ink-3 hover:bg-subtle flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-md border border-dashed text-center text-xs has-[:focus-visible]:outline-2"
-            >
-              {photo ? "Change photo" : "Add photo"}
-              <input
-                id="post-image"
-                name="image"
-                type="file"
-                accept={POST_IMAGE_TYPES.join(",")}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  setPhoto(file?.name ?? null);
-                  setDrivePhoto(null);
-                  setPhotoUrl((old) => {
-                    if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
-                    return file ? URL.createObjectURL(file) : null;
-                  });
-                }}
-                className="sr-only"
-              />
-            </label>
+        <input
+          id="post-image"
+          name="image"
+          type="file"
+          accept={POST_IMAGE_TYPES.join(",")}
+          onChange={(e) => choosePhoto(e.target.files?.[0] ?? null)}
+          className="sr-only"
+        />
+        <div
+          onDragOver={(e) => {
+            if (hasMedia) return;
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            if (hasMedia) return;
+            e.preventDefault();
+            setDragging(false);
+            dropFile(e.dataTransfer.files?.[0] ?? null);
+          }}
+          className={
+            hasMedia
+              ? "flex flex-col gap-2"
+              : cn(
+                  "flex flex-col items-center gap-2.5 rounded-2xl border-[1.5px] border-dashed px-3.5 py-5 text-center transition-colors",
+                  dragging ? "border-honey bg-honey-tint" : "border-line-strong bg-honey-tint/40",
+                )
+          }
+        >
+          {!hasMedia && (
+            <>
+              <EmptyCell size={34} />
+              <b className="text-[15px] font-semibold">Add a photo or video</b>
+              <span className="text-ink-2 text-[13px]">Drop it here, or pick one</span>
+            </>
           )}
-          {/* A post carries a photo or a video, not both (TikTok and others refuse the mix). */}
-          {!photo && <VideoField video={video} onChange={setVideo} disabled={pending} />}
-          {!hasVideo && (
-            <span className="meta min-w-0 self-center truncate">
-              {photo ?? `A photo (JPG or PNG, up to ${imageMb} MB) or a video`}
-            </span>
+          {photo && (
+            <div className="border-line bg-surface flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left">
+              {photoUrl ? (
+                // A local or copied link to the picked photo, for this card only.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photoUrl}
+                  alt=""
+                  className="size-[72px] shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <span className="bg-subtle size-[72px] shrink-0 rounded-xl" />
+              )}
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <b className="truncate text-sm font-semibold">{photo}</b>
+                <span className="text-ink-3 text-xs">
+                  Photo{photoSize ? ` · ${sizeLabel(photoSize)}` : ""} ·{" "}
+                  {drivePhoto ? "from OneDrive" : "from this device"}
+                </span>
+              </span>
+              <label htmlFor="post-image" className="action-link cursor-pointer text-[13px]">
+                Replace
+              </label>
+              <button
+                type="button"
+                onClick={() => choosePhoto(null)}
+                className="action-link text-danger text-[13px]"
+              >
+                Remove
+              </button>
+            </div>
+          )}
+          <div
+            className={
+              hasMedia ? "flex flex-col gap-2" : "flex flex-wrap items-center justify-center gap-2"
+            }
+          >
+            {!hasMedia && (
+              <label
+                htmlFor="post-image"
+                className="border-line-strong bg-surface hover:bg-subtle inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-sm font-semibold"
+              >
+                <Camera className="size-[18px]" strokeWidth={1.8} aria-hidden />
+                Photo
+              </label>
+            )}
+            {!photo && (
+              <VideoField
+                video={video}
+                onChange={setVideo}
+                disabled={pending}
+                pickRef={pickVideo}
+              />
+            )}
+            {!hasMedia && (
+              <OneDrivePicker
+                disabled={pending}
+                showSoon={false}
+                allow={{ image: true, video: true }}
+                onPick={(pick) => {
+                  if (pick.use === "image") {
+                    const file = document.getElementById("post-image") as HTMLInputElement | null;
+                    if (file) file.value = "";
+                    setPhoto(pick.name);
+                    setPhotoSize(pick.size);
+                    setDrivePhoto({ url: pick.url, size: pick.size });
+                    setPhotoUrl(pick.url);
+                  } else {
+                    setVideo({
+                      step: "ready",
+                      name: pick.name,
+                      size: pick.size,
+                      seconds: null,
+                      url: pick.url,
+                    });
+                  }
+                }}
+              />
+            )}
+          </div>
+          {!hasMedia && (
+            <>
+              <span className="text-ink-3 text-xs">
+                Photo: JPG, PNG or WebP, up to {imageMb} MB · Video: MP4, MOV or WebM · One or the
+                other, not both
+              </span>
+              <StateLabel state="soon" className="text-[13px]">
+                Google Drive, coming soon
+              </StateLabel>
+            </>
+          )}
+          {dropError && (
+            <p role="alert" className="text-danger text-sm">
+              {dropError}
+            </p>
           )}
         </div>
         {drivePhoto && (
@@ -224,30 +370,6 @@ function ComposeFields({
             <input type="hidden" name="imageUrl" value={drivePhoto.url} />
             <input type="hidden" name="imageSize" value={drivePhoto.size} />
           </>
-        )}
-        {video.step === "none" && (
-          <OneDrivePicker
-            disabled={pending}
-            allow={{ image: true, video: !photo }}
-            onPick={(pick) => {
-              if (pick.use === "image") {
-                // The OneDrive photo replaces one picked from the device.
-                const file = document.getElementById("post-image") as HTMLInputElement | null;
-                if (file) file.value = "";
-                setPhoto(pick.name);
-                setDrivePhoto({ url: pick.url, size: pick.size });
-                setPhotoUrl(pick.url);
-              } else {
-                setVideo({
-                  step: "ready",
-                  name: pick.name,
-                  size: pick.size,
-                  seconds: null,
-                  url: pick.url,
-                });
-              }
-            }}
-          />
         )}
         {fieldError("image")}
       </div>
@@ -359,7 +481,11 @@ function ComposeFields({
                     <PlatformMark platform={c.platform} size={22} />
                     <span className={c.level === "blocked" ? "text-danger" : "text-ink-2"}>
                       {c.message}
-                      {c.level === "blocked" ? " Untick it to post to the others." : ""}
+                      {c.level === "blocked"
+                        ? c.message.endsWith("needs a photo or video.")
+                          ? " Add one above, or untick it to post to the others."
+                          : " Untick it to post to the others."
+                        : ""}
                     </span>
                   </li>
                 ),
@@ -573,3 +699,8 @@ function Fold({
     </details>
   );
 }
+
+const sizeLabel = (bytes: number) =>
+  bytes >= 1024 ** 2
+    ? `${(bytes / 1024 ** 2).toFixed(1)} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
