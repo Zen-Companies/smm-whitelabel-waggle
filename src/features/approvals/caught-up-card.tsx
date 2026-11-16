@@ -20,7 +20,7 @@ export function CaughtUpCard({ activity }: { activity: ActivityEntry[] }) {
             All caught up
           </h2>
           <p className="text-ink-2">
-            Nothing needs you. Go run the shop; we&apos;ll email you when a customer does.
+            Nothing needs you. Go run the business; we&apos;ll email you when a customer does.
           </p>
         </div>
       </div>
@@ -41,14 +41,17 @@ export function CaughtUpCard({ activity }: { activity: ActivityEntry[] }) {
                 </span>
                 <Link
                   href={`/inbox?tab=${a.what}&item=${a.itemId}`}
-                  className="text-[13px] font-medium"
+                  className="action-link with-arrow text-[13px]"
                 >
                   Open
                 </Link>
               </li>
             ))}
           </ul>
-          <Link href="/inbox?tab=answered" className="pt-1.5 text-[13px] font-medium">
+          <Link
+            href="/inbox?tab=answered"
+            className="action-link with-arrow mt-2 self-start text-[13px]"
+          >
             All answered
           </Link>
         </div>

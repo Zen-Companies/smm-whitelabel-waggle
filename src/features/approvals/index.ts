@@ -74,3 +74,5 @@ export type { ReasonChip } from "./reason-chip";
 export { mediaLabel, messageWords, parseAttachments, previewIndex } from "./attachments";
 export type { Attachment } from "./attachments";
 export { attachmentPreviewUrl } from "./attachment-preview";
+export { CaughtUpCard } from "./caught-up-card";
+export { loadTodayActivity } from "./inbox-data";
