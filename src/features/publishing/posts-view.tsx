@@ -1,5 +1,7 @@
 import { CalendarClock, ChevronLeft, ChevronRight, CircleAlert, CircleCheck } from "lucide-react";
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import { SidePanel } from "@/components/app/side-panel";
 import { getCurrentTenant } from "@/features/tenants";
 import { cn } from "cn";
 import {
@@ -36,13 +38,22 @@ type View = "week" | "month" | "list";
 const clockOf = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
-function url(p: { view: View; month: Month; week?: string; day?: string; post?: string }) {
+function url(p: {
+  view: View;
+  month: Month;
+  week?: string;
+  day?: string;
+  post?: string;
+  /** The composer panel, open with no day picked. */
+  compose?: boolean;
+}) {
   const q = new URLSearchParams();
   if (p.view !== "week") q.set("view", p.view);
   if (p.view === "week" && p.week) q.set("week", p.week);
   else q.set("month", monthParam(p.month));
   if (p.day) q.set("day", p.day);
   if (p.post) q.set("post", p.post);
+  if (p.compose) q.set("new", "1");
   return `/posts?${q}`;
 }
 
@@ -105,6 +116,7 @@ export async function PostsView({
   const month = view === "week" ? parseMonth(week.slice(0, 7)) : parseMonth(str("month"));
   const time = day ? parseTime(str("time")) : null;
   const postId = str("post");
+  const composing = str("new") === "1";
   const names = accountNames(accounts);
   const selectedPost = postId ? posts.find((p) => p.id === postId) : undefined;
   const attention = posts.filter(needsNewTime);
@@ -204,9 +216,16 @@ export async function PostsView({
             List
           </Link>
         </nav>
+        <Link
+          href={url({ view, month, week, compose: true })}
+          scroll={false}
+          className={buttonVariants({ variant: "primary" })}
+        >
+          + New post
+        </Link>
       </div>
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,400px)]">
+      <div className="flex flex-col gap-6">
         <div className="flex min-w-0 flex-col gap-3">
           {first && (
             <div
@@ -430,20 +449,26 @@ export async function PostsView({
           )}
         </div>
 
-        <div className="flex flex-col gap-4">
-          {selectedPost && (
-            <section aria-label="Selected post" className="card flex flex-col px-5 pt-1">
-              <div className="flex items-center justify-between pt-3">
-                <h2 className="meta">This post</h2>
-                <Link href={url({ view, month })} className="action-link">
-                  Close
-                </Link>
-              </div>
-              <Post post={selectedPost} accounts={names} as="div" />
-            </section>
-          )}
-          <ComposeCard day={day} time={time} />
-        </div>
+        {selectedPost ? (
+          <SidePanel label="This post" closeHref={url({ view, month, week })}>
+            <Post post={selectedPost} accounts={names} as="div" />
+          </SidePanel>
+        ) : day || composing ? (
+          <SidePanel
+            label={
+              day
+                ? `New post · ${new Date(`${day}T12:00`).toLocaleDateString(undefined, {
+                    weekday: "short",
+                    month: "short",
+                    day: "numeric",
+                  })}`
+                : "New post"
+            }
+            closeHref={url({ view, month, week })}
+          >
+            <ComposeCard day={day} time={time} bare />
+          </SidePanel>
+        ) : null}
       </div>
     </>
   );

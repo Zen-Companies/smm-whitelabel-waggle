@@ -12,9 +12,12 @@ import { loadQueue } from "./queue-data";
 export async function ComposeCard({
   day = null,
   time = null,
+  bare = false,
 }: {
   day?: string | null;
   time?: string | null;
+  /** Inside the side panel: no card and no heading (the panel has them). */
+  bare?: boolean;
 }) {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
@@ -35,8 +38,12 @@ export async function ComposeCard({
   ]);
   const queue = await loadQueue(tenant.zernioProfileId);
   return (
-    <section className="card-lifted flex flex-col gap-4 p-5" aria-labelledby="compose-heading">
-      <div className="flex flex-col">
+    <section
+      className={bare ? "flex flex-col gap-4" : "card-lifted flex flex-col gap-4 p-5"}
+      aria-labelledby={bare ? undefined : "compose-heading"}
+      aria-label={bare ? "New post" : undefined}
+    >
+      <div className={bare ? "hidden" : "flex flex-col"}>
         <h2 id="compose-heading" className="section-title">
           New post
         </h2>

@@ -751,3 +751,28 @@
     scrollbar-color: var(--line-strong) transparent;
   }
 }
+
+/* Side panel (Posts composer, approved 16 Nov): slides in from the right; still when motion is off. */
+.side-panel {
+  animation: side-panel-in 220ms ease-out;
+}
+.side-panel-backdrop {
+  animation: side-panel-fade 220ms ease-out;
+}
+@keyframes side-panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes side-panel-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-panel,
+  .side-panel-backdrop {
+    animation: none;
+  }
+}

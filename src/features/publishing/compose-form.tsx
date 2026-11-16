@@ -1,5 +1,6 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { PlatformMark } from "@/components/app/platform-mark";
@@ -151,6 +152,14 @@ function ComposeFields({
       </p>
     ) : null;
 
+  const issues = checks.filter((c) => c.level !== "ok").length + serverProblems.length;
+  const beforeSummary = issues
+    ? issues === 1
+      ? "1 thing to check"
+      : `${issues} things to check`
+    : pinterest.length
+      ? "Pinterest board"
+      : "All good";
   return (
     <form action={action} className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -243,137 +252,162 @@ function ComposeFields({
         {fieldError("image")}
       </div>
 
-      {pickedPlatforms.includes("youtube") && (
-        <div className="flex flex-col gap-1.5">
-          <label htmlFor="post-youtube-title" className="text-sm font-medium">
-            YouTube title
-          </label>
-          <input
-            id="post-youtube-title"
-            name="youtubeTitle"
-            maxLength={YOUTUBE_TITLE_MAX}
-            placeholder="Without one, YouTube uses the first line of your text"
-            className="field"
-          />
-          <span className="meta">
-            {YOUTUBE_TITLE_MAX} characters max; your text becomes the description.
-          </span>
-          {fieldError("youtubeTitle")}
-        </div>
-      )}
+      <Fold
+        title="Post to"
+        summary={
+          pickedPlatforms.length
+            ? pickedPlatforms.map((p) => platformLabel(p)).join(", ")
+            : "Pick at least one"
+        }
+        open={!!state.field && state.field === "accounts"}
+      >
+        <fieldset className="flex flex-col gap-2">
+          <legend className="sr-only">Post to</legend>
+          {accounts.length === 0 && (
+            <p className="text-ink-3 text-sm">Connect an account in Settings first.</p>
+          )}
+          {accounts.map((a) => (
+            <label key={a.id} className="flex min-h-11 items-center gap-3 text-sm">
+              <input
+                type="checkbox"
+                name="accounts"
+                value={a.id}
+                checked={picked.includes(a.id)}
+                onChange={(e) =>
+                  setPicked((p) =>
+                    e.target.checked ? [...p, a.id] : p.filter((id) => id !== a.id),
+                  )
+                }
+                className="size-4"
+              />
+              <PlatformMark platform={a.platform} size={24} />
+              {platformLabel(a.platform)} @{a.username ?? "account"}
+            </label>
+          ))}
+          {disconnected.map((a) => (
+            <p
+              key={`down-${a.platform}-${a.username ?? ""}`}
+              className="text-ink-3 flex min-h-11 flex-wrap items-center gap-3 text-sm"
+            >
+              <input type="checkbox" disabled className="size-4" aria-hidden />
+              <PlatformMark platform={a.platform} size={24} />
+              {platformLabel(a.platform)} @{a.username ?? "account"}
+              <Link href="/settings/accounts" className="action-link with-arrow">
+                Reconnect to post here
+              </Link>
+            </p>
+          ))}
+          {fieldError("accounts")}
+        </fieldset>
+      </Fold>
 
-      <PostOptionsFields
-        platforms={pickedPlatforms}
-        sharedText={text}
-        hasMedia={!!photo || hasVideo}
-        hasVideo={hasVideo}
-      />
-
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 text-sm font-medium">Post to</legend>
-        {accounts.length === 0 && (
-          <p className="text-ink-3 text-sm">Connect an account in Settings first.</p>
-        )}
-        {accounts.map((a) => (
-          <label key={a.id} className="flex min-h-11 items-center gap-3 text-sm">
+      <Fold
+        title="Options"
+        summary="Extras for each app, all optional"
+        open={state.field === "youtubeTitle"}
+      >
+        {pickedPlatforms.includes("youtube") && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="post-youtube-title" className="text-sm font-medium">
+              YouTube title
+            </label>
             <input
-              type="checkbox"
-              name="accounts"
-              value={a.id}
-              checked={picked.includes(a.id)}
-              onChange={(e) =>
-                setPicked((p) => (e.target.checked ? [...p, a.id] : p.filter((id) => id !== a.id)))
-              }
-              className="size-4"
+              id="post-youtube-title"
+              name="youtubeTitle"
+              maxLength={YOUTUBE_TITLE_MAX}
+              placeholder="Without one, YouTube uses the first line of your text"
+              className="field"
             />
-            <PlatformMark platform={a.platform} size={24} />
-            {platformLabel(a.platform)} @{a.username ?? "account"}
-          </label>
-        ))}
-        {disconnected.map((a) => (
-          <p
-            key={`down-${a.platform}-${a.username ?? ""}`}
-            className="text-ink-3 flex min-h-11 flex-wrap items-center gap-3 text-sm"
-          >
-            <input type="checkbox" disabled className="size-4" aria-hidden />
-            <PlatformMark platform={a.platform} size={24} />
-            {platformLabel(a.platform)} @{a.username ?? "account"}
-            <Link href="/settings/accounts" className="action-link with-arrow">
-              Reconnect to post here
-            </Link>
-          </p>
-        ))}
-        {fieldError("accounts")}
-      </fieldset>
+            <span className="meta">
+              {YOUTUBE_TITLE_MAX} characters max; your text becomes the description.
+            </span>
+            {fieldError("youtubeTitle")}
+          </div>
+        )}
 
-      <PostPreview
-        platforms={pickedPlatforms}
-        brandName={brandName}
-        text={text}
-        photoUrl={hasVideo ? null : photoUrl}
-        hasVideo={hasVideo}
-      />
+        <PostOptionsFields
+          platforms={pickedPlatforms}
+          sharedText={text}
+          hasMedia={!!photo || hasVideo}
+          hasVideo={hasVideo}
+        />
+      </Fold>
+
+      <Fold title="Preview" summary="How it looks on each app">
+        <PostPreview
+          platforms={pickedPlatforms}
+          brandName={brandName}
+          text={text}
+          photoUrl={hasVideo ? null : photoUrl}
+          hasVideo={hasVideo}
+        />
+      </Fold>
 
       {(checks.some((c) => c.level !== "ok") ||
         serverProblems.length > 0 ||
         pinterest.length > 0) && (
-        <section
-          aria-labelledby="before-heading"
-          className="border-line flex flex-col gap-2.5 rounded-xl border p-4"
+        <Fold
+          title="Before it goes out"
+          summary={beforeSummary}
+          open={checks.some((c) => c.level === "blocked") || serverProblems.length > 0}
         >
-          <h3 id="before-heading" className="text-sm font-semibold">
-            Before it goes out
-          </h3>
-          <ul className="flex flex-col gap-2.5 text-sm">
-            {checks.map((c) =>
-              c.level === "ok" ? null : (
-                <li key={c.platform} className="flex items-start gap-2.5">
-                  <PlatformMark platform={c.platform} size={22} />
-                  <span className={c.level === "blocked" ? "text-danger" : "text-ink-2"}>
-                    {c.message}
-                    {c.level === "blocked" ? " Untick it to post to the others." : ""}
+          <section aria-label="Before it goes out" className="flex flex-col gap-2.5">
+            <ul className="flex flex-col gap-2.5 text-sm">
+              {checks.map((c) =>
+                c.level === "ok" ? null : (
+                  <li key={c.platform} className="flex items-start gap-2.5">
+                    <PlatformMark platform={c.platform} size={22} />
+                    <span className={c.level === "blocked" ? "text-danger" : "text-ink-2"}>
+                      {c.message}
+                      {c.level === "blocked" ? " Untick it to post to the others." : ""}
+                    </span>
+                  </li>
+                ),
+              )}
+              {pinterest.map((a) => {
+                const board = boards[a.id] ?? a.pinterestBoard ?? null;
+                return (
+                  <li key={`board-${a.id}`} className="flex items-start gap-2.5">
+                    <PlatformMark platform="pinterest" size={22} />
+                    <span className="text-ink-2">
+                      <b className="text-ink font-semibold">Pinterest</b>:{" "}
+                      {board ? `pins to “${board.name}”.` : "pins to your first board."}{" "}
+                      <button
+                        type="button"
+                        onClick={() => setBoardFor(a.id)}
+                        className="action-link"
+                      >
+                        Change board
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+              {serverProblems.map((p, i) => (
+                <li key={`${p.platform}-${i}`} role="alert" className="flex items-start gap-2.5">
+                  <PlatformMark platform={p.platform} size={22} />
+                  <span className="text-danger">
+                    <b className="font-semibold">{platformLabel(p.platform)}</b>: {p.message}
                   </span>
                 </li>
-              ),
+              ))}
+            </ul>
+            {boardFor && (
+              <BoardPicker
+                accountId={boardFor}
+                username={accounts.find((a) => a.id === boardFor)?.username ?? null}
+                onDone={(board) => {
+                  if (board) setBoards((b) => ({ ...b, [boardFor]: board }));
+                  setBoardFor(null);
+                }}
+              />
             )}
-            {pinterest.map((a) => {
-              const board = boards[a.id] ?? a.pinterestBoard ?? null;
-              return (
-                <li key={`board-${a.id}`} className="flex items-start gap-2.5">
-                  <PlatformMark platform="pinterest" size={22} />
-                  <span className="text-ink-2">
-                    <b className="text-ink font-semibold">Pinterest</b>:{" "}
-                    {board ? `pins to “${board.name}”.` : "pins to your first board."}{" "}
-                    <button type="button" onClick={() => setBoardFor(a.id)} className="action-link">
-                      Change board
-                    </button>
-                  </span>
-                </li>
-              );
-            })}
-            {serverProblems.map((p, i) => (
-              <li key={`${p.platform}-${i}`} role="alert" className="flex items-start gap-2.5">
-                <PlatformMark platform={p.platform} size={22} />
-                <span className="text-danger">
-                  <b className="font-semibold">{platformLabel(p.platform)}</b>: {p.message}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {boardFor && (
-            <BoardPicker
-              accountId={boardFor}
-              username={accounts.find((a) => a.id === boardFor)?.username ?? null}
-              onDone={(board) => {
-                if (board) setBoards((b) => ({ ...b, [boardFor]: board }));
-                setBoardFor(null);
-              }}
-            />
-          )}
-          <span className="text-ink-3 text-xs">
-            Rules come from each platform. Waggle checks them before saving, so nothing fails later.
-          </span>
-        </section>
+            <span className="text-ink-3 text-xs">
+              Rules come from each platform. Waggle checks them before saving, so nothing fails
+              later.
+            </span>
+          </section>
+        </Fold>
       )}
 
       {needsConsent(pickedPlatforms) && (
@@ -391,78 +425,90 @@ function ComposeFields({
         </label>
       )}
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-2 text-sm font-medium">When</legend>
-        <div className="segmented self-start" role="radiogroup">
-          {(["now", "queue", "later"] as const).map((v) => (
-            <label
-              key={v}
-              data-active={when === v || undefined}
-              aria-disabled={v === "queue" && !nextSlot}
-            >
-              <input
-                type="radio"
-                name="when"
-                value={v}
-                checked={when === v}
-                disabled={v === "queue" && !nextSlot}
-                onChange={() => setWhen(v)}
-                className="sr-only"
-              />
-              {v === "now" ? "Now" : v === "queue" ? "Next free slot" : "Pick a time"}
-            </label>
-          ))}
-        </div>
-        {nextSlot ? (
-          when === "queue" && (
-            <p className="meta">
-              Next free slot: {slotLabel(nextSlot)}.{" "}
-              <a href="/posts/queue" className="link-inline">
-                Change posting times
-              </a>
-            </p>
-          )
-        ) : (
-          <p className="meta">
-            <a href="/posts/queue" className="link-inline">
-              Set posting times
-            </a>{" "}
-            to post at your usual times with one tap.
-          </p>
-        )}
-        {when === "later" && (
-          <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="post-day" className="text-sm font-medium">
-                Day
+      <Fold
+        title="When"
+        summary={
+          when === "now"
+            ? "Now"
+            : when === "queue" && nextSlot
+              ? `Next free slot · ${slotLabel(nextSlot)}`
+              : (whenLabel(date, time) ?? "Pick a time")
+        }
+        open={state.field === "when"}
+      >
+        <fieldset className="flex flex-col gap-2">
+          <legend className="sr-only">When</legend>
+          <div className="segmented self-start" role="radiogroup">
+            {(["now", "queue", "later"] as const).map((v) => (
+              <label
+                key={v}
+                data-active={when === v || undefined}
+                aria-disabled={v === "queue" && !nextSlot}
+              >
+                <input
+                  type="radio"
+                  name="when"
+                  value={v}
+                  checked={when === v}
+                  disabled={v === "queue" && !nextSlot}
+                  onChange={() => setWhen(v)}
+                  className="sr-only"
+                />
+                {v === "now" ? "Now" : v === "queue" ? "Next free slot" : "Pick a time"}
               </label>
-              <input
-                id="post-day"
-                type="date"
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="field"
-                required
-              />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="post-time" className="text-sm font-medium">
-                Time
-              </label>
-              <input
-                id="post-time"
-                type="time"
-                value={time}
-                onChange={(e) => setTime(e.target.value)}
-                className="field"
-                required
-              />
-            </div>
-            <input type="hidden" name="scheduledFor" value={scheduledFor} />
+            ))}
           </div>
-        )}
-        {fieldError("when")}
-      </fieldset>
+          {nextSlot ? (
+            when === "queue" && (
+              <p className="meta">
+                Next free slot: {slotLabel(nextSlot)}.{" "}
+                <a href="/posts/queue" className="link-inline">
+                  Change posting times
+                </a>
+              </p>
+            )
+          ) : (
+            <p className="meta">
+              <a href="/posts/queue" className="link-inline">
+                Set posting times
+              </a>{" "}
+              to post at your usual times with one tap.
+            </p>
+          )}
+          {when === "later" && (
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="post-day" className="text-sm font-medium">
+                  Day
+                </label>
+                <input
+                  id="post-day"
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="field"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="post-time" className="text-sm font-medium">
+                  Time
+                </label>
+                <input
+                  id="post-time"
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  className="field"
+                  required
+                />
+              </div>
+              <input type="hidden" name="scheduledFor" value={scheduledFor} />
+            </div>
+          )}
+          {fieldError("when")}
+        </fieldset>
+      </Fold>
 
       <div className="flex flex-wrap items-center gap-3">
         <Button
@@ -495,5 +541,35 @@ function ComposeFields({
         )}
       </div>
     </form>
+  );
+}
+
+/**
+ * One folded line of the composer (Posts composer, approved 16 Nov): the part's name, what's
+ * chosen, and a chevron; it opens with a tap. Fields inside still submit while it's closed.
+ */
+function Fold({
+  title,
+  summary,
+  open = false,
+  children,
+}: {
+  title: string;
+  summary: string;
+  open?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <details open={open || undefined} className="group border-line border-t">
+      <summary className="flex min-h-12 cursor-pointer list-none items-center gap-3 py-2 [&::-webkit-details-marker]:hidden">
+        <span className="shrink-0 text-sm font-semibold">{title}</span>
+        <span className="text-ink-3 min-w-0 flex-1 truncate text-sm">{summary}</span>
+        <ChevronDown
+          className="text-ink-3 size-4 shrink-0 transition-transform group-open:rotate-180"
+          aria-hidden
+        />
+      </summary>
+      <div className="flex flex-col gap-3 pb-4">{children}</div>
+    </details>
   );
 }
