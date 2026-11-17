@@ -558,6 +558,16 @@ async function mapMessage(
   if (lookupError) throw new Error(`conversations lookup failed: ${lookupError.message}`);
   if (conversation.tenant_id !== tenantId) return rejected("foreign_conversation");
 
+  // The person's Zernio contact, for follow-ups to quiet leads (18 Nov).
+  if (e.message.sender.contactId) {
+    const { error: contactError } = await db
+      .from("conversations")
+      .update({ zernio_contact_id: e.message.sender.contactId })
+      .eq("id", conversation.id);
+    if (contactError)
+      throw new Error(`conversation contact update failed: ${contactError.message}`);
+  }
+
   // The 24-hour reply window (§7.4) runs from the latest customer message.
   const { error: windowError } = await db
     .from("conversations")

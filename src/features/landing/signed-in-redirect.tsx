@@ -15,3 +15,13 @@ export async function SignedInRedirect() {
   if (data.user) redirect("/today");
   return null;
 }
+
+/** `/` while gowaggle.ai is the public site: owners to Today, everyone else to sign in. */
+export async function HomeRedirect(): Promise<null> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    redirect("/login");
+  }
+  const supabase = await createServerSupabase();
+  const { data } = await supabase.auth.getUser();
+  redirect(data.user ? "/today" : "/login");
+}

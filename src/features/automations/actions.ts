@@ -11,6 +11,9 @@ import { buildFlow, parseFlowForm } from "./chat-flow";
 import { chatLink, LINK_PLATFORMS, linkCode, pageHandle } from "./links";
 import { parseCommentDmForm } from "./comment-dm";
 import { parseSequenceForm, toSequenceSteps } from "./sequence";
+import { parseFollowupForm } from "./quiet-leads";
+import { saveFollowups } from "./quiet-leads-store";
+import { planAllowsFollowUps } from "@/features/billing";
 
 export type AutomationFormState = { error?: string; field?: string; savedAt?: number };
 
@@ -39,7 +42,8 @@ export async function saveCommentDm(
     .eq("zernio_account_id", parsed.value.accountId)
     .eq("status", "active")
     .maybeSingle();
-  if (!account) return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
+  if (!account)
+    return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
 
   const id = String(formData.get("id") ?? "") || null;
   const turnOn = formData.get("intent") !== "draft";
@@ -165,12 +169,14 @@ export async function saveFlow(
     .eq("platform", parsed.value.platform)
     .eq("status", "active")
     .maybeSingle();
-  if (!account) return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
+  if (!account)
+    return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
   // T77d: a link flow starts on its ig.me / m.me link code instead of words.
   let link: { code: string; url: string } | null = null;
   if (formData.has("linkCode")) {
     const code = linkCode(String(formData.get("linkCode") ?? ""));
-    if (!code) return { error: "Give the link a code: letters, numbers and dashes.", field: "linkCode" };
+    if (!code)
+      return { error: "Give the link a code: letters, numbers and dashes.", field: "linkCode" };
     if (!LINK_PLATFORMS.has(parsed.value.platform)) {
       return { error: "Links work on Instagram and Facebook.", field: "accountId" };
     }
@@ -179,7 +185,10 @@ export async function saveFlow(
         ? account.username
         : pageHandle(String(formData.get("pageHandle") ?? "") || account.username);
     if (!handle) {
-      return { error: "Type your Page's username, as in facebook.com/yourpage.", field: "pageHandle" };
+      return {
+        error: "Type your Page's username, as in facebook.com/yourpage.",
+        field: "pageHandle",
+      };
     }
     link = { code, url: chatLink(parsed.value.platform, handle, code) };
   }
@@ -195,7 +204,8 @@ export async function saveFlow(
       graph: buildFlow({ ...parsed.value, ...(link ? { referral: link.code } : {}) }),
       signal: AbortSignal.timeout(15_000),
     });
-    if (turnOn) await social.setWorkflowActive({ id, active: true, signal: AbortSignal.timeout(15_000) });
+    if (turnOn)
+      await social.setWorkflowActive({ id, active: true, signal: AbortSignal.timeout(15_000) });
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "saveFlow" } });
     return { error: UNAVAILABLE };
@@ -204,7 +214,11 @@ export async function saveFlow(
     tenantId: tenant.id,
     action: "automation_created",
     actor: tenant.userId,
-    details: { kind: link ? "chat_link" : "chat_flow", active: turnOn, steps: parsed.value.steps.length },
+    details: {
+      kind: link ? "chat_link" : "chat_flow",
+      active: turnOn,
+      steps: parsed.value.steps.length,
+    },
   });
   revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now() };
@@ -230,7 +244,12 @@ export async function changeFlow(
     });
     if (!flows.some((f) => f.id === id)) return { error: "Something went wrong. Reload the page." };
     if (op === "delete") await social.deleteWorkflow({ id, signal: AbortSignal.timeout(15_000) });
-    else await social.setWorkflowActive({ id, active: op === "on", signal: AbortSignal.timeout(15_000) });
+    else
+      await social.setWorkflowActive({
+        id,
+        active: op === "on",
+        signal: AbortSignal.timeout(15_000),
+      });
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "changeFlow" } });
     return { error: UNAVAILABLE };
@@ -238,7 +257,11 @@ export async function changeFlow(
   await writeAudit(getServiceClient(), {
     tenantId: tenant.id,
     action:
-      op === "delete" ? "automation_deleted" : op === "on" ? "automation_turned_on" : "automation_turned_off",
+      op === "delete"
+        ? "automation_deleted"
+        : op === "on"
+          ? "automation_turned_on"
+          : "automation_turned_off",
     actor: tenant.userId,
     details: { kind: "chat_flow", automationId: id },
   });
@@ -265,7 +288,8 @@ export async function saveSequence(
     .eq("platform", parsed.value.platform)
     .eq("status", "active")
     .maybeSingle();
-  if (!account) return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
+  if (!account)
+    return { error: "Pick one of this brand's connected accounts.", field: "accountId" };
   const turnOn = formData.get("intent") !== "draft";
   try {
     const social = getSocialProvider();
@@ -279,7 +303,8 @@ export async function saveSequence(
       exitOnUnsubscribe: parsed.value.exitOnUnsubscribe,
       signal: AbortSignal.timeout(15_000),
     });
-    if (turnOn) await social.setSequenceActive({ id, active: true, signal: AbortSignal.timeout(15_000) });
+    if (turnOn)
+      await social.setSequenceActive({ id, active: true, signal: AbortSignal.timeout(15_000) });
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "saveSequence" } });
     return { error: UNAVAILABLE };
@@ -319,7 +344,11 @@ export async function changeSequence(_prev: EnrollState, formData: FormData): Pr
     if (!seq) return { error: "Something went wrong. Reload the page." };
     if (op === "delete") await social.deleteSequence({ id, signal: AbortSignal.timeout(15_000) });
     else if (op === "on" || op === "off") {
-      await social.setSequenceActive({ id, active: op === "on", signal: AbortSignal.timeout(15_000) });
+      await social.setSequenceActive({
+        id,
+        active: op === "on",
+        signal: AbortSignal.timeout(15_000),
+      });
     } else {
       const tag = String(formData.get("tag") ?? "").trim();
       if (!tag) return { error: "Type the tag of the people to add.", field: "tag" };
@@ -332,10 +361,16 @@ export async function changeSequence(_prev: EnrollState, formData: FormData): Pr
       if (!contactIds.length) {
         return { error: `No one tagged “${tag}” can get messages there.`, field: "tag" };
       }
-      result = await social.enrollInSequence({ id, contactIds, signal: AbortSignal.timeout(20_000) });
+      result = await social.enrollInSequence({
+        id,
+        contactIds,
+        signal: AbortSignal.timeout(20_000),
+      });
     }
   } catch (error) {
-    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: `changeSequence:${op}` } });
+    Sentry.captureException(error, {
+      extra: { tenantId: tenant.id, step: `changeSequence:${op}` },
+    });
     return { error: UNAVAILABLE };
   }
   await writeAudit(getServiceClient(), {
@@ -353,4 +388,40 @@ export async function changeSequence(_prev: EnrollState, formData: FormData): Pr
   });
   revalidatePath("/teach/automations", "layout");
   return { savedAt: Date.now(), ...(result ?? {}) };
+}
+
+/**
+ * Follow up quiet leads (design "Billing round 2" §4, approved 18 Nov): the owner's follow-up,
+ * once; saving remakes its Zernio sequences. It messages people on the brand's behalf, so owner
+ * and admin only, and only on a plan that includes it.
+ */
+export async function saveFollowupsAction(
+  _prev: AutomationFormState,
+  formData: FormData,
+): Promise<AutomationFormState> {
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  if (!tenant.zernioProfileId) return { error: "Connect an account first." };
+  const parsed = parseFollowupForm((f) => formData.get(f));
+  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+  const db = getServiceClient();
+  if (parsed.value.enabled && !(await planAllowsFollowUps(db, tenant.id))) {
+    return { error: "Follow-ups come with Team and Business. See Your plan." };
+  }
+  try {
+    await saveFollowups(
+      { db, social: getSocialProvider() },
+      {
+        tenantId: tenant.id,
+        profileId: tenant.zernioProfileId,
+        actor: tenant.userId,
+        settings: parsed.value,
+      },
+    );
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "saveFollowups" } });
+    return { error: UNAVAILABLE };
+  }
+  revalidatePath("/teach/automations", "layout");
+  return { savedAt: Date.now() };
 }

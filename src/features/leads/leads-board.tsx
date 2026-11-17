@@ -78,6 +78,11 @@ export async function LeadsBoard() {
                         <p className="text-ink-2 line-clamp-2 text-sm">&ldquo;{l.quote}&rdquo;</p>
                       )}
                       {next && <p className="text-honey-text text-[13px] font-medium">{next}</p>}
+                      {l.followedUpAt && (
+                        <span className="bg-honey-tint text-honey-text w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                          Follow-up sent · {shortTime(l.followedUpAt)}
+                        </span>
+                      )}
                       <div className="flex flex-wrap items-center gap-2 pt-1">
                         <Link href={`/inbox/items/${l.itemId}`} className="action-link with-arrow">
                           Open chat

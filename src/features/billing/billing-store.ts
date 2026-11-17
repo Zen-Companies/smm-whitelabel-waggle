@@ -4,7 +4,7 @@ import { writeAudit } from "@/lib/audit";
 import { monthStart } from "@/lib/llm/spend";
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
-import { EXTRAS, PLANS, type PlanId } from "./plans";
+import { EXTRAS } from "./plans";
 import { billingFromSubscription, carriedReplies, planIsLive } from "./subscription";
 
 // The organization's bill as Waggle stores it (org_billing, reply_top_ups), and the Stripe events
@@ -76,7 +76,8 @@ export interface TopUps {
 export async function loadTopUps(
   db: ServiceClient,
   orgId: string,
-  plan: PlanId,
+  /** The plan's AI replies a month (used first, before top-ups). */
+  planReplies: number,
   now: Date,
 ): Promise<TopUps> {
   const start = monthStart(now);
@@ -94,7 +95,7 @@ export async function loadTopUps(
     lastReplies === 0
       ? 0
       : carriedReplies({
-          planReplies: PLANS[plan].replies,
+          planReplies,
           topUpReplies: lastReplies,
           used: await countOrgReplies(db, orgId, lastStart, start),
         });
@@ -186,12 +187,15 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
     }
     case "invoice.paid": {
       const inv = event.data.object;
-      if (inv.metadata?.kind !== "auto_top_up") return "ignored";
+      // Top-ups charged to the saved card (automatic, or one click); a checkout's own invoice
+      // ("top_up") is counted by its session instead.
+      const kind = inv.metadata?.kind;
+      if (kind !== "auto_top_up" && kind !== "top_up_now") return "ignored";
       const orgId =
-        inv.metadata.organization_id ??
+        inv.metadata?.organization_id ??
         (await orgForCustomer(db, undefined, customerId(inv.customer) ?? ""));
       if (!orgId || !inv.id) return "ignored: no organization";
-      return addTopUp(db, orgId, inv.id, true);
+      return addTopUp(db, orgId, inv.id, kind === "auto_top_up");
     }
     default:
       return "ignored";
@@ -204,13 +208,16 @@ async function addTopUp(
   ref: string,
   automatic: boolean,
 ): Promise<string> {
-  const { error } = await db
+  const { data, error } = await db
     .from("reply_top_ups")
     .upsert(
       { organization_id: orgId, replies: EXTRAS.topUp.replies, stripe_ref: ref, automatic },
       { onConflict: "stripe_ref", ignoreDuplicates: true },
-    );
+    )
+    .select("id");
   if (error) throw new Error(`billing: saving the top-up failed: ${error.message}`);
+  // Recorded already (by the one-click action or a retried event): nothing more to log.
+  if (!data?.length) return "top-up already recorded";
   await auditOrg(db, orgId, "billing.top_up", "system", {
     replies: EXTRAS.topUp.replies,
     automatic,

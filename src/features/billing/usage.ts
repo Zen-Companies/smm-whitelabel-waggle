@@ -3,11 +3,12 @@ import { monthStart } from "@/lib/llm/spend";
 import type { ServiceClient } from "@/lib/supabase/service";
 import {
   accountAllowance,
+  applyPlanSettings,
   canAddBrand,
   canConnectAnother,
   isPlanId,
-  PLANS,
   replyAllowance,
+  type Plan,
   type PlanId,
 } from "./plans";
 import { tryAutoTopUp } from "./auto-top-up";
@@ -32,8 +33,24 @@ export async function planLimitsOn(db: ServiceClient): Promise<boolean> {
   return data?.enabled === true;
 }
 
+/**
+ * The plans as the app uses them: the code's defaults with what staff set on Staff → Plans
+ * (plan_settings, 18 Nov).
+ */
+export async function loadPlans(db: ServiceClient): Promise<Record<PlanId, Plan>> {
+  const { data, error } = await db
+    .from("plan_settings")
+    .select(
+      "plan, brands_limit, accounts, replies, team, auto_reply, leads_flagged, follow_ups, for_sale",
+    );
+  if (error) throw new Error(`billing: reading plan settings failed: ${error.message}`);
+  return applyPlanSettings(data ?? []);
+}
+
 export interface OrgPlan {
   plan: PlanId;
+  /** What this plan includes now (defaults with Staff → Plans). */
+  details: Plan;
   extraAccounts: number;
   topUpsThisMonth: number;
   carriedReplies: number;
@@ -51,9 +68,11 @@ export async function loadOrgPlan(
 ): Promise<OrgPlan | null> {
   const bill = await loadBilling(db, orgId);
   if (!bill || !planIsLive(bill.status) || !isPlanId(bill.plan)) return null;
-  const topUps = await loadTopUps(db, orgId, bill.plan, now);
+  const details = (await loadPlans(db))[bill.plan];
+  const topUps = await loadTopUps(db, orgId, details.replies, now);
   return {
     plan: bill.plan,
+    details,
     extraAccounts: bill.extra_accounts,
     topUpsThisMonth: topUps.thisMonth,
     carriedReplies: topUps.carried,
@@ -98,7 +117,7 @@ export async function loadReplyLimit(
     (brands ?? []).map((b) => b.id),
     now,
   );
-  const allowance = replyAllowance(plan.plan, {
+  const allowance = replyAllowance(plan.details, {
     thisMonth: plan.topUpsThisMonth,
     carriedReplies: plan.carriedReplies,
   });
@@ -125,7 +144,8 @@ export async function replyLimitReached(
   const status = await loadReplyLimit(db, tenant.organization_id, now);
   if (status?.limit.level !== "reached") return false;
   // Automatic top-up, when the owner turned it on: 200 more, then check again.
-  if (!(await tryAutoTopUp(db, tenant.organization_id, now))) return true;
+  if (!(await tryAutoTopUp(db, tenant.organization_id, now, status.plan.details.replies)))
+    return true;
   const after = await loadReplyLimit(db, tenant.organization_id, now);
   return after?.limit.level === "reached";
 }
@@ -162,7 +182,10 @@ export async function roomForAnotherAccount(db: ServiceClient, tenantId: string)
       (brands ?? []).map((b) => b.id),
     )
     .eq("status", "active");
-  return canConnectAnother(count ?? 0, accountAllowance(found.plan.plan, found.plan.extraAccounts));
+  return canConnectAnother(
+    count ?? 0,
+    accountAllowance(found.plan.details, found.plan.extraAccounts),
+  );
 }
 
 /**
@@ -171,21 +194,12 @@ export async function roomForAnotherAccount(db: ServiceClient, tenantId: string)
  */
 export async function planAllowsAutoReply(db: ServiceClient, tenantId: string): Promise<boolean> {
   const found = await planForBrand(db, tenantId);
-  return !found || PLANS[found.plan.plan].features.autoReply;
+  return !found || found.plan.details.features.autoReply;
 }
 
 async function planForOrg(db: ServiceClient, orgId: string): Promise<OrgPlan | null> {
   if (!(await planLimitsOn(db))) return null;
   return loadOrgPlan(db, orgId);
-}
-
-/** Brands each plan includes (Staff → Plans), null for no limit. */
-export async function loadBrandLimits(db: ServiceClient): Promise<Record<PlanId, number | null>> {
-  const { data, error } = await db.from("plan_settings").select("plan, brands_limit");
-  if (error) throw new Error(`billing: reading plan settings failed: ${error.message}`);
-  const out: Record<PlanId, number | null> = { solo: null, business: null, team: null };
-  for (const r of data ?? []) if (isPlanId(r.plan)) out[r.plan] = r.brands_limit;
-  return out;
 }
 
 /**
@@ -198,14 +212,14 @@ export async function roomForAnotherBrand(
 ): Promise<{ ok: true } | { ok: false; limit: number; plan: string }> {
   const plan = await planForOrg(db, orgId);
   if (!plan) return { ok: true };
-  const limit = (await loadBrandLimits(db))[plan.plan];
+  const limit = plan.details.brands;
   const { count } = await db
     .from("tenants")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", orgId)
     .is("offboarded_at", null);
   if (canAddBrand(count ?? 0, limit)) return { ok: true };
-  return { ok: false, limit: limit!, plan: PLANS[plan.plan].name };
+  return { ok: false, limit: limit!, plan: plan.details.name };
 }
 
 /**
@@ -214,5 +228,14 @@ export async function roomForAnotherBrand(
  */
 export async function planAllowsTeam(db: ServiceClient, orgId: string): Promise<boolean> {
   const plan = await planForOrg(db, orgId);
-  return !plan || PLANS[plan.plan].features.team;
+  return !plan || plan.details.features.team;
+}
+
+/**
+ * For follow-ups for quiet leads (Business and Team, 18 Nov): whether the brand's plan includes
+ * them. True while plan limits are off or there's no plan.
+ */
+export async function planAllowsFollowUps(db: ServiceClient, tenantId: string): Promise<boolean> {
+  const found = await planForBrand(db, tenantId);
+  return !found || found.plan.details.features.followUps;
 }

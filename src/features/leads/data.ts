@@ -15,6 +15,8 @@ export interface BoardLead {
   platform: string | null;
   source: string;
   stage: LeadStage;
+  /** When Waggle sent its follow-up because they went quiet (18 Nov), or null. */
+  followedUpAt: string | null;
 }
 
 /** The brand's leads for the board and the download (through RLS), newest first. */
@@ -25,7 +27,7 @@ export async function loadBoardLeads(
   const { data, error } = await db
     .from("leads")
     .select(
-      "id, created_at, name, contact, request, item_id, stage, " +
+      "id, created_at, name, contact, request, item_id, stage, followed_up_at, " +
         "inbound_items (kind, status, text, author_name, social_accounts (platform))",
     )
     .eq("tenant_id", tenantId)
@@ -40,6 +42,7 @@ export async function loadBoardLeads(
     request: string | null;
     item_id: string;
     stage: string | null;
+    followed_up_at: string | null;
     inbound_items: {
       kind: string;
       status: string;
@@ -63,6 +66,7 @@ export async function loadBoardLeads(
       platform,
       source: `${platformName(platform ?? undefined)} ${item?.kind === "dm" ? "DM" : (item?.kind ?? "comment")}`,
       stage: leadStage(r.stage, item?.status ?? ""),
+      followedUpAt: r.followed_up_at,
     };
   });
 }

@@ -1,9 +1,24 @@
 import Link from "next/link";
 import { CombMeter, RestingBee } from "@/components/app/bee-plan";
 import { getServiceClient } from "@/lib/supabase/service";
-import { buyTopUp, choosePlan } from "./plan-actions";
-import { PlanButton } from "./plan-forms";
+import { cardLabel } from "./auto-top-up";
+import { loadBilling } from "./billing-store";
+import { buyTopUpNow, choosePlan } from "./plan-actions";
+import { PlanButton, TopUpButton } from "./plan-forms";
+import { getStripe } from "./stripe-client";
 import { EXTRAS, PLANS } from "./plans";
+
+/** The saved card's label for the confirm line, or null. */
+async function ownerCard(orgId: string): Promise<string | null> {
+  const stripe = getStripe();
+  if (!stripe) return null;
+  try {
+    const bill = await loadBilling(getServiceClient(), orgId);
+    return bill ? await cardLabel(stripe, bill) : null;
+  } catch {
+    return null;
+  }
+}
 import { replyLimitNote } from "./reply-limit";
 import { loadReplyLimit, planLimitsOn } from "./usage";
 
@@ -62,12 +77,14 @@ export async function ReplyLimitNotice({
       <span className="text-ink-2 text-sm">{note.body}</span>
       {isOwner ? (
         <div className="flex flex-wrap gap-2">
-          <PlanButton
-            action={buyTopUp}
-            fields={fields}
+          <TopUpButton
+            action={buyTopUpNow}
+            orgId={orgId}
+            card={await ownerCard(orgId)}
             label={`+${EXTRAS.topUp.replies} replies for $${EXTRAS.topUp.usd}`}
+            usd={EXTRAS.topUp.usd}
+            replies={EXTRAS.topUp.replies}
             honey
-            className="items-start"
           />
           {plan.plan === "solo" && (
             <PlanButton

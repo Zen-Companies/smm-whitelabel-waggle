@@ -9,8 +9,8 @@ export default function Page() {
       <div className="flex flex-col gap-1">
         <h1 className="page-title">Plans</h1>
         <p className="text-ink-2">
-          The plans from the Pricing Bible. Prices change only there (Jason). Set how many brands
-          each plan includes; blank is no limit. Limits apply once billing is on.
+          The plans from the Pricing Bible (docs/Waggle Pricing Bible 1.md): Jason agrees every
+          change. Limits apply once billing is on.
         </p>
       </div>
       <Suspense fallback={<div className="skeleton h-64" />}>

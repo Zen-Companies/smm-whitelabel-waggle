@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   accountAllowance,
+  applyPlanSettings,
   canAddBrand,
   canConnectAnother,
   EXTRAS,
   FOUNDING,
   monthlyPrice,
+  parsePlanSettings,
+  planBullets,
   parseBrandsLimit,
   PLANS,
   PROMOTED_PLAN,
@@ -15,7 +18,7 @@ import {
 } from "./plans";
 import { limitEmailDue, NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 
-describe("plans match the Pricing Bible (16 Nov 2026)", () => {
+describe("plans match the Pricing Bible (updated 18 Nov 2026)", () => {
   it("prices, accounts and replies", () => {
     expect(PLANS.solo).toMatchObject({ monthlyUsd: 49, yearlyUsd: 490, accounts: 3, replies: 200 });
     expect(PLANS.business).toMatchObject({
@@ -26,10 +29,17 @@ describe("plans match the Pricing Bible (16 Nov 2026)", () => {
     });
     expect(PLANS.team).toMatchObject({
       monthlyUsd: 199,
+      yearlyUsd: null,
       accounts: 10,
       replies: 1500,
-      forSale: false,
+      forSale: true,
     });
+    // Shown names (Jason, 17 Nov): $99 is Team, $199 is Business; the ids stay.
+    expect([PLANS.solo.name, PLANS.business.name, PLANS.team.name]).toEqual([
+      "Solo",
+      "Team",
+      "Business",
+    ]);
     expect(PROMOTED_PLAN).toBe("business");
   });
 
@@ -38,7 +48,7 @@ describe("plans match the Pricing Bible (16 Nov 2026)", () => {
     expect(PLANS.business.features).toMatchObject({
       autoReply: true,
       leadsFlagged: true,
-      followUps: "soon",
+      followUps: true,
       team: true,
     });
     expect(PLANS.solo.features.team).toBe(false);
@@ -71,12 +81,12 @@ describe("plans match the Pricing Bible (16 Nov 2026)", () => {
   });
 
   it("accounts and replies with extras", () => {
-    expect(accountAllowance("solo")).toBe(3);
-    expect(accountAllowance("business", 2)).toBe(6);
-    expect(canConnectAnother(3, accountAllowance("solo"))).toBe(false);
+    expect(accountAllowance(PLANS.solo)).toBe(3);
+    expect(accountAllowance(PLANS.business, 2)).toBe(6);
+    expect(canConnectAnother(3, accountAllowance(PLANS.solo))).toBe(false);
     expect(canConnectAnother(2, 3)).toBe(true);
-    expect(replyAllowance("solo")).toBe(200);
-    expect(replyAllowance("solo", { thisMonth: 1, carriedReplies: 50 })).toBe(450);
+    expect(replyAllowance(PLANS.solo)).toBe(200);
+    expect(replyAllowance(PLANS.solo, { thisMonth: 1, carriedReplies: 50 })).toBe(450);
   });
 });
 
@@ -99,7 +109,7 @@ describe("the AI reply limit", () => {
     });
     const solo = replyLimitNote(replyLimit(200, 200, now), "solo")!;
     expect(solo.body).toContain(NEVER_DARK);
-    expect(solo.offers).toEqual(["+200 replies for $15", "Upgrade to Business"]);
+    expect(solo.offers).toEqual(["+200 replies for $15", "Upgrade to Team"]);
     expect(replyLimitNote(replyLimit(750, 750, now), "business")!.offers).toEqual([
       "+200 replies for $15",
     ]);
@@ -128,5 +138,121 @@ describe("brands per plan (Staff → Plans)", () => {
     expect(canAddBrand(5, null)).toBe(true);
     expect(canAddBrand(0, 1)).toBe(true);
     expect(canAddBrand(1, 1)).toBe(false);
+  });
+});
+
+describe("plan settings (Staff → Plans, 18 Nov)", () => {
+  it("Solo is one business and just you; Business and Team unlimited", () => {
+    expect(PLANS.solo).toMatchObject({ brands: 1, features: { team: false, followUps: false } });
+    expect(PLANS.business).toMatchObject({
+      brands: null,
+      features: { team: true, followUps: true },
+    });
+    expect(PLANS.team.brands).toBeNull();
+  });
+
+  it("staff settings override the defaults; null keeps them", () => {
+    const plans = applyPlanSettings([
+      {
+        plan: "solo",
+        brands_limit: 2,
+        accounts: 4,
+        replies: null,
+        team: null,
+        auto_reply: true,
+        leads_flagged: null,
+        follow_ups: null,
+        for_sale: null,
+      },
+      {
+        plan: "business",
+        brands_limit: null,
+        accounts: null,
+        replies: 900,
+        team: null,
+        auto_reply: null,
+        leads_flagged: null,
+        follow_ups: false,
+        for_sale: null,
+      },
+      {
+        plan: "gold",
+        brands_limit: 1,
+        accounts: 1,
+        replies: 1,
+        team: true,
+        auto_reply: true,
+        leads_flagged: true,
+        follow_ups: true,
+        for_sale: true,
+      },
+    ]);
+    expect(plans.solo).toMatchObject({
+      brands: 2,
+      accounts: 4,
+      replies: 200,
+      features: { autoReply: true, team: false },
+    });
+    expect(plans.business).toMatchObject({
+      brands: null,
+      replies: 900,
+      features: { followUps: false },
+    });
+    expect(plans.team).toEqual(PLANS.team);
+    // The defaults themselves never change.
+    expect(PLANS.solo.accounts).toBe(3);
+  });
+
+  it("parses one plan's column of the form", () => {
+    const form = new Map<string, string>([
+      ["accounts", "3"],
+      ["replies", "250"],
+      ["brands", ""],
+      ["team", "on"],
+      ["followUps", "on"],
+    ]);
+    expect(parsePlanSettings("business", (f) => form.get(f) ?? null)).toEqual({
+      value: {
+        accounts: 3,
+        replies: 250,
+        brands: null,
+        team: true,
+        autoReply: false,
+        leadsFlagged: false,
+        followUps: true,
+        forSale: false,
+      },
+    });
+    form.set("accounts", "0");
+    expect(parsePlanSettings("business", (f) => form.get(f) ?? null)).toEqual({
+      error: "Team: accounts included must be a whole number from 1 to 100.",
+    });
+    form.set("accounts", "2.5");
+    expect(parsePlanSettings("business", (f) => form.get(f) ?? null)).toEqual({
+      error: "Team: accounts included must be a whole number from 1 to 100.",
+    });
+  });
+});
+
+describe("plan card lines (Pricing Bible, 18 Nov)", () => {
+  it("from the plan as staff set it", () => {
+    expect(planBullets(PLANS.solo)).toEqual([
+      "1 business, just you",
+      "3 accounts, then $10 each",
+      "About 200 AI replies a month",
+      "You approve every reply",
+    ]);
+    expect(planBullets(PLANS.business)).toEqual([
+      "Unlimited businesses and team members",
+      "4 accounts, then $10 each",
+      "About 750 AI replies a month",
+      "Replies on its own, once you trust it",
+      "Leads and complaints flagged",
+      "Follow-ups for leads that go quiet",
+    ]);
+    expect(planBullets({ ...PLANS.solo, brands: 3, accounts: 4 }).slice(0, 2)).toEqual([
+      "3 businesses, just you",
+      "4 accounts, then $10 each",
+    ]);
   });
 });

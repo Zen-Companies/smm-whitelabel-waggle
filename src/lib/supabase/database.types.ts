@@ -368,6 +368,8 @@ export type Database = {
       }
       conversations: {
         Row: {
+          followed_up_at: string | null
+          zernio_contact_id: string | null
           created_at: string
           id: string
           last_customer_message_at: string | null
@@ -381,6 +383,8 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          followed_up_at?: string | null
+          zernio_contact_id?: string | null
           created_at?: string
           id?: string
           last_customer_message_at?: string | null
@@ -393,6 +397,8 @@ export type Database = {
           zernio_conversation_id: string
         }
         Update: {
+          followed_up_at?: string | null
+          zernio_contact_id?: string | null
           created_at?: string
           id?: string
           last_customer_message_at?: string | null
@@ -631,6 +637,40 @@ export type Database = {
           outcome?: string | null
           shown_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      followup_settings: {
+        Row: {
+          enabled: boolean
+          message: string
+          sequences: Json
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+          wait_minutes: number
+          whatsapp_template: Json | null
+        }
+        ComputedFields: never
+        Insert: {
+          enabled?: boolean
+          message: string
+          sequences?: Json
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+          wait_minutes?: number
+          whatsapp_template?: Json | null
+        }
+        Update: {
+          enabled?: boolean
+          message?: string
+          sequences?: Json
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          wait_minutes?: number
+          whatsapp_template?: Json | null
         }
         Relationships: []
       }
@@ -942,6 +982,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          followed_up_at: string | null
           contact: string | null
           created_at: string
           id: string
@@ -954,6 +995,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          followed_up_at?: string | null
           contact?: string | null
           created_at?: string
           id?: string
@@ -965,6 +1007,7 @@ export type Database = {
           tenant_id: string
         }
         Update: {
+          followed_up_at?: string | null
           contact?: string | null
           created_at?: string
           id?: string
@@ -1439,6 +1482,13 @@ export type Database = {
       }
       plan_settings: {
         Row: {
+          accounts: number | null
+          auto_reply: boolean | null
+          follow_ups: boolean | null
+          for_sale: boolean | null
+          leads_flagged: boolean | null
+          replies: number | null
+          team: boolean | null
           brands_limit: number | null
           plan: string
           updated_at: string
@@ -1446,16 +1496,58 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          accounts?: number | null
+          auto_reply?: boolean | null
+          follow_ups?: boolean | null
+          for_sale?: boolean | null
+          leads_flagged?: boolean | null
+          replies?: number | null
+          team?: boolean | null
           brands_limit?: number | null
           plan: string
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
+          accounts?: number | null
+          auto_reply?: boolean | null
+          follow_ups?: boolean | null
+          for_sale?: boolean | null
+          leads_flagged?: boolean | null
+          replies?: number | null
+          team?: boolean | null
           brands_limit?: number | null
           plan?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      plan_settings_changes: {
+        Row: {
+          after: Json
+          before: Json
+          changed_by: string | null
+          created_at: string
+          id: string
+          plan: string
+        }
+        ComputedFields: never
+        Insert: {
+          after: Json
+          before: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          plan: string
+        }
+        Update: {
+          after?: Json
+          before?: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          plan?: string
         }
         Relationships: []
       }

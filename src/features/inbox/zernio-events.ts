@@ -73,6 +73,8 @@ export const messageEventSchema = z.object({
       id: z.string(),
       name: z.string().optional(),
       username: z.string().optional(),
+      // The Zernio CRM contact, when one exists (follow-ups for quiet leads enroll it).
+      contactId: z.string().max(100).optional().catch(undefined),
     }),
     sentAt: z.string(),
   }),
