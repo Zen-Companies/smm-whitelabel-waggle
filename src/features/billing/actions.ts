@@ -53,7 +53,7 @@ export type PlanSettingsState = { saved?: boolean; error?: string };
 /**
  * Staff → Plans (design "Billing round 2", approved 18 Nov): what each plan includes, all three
  * plans saved together. Admins only (`admin.caps.manage`), checked here too. Who and when: on
- * each row, and one audit row per changed plan.
+ * each changed row, and each change kept in plan_settings_changes (before and after).
  */
 export async function updatePlanSettings(
   _prev: PlanSettingsState,
@@ -68,25 +68,47 @@ export async function updatePlanSettings(
     if ("error" in r) return { error: r.error };
     parsed.push({ id, ...r.value });
   }
-  const now = new Date().toISOString();
-  const { error } = await getServiceClient()
+  const db = getServiceClient();
+  const { data: rows } = await db
     .from("plan_settings")
-    .upsert(
-      parsed.map((p) => ({
-        plan: p.id,
-        brands_limit: p.brands,
-        accounts: p.accounts,
-        replies: p.replies,
-        team: p.team,
-        auto_reply: p.autoReply,
-        leads_flagged: p.leadsFlagged,
-        follow_ups: p.followUps,
-        for_sale: p.forSale,
-        updated_at: now,
-        updated_by: user.id,
-      })),
+    .select(
+      "plan, brands_limit, accounts, replies, team, auto_reply, leads_flagged, follow_ups, for_sale",
     );
-  if (error) return { error: "Couldn't save. Please try again." };
+  const now = new Date().toISOString();
+  for (const p of parsed) {
+    const after = {
+      brands_limit: p.brands,
+      accounts: p.accounts,
+      replies: p.replies,
+      team: p.team,
+      auto_reply: p.autoReply,
+      leads_flagged: p.leadsFlagged,
+      follow_ups: p.followUps,
+      for_sale: p.forSale,
+    };
+    const old = (rows ?? []).find((r) => r.plan === p.id);
+    const before = old
+      ? {
+          brands_limit: old.brands_limit,
+          accounts: old.accounts,
+          replies: old.replies,
+          team: old.team,
+          auto_reply: old.auto_reply,
+          leads_flagged: old.leads_flagged,
+          follow_ups: old.follow_ups,
+          for_sale: old.for_sale,
+        }
+      : null;
+    // Only plans that changed are saved and recorded.
+    if (before && JSON.stringify(before) === JSON.stringify(after)) continue;
+    const { error } = await db
+      .from("plan_settings")
+      .upsert({ plan: p.id, ...after, updated_at: now, updated_by: user.id });
+    if (error) return { error: "Couldn't save. Please try again." };
+    await db
+      .from("plan_settings_changes")
+      .insert({ plan: p.id, changed_by: user.id, before: before ?? {}, after });
+  }
   revalidatePath("/admin/plans");
   revalidatePath("/settings/billing");
   return { saved: true };

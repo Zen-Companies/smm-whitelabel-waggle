@@ -222,9 +222,11 @@ export function parsePlanSettings(
       ? n
       : `${name}: ${label} must be a whole number from ${min} to ${max}.`;
   };
-  const accounts = whole("accounts", "accounts included", 0, 100);
+  // At least 1 of each: 0 replies would pause drafting (and start automatic top-ups) for every
+  // organization on the plan at once.
+  const accounts = whole("accounts", "accounts included", 1, 100);
   if (typeof accounts === "string") return { error: accounts };
-  const replies = whole("replies", "AI replies a month", 0, 100000);
+  const replies = whole("replies", "AI replies a month", 1, 100000);
   if (typeof replies === "string") return { error: replies };
   const brands = parseBrandsLimit(get("brands"));
   if ("error" in brands) return { error: `${name}: ${brands.error}` };

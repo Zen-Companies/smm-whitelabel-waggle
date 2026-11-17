@@ -206,6 +206,12 @@ export function TopUpButton({
 }) {
   const [nonce, setNonce] = useState<string | null>(null);
   const [state, run, pending] = useActionState(action, {});
+  // After a decline the next try is a new charge: ask again with a new key.
+  const [seen, setSeen] = useState(state);
+  if (state !== seen) {
+    setSeen(state);
+    if (state.fresh) setNonce(null);
+  }
   if (state.done) {
     return (
       <span role="status" className="flex items-center gap-2 text-sm">

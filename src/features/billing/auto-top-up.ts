@@ -56,8 +56,9 @@ export async function chargeTopUp(
   if (!card) return { ok: false, reason: "needs_checkout" };
   const orgId = bill.organization_id;
   let invoiceId: string;
+  let status: string | null;
   try {
-    const invoice = await stripe.invoices.create(
+    const created = await stripe.invoices.create(
       {
         customer: bill.stripe_customer_id,
         collection_method: "charge_automatically",
@@ -73,24 +74,36 @@ export async function chargeTopUp(
       },
       { idempotencyKey: opts.idempotencyKey },
     );
-    invoiceId = invoice.id!;
+    invoiceId = created.id!;
+    // A repeated key replays the invoice as first created: read where it really is now.
+    let invoice = await stripe.invoices.retrieve(invoiceId);
     if (invoice.status === "draft") {
-      await stripe.invoiceItems.create(
-        {
-          customer: bill.stripe_customer_id,
-          invoice: invoiceId,
-          pricing: { price: await priceId(stripe, PRICE_KEYS.topUp) },
-        },
-        { idempotencyKey: `${opts.idempotencyKey}:item` },
-      );
-      await stripe.invoices.finalizeInvoice(invoiceId);
+      if (!invoice.lines?.data?.length) {
+        await stripe.invoiceItems.create(
+          {
+            customer: bill.stripe_customer_id,
+            invoice: invoiceId,
+            pricing: { price: await priceId(stripe, PRICE_KEYS.topUp) },
+          },
+          { idempotencyKey: `${opts.idempotencyKey}:item` },
+        );
+      }
+      invoice = await stripe.invoices.finalizeInvoice(invoiceId);
     }
+    status = invoice.status;
   } catch {
     return { ok: false, reason: "unavailable" };
   }
+  // Already settled by an earlier try with this key.
+  if (status === "paid") return credit(db, orgId, invoiceId, opts);
+  if (status === "void" || status === "uncollectible") return { ok: false, reason: "declined" };
+
   try {
-    const paid = await stripe.invoices.pay(invoiceId, { off_session: true });
-    if (paid.status !== "paid") return { ok: false, reason: "declined" };
+    // One click: the owner is here (on session). Automatic: they aren't (off session).
+    const paid = await stripe.invoices.pay(invoiceId, opts.automatic ? { off_session: true } : {});
+    if (paid.status === "paid") return credit(db, orgId, invoiceId, opts);
+    await stripe.invoices.voidInvoice(invoiceId).catch(() => undefined);
+    return { ok: false, reason: "declined" };
   } catch (e) {
     const code = (e as { code?: string }).code;
     if (code === "authentication_required" || code === "invoice_payment_intent_requires_action") {
@@ -101,22 +114,45 @@ export async function chargeTopUp(
       await stripe.invoices.voidInvoice(invoiceId).catch(() => undefined);
       return { ok: false, reason: "declined" };
     }
+    // Unclear (network, timeout, 5xx): the charge may have gone through. Look before deciding.
+    try {
+      const now = await stripe.invoices.retrieve(invoiceId);
+      if (now.status === "paid") return credit(db, orgId, invoiceId, opts);
+      // Not paid: void it so it can't be charged later by surprise.
+      await stripe.invoices.voidInvoice(invoiceId).catch(() => undefined);
+    } catch {
+      // Still unknown: the same key on a retry reads it again before anything else.
+    }
     return { ok: false, reason: "unavailable" };
   }
-  const { error } = await db.from("reply_top_ups").upsert(
-    {
-      organization_id: orgId,
-      replies: EXTRAS.topUp.replies,
-      stripe_ref: invoiceId,
-      automatic: opts.automatic,
-    },
-    { onConflict: "stripe_ref", ignoreDuplicates: true },
-  );
+}
+
+/** Records the 200 replies once per invoice (the webhook may record it too) and audits it once. */
+async function credit(
+  db: ServiceClient,
+  orgId: string,
+  invoiceId: string,
+  opts: { automatic: boolean; actor: string },
+): Promise<TopUpCharge> {
+  const { data, error } = await db
+    .from("reply_top_ups")
+    .upsert(
+      {
+        organization_id: orgId,
+        replies: EXTRAS.topUp.replies,
+        stripe_ref: invoiceId,
+        automatic: opts.automatic,
+      },
+      { onConflict: "stripe_ref", ignoreDuplicates: true },
+    )
+    .select("id");
   if (error) throw new Error(`billing: saving the top-up failed: ${error.message}`);
-  await auditOrg(db, orgId, "billing.top_up", opts.actor, {
-    automatic: opts.automatic,
-    ref: invoiceId,
-  });
+  if (data?.length) {
+    await auditOrg(db, orgId, "billing.top_up", opts.actor, {
+      automatic: opts.automatic,
+      ref: invoiceId,
+    });
+  }
   return { ok: true, ref: invoiceId };
 }
 
@@ -151,6 +187,11 @@ export async function tryAutoTopUp(
       idempotencyKey: `auto-top-up:${orgId}:${now.toISOString().slice(0, 7)}:${topUps.automaticThisMonth}`,
       actor: "system",
     });
+    if (!r.ok && r.reason === "declined") {
+      // A declined card: stop trying every draft; the owner turns it on again after updating it.
+      await db.from("org_billing").update({ auto_top_up: false }).eq("organization_id", orgId);
+      await auditOrg(db, orgId, "billing.auto_top_up_off", "system", { reason: "declined" });
+    }
     return r.ok;
   } catch (e) {
     // A Stripe outage: drafting stays paused, like any limit.

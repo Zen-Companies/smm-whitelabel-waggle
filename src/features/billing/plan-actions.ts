@@ -22,7 +22,12 @@ import {
 // Settings → Your plan (T86). Only the organization's Owner manages the bill (billing.view,
 // T53); checked here too, since a Server Action is reachable without the page.
 
-export type PlanActionState = { error?: string; done?: string };
+export type PlanActionState = {
+  error?: string;
+  done?: string;
+  /** The confirm must be asked again with a new key (after a decline). */
+  fresh?: boolean;
+};
 
 const PLAN_PATH = "/settings/billing";
 const orgIdSchema = z.string().uuid();
@@ -324,8 +329,9 @@ export async function buyTopUpNow(
       done: `${EXTRAS.topUp.replies} more replies added. The receipt is on its way to your email.`,
     };
   }
-  if (r.reason === "declined")
-    return { error: "Your bank declined it. Update your card, then try again." };
+  if (r.reason === "declined") {
+    return { error: "Your bank declined it. Update your card, then try again.", fresh: true };
+  }
   if (r.reason === "unavailable") return { error: STRIPE_DOWN };
   let url: string | null;
   try {

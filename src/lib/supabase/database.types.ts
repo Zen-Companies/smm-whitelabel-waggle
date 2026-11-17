@@ -368,6 +368,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          followed_up_at: string | null
           zernio_contact_id: string | null
           created_at: string
           id: string
@@ -382,6 +383,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          followed_up_at?: string | null
           zernio_contact_id?: string | null
           created_at?: string
           id?: string
@@ -395,6 +397,7 @@ export type Database = {
           zernio_conversation_id: string
         }
         Update: {
+          followed_up_at?: string | null
           zernio_contact_id?: string | null
           created_at?: string
           id?: string
@@ -1517,6 +1520,34 @@ export type Database = {
           plan?: string
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      plan_settings_changes: {
+        Row: {
+          after: Json
+          before: Json
+          changed_by: string | null
+          created_at: string
+          id: string
+          plan: string
+        }
+        ComputedFields: never
+        Insert: {
+          after: Json
+          before: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          plan: string
+        }
+        Update: {
+          after?: Json
+          before?: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          plan?: string
         }
         Relationships: []
       }

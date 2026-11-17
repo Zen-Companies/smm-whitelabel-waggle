@@ -216,9 +216,13 @@ describe("plan settings (Staff → Plans, 18 Nov)", () => {
         forSale: false,
       },
     });
+    form.set("accounts", "0");
+    expect(parsePlanSettings("business", (f) => form.get(f) ?? null)).toEqual({
+      error: "Business: accounts included must be a whole number from 1 to 100.",
+    });
     form.set("accounts", "2.5");
     expect(parsePlanSettings("business", (f) => form.get(f) ?? null)).toEqual({
-      error: "Business: accounts included must be a whole number from 0 to 100.",
+      error: "Business: accounts included must be a whole number from 1 to 100.",
     });
   });
 });

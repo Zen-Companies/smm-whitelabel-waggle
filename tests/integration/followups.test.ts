@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { saveFollowups, sendQuietLeadFollowUps } from "@/features/automations/quiet-leads-store";
 import { MockSocialProvider } from "@/lib/social/mock";
+import { SocialProviderError } from "@/lib/social/types";
 import { anonClient, serviceClient, uniqueEmail } from "./helpers";
 
 // Follow-ups for leads that go quiet (Pricing Bible, 18 Nov; design "Billing round 2" §4): saving
@@ -24,17 +25,21 @@ async function quietLead(opts: {
   oursHoursAgo: number | null;
   contact?: string | null;
   stage?: string | null;
+  /** A second lead in an existing thread. */
+  conversationId?: string;
 }) {
-  const convId = randomUUID();
-  await db.from("conversations").insert({
-    id: convId,
-    tenant_id: tenantId,
-    social_account_id: accountId,
-    zernio_conversation_id: `conv_${convId}`,
-    platform: "instagram",
-    last_customer_message_at: ago(opts.customerHoursAgo),
-    zernio_contact_id: opts.contact === undefined ? `contact_${convId.slice(0, 8)}` : opts.contact,
-  });
+  const convId = opts.conversationId ?? randomUUID();
+  if (!opts.conversationId)
+    await db.from("conversations").insert({
+      id: convId,
+      tenant_id: tenantId,
+      social_account_id: accountId,
+      zernio_conversation_id: `conv_${convId}`,
+      platform: "instagram",
+      last_customer_message_at: ago(opts.customerHoursAgo),
+      zernio_contact_id:
+        opts.contact === undefined ? `contact_${convId.slice(0, 8)}` : opts.contact,
+    });
   const itemId = randomUUID();
   const { error } = await db.from("inbound_items").insert({
     id: itemId,
@@ -65,7 +70,7 @@ async function quietLead(opts: {
     .insert({ tenant_id: tenantId, item_id: itemId, name: "Ana", stage: opts.stage ?? null })
     .select("id")
     .single();
-  return lead!.id as string;
+  return Object.assign(lead!.id as string, { convId }) as string & { convId: string };
 }
 
 const followedUp = async (leadId: string) =>
@@ -163,5 +168,107 @@ describe("follow up quiet leads", () => {
     const r = await sendQuietLeadFollowUps({ db, social: () => social, now });
     expect(r.sent).toBe(0);
     expect(await followedUp(lead)).toBeNull();
+  });
+});
+
+describe("follow-ups after the review (18 Nov)", () => {
+  const save = (enabled: boolean) =>
+    saveFollowups(
+      { db, social },
+      {
+        tenantId,
+        profileId: "prof_1",
+        actor: userId,
+        settings: { enabled, waitMinutes: 20 * 60, message: "Hi", whatsappTemplate: null },
+      },
+    );
+
+  it("two leads in one conversation: one follow-up, and both show it", async () => {
+    await save(true);
+    const first = await quietLead({ customerHoursAgo: 21, oursHoursAgo: 20.5 });
+    const second = await quietLead({
+      customerHoursAgo: 21,
+      oursHoursAgo: 20.5,
+      conversationId: (first as unknown as { convId: string }).convId,
+    });
+    const enroll = social.enrollInSequence.bind(social);
+    const contact = `contact_${(first as unknown as { convId: string }).convId.slice(0, 8)}`;
+    let calls = 0;
+    social.enrollInSequence = async (input) => {
+      if (input.contactIds.includes(contact)) calls++;
+      return enroll(input);
+    };
+    try {
+      await sendQuietLeadFollowUps({ db, social: () => social, now });
+      await sendQuietLeadFollowUps({ db, social: () => social, now });
+    } finally {
+      social.enrollInSequence = enroll;
+    }
+    expect(calls).toBe(1);
+    expect(await followedUp(first)).not.toBeNull();
+    expect(await followedUp(second)).not.toBeNull();
+  });
+
+  it("a timeout may have gone through: the conversation stays claimed (no second message)", async () => {
+    await save(true);
+    const lead = await quietLead({ customerHoursAgo: 21, oursHoursAgo: 20.5 });
+    const enroll = social.enrollInSequence.bind(social);
+    social.enrollInSequence = async () => {
+      throw new SocialProviderError("timeout", { ambiguous: true });
+    };
+    try {
+      await sendQuietLeadFollowUps({ db, social: () => social, now });
+    } finally {
+      social.enrollInSequence = enroll;
+    }
+    const convId = (lead as unknown as { convId: string }).convId;
+    const { data } = await db
+      .from("conversations")
+      .select("followed_up_at")
+      .eq("id", convId)
+      .single();
+    expect(data!.followed_up_at).not.toBeNull();
+    const r = await sendQuietLeadFollowUps({ db, social: () => social, now });
+    expect(r.sent).toBe(0);
+  });
+
+  it("a clear refusal frees it for the next run", async () => {
+    await save(true);
+    const lead = await quietLead({ customerHoursAgo: 21, oursHoursAgo: 20.5 });
+    const enroll = social.enrollInSequence.bind(social);
+    social.enrollInSequence = async () => {
+      throw new SocialProviderError("bad request", { status: 400, ambiguous: false });
+    };
+    try {
+      await sendQuietLeadFollowUps({ db, social: () => social, now });
+    } finally {
+      social.enrollInSequence = enroll;
+    }
+    const convId = (lead as unknown as { convId: string }).convId;
+    const { data } = await db
+      .from("conversations")
+      .select("followed_up_at")
+      .eq("id", convId)
+      .single();
+    expect(data!.followed_up_at).toBeNull();
+  });
+
+  it("an offboarded brand sends nothing", async () => {
+    await save(true);
+    const lead = await quietLead({ customerHoursAgo: 21, oursHoursAgo: 20.5 });
+    const off = await db
+      .from("tenants")
+      .update({ offboarded_at: now.toISOString(), purge_after: now.toISOString() })
+      .eq("id", tenantId);
+    expect(off.error).toBeNull();
+    try {
+      await sendQuietLeadFollowUps({ db, social: () => social, now });
+      expect(await followedUp(lead)).toBeNull();
+    } finally {
+      await db
+        .from("tenants")
+        .update({ offboarded_at: null, purge_after: null })
+        .eq("id", tenantId);
+    }
   });
 });

@@ -208,13 +208,16 @@ async function addTopUp(
   ref: string,
   automatic: boolean,
 ): Promise<string> {
-  const { error } = await db
+  const { data, error } = await db
     .from("reply_top_ups")
     .upsert(
       { organization_id: orgId, replies: EXTRAS.topUp.replies, stripe_ref: ref, automatic },
       { onConflict: "stripe_ref", ignoreDuplicates: true },
-    );
+    )
+    .select("id");
   if (error) throw new Error(`billing: saving the top-up failed: ${error.message}`);
+  // Recorded already (by the one-click action or a retried event): nothing more to log.
+  if (!data?.length) return "top-up already recorded";
   await auditOrg(db, orgId, "billing.top_up", "system", {
     replies: EXTRAS.topUp.replies,
     automatic,
