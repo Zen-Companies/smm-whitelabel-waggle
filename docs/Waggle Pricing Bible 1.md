@@ -53,6 +53,10 @@ Every extra is self-serve, so no one has to talk to sales.
 
 Upgrades mid-month raise the reply limit right away.
 
+### Usage at cost (18 November)
+
+Pay-per-use that our providers bill us for a business (X posts and DMs, texts, calls, phone numbers, iMessage and RCS, messages and automation runs past the free tiers, managed ads) goes on the owner's invoice **at cost, with no markup and no limit**, in the same billing cycle as the plan, one line per business. Connected accounts are not passed through: the plan prices them ($10 each past the included ones). During the free trial, everything the chosen plan includes works and its usage goes on the first invoice; a trial cancelled before its first invoice is charged its usage then. X's own prices (shown before connecting X): a post $0.015, a post with a link $0.20, sending a DM $0.015, reading a DM $0.01.
+
 ## Launch offers
 
 There are three launch offers. Ads and posts may promote the founding offer; the Destin seeds are offered in person only.
@@ -164,6 +168,7 @@ Updated 18 November 2026. Billing is built but not switched on: no one is charge
 |   |   |   |
 |---|---|---|
 |Date|Change|Decided by|
+|18 November 2026 (evening)|Usage at cost: pay-per-use on the owner's invoice at cost, no markup, no limit, same billing cycle; trial follows the chosen plan. Every Zernio platform can be offered (Staff → Platforms), naming Zernio before a sign-in that shows it; Creators stays held|Febron (Jason and Walter to confirm)|
 |18 November 2026 (later)|Names: the $99 plan is shown as Team and the $199 plan as Business (ids unchanged); Business on sale from launch, monthly only; founding $79 stays on the $99 plan (Team); the trial starts at sign-up; ads say "Try it free for 7 days at gowaggle.ai". Jason's own copy of this bible was updated the same day and is the final word if they differ|Jason (via Atlas and Febron)|
 |18 November 2026|Solo: 1 business, just you, more accounts at $10 each with no limit; Business ($99, now called Team): unlimited businesses and team members; follow-ups for quiet leads included on Business and Team (the owner's own message on Zernio Sequences, not AI-written); one-click top-up charged right away, also during the trial; plan settings to be changeable on Staff → Plans|Jason (via Febron)|
 |17 November 2026|A plan covers the whole organization; only sent AI replies count; team members come with Business, the $99 plan (earlier draft: Team only); sign-up open at launch|Febron|

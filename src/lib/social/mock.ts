@@ -824,6 +824,18 @@ export class MockSocialProvider implements SocialProvider {
     return { id };
   }
 
+  /** Steady sample pay-per-use for one profile (rule 14: no real Zernio in tests or demos). */
+  async getUsageCost(input: { profileId: string }): Promise<Record<string, number>> {
+    if (!input.profileId) return {};
+    return { accounts: 6, xApi: 3.4, sms: 1.1, credits: -12, total: -1.5 };
+  }
+
+  async getIntegrationConnectUrl(input: { kind: string; redirectUrl: string }) {
+    const url = new URL(input.redirectUrl);
+    url.searchParams.set("connected", input.kind);
+    return { authUrl: url.toString() };
+  }
+
   async getMailConnectUrl(input: { platform: string; redirectUrl: string }) {
     const url = new URL(input.redirectUrl);
     url.searchParams.set("connected", input.platform);

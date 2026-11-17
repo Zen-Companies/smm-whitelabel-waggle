@@ -665,6 +665,26 @@ export interface SocialProvider {
       scopes: readonly ("email" | "calendar" | "files")[];
     } & CallOptions,
   ): Promise<{ authUrl: string }>;
+  /**
+   * The sign-in link for Google Analytics, Slack or Google Ads (design "Every Zernio platform",
+   * approved 18 Nov). Zernio skips the welcome page on these, so Waggle shows its "Before you
+   * connect" note first. `alreadyConnected` when Google Ads is already connected on the profile.
+   */
+  getIntegrationConnectUrl(
+    input: {
+      kind: "googleanalytics" | "slack" | "googleads";
+      profileId: string;
+      redirectUrl: string;
+    } & CallOptions,
+  ): Promise<{ authUrl: string } | { alreadyConnected: true }>;
+  /**
+   * What Zernio billed for one profile's pay-per-use over a window (usage at cost, approved
+   * 18 Nov): USD per product family from Zernio's usage report (`GET /v1/usage`, metering mode,
+   * `range=custom`, projected onto the profile). `from`/`to` are inclusive UTC dates (YYYY-MM-DD).
+   */
+  getUsageCost(
+    input: { profileId: string; from: string; to: string } & CallOptions,
+  ): Promise<Record<string, number>>;
   /** Turns texting on for a number (T82c); receiving works at once, US sending after approval. */
   enableSms(input: { numberId: string } & CallOptions): Promise<SmsOnNumber>;
   /**

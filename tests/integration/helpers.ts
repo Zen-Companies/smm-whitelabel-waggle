@@ -88,6 +88,8 @@ export function fakeZernio() {
     listCalendarEvents: notImplemented,
     createCalendarEvent: notImplemented,
     getMailConnectUrl: notImplemented,
+    getIntegrationConnectUrl: notImplemented,
+    getUsageCost: notImplemented,
     discoverEmail: notImplemented,
     connectEmail: notImplemented,
     connectLine: notImplemented,

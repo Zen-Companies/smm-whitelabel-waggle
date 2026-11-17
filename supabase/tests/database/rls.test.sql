@@ -88,7 +88,8 @@ select is_empty(
                                 'beta_codes', 'beta_access', 'beta_attempts',
                                 'feedback_nudges',
                                 -- billing belongs to the organization (T86), server-only.
-                                'plan_settings', 'org_billing', 'reply_top_ups', 'plan_settings_changes')
+                                'plan_settings', 'org_billing', 'reply_top_ups', 'plan_settings_changes',
+                                'platform_settings', 'platform_settings_changes', 'usage_charges')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

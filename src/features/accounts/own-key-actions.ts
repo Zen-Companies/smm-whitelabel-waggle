@@ -1,5 +1,7 @@
 "use server";
 
+import { loadPlatformStatuses, statusOf } from "@/features/platforms";
+import { goToConnect } from "./connect-go";
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -324,6 +326,10 @@ export async function connectMailAction(formData: FormData): Promise<void> {
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
   const db = getServiceClient();
+  const rowId = platform === "google" ? "gmail" : "outlook";
+  if (statusOf(await loadPlatformStatuses(db), rowId) !== "available") {
+    redirect(`/settings/accounts?connect_error=unavailable&platform=${platform}`);
+  }
   const scopes =
     platform === "microsoft"
       ? (["email", "calendar", "files"] as const)
@@ -350,5 +356,44 @@ export async function connectMailAction(formData: FormData): Promise<void> {
       `/settings/accounts?connect_error=${status(error) === 402 ? "plan_limit" : "unavailable"}&platform=${platform}`,
     );
   }
-  redirect(authUrl);
+  await goToConnect({ db, id: rowId, authUrl });
+}
+
+/**
+ * Google Analytics, Slack or Google Ads (design "Every Zernio platform", approved 18 Nov). Only
+ * when Staff → Platforms has it Available. Zernio skips our welcome page here, so the owner gets
+ * the "Before you connect" note first.
+ */
+export async function connectIntegrationAction(formData: FormData): Promise<void> {
+  const kind = formData.get("kind");
+  if (kind !== "googleanalytics" && kind !== "slack" && kind !== "googleads") {
+    redirect("/settings/accounts");
+  }
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
+  const db = getServiceClient();
+  if (statusOf(await loadPlatformStatuses(db), kind) !== "available") {
+    redirect(`/settings/accounts?connect_error=unavailable&platform=${kind}`);
+  }
+  let result: { authUrl: string } | { alreadyConnected: true };
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    result = await getSocialProvider().getIntegrationConnectUrl({
+      kind,
+      profileId,
+      redirectUrl: `${process.env.APP_URL}/settings/accounts?connecting=${kind}`,
+      signal: AbortSignal.timeout(20_000),
+    });
+    await writeAudit(db, {
+      tenantId: tenant.id,
+      action: "account_connect_started",
+      actor: tenant.userId,
+      details: { platform: kind },
+    });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, platform: kind } });
+    redirect(`/settings/accounts?connect_error=unavailable&platform=${kind}`);
+  }
+  if ("alreadyConnected" in result) redirect(`/settings/accounts?connected=${kind}`);
+  await goToConnect({ db, id: kind, authUrl: result.authUrl });
 }

@@ -1551,6 +1551,62 @@ export type Database = {
         }
         Relationships: []
       }
+      platform_settings: {
+        Row: {
+          last_signin: string | null
+          last_signin_at: string | null
+          platform: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          last_signin?: string | null
+          last_signin_at?: string | null
+          platform: string
+          status: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          last_signin?: string | null
+          last_signin_at?: string | null
+          platform?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      platform_settings_changes: {
+        Row: {
+          after: string
+          before: string | null
+          changed_by: string | null
+          created_at: string
+          id: string
+          platform: string
+        }
+        ComputedFields: never
+        Insert: {
+          after: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          platform: string
+        }
+        Update: {
+          after?: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          platform?: string
+        }
+        Relationships: []
+      }
       platform_state: {
         Row: {
           key: string
@@ -2056,6 +2112,49 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      usage_charges: {
+        Row: {
+          amount_cents: number | null
+          created_at: string
+          done_at: string | null
+          id: string
+          kind: string
+          lines: Json | null
+          organization_id: string
+          period_end: string
+          period_start: string
+          status: string
+          stripe_invoice_id: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          amount_cents?: number | null
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          kind: string
+          lines?: Json | null
+          organization_id: string
+          period_end: string
+          period_start: string
+          status?: string
+          stripe_invoice_id?: string | null
+        }
+        Update: {
+          amount_cents?: number | null
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          kind?: string
+          lines?: Json | null
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          stripe_invoice_id?: string | null
+        }
+        Relationships: []
       }
       webhook_events: {
         Row: {

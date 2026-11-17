@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { UsageAtCostCard } from "./usage-at-cost-card";
 import { CombMeter, PlanBees, RestingBee, TrialCells } from "@/components/app/bee-plan";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { loadBilling, loadTopUps, type BillingRecord } from "./billing-store";
@@ -538,6 +540,12 @@ export async function YourPlanSection({
       </section>
       {!org.isOwner && (
         <p className="meta">You see what&apos;s counted, not the card or invoices.</p>
+      )}
+
+      {bill && (
+        <Suspense fallback={null}>
+          <UsageAtCostCard orgId={org.id} bill={bill} />
+        </Suspense>
       )}
 
       <section id="change-plan" className="flex scroll-mt-6 flex-col gap-3">

@@ -18,7 +18,7 @@ export type ConnectionItem = {
   id: string;
   label: string;
   line: string;
-  how: "keys" | "email" | "mail" | "link" | "soon";
+  how: "keys" | "email" | "mail" | "link" | "soon" | "integration";
   /** The Zernio platform its connections carry, when it differs from `id`. */
   platform?: string;
   href?: string;
@@ -70,6 +70,8 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
       },
       { id: "googleads", label: "Google Ads", line: "Search and Maps ads", how: "soon" },
       { id: "tiktokads", label: "TikTok Ads", line: "TikTok ads", how: "soon" },
+      { id: "redditads", label: "Reddit Ads", line: "Reddit ads", how: "soon" },
+      { id: "microsoftads", label: "Microsoft Ads", line: "Bing search ads", how: "soon" },
     ],
   },
   {

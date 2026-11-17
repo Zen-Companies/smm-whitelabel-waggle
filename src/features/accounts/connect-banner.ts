@@ -20,6 +20,13 @@ export function connectBanner(params: Params): ConnectBanner | null {
     first(params.platform) ?? first(params.connecting) ?? first(params.connected) ?? "";
   const platform = isPlatformId(platformKey) ? platformLabel(platformKey) : "the account";
 
+  // X needs pay-per-use set up on our side first (Zernio's 402): ours to fix, not the owner's.
+  if (first(params.connect_error) === "plan_limit" && platformKey === "twitter") {
+    return {
+      tone: "error",
+      text: "X can't be connected yet: we're finishing its pay-per-use setup on our side. We've been alerted; please try again later.",
+    };
+  }
   // Our Zernio plan has no room for another profile (402): ours to fix, not the owner's.
   if (first(params.connect_error) === "plan_limit") {
     return {
@@ -33,6 +40,10 @@ export function connectBanner(params: Params): ConnectBanner | null {
       tone: "error",
       text: `Your plan's connected accounts are all in use, so ${platform} can't be added yet. Add an extra account for $10 a month, or move to a bigger plan.`,
     };
+  }
+  // The "Before you connect" link is used once and lasts 10 minutes (18 Nov).
+  if (first(params.connect_error) === "expired") {
+    return { tone: "error", text: "That link expired. Click Connect again to start over." };
   }
   // T55: only Owners and Admins connect accounts.
   if (first(params.connect_error) === "not_allowed") {

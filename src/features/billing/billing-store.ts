@@ -1,3 +1,4 @@
+import { queueUsageCharge } from "./usage-charges";
 import "server-only";
 import type Stripe from "stripe";
 import { writeAudit } from "@/lib/audit";
@@ -168,6 +169,20 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
         { onConflict: "organization_id" },
       );
       if (error) throw new Error(`billing: saving the subscription failed: ${error.message}`);
+      // Usage at cost (18 Nov): a trial cancelled before its first invoice is charged its usage.
+      if (
+        event.type === "customer.subscription.deleted" &&
+        sub.trial_start &&
+        sub.trial_end &&
+        sub.ended_at &&
+        sub.ended_at <= sub.trial_end
+      ) {
+        await queueUsageCharge(db, orgId, {
+          kind: "trial_end",
+          start: sub.trial_start,
+          end: sub.ended_at,
+        });
+      }
       if (before?.plan !== row.plan || before?.status !== row.status) {
         await auditOrg(db, orgId, "billing.subscription", "system", {
           plan: row.plan,
@@ -184,6 +199,22 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
       const orgId = s.metadata.organization_id;
       if (!orgId) return "ignored: no organization";
       return addTopUp(db, orgId, s.id, false);
+    }
+    case "invoice.created": {
+      // Usage at cost (18 Nov): a renewal invoice in draft gets this cycle's pay-per-use, added
+      // by the jobs route before Stripe finalizes it (about an hour).
+      const inv = event.data.object;
+      if (inv.billing_reason !== "subscription_cycle" || inv.status !== "draft" || !inv.id) {
+        return "ignored";
+      }
+      const orgId = await orgForCustomer(db, undefined, customerId(inv.customer) ?? "");
+      if (!orgId) return "ignored: no organization";
+      return queueUsageCharge(db, orgId, {
+        kind: "invoice",
+        invoiceId: inv.id,
+        start: inv.period_start,
+        end: inv.period_end,
+      });
     }
     case "invoice.paid": {
       const inv = event.data.object;

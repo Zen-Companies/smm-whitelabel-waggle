@@ -8,6 +8,7 @@ import {
   handlePlatformPause,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
+import { chargeUsageAtCost, getStripe } from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
 import { pruneCalls } from "@/features/mcp";
 import { purgeDueBrands } from "@/features/offboarding";
@@ -95,6 +96,14 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 25_000,
     });
 
+    // Usage at cost (18 Nov): pay-per-use added to renewal invoices before Stripe charges them.
+    const usageAtCost = await chargeUsageAtCost({
+      db,
+      stripe: getStripe(),
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+
     // Follow-ups for leads that went quiet (18 Nov): the owner's message, through Zernio Sequences.
     const followUps = await sendQuietLeadFollowUps({
       db,
@@ -125,6 +134,8 @@ export async function POST(request: Request): Promise<Response> {
       kbEmbedded: kb.embedded,
       followUpsSent: followUps.sent,
       followUpsFailed: followUps.failed,
+      usageAtCostAdded: usageAtCost.added,
+      usageAtCostMissed: usageAtCost.missed,
       kbEmbedFailed: kb.failed,
       dmWindowsEscalated,
       nudges,

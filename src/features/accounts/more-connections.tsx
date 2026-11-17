@@ -11,7 +11,7 @@ import type { Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
 import { Button } from "@/components/ui/button";
 import { EmailConnectForm } from "./email-line-forms";
-import { connectMailAction } from "./own-key-actions";
+import { connectMailAction, connectIntegrationAction } from "./own-key-actions";
 import {
   CONNECTED_PLATFORMS,
   isOwnKeyPlatform,
@@ -19,20 +19,41 @@ import {
   withSettingsLinks,
 } from "./own-keys";
 import { StateLabel } from "@/components/app/state-mark";
+import { loadPlatformStatuses, statusOf } from "@/features/platforms";
+import { ConnectNoteBox } from "./connect-note-box";
+
+/** Connections that sign in through Zernio's link (Google Analytics, Slack, Google Ads). */
+const INTEGRATIONS = ["googleanalytics", "slack", "googleads"];
 
 /**
  * Settings → Accounts → More connections (T80): groups under the social tiles. Sites connect
  * with the owner's own keys, typed here; the rest say Coming soon. Owners and admins only
  * (the caller checks accounts.manage).
  */
-export async function MoreConnections() {
+export async function MoreConnections({ before }: { before?: string | null } = {}) {
   const tenant = await getCurrentTenant();
   const db = getServiceClient();
   const [phone, messaging] = await Promise.all([
     brandSwitchOn(db, "phone", tenant.id),
     brandSwitchOn(db, "messaging", tenant.id),
   ]);
-  const groups = withSettingsLinks(MORE_CONNECTIONS, { phone, messaging });
+  // Staff → Platforms (18 Nov): Hidden rows are left out; Coming soon can't connect.
+  const statuses = await loadPlatformStatuses(db);
+  const groups = withSettingsLinks(MORE_CONNECTIONS, { phone, messaging })
+    .map((g) => ({
+      ...g,
+      items: g.items
+        .filter((item) => statusOf(statuses, item.id) !== "hidden")
+        .map((item) => {
+          const status = statusOf(statuses, item.id);
+          if (status === "soon" && item.how !== "link") return { ...item, how: "soon" as const };
+          if (status === "available" && INTEGRATIONS.includes(item.id)) {
+            return { ...item, how: "integration" as const };
+          }
+          return item;
+        }),
+    }))
+    .filter((g) => g.items.length);
   let connected: Integration[] = [];
   let unavailable = false;
   if (tenant.zernioProfileId) {
@@ -74,6 +95,18 @@ export async function MoreConnections() {
                       <span className="text-ink-2 text-[13px]">{item.line}</span>
                     </span>
                     {item.how === "soon" && <StateLabel state="soon">Coming soon</StateLabel>}
+                    {item.how === "integration" && !mine.length && (
+                      <form action={connectIntegrationAction}>
+                        <input type="hidden" name="kind" value={item.id} />
+                        <Button
+                          type="submit"
+                          variant="secondary"
+                          aria-label={`Connect ${item.label}`}
+                        >
+                          Connect
+                        </Button>
+                      </form>
+                    )}
                     {item.how === "mail" && item.platform && (
                       <form action={connectMailAction}>
                         <input type="hidden" name="platform" value={item.platform} />
@@ -90,6 +123,15 @@ export async function MoreConnections() {
                       </Link>
                     )}
                   </div>
+                  {before === item.id && (
+                    <div className="pt-3">
+                      <ConnectNoteBox
+                        id={item.id}
+                        label={item.label}
+                        mark={<BrandMark brand={item.id} size={40} />}
+                      />
+                    </div>
+                  )}
                   {mine.map((c) => (
                     <div
                       key={c.id}

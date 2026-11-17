@@ -645,6 +645,73 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async getUsageCost(input: { profileId: string; from: string; to: string; signal?: AbortSignal }) {
+    return call("getUsageCost", async (withFetch) => {
+      const { data } = await this.zernio.usage.getUsage(
+        withFetch({
+          signal: input.signal,
+          query: {
+            range: "custom",
+            from: input.from,
+            to: input.to,
+            granularity: "total",
+            profileId: input.profileId,
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          supported: z.boolean().nullish(),
+          totals: z.record(z.string(), z.number()).nullish(),
+        }),
+        data,
+        "getUsageCost",
+      );
+      return r.totals ?? {};
+    });
+  }
+
+  /** See SocialProvider.getIntegrationConnectUrl (Google Analytics, Slack, Google Ads). */
+  async getIntegrationConnectUrl(input: {
+    kind: "googleanalytics" | "slack" | "googleads";
+    profileId: string;
+    redirectUrl: string;
+    signal?: AbortSignal;
+  }) {
+    const schema = z.object({
+      authUrl: z.string().nullish(),
+      alreadyConnected: z.boolean().nullish(),
+    });
+    if (input.kind === "googleads") {
+      return call("getIntegrationConnectUrl", async (withFetch) => {
+        const { data } = await this.zernio.connect.connectAds(
+          withFetch({
+            signal: input.signal,
+            path: { platform: "googleads" as never },
+            query: { profileId: input.profileId, redirect_url: input.redirectUrl },
+          }),
+        );
+        const r = parse(schema, data, "getIntegrationConnectUrl");
+        return r.authUrl ? { authUrl: r.authUrl } : { alreadyConnected: true as const };
+      });
+    }
+    return call("getIntegrationConnectUrl", async (withFetch) => {
+      const { data } = await this.zernio.connect.getConnectUrl(
+        withFetch({
+          signal: input.signal,
+          path: { platform: input.kind as never },
+          query: {
+            profileId: input.profileId,
+            redirect_url: input.redirectUrl,
+            ...connectBranding(process.env.APP_URL ?? ""),
+          },
+        }),
+      );
+      const r = parse(schema, data, "getIntegrationConnectUrl");
+      return r.authUrl ? { authUrl: r.authUrl } : { alreadyConnected: true as const };
+    });
+  }
+
   /** Zernio's own user id for the credentials connect state; it never changes, so it's kept. */
   private currentUserId: string | null = null;
 
