@@ -1089,6 +1089,7 @@ export type Database = {
           expires_at: string
           files: Json
           id: string
+          issued: Json
           tenant_id: string
         }
         ComputedFields: never
@@ -1100,6 +1101,7 @@ export type Database = {
           expires_at: string
           files?: Json
           id?: string
+          issued?: Json
           tenant_id: string
         }
         Update: {
@@ -1110,6 +1112,7 @@ export type Database = {
           expires_at?: string
           files?: Json
           id?: string
+          issued?: Json
           tenant_id?: string
         }
         Relationships: []
@@ -1998,6 +2001,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      media_upload_add_file: {
+        Args: { p_file: Json; p_id: string; p_max: number }
+        Returns: boolean
+      }
+      media_upload_issue: {
+        Args: { p_id: string; p_max: number; p_url: string }
+        Returns: boolean
+      }
       accept_invite: {
         Args: { p_token_hash: string; p_user: string }
         Returns: {

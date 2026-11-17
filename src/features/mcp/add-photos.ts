@@ -1,6 +1,8 @@
 // Pure rules of the "Add photos for your post" page. Tested.
 
 export const ADD_PHOTOS_MAX = 10;
+/** Upload links handed out per upload (retries and removed files included). */
+export const ADD_PHOTOS_ISSUE_MAX = 20;
 const IMAGE_MAX = 30 * 1024 * 1024;
 const VIDEO_MAX = 1024 * 1024 * 1024;
 

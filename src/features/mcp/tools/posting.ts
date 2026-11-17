@@ -6,6 +6,7 @@ import {
   POST_TEXT_MAX,
   type PostOptions,
 } from "@/features/publishing";
+import { writeAudit } from "@/lib/audit";
 import { platformLabel } from "@/lib/social/platforms";
 import type { Json } from "@/lib/supabase/database.types";
 import { resolveBrand, ToolError, viaOf, type ToolContext } from "../context";
@@ -195,6 +196,29 @@ export const previewPost = defineTool({
     }
     const platforms = [...new Set(accounts.map((a) => a.platform))];
     const optionIssues = optionProblems(input.options as ToolPostOption[], platforms);
+    // A chosen Pinterest board must be one of the account's boards.
+    const board = (input.options as ToolPostOption[]).find(
+      (o) => o.platform.trim().toLowerCase() === "pinterest" && o.pinterest_board_id,
+    )?.pinterest_board_id;
+    if (board) {
+      const pin = accounts.find((a) => a.platform === "pinterest");
+      let ok = false;
+      try {
+        const r = pin
+          ? await listBoardsFor(
+              { db: ctx.db, social: ctx.social() },
+              { tenantId, accountId: pin.id },
+            )
+          : null;
+        ok = !!r?.boards.some((b) => b.id === board);
+      } catch {
+        throw new ToolError("provider_failed", "Couldn't check the Pinterest board. Try again.");
+      }
+      if (!ok)
+        optionIssues.push(
+          "options: pinterest_board_id isn't one of this account's boards (see list_pinterest_boards).",
+        );
+    }
     if (optionIssues.length) throw new ToolError("invalid_input", optionIssues.join(" "));
     const postOptions: PostOptions = toPostOptions(input.options as ToolPostOption[], {
       youtubeTitle: input.youtube_title,
@@ -307,6 +331,17 @@ export const previewPost = defineTool({
       .select("id")
       .single();
     if (error || !row) throw new ToolError("unavailable", "Couldn't save the preview. Try again.");
+    await writeAudit(ctx.db, {
+      tenantId,
+      action: "post_previewed",
+      actor: ctx.principal.userId,
+      details: {
+        previewId: row.id,
+        accounts: accounts.length,
+        media: media.length,
+        via: viaOf(ctx.principal),
+      },
+    });
 
     return {
       confirmation: row.id,
@@ -375,6 +410,8 @@ export const createPostTool = defineTool({
         .select("used_at, expires_at, post_id")
         .eq("id", input.confirmation)
         .eq("tenant_id", tenantId)
+        .eq("created_by", ctx.principal.userId)
+        .eq("client_id", ctx.principal.clientId)
         .maybeSingle();
       if (seen?.used_at) {
         throw new ToolError(
@@ -505,6 +542,12 @@ export const createUploadLink = defineTool({
       .select("id")
       .single();
     if (error || !data) throw new ToolError("unavailable", "Couldn't make the link. Try again.");
+    await writeAudit(ctx.db, {
+      tenantId,
+      action: "mcp_upload_link_created",
+      actor: ctx.principal.userId,
+      details: { uploadId: data.id, via: viaOf(ctx.principal) },
+    });
     const base = (process.env.APP_URL ?? "").replace(/\/$/, "");
     return {
       upload_id: data.id,

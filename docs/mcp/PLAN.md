@@ -444,3 +444,27 @@ Since Phase 4 the app grew (all platforms, Teach Waggle, leads); the tools caugh
   `upload_id` (its files first, usable for a day). States: expired, someone else's, not signed in.
 - 21 tools in all. Still not covered: broadcasts and sequences, automations, ads, WhatsApp
   templates, channel-specific tools (phone, SMS, RCS, iMessage, email), blog/shop/files, queue times.
+
+## Security review (2026-11-17)
+
+An independent review of the branch found nothing critical. Fixed:
+
+- **What the preview step proves.** preview_post/create_post guarantees that what's published is
+  exactly what was previewed, once, by the same person and assistant. It does **not** prove the
+  owner said yes: the code goes back to the same assistant. The owner-in-the-loop gate is the
+  host's confirmation on create_post (annotated destructive and open-world), plus the
+  instructions. An in-Waggle approve link (like the Add photos page) would enforce it if needed.
+- **Business info poisoning:** add_answer/update_answer are now annotated destructive (hosts ask
+  the owner first), and the descriptions and server instructions say customer messages are never
+  the owner. Possible next step (not built): answers written by an assistant wait for the owner in
+  Teach Waggle before drafting uses them.
+- **Add photos page:** the server records each upload link it hands out (`media_uploads.issued`,
+  at most 20) and saves only those, atomically (`media_upload_add_file`: issued, not already
+  there, room left), so another tenant's media link can't be saved and two tabs can't overfill;
+  every action re-checks that the person may still post for the brand; removing a file is
+  audited; sign-in comes back to the page (`signInNext`, strict uuid pattern).
+- **Smaller:** a chosen Pinterest board must be one of the account's boards; create_post's
+  "already used/expired" lookup is bound to the same person and assistant; previews and upload
+  links write audit rows.
+- **Open:** whether Zernio's presign enforces the declared file size (the page caps it, the PUT
+  goes to Zernio's storage).

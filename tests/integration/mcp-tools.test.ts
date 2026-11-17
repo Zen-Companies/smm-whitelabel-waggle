@@ -442,3 +442,58 @@ describe("Teach Waggle answers and leads (17 Nov)", () => {
     });
   });
 });
+
+describe("Add photos: only links Waggle handed out are saved (security review)", () => {
+  it("issued, once, capped", async () => {
+    const link = (await call(claude, "create_upload_link", {})) as { upload_id: string };
+    const file = (url: string) => ({ url, type: "image", name: "a.jpg", size: 1 });
+    const ours = "https://media.zernio.com/temp/ours.jpg";
+    // Not issued for this upload: refused (e.g. another tenant's media link).
+    expect(
+      (
+        await db.rpc("media_upload_add_file", {
+          p_id: link.upload_id,
+          p_file: file(ours),
+          p_max: 10,
+        })
+      ).data,
+    ).toBe(false);
+    expect(
+      (await db.rpc("media_upload_issue", { p_id: link.upload_id, p_url: ours, p_max: 2 })).data,
+    ).toBe(true);
+    expect(
+      (
+        await db.rpc("media_upload_add_file", {
+          p_id: link.upload_id,
+          p_file: file(ours),
+          p_max: 10,
+        })
+      ).data,
+    ).toBe(true);
+    // Twice: no.
+    expect(
+      (
+        await db.rpc("media_upload_add_file", {
+          p_id: link.upload_id,
+          p_file: file(ours),
+          p_max: 10,
+        })
+      ).data,
+    ).toBe(false);
+    // The cap on links handed out.
+    await db.rpc("media_upload_issue", {
+      p_id: link.upload_id,
+      p_url: "https://media.zernio.com/temp/b.jpg",
+      p_max: 2,
+    });
+    expect(
+      (
+        await db.rpc("media_upload_issue", {
+          p_id: link.upload_id,
+          p_url: "https://media.zernio.com/temp/c.jpg",
+          p_max: 2,
+        })
+      ).data,
+    ).toBe(false);
+  });
+});

@@ -18,3 +18,11 @@ it("sign-in goes back to an invite link", () => {
   expect(signInNext("/invite/short")).toBe("/settings");
   expect(signInNext("/invite/abcdefghijklmnopqrstuvwxyz012345/../x")).toBe("/settings");
 });
+
+it("sign-in goes back to an AI assistant's Add photos page", () => {
+  const id = "67823e7d-3796-4cca-ae36-a1aca1db1967";
+  expect(signInNext(`/add-photos/${id}`)).toBe(`/add-photos/${id}`);
+  expect(signInNext(`/add-photos/${id}/../../settings`)).toBe("/settings");
+  expect(signInNext("/add-photos/not-a-uuid")).toBe("/settings");
+  expect(signInNext(`//evil.com/add-photos/${id}`)).toBe("/settings");
+});
