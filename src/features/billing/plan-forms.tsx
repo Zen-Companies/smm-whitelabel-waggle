@@ -61,7 +61,7 @@ export interface PlanCardData {
 }
 
 /**
- * Change plan: three cards with their bees, the current plan in honey, Team coming soon.
+ * Change plan: three cards with their bees, the current plan in honey, any plan not for sale as coming soon.
  * Monthly or yearly is picked once above the cards.
  */
 export function PlanCards({

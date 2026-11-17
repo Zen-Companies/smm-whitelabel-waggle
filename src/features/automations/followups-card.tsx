@@ -10,7 +10,7 @@ import type { SequenceTemplate } from "./sequences-section";
 
 /**
  * Follow up quiet leads (design "Billing round 2" §4, approved 18 Nov): set it once. When a lead
- * stops answering, Waggle sends this message and stops if they reply. Business and Team.
+ * stops answering, Waggle sends this message and stops if they reply. Team and Business.
  */
 export function FollowupsCard({
   settings,
@@ -43,15 +43,15 @@ export function FollowupsCard({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-base font-semibold">Follow up quiet leads</h3>
           <span className="bg-honey-tint text-honey-text rounded-full px-2.5 py-0.5 text-xs font-semibold">
-            Comes with Business
+            Comes with Team and Business
           </span>
         </div>
         <p className="text-ink-2 text-sm">
-          On Solo you follow up yourself. Business sends your follow-up on its own when a lead goes
-          quiet.
+          On Solo you follow up yourself. Team and Business send your follow-up on their own when a
+          lead goes quiet.
         </p>
         <Link href="/settings/billing" className="action-link w-fit text-sm">
-          See Business
+          See the plans
         </Link>
       </section>
     );

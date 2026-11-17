@@ -20,7 +20,7 @@ export interface Plan {
   replies: number;
   /** The most AI may cost us a month on this plan (the margin table's worst case). */
   aiCostCapUsd: number;
-  /** Selling now, or coming soon (Team goes on sale when team features are built). */
+  /** Selling now, or coming soon. */
   forSale: boolean;
   features: {
     /** Waggle answers regular questions on its own, once the owner trusts it. */
@@ -29,7 +29,7 @@ export interface Plan {
     leadsFlagged: boolean;
     /** Follow-ups for leads that go quiet (the owner's own message, on Zernio Sequences). */
     followUps: boolean;
-    /** Team members and roles: Business and Team (17 Nov). Solo is just the owner (18 Nov). */
+    /** Team members and roles: on both paid plans above Solo. Solo is just the owner (18 Nov). */
     team: boolean;
   };
 }
@@ -49,7 +49,8 @@ export const PLANS: Record<PlanId, Plan> = {
   },
   business: {
     id: "business",
-    name: "Business",
+    // Shown as Team (Jason, 17 Nov); the id stays "business" so nothing stored changes.
+    name: "Team",
     monthlyUsd: 99,
     yearlyUsd: 990,
     accounts: 4,
@@ -61,14 +62,15 @@ export const PLANS: Record<PlanId, Plan> = {
   },
   team: {
     id: "team",
-    name: "Team",
+    // Shown as Business (Jason, 17 Nov), on sale from launch, monthly only for now.
+    name: "Business",
     monthlyUsd: 199,
     yearlyUsd: null,
     accounts: 10,
     brands: null,
     replies: 1500,
     aiCostCapUsd: 30,
-    forSale: false,
+    forSale: true,
     features: { autoReply: true, leadsFlagged: true, followUps: true, team: true },
   },
 };
@@ -93,7 +95,7 @@ export const EXTRAS = {
   autoTopUp: { maxPerMonth: 2 },
 } as const;
 
-/** The first 50 businesses get Business at $79 a month for 6 months, then $99. */
+/** The first 50 businesses get the $99 plan (shown as Team) at $79 a month for 6 months, then $99. */
 export const FOUNDING = { plan: "business" as PlanId, monthlyUsd: 79, months: 6, spots: 50 };
 
 /** Pure: when a trial that started at `start` ends. */

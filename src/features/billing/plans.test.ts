@@ -29,10 +29,17 @@ describe("plans match the Pricing Bible (updated 18 Nov 2026)", () => {
     });
     expect(PLANS.team).toMatchObject({
       monthlyUsd: 199,
+      yearlyUsd: null,
       accounts: 10,
       replies: 1500,
-      forSale: false,
+      forSale: true,
     });
+    // Shown names (Jason, 17 Nov): $99 is Team, $199 is Business; the ids stay.
+    expect([PLANS.solo.name, PLANS.business.name, PLANS.team.name]).toEqual([
+      "Solo",
+      "Team",
+      "Business",
+    ]);
     expect(PROMOTED_PLAN).toBe("business");
   });
 
@@ -102,7 +109,7 @@ describe("the AI reply limit", () => {
     });
     const solo = replyLimitNote(replyLimit(200, 200, now), "solo")!;
     expect(solo.body).toContain(NEVER_DARK);
-    expect(solo.offers).toEqual(["+200 replies for $15", "Upgrade to Business"]);
+    expect(solo.offers).toEqual(["+200 replies for $15", "Upgrade to Team"]);
     expect(replyLimitNote(replyLimit(750, 750, now), "business")!.offers).toEqual([
       "+200 replies for $15",
     ]);
@@ -218,11 +225,11 @@ describe("plan settings (Staff → Plans, 18 Nov)", () => {
     });
     form.set("accounts", "0");
     expect(parsePlanSettings("business", (f) => form.get(f) ?? null)).toEqual({
-      error: "Business: accounts included must be a whole number from 1 to 100.",
+      error: "Team: accounts included must be a whole number from 1 to 100.",
     });
     form.set("accounts", "2.5");
     expect(parsePlanSettings("business", (f) => form.get(f) ?? null)).toEqual({
-      error: "Business: accounts included must be a whole number from 1 to 100.",
+      error: "Team: accounts included must be a whole number from 1 to 100.",
     });
   });
 });

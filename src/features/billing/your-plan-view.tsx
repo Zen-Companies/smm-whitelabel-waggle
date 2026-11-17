@@ -407,7 +407,7 @@ export async function YourPlanSection({
                       plan: "business",
                       interval: bill.billing_interval ?? "month",
                     }}
-                    label="Upgrade to Business"
+                    label={`Upgrade to ${PLANS.business.name}`}
                     className="items-start"
                   />
                 )}

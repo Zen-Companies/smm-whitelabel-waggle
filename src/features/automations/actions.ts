@@ -406,7 +406,7 @@ export async function saveFollowupsAction(
   if (!parsed.ok) return { error: parsed.error, field: parsed.field };
   const db = getServiceClient();
   if (parsed.value.enabled && !(await planAllowsFollowUps(db, tenant.id))) {
-    return { error: "Follow-ups come with Business. See Your plan." };
+    return { error: "Follow-ups come with Team and Business. See Your plan." };
   }
   try {
     await saveFollowups(
