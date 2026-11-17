@@ -24,3 +24,5 @@ export {
   retrieveKbEntries,
 } from "./retrieval";
 export type { KbMatch } from "./retrieval";
+export { saveAnswer } from "./answers";
+export type { SaveAnswerResult } from "./answers";

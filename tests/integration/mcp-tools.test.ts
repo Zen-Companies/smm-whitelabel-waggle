@@ -290,3 +290,155 @@ describe("business info, posts", () => {
     ).toEqual({ error: "invalid_input" });
   });
 });
+
+describe("posting extras (17 Nov): options, photos added in Waggle, analytics platforms", () => {
+  it("per-platform options are stored with the preview and checked against the accounts", async () => {
+    expect(
+      await call(claude, "preview_post", {
+        content: "Weekend special",
+        account_ids: [cafe.accountId],
+        options: [{ platform: "instagram", post_type: "reel" }],
+      }),
+    ).toEqual({ error: "invalid_input" });
+    const p = (await call(claude, "preview_post", {
+      content: "Weekend special",
+      account_ids: [cafe.accountId],
+      options: [{ platform: "facebook", post_type: "reel", first_comment: "Menu in bio" }],
+      publish_at: "queue",
+    })) as { confirmation: string; preview: { options: Record<string, unknown> } };
+    expect(p.preview.options).toEqual({ facebook: { as: "reel", firstComment: "Menu in bio" } });
+    const { data } = await db
+      .from("post_previews")
+      .select("options")
+      .eq("id", p.confirmation)
+      .single();
+    expect(data!.options).toEqual({ facebook: { as: "reel", firstComment: "Menu in bio" } });
+  });
+
+  it("an upload link: empty until the owner adds files, then its files go in the preview", async () => {
+    const link = (await call(claude, "create_upload_link", {})) as {
+      upload_id: string;
+      upload_url: string;
+    };
+    expect(link.upload_url.endsWith(`/add-photos/${link.upload_id}`)).toBe(true);
+    expect(
+      await call(claude, "preview_post", {
+        content: "From the oven",
+        account_ids: [cafe.accountId],
+        upload_id: link.upload_id,
+      }),
+    ).toEqual({ error: "invalid_input" });
+    // What the page records after each browser upload.
+    await db
+      .from("media_uploads")
+      .update({
+        files: [
+          {
+            url: "https://media.zernio.com/temp/oven.jpg",
+            type: "image",
+            name: "oven.jpg",
+            size: 1000,
+          },
+        ],
+      })
+      .eq("id", link.upload_id);
+    const p = (await call(claude, "preview_post", {
+      content: "From the oven",
+      account_ids: [cafe.accountId],
+      upload_id: link.upload_id,
+    })) as { preview: { media: { url: string; type: string }[] } };
+    expect(p.preview.media).toEqual([
+      expect.objectContaining({ url: "https://media.zernio.com/temp/oven.jpg", type: "image" }),
+    ]);
+    // Another assistant can't use it.
+    expect(
+      await call({ ...claude, clientId: "client_grok" }, "preview_post", {
+        content: "From the oven",
+        account_ids: [cafe.accountId],
+        upload_id: link.upload_id,
+      }),
+    ).toEqual({ error: "invalid_input" });
+  });
+
+  it("analytics take any connected platform, and say which when it isn't one", async () => {
+    expect(await call(claude, "get_analytics", { platform: "facebook" })).toHaveProperty("section");
+    expect(await call(claude, "get_analytics", { platform: "tiktok" })).toEqual({
+      error: "invalid_input",
+    });
+    expect(await call(claude, "get_post_performance", { platform: "tiktok" })).toEqual({
+      error: "invalid_input",
+    });
+  });
+});
+
+describe("Teach Waggle answers and leads (17 Nov)", () => {
+  it("add an answer, refuse the same question twice, change it", async () => {
+    const added = (await call(claude, "add_answer", {
+      question: "Do you deliver?",
+      answer: "Yes, within 5 km, free over $20.",
+    })) as { entry_id: string };
+    expect(added.entry_id).toBeTruthy();
+    expect(
+      await call(claude, "add_answer", { question: "do you deliver?", answer: "Maybe" }),
+    ).toEqual({ error: "invalid_input" });
+    expect(
+      await call(claude, "update_answer", {
+        entry_id: added.entry_id,
+        question: "Do you deliver?",
+        answer: "Yes, within 8 km, free over $25.",
+      }),
+    ).toEqual({ entry_id: added.entry_id, title: "Do you deliver?" });
+    const { data } = await db
+      .from("kb_entries")
+      .select("content, embedding")
+      .eq("id", added.entry_id)
+      .single();
+    // Saved now; the jobs route embeds it later (no AI call from the assistant's tool).
+    expect(data).toEqual({ content: "Yes, within 8 km, free over $25.", embedding: null });
+    const { data: audit } = await db
+      .from("audit_log")
+      .select("action, details")
+      .eq("tenant_id", cafe.tenantId)
+      .in("action", ["kb_entry_created", "kb_entry_updated"]);
+    expect(audit!.length).toBeGreaterThanOrEqual(2);
+    expect(audit!.every((a) => !!(a.details as { via?: unknown }).via)).toBe(true);
+    expect(
+      await call(claude, "update_answer", {
+        entry_id: randomUUID(),
+        question: "Parking?",
+        answer: "Behind the shop.",
+      }),
+    ).toEqual({ error: "not_found" });
+  });
+
+  it("list leads by stage and move one, this brand's only", async () => {
+    const itemId = await item(cafe, "drafted", "lead", "Can I book a table for 8 on Friday?");
+    const { data: lead } = await db
+      .from("leads")
+      .insert({
+        tenant_id: cafe.tenantId,
+        item_id: itemId,
+        name: "Ana",
+        request: "Table for 8, Friday",
+      })
+      .select("id")
+      .single();
+    const listed = (await call(claude, "list_leads", {})) as {
+      leads: { lead_id: string; stage: string; customer_wants: string | null }[];
+    };
+    expect(listed.leads.find((l) => l.lead_id === lead!.id)).toMatchObject({
+      customer_wants: "Table for 8, Friday",
+    });
+    expect(await call(claude, "move_lead", { lead_id: lead!.id, stage: "booked" })).toEqual({
+      lead_id: lead!.id,
+      stage: "booked",
+    });
+    const booked = (await call(claude, "list_leads", { stage: "booked" })) as {
+      leads: { lead_id: string }[];
+    };
+    expect(booked.leads.map((l) => l.lead_id)).toContain(lead!.id);
+    expect(await call(claude, "move_lead", { lead_id: randomUUID(), stage: "done" })).toEqual({
+      error: "not_found",
+    });
+  });
+});

@@ -52,3 +52,4 @@ export type { ActivityRow, PlaygroundResult, PlaygroundTarget, SwitchRow } from 
 export { McpToolsView } from "./tools-view";
 export { McpActivityView } from "./activity-view";
 export { SwitchesView } from "./switches-view";
+export { AddPhotosView } from "./add-photos-view";

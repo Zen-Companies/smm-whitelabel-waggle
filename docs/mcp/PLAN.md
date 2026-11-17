@@ -417,3 +417,30 @@ links now, an upload page for photos dropped into a chat next (design-first).
   the DM window.
 - Not built yet: the upload page for chat photos (canvas proposal), per-platform options
   (first comment, post type) and TikTok from an assistant.
+
+## Feature catch-up (2026-11-17)
+
+Since Phase 4 the app grew (all platforms, Teach Waggle, leads); the tools caught up on:
+
+- **Analytics on every platform:** `platform` takes "all" or any platform the brand has
+  connected (checked; the error lists them), for get_analytics and get_post_performance.
+- **Posting options:** `preview_post.options` per platform: `post_type` (post, story, reel on
+  Instagram and Facebook), `first_comment` (Instagram, Facebook, YouTube, Threads, LinkedIn),
+  `title` (YouTube, Facebook reels), `pinterest_board_id`, a platform-only `caption`. Stored on
+  the preview (`post_previews.options`) and sent as the composer's `platform_options`.
+  `list_pinterest_boards` lists a Pinterest account's boards (without a choice, pins go to the
+  board picked in Waggle, else the first one).
+- **Teach Waggle:** `add_answer` and `update_answer` (`knowledge-base.saveAnswer`, ability
+  brand.settings, audited with the assistant). No AI call in the tool: the jobs route embeds new
+  and changed answers on its next run.
+- **Leads:** `list_leads` (by stage, customer fields marked untrusted) and `move_lead` (the board's
+  New → Talking → Booked → Done, ability replies.approve, audited).
+- **Photos from a chat** (design "AI assistants · Add photos from a chat", approved 17 Nov):
+  `create_upload_link` makes a `media_uploads` row (migration `20261118110000`: 30-minute link,
+  same person and assistant, refused to OAuth tokens, purged with the brand) and returns
+  `/add-photos/<id>`. On that page (own layout, phone first, sign in with `?next`) the browser
+  PUTs each file straight to Zernio's storage (presign, like the composer's videos) and the server
+  records only links our presign handed out; Done shows the bee's dance. `preview_post` takes
+  `upload_id` (its files first, usable for a day). States: expired, someone else's, not signed in.
+- 21 tools in all. Still not covered: broadcasts and sequences, automations, ads, WhatsApp
+  templates, channel-specific tools (phone, SMS, RCS, iMessage, email), blog/shop/files, queue times.

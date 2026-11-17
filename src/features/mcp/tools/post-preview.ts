@@ -1,9 +1,13 @@
 // Pure pieces of the two-step posting tools (preview_post, create_post): when a post goes out,
 // and which media problems block it. No database, no Zernio.
 
+import type { PostOptions } from "@/features/publishing";
 import type { MediaCheck } from "@/lib/social/types";
 
 export const PREVIEW_TTL_MS = 30 * 60_000;
+/** An upload link works for 30 minutes; its files can be used in a preview for a day. */
+export const UPLOAD_TTL_MS = 30 * 60_000;
+export const UPLOAD_USABLE_MS = 24 * 60 * 60_000;
 export const MIN_AHEAD_MS = 5 * 60_000;
 /** The furthest ahead a post may be scheduled from an assistant. */
 export const MAX_AHEAD_MS = 365 * 86_400_000;
@@ -68,4 +72,64 @@ export function mediaProblems(index: number, check: MediaCheck, platforms: strin
     }
   }
   return problems;
+}
+
+/** One platform's choices, as the assistant sends them in preview_post. */
+export interface ToolPostOption {
+  platform: string;
+  post_type?: "post" | "story" | "reel";
+  first_comment?: string;
+  title?: string;
+  pinterest_board_id?: string;
+  caption?: string;
+}
+
+const POST_TYPES = new Set(["instagram", "facebook"]);
+const FIRST_COMMENT = new Set(["instagram", "facebook", "youtube", "threads", "linkedin"]);
+const TITLES = new Set(["youtube", "facebook"]);
+
+/** Pure: choices that don't fit the chosen platforms, said so the assistant can fix them. */
+export function optionProblems(options: ToolPostOption[], platforms: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const o of options) {
+    const p = o.platform.trim().toLowerCase();
+    if (seen.has(p)) out.push(`options: ${p} is listed twice.`);
+    seen.add(p);
+    if (!platforms.includes(p)) {
+      out.push(`options: ${p} isn't one of the accounts in account_ids (${platforms.join(", ")}).`);
+      continue;
+    }
+    if (o.post_type && !POST_TYPES.has(p))
+      out.push(`options: post_type is for Instagram and Facebook, not ${p}.`);
+    if (o.first_comment && !FIRST_COMMENT.has(p)) out.push(`options: ${p} has no first comment.`);
+    if (o.title && !TITLES.has(p))
+      out.push(`options: title is for YouTube and Facebook, not ${p}.`);
+    if (o.pinterest_board_id && p !== "pinterest")
+      out.push("options: pinterest_board_id is for Pinterest only.");
+  }
+  return out;
+}
+
+/** Pure: the assistant's choices as the composer's per-platform options (posts.platform_options). */
+export function toPostOptions(
+  options: ToolPostOption[],
+  extra: { youtubeTitle?: string } = {},
+): PostOptions {
+  const out: PostOptions = {};
+  for (const o of options) {
+    const p = o.platform.trim().toLowerCase();
+    const v = {
+      ...(o.caption ? { text: o.caption } : {}),
+      ...(o.post_type ? { as: o.post_type } : {}),
+      ...(o.first_comment ? { firstComment: o.first_comment } : {}),
+      ...(o.title ? { title: o.title } : {}),
+      ...(o.pinterest_board_id ? { boardId: o.pinterest_board_id } : {}),
+    };
+    if (Object.keys(v).length) out[p] = v;
+  }
+  if (extra.youtubeTitle && !out.youtube?.title) {
+    out.youtube = { ...(out.youtube ?? {}), title: extra.youtubeTitle };
+  }
+  return out;
 }

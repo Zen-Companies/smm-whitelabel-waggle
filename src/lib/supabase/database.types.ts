@@ -1080,6 +1080,40 @@ export type Database = {
         }
         Relationships: []
       }
+      media_uploads: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string
+          done_at: string | null
+          expires_at: string
+          files: Json
+          id: string
+          tenant_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by: string
+          done_at?: string | null
+          expires_at: string
+          files?: Json
+          id?: string
+          tenant_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          done_at?: string | null
+          expires_at?: string
+          files?: Json
+          id?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -1541,6 +1575,7 @@ export type Database = {
           expires_at: string
           id: string
           media: Json
+          options: Json
           post_id: string | null
           publish_at: string | null
           publish_mode: string
@@ -1558,6 +1593,7 @@ export type Database = {
           expires_at: string
           id?: string
           media?: Json
+          options?: Json
           post_id?: string | null
           publish_at?: string | null
           publish_mode: string
@@ -1574,6 +1610,7 @@ export type Database = {
           expires_at?: string
           id?: string
           media?: Json
+          options?: Json
           post_id?: string | null
           publish_at?: string | null
           publish_mode?: string

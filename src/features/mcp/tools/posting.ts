@@ -1,15 +1,38 @@
 import { z } from "zod";
-import { createPost, POST_TEXT_MAX } from "@/features/publishing";
+import {
+  createPost,
+  listBoardsFor,
+  parsePostOptions,
+  POST_TEXT_MAX,
+  type PostOptions,
+} from "@/features/publishing";
 import { platformLabel } from "@/lib/social/platforms";
 import type { Json } from "@/lib/supabase/database.types";
 import { resolveBrand, ToolError, viaOf, type ToolContext } from "../context";
-import { brandId, defineTool, PUBLIC_ACTION, type ToolAnnotations } from "./define";
-import { mediaProblems, parsePublishWhen, PREVIEW_TTL_MS } from "./post-preview";
+import {
+  brandId,
+  defineTool,
+  LOCAL_ACTION,
+  PUBLIC_ACTION,
+  READ,
+  type ToolAnnotations,
+} from "./define";
+import {
+  mediaProblems,
+  optionProblems,
+  parsePublishWhen,
+  PREVIEW_TTL_MS,
+  toPostOptions,
+  UPLOAD_TTL_MS,
+  UPLOAD_USABLE_MS,
+  type ToolPostOption,
+} from "./post-preview";
 
 // Posting in two steps (17 Nov, after an assistant published wording the owner never saw):
 // preview_post checks everything and stores exactly what would go out; create_post publishes that
 // stored post once, after the owner said yes. Photos and videos are public links Zernio fetches
-// (checked by Zernio first); photos dropped into a chat need Waggle's upload page (next).
+// (checked by Zernio first); photos dropped into a chat go through Waggle's upload page
+// (create_upload_link, then upload_id).
 
 const MAX_MEDIA = 10;
 const CHECK_TIMEOUT_MS = 20_000;
@@ -73,7 +96,50 @@ export const previewPost = defineTool({
       .describe(
         '"now", "queue" (the brand\'s next free posting time), or a date and time with its timezone offset, like 2026-11-21T09:00:00-06:00. At least 5 minutes ahead.',
       ),
+    upload_id: z
+      .uuid()
+      .optional()
+      .describe(
+        "upload_id from create_upload_link, after the owner added photos on Waggle's page. Its files come first, then any media links.",
+      ),
     youtube_title: z.string().trim().max(100).optional().describe("YouTube only: the video title."),
+    options: z
+      .array(
+        z.object({
+          platform: z.string().describe("The platform these choices are for, e.g. instagram."),
+          post_type: z
+            .enum(["post", "story", "reel"])
+            .optional()
+            .describe("Instagram and Facebook: a feed post, a story or a reel. Default: post."),
+          first_comment: z
+            .string()
+            .trim()
+            .max(2200)
+            .optional()
+            .describe(
+              "Instagram, Facebook, YouTube, Threads, LinkedIn: posted as the first comment.",
+            ),
+          title: z
+            .string()
+            .trim()
+            .max(100)
+            .optional()
+            .describe("YouTube and Facebook reels: a title."),
+          pinterest_board_id: z
+            .string()
+            .optional()
+            .describe("Pinterest: board_id from list_pinterest_boards."),
+          caption: z
+            .string()
+            .trim()
+            .max(POST_TEXT_MAX)
+            .optional()
+            .describe("A different caption for this platform only."),
+        }),
+      )
+      .max(10)
+      .default([])
+      .describe("Optional per-platform choices. Leave out for a normal post everywhere."),
   }),
   output: z.object({
     confirmation: z.uuid(),
@@ -92,6 +158,7 @@ export const previewPost = defineTool({
         }),
       ),
       publish: z.object({ mode: z.enum(["now", "queue", "at"]), at: z.string().nullable() }),
+      options: z.record(z.string(), z.record(z.string(), z.unknown())),
     }),
     warnings: z.array(z.string()),
     next_step: z.string(),
@@ -127,11 +194,55 @@ export const previewPost = defineTool({
       );
     }
     const platforms = [...new Set(accounts.map((a) => a.platform))];
+    const optionIssues = optionProblems(input.options as ToolPostOption[], platforms);
+    if (optionIssues.length) throw new ToolError("invalid_input", optionIssues.join(" "));
+    const postOptions: PostOptions = toPostOptions(input.options as ToolPostOption[], {
+      youtubeTitle: input.youtube_title,
+    });
+
+    // Photos the owner added on Waggle's page (create_upload_link) come first.
+    let uploaded: { url: string }[] = [];
+    if (input.upload_id) {
+      const { data: up } = await ctx.db
+        .from("media_uploads")
+        .select("files, created_at")
+        .eq("id", input.upload_id)
+        .eq("tenant_id", tenantId)
+        .eq("created_by", ctx.principal.userId)
+        .eq("client_id", ctx.principal.clientId)
+        .maybeSingle();
+      if (!up) {
+        throw new ToolError(
+          "invalid_input",
+          "No upload with this upload_id for this brand. Call create_upload_link.",
+        );
+      }
+      if (new Date(up.created_at).getTime() + UPLOAD_USABLE_MS < now.getTime()) {
+        throw new ToolError(
+          "invalid_input",
+          "This upload is too old. Make a new one with create_upload_link.",
+        );
+      }
+      uploaded = (up.files as { url: string }[]) ?? [];
+      if (!uploaded.length) {
+        throw new ToolError(
+          "invalid_input",
+          "No photos were added yet. Ask the owner to add them with the link, then tell you when they're done.",
+        );
+      }
+    }
+    const allMedia = [
+      ...uploaded.map((f) => ({ url: f.url, alt_text: undefined as string | undefined })),
+      ...input.media,
+    ];
+    if (allMedia.length > MAX_MEDIA) {
+      throw new ToolError("invalid_input", `At most ${MAX_MEDIA} photos or videos in one post.`);
+    }
     const social = ctx.social();
 
     // Each link checked by Zernio: reachable, really a photo or video, within each platform's size.
     const checks = await Promise.all(
-      input.media.map((m) =>
+      allMedia.map((m) =>
         social
           .validateMedia({ url: m.url, signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) })
           .catch(() => null),
@@ -149,7 +260,7 @@ export const previewPost = defineTool({
     try {
       const v = await social.validatePost({
         content: input.content,
-        mediaUrls: input.media.map((m) => m.url),
+        mediaUrls: allMedia.map((m) => m.url),
         targets: accounts.map((a) => ({
           platform: a.platform as "instagram",
           accountId: a.id,
@@ -170,7 +281,7 @@ export const previewPost = defineTool({
       );
     }
 
-    const media = input.media.map((m, i) => ({
+    const media = allMedia.map((m, i) => ({
       url: m.url,
       type: checks[i]?.type ?? null,
       format: checks[i]?.format ?? null,
@@ -190,6 +301,7 @@ export const previewPost = defineTool({
         publish_mode: when.mode,
         publish_at: when.at?.toISOString() ?? null,
         youtube_title: input.youtube_title ?? null,
+        options: postOptions as unknown as Json,
         expires_at: expires.toISOString(),
       })
       .select("id")
@@ -213,6 +325,7 @@ export const previewPost = defineTool({
           size_bytes,
         })),
         publish: { mode: when.mode, at: when.at?.toISOString() ?? null },
+        options: postOptions as Record<string, Record<string, unknown>>,
       },
       warnings,
       next_step:
@@ -298,6 +411,7 @@ export const createPostTool = defineTool({
         queued: claimed.publish_mode === "queue",
         media,
         youtubeTitle: claimed.youtube_title ?? undefined,
+        options: parsePostOptions(claimed.options),
         via: { ...viaOf(ctx.principal), previewId: claimed.id },
         now,
       },
@@ -328,4 +442,78 @@ export const createPostTool = defineTool({
   },
 });
 
-export const POSTING_TOOLS = [previewPost, createPostTool];
+export const listPinterestBoards = defineTool({
+  name: "list_pinterest_boards",
+  title: "List Pinterest boards",
+  description:
+    "The boards of one of the brand's Pinterest accounts (account_id from list_brands), for options.pinterest_board_id in preview_post. Without a choice, pins go to default_board_id (the board the owner picked in Waggle) or else the account's first board.",
+  access: "read",
+  annotations: READ,
+  wraps: "publishing.listBoardsFor",
+  input: z.object({ brand_id: brandId, account_id: z.uuid() }),
+  output: z.object({
+    boards: z.array(z.object({ board_id: z.string(), name: z.string() })),
+    default_board_id: z.string().nullable(),
+  }),
+  async run(ctx, input) {
+    const tenantId = await resolveBrand(ctx, input.brand_id);
+    let r: Awaited<ReturnType<typeof listBoardsFor>>;
+    try {
+      r = await listBoardsFor(
+        { db: ctx.db, social: ctx.social() },
+        { tenantId, accountId: input.account_id },
+      );
+    } catch {
+      throw new ToolError("provider_failed", "Couldn't load the boards from Pinterest. Try again.");
+    }
+    if (!r) throw new ToolError("not_found", "That isn't one of this brand's Pinterest accounts.");
+    return {
+      boards: r.boards.map((b) => ({ board_id: b.id, name: b.name })),
+      default_board_id: r.current,
+    };
+  },
+});
+
+export const createUploadLink = defineTool({
+  name: "create_upload_link",
+  title: "Get a link to add photos",
+  description:
+    "When the owner drops a photo or video into this chat, you can't pass it to Waggle: give them this link instead. They open it (signed in to Waggle), add the files, and tell you when they're done; then call preview_post with upload_id. The link works for 30 minutes, for this owner only.",
+  access: "act",
+  ability: "posts.write",
+  annotations: { ...LOCAL_ACTION, idempotentHint: false },
+  wraps: "media_uploads (Waggle's Add photos page)",
+  input: z.object({ brand_id: brandId }),
+  output: z.object({
+    upload_id: z.uuid(),
+    upload_url: z.string(),
+    expires_at: z.string(),
+    next_step: z.string(),
+  }),
+  async run(ctx, input) {
+    const tenantId = await resolveBrand(ctx, input.brand_id);
+    const now = ctx.now?.() ?? new Date();
+    const expires = new Date(now.getTime() + UPLOAD_TTL_MS);
+    const { data, error } = await ctx.db
+      .from("media_uploads")
+      .insert({
+        tenant_id: tenantId,
+        created_by: ctx.principal.userId,
+        client_id: ctx.principal.clientId,
+        expires_at: expires.toISOString(),
+      })
+      .select("id")
+      .single();
+    if (error || !data) throw new ToolError("unavailable", "Couldn't make the link. Try again.");
+    const base = (process.env.APP_URL ?? "").replace(/\/$/, "");
+    return {
+      upload_id: data.id,
+      upload_url: `${base}/add-photos/${data.id}`,
+      expires_at: expires.toISOString(),
+      next_step:
+        "Give the owner upload_url to open. When they say they're done, call preview_post with this upload_id (and the caption, accounts and time).",
+    };
+  },
+});
+
+export const POSTING_TOOLS = [previewPost, createPostTool, listPinterestBoards, createUploadLink];

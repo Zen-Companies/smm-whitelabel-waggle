@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MediaCheck } from "@/lib/social/types";
-import { mediaProblems, parsePublishWhen } from "./post-preview";
+import { mediaProblems, optionProblems, parsePublishWhen, toPostOptions } from "./post-preview";
 
 const now = new Date("2026-11-18T10:00:00Z");
 
@@ -63,5 +63,47 @@ describe("mediaProblems", () => {
     expect(mediaProblems(0, big, ["bluesky"])).toEqual([
       "media[0]: too big for bluesky (limit 977 KB).",
     ]);
+  });
+});
+
+describe("options", () => {
+  it("only choices that fit the chosen platforms", () => {
+    expect(
+      optionProblems(
+        [{ platform: "instagram", post_type: "reel", first_comment: "Menu in bio" }],
+        ["instagram"],
+      ),
+    ).toEqual([]);
+    expect(optionProblems([{ platform: "tiktok", post_type: "reel" }], ["instagram"])[0]).toContain(
+      "isn't one of the accounts",
+    );
+    expect(
+      optionProblems([{ platform: "pinterest", post_type: "story" }], ["pinterest"])[0],
+    ).toContain("post_type is for Instagram and Facebook");
+    expect(
+      optionProblems([{ platform: "pinterest", first_comment: "x" }], ["pinterest"])[0],
+    ).toContain("no first comment");
+    expect(
+      optionProblems([{ platform: "instagram", pinterest_board_id: "b1" }], ["instagram"])[0],
+    ).toContain("Pinterest only");
+    expect(
+      optionProblems([{ platform: "instagram" }, { platform: "Instagram" }], ["instagram"])[0],
+    ).toContain("listed twice");
+  });
+  it("become the composer's per-platform options", () => {
+    expect(
+      toPostOptions(
+        [
+          { platform: "instagram", post_type: "reel", first_comment: "Menu in bio" },
+          { platform: "pinterest", pinterest_board_id: "b1", caption: "Ube pandesal" },
+        ],
+        { youtubeTitle: "Ube pandesal" },
+      ),
+    ).toEqual({
+      instagram: { as: "reel", firstComment: "Menu in bio" },
+      pinterest: { boardId: "b1", text: "Ube pandesal" },
+      youtube: { title: "Ube pandesal" },
+    });
+    expect(toPostOptions([{ platform: "facebook" }])).toEqual({});
   });
 });

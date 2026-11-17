@@ -7,6 +7,7 @@ import {
   loadPostDetail,
   loadPostMetrics,
   loadWork,
+  type AnalyticsPlatform,
 } from "@/features/analytics";
 import { searchKbEntries } from "@/features/knowledge-base";
 import { cancelScheduledPost } from "@/features/publishing";
@@ -29,7 +30,26 @@ import {
 
 const DAY_MS = 86_400_000;
 const period = z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30);
-const platform = z.enum(["all", "instagram", "facebook"]).default("all");
+const platform = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .default("all")
+  .describe(
+    '"all", or one platform the brand has connected (as in list_brands), e.g. instagram, facebook, tiktok, youtube, linkedin.',
+  );
+
+/** The analytics platform asked for, checked against what the brand has connected. */
+function checkPlatform(asked: string, connected: string[]): AnalyticsPlatform {
+  if (asked === "all") return "all";
+  if (!connected.includes(asked)) {
+    throw new ToolError(
+      "invalid_input",
+      `platform must be "all" or one of this brand's connected platforms: ${connected.join(", ") || "none connected"}.`,
+    );
+  }
+  return asked as AnalyticsPlatform;
+}
 
 export const searchKnowledge = defineTool({
   name: "search_knowledge",
@@ -170,7 +190,7 @@ export const getAnalytics = defineTool({
   name: "get_analytics",
   title: "Get analytics",
   description:
-    "A brand's numbers from Instagram and Facebook, copied hourly (followers daily). overview: reach, engagement, followers and daily series vs the previous period; audience: followers over time, best times, age/city breakdowns; waggle_work: messages Waggle answered, how fast, leads. Raw numbers only: summarise them yourself.",
+    "A brand's numbers from every connected platform (Instagram, Facebook, TikTok, YouTube, LinkedIn and the rest Waggle syncs), copied hourly (followers daily). overview: reach, engagement, followers and daily series vs the previous period; audience: followers over time, best times, age/city breakdowns; waggle_work: messages Waggle answered, how fast, leads. Raw numbers only: summarise them yourself.",
   access: "read",
   annotations: READ,
   wraps: "analytics.loadOverview, analytics.loadAudience, analytics.loadWork",
@@ -191,12 +211,14 @@ export const getAnalytics = defineTool({
     const tenantId = await resolveBrand(ctx, input.brand_id);
     const now = ctx.now?.() ?? new Date();
     const accounts = await loadAccounts(ctx.db, tenantId);
+    const connected = [...new Set(accounts.map((a) => a.platform))];
+    const chosen = checkPlatform(input.platform, connected);
     const data =
       input.section === "overview"
         ? await loadOverview(ctx.db, tenantId, {
             period: input.period,
-            platform: input.platform,
-            platforms: [...new Set(accounts.map((a) => a.platform))],
+            platform: chosen,
+            platforms: connected,
             now,
           })
         : input.section === "audience"
@@ -234,7 +256,7 @@ export const getPostPerformance = defineTool({
   name: "get_post_performance",
   title: "Get post performance",
   description:
-    "How individual posts did (lifetime totals), including posts made directly on Instagram/Facebook. Without post_metric_id: posts published in the period, sorted. With post_metric_id: one post plus its reach over the first days.",
+    "How individual posts did (lifetime totals), including posts made directly on the platforms. Without post_metric_id: posts published in the period, sorted. With post_metric_id: one post plus its reach over the first days.",
   access: "read",
   annotations: READ,
   wraps: "analytics.loadPostMetrics, analytics.loadPostDetail",
@@ -280,10 +302,11 @@ export const getPostPerformance = defineTool({
       };
     }
     const to = ctx.now?.() ?? new Date();
+    const connected = [...new Set((await loadAccounts(ctx.db, tenantId)).map((a) => a.platform))];
     const rows = await loadPostMetrics(ctx.db, tenantId, {
       from: new Date(to.getTime() - input.period * DAY_MS),
       to,
-      platform: input.platform,
+      platform: checkPlatform(input.platform, connected),
     });
     const sorted = [...rows].sort((a, b) =>
       input.sort === "published_at"

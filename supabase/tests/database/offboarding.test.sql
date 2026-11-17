@@ -25,7 +25,7 @@ select is(
        'lab_runs', 'lab_cases', 'autonomy_settings', 'feature_flags', 'mcp_calls',
        'social_accounts', 'tenant_members',
        -- deleted by the tenants_forget_purged(_previews) triggers when purge_tenant sets purged_at
-       'organization_member_brands', 'post_previews',
+       'organization_member_brands', 'post_previews', 'media_uploads',
        -- kept: costs and the audit trail
        'ai_usage', 'audit_log',
        -- kept: feedback stays with the person (its tenant_id is set null if the brand row goes)
