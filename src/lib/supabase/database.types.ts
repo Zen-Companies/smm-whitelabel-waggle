@@ -1348,6 +1348,58 @@ export type Database = {
         }
         Relationships: []
       }
+      org_billing: {
+        Row: {
+          auto_top_up: boolean
+          billing_interval: string | null
+          cancel_at_period_end: boolean
+          current_period_end: string | null
+          extra_accounts: number
+          founding: boolean
+          organization_id: string
+          plan: string | null
+          status: string | null
+          stripe_customer_id: string
+          stripe_event_at: string | null
+          stripe_subscription_id: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          auto_top_up?: boolean
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          extra_accounts?: number
+          founding?: boolean
+          organization_id: string
+          plan?: string | null
+          status?: string | null
+          stripe_customer_id: string
+          stripe_event_at?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_top_up?: boolean
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          extra_accounts?: number
+          founding?: boolean
+          organization_id?: string
+          plan?: string | null
+          status?: string | null
+          stripe_customer_id?: string
+          stripe_event_at?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       plan_settings: {
         Row: {
           brands_limit: number | null
@@ -1556,6 +1608,34 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      reply_top_ups: {
+        Row: {
+          automatic: boolean
+          created_at: string
+          id: string
+          organization_id: string
+          replies: number
+          stripe_ref: string
+        }
+        ComputedFields: never
+        Insert: {
+          automatic?: boolean
+          created_at?: string
+          id?: string
+          organization_id: string
+          replies: number
+          stripe_ref: string
+        }
+        Update: {
+          automatic?: boolean
+          created_at?: string
+          id?: string
+          organization_id?: string
+          replies?: number
+          stripe_ref?: string
+        }
+        Relationships: []
       }
       social_accounts: {
         Row: {

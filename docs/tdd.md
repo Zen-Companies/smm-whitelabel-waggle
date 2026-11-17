@@ -570,10 +570,15 @@ As built (T10, `features/approvals`):
 
 ## 12. Billing
 
-- Stripe Checkout for the subscription; webhook `/api/webhooks/stripe` verifies the signature and handles `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` → update `tenants.subscription_status`.
-- Stripe events also go through `webhook_events` for dedupe.
-- Gate: job processing skips tenants not `active`/`trialing` (items → `paused`).
-- One bill per brand (T47): billing stays per tenant, so an owner with three brands has three subscriptions.
+_Built 2026-11-17 (T86, Pricing Bible; design "Settings · Your plan, with the bee"). **Changed** from the first plan: one bill per **organization** (decided 10 and 17 Nov), not per brand, and the organization's plan is stored in its own table, not on `tenants`._
+
+- **Catalog:** `pnpm stripe:catalog` creates the products, prices (lookup keys `waggle_<plan>_<monthly|yearly>`, `waggle_extra_account_<monthly|yearly>`, `waggle_top_up_200`), the founding coupon (`waggle_founding_business`: $20 off Business for 6 months, 50 redemptions) and the customer portal settings, idempotently, and prints the ids. The app finds prices by lookup key: no price id in the environment. Refuses a live key without `--live`.
+- **Tables:** `org_billing` (one row per organization: Stripe customer and subscription, plan, interval, status, trial end, period end, ending, extra accounts, founding, automatic top-up, the time of the Stripe event it came from) and `reply_top_ups` (one row per paid 200, unique Stripe reference). RLS on, no policies: server only.
+- **Checkout:** Settings → Your plan (Owner only, `billing.view`, checked again in the actions). No plan: Stripe Checkout, subscription mode, card up front, 7-day trial the first time, the founding coupon on Business monthly while spots last (also marked `founding=1` in the subscription's metadata, since subscription events list discounts by id only), USD only (adaptive pricing off). With a plan: the item is switched in place, prorated; extra accounts are a second item at the plan's interval. Top-ups: one-time Checkout. Card, invoices, cancelling: Stripe's customer portal.
+- **Webhook** `/api/webhooks/stripe`: verifies the signature, dedupes in `webhook_events` (a failed event is applied again on retry), then writes only to the database (rule 3): `customer.subscription.*` → `org_billing` (older events never overwrite newer ones); `checkout.session.completed` with `kind=top_up` and `invoice.paid` with `kind=auto_top_up` → `reply_top_ups`. A cancel by date (`cancel_at`, what the portal sets on current API versions) counts as ending.
+- **Limits:** a plan applies while the subscription is trialing, active or past due. `billing.plans` (staff switch) still gates every limit; with it off nothing is limited. At 100% drafting pauses; with automatic top-up on (not during the trial) the card on the subscription is charged for 200 more, at most twice a month, then checked again.
+- **Notes:** Today shows the 80% note and the 100% banner, the Inbox the 100% banner, all with the comb and the bee. Not built: the 80%/100% emails (`limitEmailDue` exists) and dismissing the 80% note.
+- Local: `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints the webhook secret for `STRIPE_WEBHOOK_SECRET`.
 
 ## 13. Security
 

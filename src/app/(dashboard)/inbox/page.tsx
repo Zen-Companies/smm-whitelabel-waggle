@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { InboxSkeleton, InboxView } from "@/features/approvals";
+import { PlanNote } from "../plan-note";
 
 export const metadata = { title: "Inbox" };
 
@@ -13,6 +14,9 @@ export default function InboxPage({ searchParams }: Props) {
       data-fit-screen
       className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8 lg:min-h-0 lg:flex-1"
     >
+      <Suspense fallback={null}>
+        <PlanNote where="inbox" />
+      </Suspense>
       <Suspense fallback={<InboxSkeleton />}>
         <InboxView tab="for_you" searchParams={searchParams} />
       </Suspense>

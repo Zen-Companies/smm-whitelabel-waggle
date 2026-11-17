@@ -10,7 +10,10 @@ import {
   replyAllowance,
   type PlanId,
 } from "./plans";
+import { tryAutoTopUp } from "./auto-top-up";
+import { loadBilling, loadTopUps } from "./billing-store";
 import { replyLimit, type ReplyLimit } from "./reply-limit";
+import { planIsLive } from "./subscription";
 
 // Plan limits in the app (Pricing Bible, "Still to build": per-plan reply limits). Off until
 // billing ships: the `billing.plans` switch is off by default, and no organization has a plan
@@ -37,12 +40,24 @@ export interface OrgPlan {
 }
 
 /**
- * The organization's plan. The organization owns the bill (decided 10 Nov). Not stored yet: it
- * comes with the Stripe subscription, so every organization has none for now.
+ * The organization's plan (the organization owns the bill, decided 10 Nov), from its Stripe
+ * subscription as the webhook stored it. Null without a subscription that's trialing, active or
+ * past due (Stripe still retrying the card).
  */
-export async function loadOrgPlan(db: ServiceClient, orgId: string): Promise<OrgPlan | null> {
-  void [db, orgId];
-  return null;
+export async function loadOrgPlan(
+  db: ServiceClient,
+  orgId: string,
+  now: Date = new Date(),
+): Promise<OrgPlan | null> {
+  const bill = await loadBilling(db, orgId);
+  if (!bill || !planIsLive(bill.status) || !isPlanId(bill.plan)) return null;
+  const topUps = await loadTopUps(db, orgId, bill.plan, now);
+  return {
+    plan: bill.plan,
+    extraAccounts: bill.extra_accounts,
+    topUpsThisMonth: topUps.thisMonth,
+    carriedReplies: topUps.carried,
+  };
 }
 
 /**
@@ -71,7 +86,7 @@ export async function loadReplyLimit(
   orgId: string,
   now: Date,
 ): Promise<{ plan: OrgPlan; limit: ReplyLimit } | null> {
-  const plan = await loadOrgPlan(db, orgId);
+  const plan = await loadOrgPlan(db, orgId, now);
   if (!plan) return null;
   const { data: brands, error } = await db
     .from("tenants")
@@ -108,7 +123,11 @@ export async function replyLimitReached(
     .maybeSingle();
   if (!tenant?.organization_id) return false;
   const status = await loadReplyLimit(db, tenant.organization_id, now);
-  return status?.limit.level === "reached";
+  if (status?.limit.level !== "reached") return false;
+  // Automatic top-up, when the owner turned it on: 200 more, then check again.
+  if (!(await tryAutoTopUp(db, tenant.organization_id, now))) return true;
+  const after = await loadReplyLimit(db, tenant.organization_id, now);
+  return after?.limit.level === "reached";
 }
 
 async function planForBrand(
