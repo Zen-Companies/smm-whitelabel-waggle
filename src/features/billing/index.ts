@@ -25,6 +25,7 @@ export {
   PLANS_FLAG,
   loadPlans,
   planAllowsAutoReply,
+  planAllowsFollowUps,
   planAllowsTeam,
   planLimitsOn,
   replyLimitReached,

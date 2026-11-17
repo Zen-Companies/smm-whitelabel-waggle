@@ -8,6 +8,7 @@ import {
   handlePlatformPause,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
+import { sendQuietLeadFollowUps } from "@/features/automations";
 import { pruneCalls } from "@/features/mcp";
 import { purgeDueBrands } from "@/features/offboarding";
 import { escalateClosingDmWindows } from "@/features/approvals";
@@ -94,6 +95,13 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 25_000,
     });
 
+    // Follow-ups for leads that went quiet (18 Nov): the owner's message, through Zernio Sequences.
+    const followUps = await sendQuietLeadFollowUps({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+
     // T21: brands offboarded 3 months ago are deleted for good (Zernio clean-up first).
     const offboarding = await purgeDueBrands({
       db,
@@ -115,6 +123,8 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({
       ...items,
       kbEmbedded: kb.embedded,
+      followUpsSent: followUps.sent,
+      followUpsFailed: followUps.failed,
       kbEmbedFailed: kb.failed,
       dmWindowsEscalated,
       nudges,

@@ -368,6 +368,7 @@ export type Database = {
       }
       conversations: {
         Row: {
+          zernio_contact_id: string | null
           created_at: string
           id: string
           last_customer_message_at: string | null
@@ -381,6 +382,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          zernio_contact_id?: string | null
           created_at?: string
           id?: string
           last_customer_message_at?: string | null
@@ -393,6 +395,7 @@ export type Database = {
           zernio_conversation_id: string
         }
         Update: {
+          zernio_contact_id?: string | null
           created_at?: string
           id?: string
           last_customer_message_at?: string | null
@@ -631,6 +634,40 @@ export type Database = {
           outcome?: string | null
           shown_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      followup_settings: {
+        Row: {
+          enabled: boolean
+          message: string
+          sequences: Json
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+          wait_minutes: number
+          whatsapp_template: Json | null
+        }
+        ComputedFields: never
+        Insert: {
+          enabled?: boolean
+          message: string
+          sequences?: Json
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+          wait_minutes?: number
+          whatsapp_template?: Json | null
+        }
+        Update: {
+          enabled?: boolean
+          message?: string
+          sequences?: Json
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+          wait_minutes?: number
+          whatsapp_template?: Json | null
         }
         Relationships: []
       }
@@ -942,6 +979,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          followed_up_at: string | null
           contact: string | null
           created_at: string
           id: string
@@ -954,6 +992,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          followed_up_at?: string | null
           contact?: string | null
           created_at?: string
           id?: string
@@ -965,6 +1004,7 @@ export type Database = {
           tenant_id: string
         }
         Update: {
+          followed_up_at?: string | null
           contact?: string | null
           created_at?: string
           id?: string

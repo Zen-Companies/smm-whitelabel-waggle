@@ -14,6 +14,11 @@ import { isChatLink, LINK_PLATFORMS } from "./links";
 import { LinksSection, type LinkFlow } from "./links-section";
 import { SEQUENCE_PLATFORMS } from "./sequence";
 import { SequencesSection, type SequenceTemplate } from "./sequences-section";
+import { FollowupsCard } from "./followups-card";
+import { isFollowupPlatform } from "./quiet-leads";
+import { FOLLOWUP_SEQUENCE_NAME, loadFollowupSettings } from "./quiet-leads-store";
+import { planAllowsFollowUps } from "@/features/billing";
+import { getServiceClient } from "@/lib/supabase/service";
 import { TeachHeader } from "@/components/app/teach-header";
 
 const KINDS = [
@@ -69,8 +74,14 @@ export async function AutomationsView({
       if (kind === "comment") automations = await social.listCommentAutomations(opts);
       else if (kind === "flows" || kind === "links") flows = await social.listWorkflows(opts);
       else {
-        sequences = await social.listSequences(opts);
-        // WhatsApp follow-ups a day or more later need an approved template (≤ 1 placeholder).
+        // The follow-ups' own sequences live on their card, not in this list.
+        sequences = (await social.listSequences(opts)).filter(
+          (s) => s.name !== FOLLOWUP_SEQUENCE_NAME,
+        );
+      }
+      // WhatsApp follow-ups a day or more later need an approved template (≤ 1 placeholder):
+      // for Sequences and for following up quiet leads.
+      {
         for (const a of all.filter((x) => x.platform === "whatsapp")) {
           const list = await social
             .listWhatsAppTemplates({ accountId: a.zernioId, signal: AbortSignal.timeout(10_000) })
@@ -93,6 +104,13 @@ export async function AutomationsView({
     }
   }
 
+  const db = getServiceClient();
+  const [followups, followupsIncluded] = await Promise.all([
+    loadFollowupSettings(db, tenant.id),
+    planAllowsFollowUps(db, tenant.id),
+  ]);
+  const whatsappTemplates = Object.values(templates).flat();
+
   // Link flows (T77d) keep their ig.me / m.me link as the description; the rest are chat flows.
   const links: LinkFlow[] = await Promise.all(
     flows
@@ -111,6 +129,22 @@ export async function AutomationsView({
         <h2 className="section-title mt-2">Automations</h2>
         <p className="text-ink-2">Replies that happen on their own, set up once.</p>
       </div>
+      <FollowupsCard
+        settings={
+          followups && {
+            enabled: followups.enabled,
+            waitHours: Math.round(followups.waitMinutes / 60),
+            message: followups.message,
+            template: followups.whatsappTemplate
+              ? `${followups.whatsappTemplate.name}|${followups.whatsappTemplate.language}|${followups.whatsappTemplate.variables}`
+              : null,
+          }
+        }
+        platforms={[...new Set(all.map((a) => a.platform).filter(isFollowupPlatform))]}
+        templates={whatsappTemplates}
+        canEdit={canEdit}
+        included={followupsIncluded}
+      />
       <nav aria-label="Automation kinds" className="tabs">
         {KINDS.map((k) => (
           <Link
