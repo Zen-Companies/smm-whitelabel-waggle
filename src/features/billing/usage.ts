@@ -1,7 +1,7 @@
 import "server-only";
 import { monthStart } from "@/lib/llm/spend";
 import type { ServiceClient } from "@/lib/supabase/service";
-import { replyAllowance, type PlanId } from "./plans";
+import { accountAllowance, canConnectAnother, PLANS, replyAllowance, type PlanId } from "./plans";
 import { replyLimit, type ReplyLimit } from "./reply-limit";
 
 // Plan limits in the app (Pricing Bible, "Still to build": per-plan reply limits). Off until
@@ -101,4 +101,48 @@ export async function replyLimitReached(
   if (!tenant?.organization_id) return false;
   const status = await loadReplyLimit(db, tenant.organization_id, now);
   return status?.limit.level === "reached";
+}
+
+async function planForBrand(
+  db: ServiceClient,
+  tenantId: string,
+): Promise<{ orgId: string; plan: OrgPlan } | null> {
+  if (!(await planLimitsOn(db))) return null;
+  const { data: tenant } = await db
+    .from("tenants")
+    .select("organization_id")
+    .eq("id", tenantId)
+    .maybeSingle();
+  if (!tenant?.organization_id) return null;
+  const plan = await loadOrgPlan(db, tenant.organization_id);
+  return plan ? { orgId: tenant.organization_id, plan } : null;
+}
+
+/**
+ * For Connect: whether the organization's plan has room for one more account (its plan's
+ * accounts plus extras, counted across its brands). True while plan limits are off or there's
+ * no plan.
+ */
+export async function roomForAnotherAccount(db: ServiceClient, tenantId: string): Promise<boolean> {
+  const found = await planForBrand(db, tenantId);
+  if (!found) return true;
+  const { data: brands } = await db.from("tenants").select("id").eq("organization_id", found.orgId);
+  const { count } = await db
+    .from("social_accounts")
+    .select("id", { count: "exact", head: true })
+    .in(
+      "tenant_id",
+      (brands ?? []).map((b) => b.id),
+    )
+    .eq("status", "active");
+  return canConnectAnother(count ?? 0, accountAllowance(found.plan.plan, found.plan.extraAccounts));
+}
+
+/**
+ * For "Reply on its own": Solo approves every reply (Pricing Bible); Business and Team may let
+ * Waggle answer regular questions on its own. True while plan limits are off or there's no plan.
+ */
+export async function planAllowsAutoReply(db: ServiceClient, tenantId: string): Promise<boolean> {
+  const found = await planForBrand(db, tenantId);
+  return !found || PLANS[found.plan.plan].features.autoReply;
 }

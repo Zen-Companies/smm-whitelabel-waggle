@@ -22,7 +22,9 @@ export {
   loadOrgPlan,
   loadReplyLimit,
   PLANS_FLAG,
+  planAllowsAutoReply,
   planLimitsOn,
   replyLimitReached,
+  roomForAnotherAccount,
 } from "./usage";
 export type { OrgPlan } from "./usage";

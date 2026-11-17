@@ -62,3 +62,12 @@ describe("connectBanner", () => {
     );
   });
 });
+
+describe("the plan's account cap (Pricing Bible)", () => {
+  it("says the plan is full and how to make room", () => {
+    expect(connectBanner({ connect_error: "accounts_full", platform: "tiktok" })).toEqual({
+      tone: "error",
+      text: "Your plan's connected accounts are all in use, so TikTok can't be added yet. Add an extra account for $10 a month, or move to a bigger plan.",
+    });
+  });
+});

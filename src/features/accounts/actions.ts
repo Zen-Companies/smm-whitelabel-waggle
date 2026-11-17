@@ -3,6 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { roomForAnotherAccount } from "@/features/billing";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
@@ -33,6 +34,10 @@ export async function connectAccount(formData: FormData): Promise<void> {
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
   const db = getServiceClient();
+  // The plan's connected accounts (Pricing Bible). Off until billing ships.
+  if (!(await roomForAnotherAccount(db, tenant.id))) {
+    redirect(`/settings/accounts?connect_error=accounts_full&platform=${platform}`);
+  }
 
   let authUrl: string;
   try {
