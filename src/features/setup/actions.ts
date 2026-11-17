@@ -4,7 +4,10 @@ import { redirect } from "next/navigation";
 import { updateAutonomyMode } from "@/features/approvals";
 import { addStarterAnswers } from "@/features/knowledge-base";
 import { getTenantFor, NOT_ALLOWED, updateBusinessProfile } from "@/features/tenants";
+import { writeAudit } from "@/lib/audit";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
+import { getServiceClient } from "@/lib/supabase/service";
+import { REPLIES_CHOSEN_ACTION } from "./checklist";
 import { kindOf, profileText } from "./starter";
 
 export type SetupState = { error?: string };
@@ -36,7 +39,7 @@ export async function saveAnswersStep(_prev: SetupState, formData: FormData): Pr
   redirect("/setup?step=4");
 }
 
-/** Step 4: how replies to questions go out (Ask me first, or on its own). Leads stay as they are. */
+/** Step 5: how replies to questions go out (Ask me first, or on its own). Leads stay as they are. */
 export async function saveRepliesStep(_prev: SetupState, formData: FormData): Promise<SetupState> {
   const mode = formData.get("mode") === "auto" ? "auto" : "approve";
   const tenant = await getTenantFor("brand.settings");
@@ -46,5 +49,12 @@ export async function saveRepliesStep(_prev: SetupState, formData: FormData): Pr
   fd.set("mode", mode);
   const r = await updateAutonomyMode({}, fd);
   if (r.error) return { error: r.error };
-  redirect("/setup?step=5");
+  // Done even when the choice is the default (Ask me first): the owner chose it.
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: REPLIES_CHOSEN_ACTION,
+    actor: tenant.userId,
+    details: { category: "faq", mode },
+  });
+  redirect("/setup?step=6");
 }

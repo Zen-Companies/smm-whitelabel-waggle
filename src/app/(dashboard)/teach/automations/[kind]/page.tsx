@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AutomationsView, isAutomationKind } from "@/features/automations";
+import { ReadyLine } from "@/features/setup";
 
 export const metadata = { title: "Automations" };
 
@@ -10,7 +11,7 @@ type Props = { params: Promise<{ kind: string }> };
 async function View({ params }: Props) {
   const { kind } = await params;
   if (!isAutomationKind(kind)) notFound();
-  return <AutomationsView kind={kind} />;
+  return <AutomationsView kind={kind} top={<ReadyLine />} />;
 }
 
 /** /teach/automations/<kind>: comment, flows, sequences or links. */

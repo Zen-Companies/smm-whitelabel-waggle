@@ -13,6 +13,7 @@ import {
   usageText,
 } from "@/features/knowledge-base";
 import { can } from "@/features/orgs";
+import { ReadyLine } from "@/features/setup";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { QuestionAnswers } from "./question-answers";
@@ -62,7 +63,9 @@ export async function TeachView({ replies = false }: { replies?: boolean }) {
       data-fit-screen
       className="mx-auto flex w-full max-w-[1320px] flex-col gap-5 px-4 py-6 md:px-6 md:py-9 lg:min-h-0 lg:flex-1"
     >
-      <TeachHeader />
+      <TeachHeader>
+        <ReadyLine />
+      </TeachHeader>
       {canEdit && <PauseForm paused={paused} />}
 
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">

@@ -1,19 +1,23 @@
 import { Check } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { connectAccount } from "@/features/accounts";
+import { TryIt } from "@/features/lab";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { platformLabel } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "cn";
 import { saveAnswersStep, saveBusinessStep, saveRepliesStep } from "./actions";
+import { nextReadyStep, PRACTICE_GOAL, type ReadyStep } from "./checklist";
+import { loadReadySteps } from "./ready-data";
 import {
   BUSINESS_KINDS,
   doneLine,
   kindFromProfile,
-  SETUP_STEPS,
+  SETUP_LAST,
   type SetupStepNumber,
 } from "./starter";
 import { StepForm } from "./step-form";
@@ -23,11 +27,12 @@ const FIRST_ACCOUNTS = [
   { platform: "facebook", does: "Comments, DMs and reviews" },
 ] as const;
 
-function Stepper({ step }: { step: SetupStepNumber }) {
+function Stepper({ step, steps }: { step: SetupStepNumber; steps: ReadyStep[] }) {
   return (
-    <ol className="flex flex-wrap gap-x-5 gap-y-2 text-sm" aria-label="Setup steps">
-      {SETUP_STEPS.map((s) => {
-        const done = step > s.n;
+    <ol className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Setup steps">
+      {steps.map((s) => {
+        // Ticked by what's really done, so a skipped step stays open.
+        const done = s.done && step !== s.n;
         const current = step === s.n;
         return (
           <li
@@ -58,15 +63,31 @@ function Stepper({ step }: { step: SetupStepNumber }) {
   );
 }
 
-/** The first-time setup (T73b, design "0c · First-time setup, 4 steps"). */
+function SkipLink({ to }: { to: SetupStepNumber }) {
+  return (
+    <Link href={`/setup?step=${to}`} className="action-link">
+      Skip for now
+    </Link>
+  );
+}
+
+/**
+ * "Get Waggle ready" (T73b; 5 steps approved 17 Nov): your business, connect, top answers, try 3
+ * messages, how replies go out. Every step can be skipped; opening /setup again lands on the first
+ * step not done, and the same steps show on top of Teach Waggle and on Today until they are.
+ */
 export async function SetupView({
-  step,
+  step: requested,
   connecting,
 }: {
-  step: SetupStepNumber;
+  step: SetupStepNumber | null;
   connecting?: string;
 }) {
   const tenant = await getCurrentTenant();
+  const steps = await loadReadySteps(tenant.id);
+  const step: SetupStepNumber = requested ?? nextReadyStep(steps)?.n ?? 6;
+  const left = steps.filter((s) => !s.done);
+  const tries = steps.find((s) => s.key === "practice");
   const supabase = await createServerSupabase();
   const [{ data: t }, { data: accounts }, { count: answers }, { data: faq }] = await Promise.all([
     supabase.from("tenants").select("business_profile").eq("id", tenant.id).single(),
@@ -104,15 +125,16 @@ export async function SetupView({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-[680px] flex-col gap-7 px-4 py-8 md:py-12">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        {step <= 4 ? <Stepper step={step} /> : <span />}
+    <main className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 py-8 md:py-12">
+      {step <= SETUP_LAST && <Stepper step={step} steps={steps} />}
+
+      {/* Five steps fill the row, so "Need help?" sits on the step line. */}
+      <div className="text-ink-3 -mb-5 flex items-center justify-between gap-3 text-sm">
+        <span>{step <= SETUP_LAST ? `Step ${step} of ${SETUP_LAST}` : ""}</span>
         <Link href="/settings/account" className="text-ink-3 text-sm">
           Need help?
         </Link>
       </div>
-
-      {step <= 4 && <p className="text-ink-3 -mb-5 text-sm">Step {step} of 4</p>}
 
       {step === 1 && (
         <section className="flex flex-col gap-5">
@@ -122,7 +144,12 @@ export async function SetupView({
               Two lines is enough. This helps Waggle tell a question from someone ready to buy.
             </p>
           </div>
-          <StepForm action={saveBusinessStep} submitLabel="Next" backHref={null}>
+          <StepForm
+            action={saveBusinessStep}
+            submitLabel="Next"
+            backHref={null}
+            skipHref="/setup?step=2"
+          >
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-2 text-sm font-medium">What kind of business?</legend>
               <div className="flex flex-wrap gap-2">
@@ -228,7 +255,12 @@ export async function SetupView({
               Waggle only says what you write. You can add more any time in Teach Waggle.
             </p>
           </div>
-          <StepForm action={saveAnswersStep} submitLabel="Next" backHref="/setup?step=2">
+          <StepForm
+            action={saveAnswersStep}
+            submitLabel="Next"
+            backHref="/setup?step=2"
+            skipHref="/setup?step=4"
+          >
             {(kind ?? BUSINESS_KINDS[BUSINESS_KINDS.length - 1]).questions.map((q, i) => (
               <label key={q} className="flex flex-col gap-1.5 text-sm font-medium">
                 &ldquo;{q}&rdquo;
@@ -251,12 +283,44 @@ export async function SetupView({
       {step === 4 && (
         <section className="flex flex-col gap-5">
           <div>
+            <h1 className="page-title">Try {PRACTICE_GOAL} messages</h1>
+            <p className="text-ink-2 mt-1">
+              Type what a customer might say and see what Waggle would do. Nothing gets posted.
+              {tries && !tries.done && tries.status !== "Not yet" && ` ${tries.status} tried.`}
+            </p>
+          </div>
+          <Suspense fallback={<div className="skeleton h-72 rounded-xl" />}>
+            <TryIt />
+          </Suspense>
+          <div className="flex items-center justify-between gap-3">
+            <Link href="/setup?step=3" className="text-ink-2 hover:text-ink text-sm font-medium">
+              Back
+            </Link>
+            {tries?.done ? (
+              <Link href="/setup?step=5" className={buttonVariants({ variant: "primary" })}>
+                Next
+              </Link>
+            ) : (
+              <SkipLink to={5} />
+            )}
+          </div>
+        </section>
+      )}
+
+      {step === 5 && (
+        <section className="flex flex-col gap-5">
+          <div>
             <h1 className="page-title">How should replies go out?</h1>
             <p className="text-ink-2 mt-1">
               You can change this any time. Most owners start with Ask me first.
             </p>
           </div>
-          <StepForm action={saveRepliesStep} submitLabel="Finish" backHref="/setup?step=3">
+          <StepForm
+            action={saveRepliesStep}
+            submitLabel="Finish"
+            backHref="/setup?step=4"
+            skipHref="/setup?step=6"
+          >
             <fieldset className="flex flex-col gap-3">
               <legend className="sr-only">How replies go out</legend>
               {[
@@ -293,9 +357,9 @@ export async function SetupView({
         </section>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <section className="flex flex-col gap-5">
-          <h1 className="page-title">You&apos;re set up</h1>
+          <h1 className="page-title">{left.length ? "Almost there" : "You’re set up"}</h1>
           <p className="text-ink-2 text-[15px]">
             {doneLine({
               accounts: [...connected].map(platformLabel),
@@ -303,12 +367,25 @@ export async function SetupView({
               replyOnItsOwn: faq?.mode === "auto",
             })}
           </p>
+          {left.length > 0 && (
+            <ul className="card divide-line flex flex-col divide-y">
+              {left.map((s) => (
+                <li key={s.key} className="flex items-center gap-3 px-5 py-3.5">
+                  <span className="min-w-0 flex-1 font-semibold">{s.label}</span>
+                  <span className="text-ink-3 text-sm">{s.status}</span>
+                  <Link href={`/setup?step=${s.n}`} className="action-link with-arrow text-sm">
+                    Do it now
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="flex flex-wrap gap-2">
             <Link href="/today" className={buttonVariants({ variant: "primary" })}>
               Go to Today
             </Link>
-            <Link href="/teach#try" className={buttonVariants({ variant: "secondary" })}>
-              Try a pretend message first
+            <Link href="/teach" className={buttonVariants({ variant: "secondary" })}>
+              Open Teach Waggle
             </Link>
           </div>
         </section>

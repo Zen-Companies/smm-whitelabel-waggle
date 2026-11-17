@@ -20,9 +20,10 @@ export function teachTab(pathname: string): (typeof TABS)[number]["key"] {
 
 /**
  * The top of every Teach Waggle part (design.md §4 "Beyond text", rule 2): the title, one line,
- * and the parts as tabs instead of "← Teach Waggle" and underlined links.
+ * and the parts as tabs instead of "← Teach Waggle" and underlined links. `children` sits under the
+ * tabs on every part (the "Get Waggle ready" line until setup is done).
  */
-export function TeachHeader({ line }: { line?: string }) {
+export function TeachHeader({ line, children }: { line?: string; children?: React.ReactNode }) {
   const active = teachTab(usePathname());
   return (
     <header className="flex flex-col gap-3">
@@ -34,6 +35,7 @@ export function TeachHeader({ line }: { line?: string }) {
         </p>
       </div>
       <SectionTabs label="Teach Waggle" items={TABS} active={active} />
+      {children}
     </header>
   );
 }

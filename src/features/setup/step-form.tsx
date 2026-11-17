@@ -12,11 +12,14 @@ export function StepForm({
   children,
   submitLabel,
   backHref,
+  skipHref,
 }: {
   action: (prev: State, fd: FormData) => Promise<State>;
   children: ReactNode;
   submitLabel: string;
   backHref: string | null;
+  /** "Skip for now" (every setup step can be skipped, approved 17 Nov). */
+  skipHref?: string;
 }) {
   const [state, act, pending] = useActionState(action, {});
   return (
@@ -35,9 +38,16 @@ export function StepForm({
         ) : (
           <span />
         )}
-        <Button type="submit" variant="primary" disabled={pending}>
-          {pending ? "Saving…" : submitLabel}
-        </Button>
+        <span className="flex items-center gap-4">
+          {skipHref && (
+            <Link href={skipHref} className="action-link">
+              Skip for now
+            </Link>
+          )}
+          <Button type="submit" variant="primary" disabled={pending}>
+            {pending ? "Saving…" : submitLabel}
+          </Button>
+        </span>
       </div>
     </form>
   );

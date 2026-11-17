@@ -33,7 +33,14 @@ export function isAutomationKind(value: string): value is Kind {
  * Teach Waggle → Automations (T77, design "Automations"): replies that happen on their own, set
  * up once: comment to DM, chat flows, sequences, and links with QR codes.
  */
-export async function AutomationsView({ kind: raw }: { kind?: string }) {
+export async function AutomationsView({
+  kind: raw,
+  top,
+}: {
+  kind?: string;
+  /** Under the Teach Waggle tabs (the "Get Waggle ready" line). */
+  top?: React.ReactNode;
+}) {
   const kind: Kind = KINDS.some((k) => k.key === raw) ? (raw as Kind) : "comment";
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
@@ -100,7 +107,7 @@ export async function AutomationsView({ kind: raw }: { kind?: string }) {
   return (
     <div className="flex max-w-[860px] flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <TeachHeader />
+        <TeachHeader>{top}</TeachHeader>
         <h2 className="section-title mt-2">Automations</h2>
         <p className="text-ink-2">Replies that happen on their own, set up once.</p>
       </div>

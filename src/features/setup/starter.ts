@@ -1,18 +1,16 @@
-// First-time setup (T73b, design "0c · First-time setup, 4 steps"): pure parts, tested.
+// First-time setup, "Get Waggle ready" (T73b; 5 steps approved 17 Nov): pure parts, tested.
+// The steps themselves (labels, when each is done) are in ./checklist.
 
-export const SETUP_STEPS = [
-  { n: 1, label: "Your business" },
-  { n: 2, label: "Connect" },
-  { n: 3, label: "Top questions" },
-  { n: 4, label: "How replies go out" },
-] as const;
+export const SETUP_LAST = 5;
 
-export type SetupStepNumber = 1 | 2 | 3 | 4 | 5;
+/** 1..5 are the steps, 6 is "You're set up". */
+export type SetupStepNumber = 1 | 2 | 3 | 4 | 5 | 6;
 
-/** Pure: ?step= → 1..4, or 5 for "You're set up". */
-export function parseStep(v: unknown): SetupStepNumber {
-  const n = Number(typeof v === "string" ? v : "1");
-  return n >= 1 && n <= 5 && Number.isInteger(n) ? (n as SetupStepNumber) : 1;
+/** Pure: ?step= → 1..6, or null when the page should pick (the first step not done). */
+export function parseStep(v: unknown): SetupStepNumber | null {
+  if (typeof v !== "string") return null;
+  const n = Number(v);
+  return n >= 1 && n <= 6 && Number.isInteger(n) ? (n as SetupStepNumber) : null;
 }
 
 /** The kinds of business offered in step 1, each with the three questions it gets most. */

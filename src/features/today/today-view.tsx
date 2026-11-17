@@ -18,6 +18,7 @@ import {
   URGENT_CHIPS,
 } from "@/features/approvals";
 import { can } from "@/features/orgs";
+import { ReadyLine } from "@/features/setup";
 import { getCurrentTenant } from "@/features/tenants";
 import { platformLabel } from "@/lib/social/platforms";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
@@ -148,6 +149,8 @@ export async function TodayView() {
         )}
       </div>
 
+      {!noAccounts && <ReadyLine />}
+
       {noAccounts ? (
         // A brand with nothing connected: one clear next step, not a page of zeros.
         <section
@@ -160,8 +163,8 @@ export async function TodayView() {
               Let&apos;s get Waggle answering
             </h2>
             <p className="text-ink-2">
-              Four short steps: your business, where customers message you, your top answers, and
-              how replies go out. About five minutes.
+              Five short steps: your business, where customers message you, your top answers, a few
+              practice messages, and how replies go out. Each one can wait. About five minutes.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <Link href="/setup" className={buttonVariants({ variant: "primary" })}>

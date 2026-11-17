@@ -4,9 +4,9 @@ import { BUSINESS_KINDS, doneLine, kindFromProfile, parseStep, profileText } fro
 describe("first-time setup (T73b)", () => {
   it("reads the step", () => {
     expect(parseStep("3")).toBe(3);
-    expect(parseStep("5")).toBe(5);
-    expect(parseStep("9")).toBe(1);
-    expect(parseStep(undefined)).toBe(1);
+    expect(parseStep("6")).toBe(6);
+    expect(parseStep("9")).toBeNull();
+    expect(parseStep(undefined)).toBeNull();
   });
 
   it("every kind offers three questions, opening hours first", () => {

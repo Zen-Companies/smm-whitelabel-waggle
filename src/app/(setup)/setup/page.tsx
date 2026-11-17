@@ -14,7 +14,7 @@ async function Setup({ searchParams }: Props) {
 export default function SetupPage({ searchParams }: Props) {
   return (
     <Suspense
-      fallback={<div className="skeleton mx-auto mt-12 h-96 w-full max-w-[680px] rounded-xl" />}
+      fallback={<div className="skeleton mx-auto mt-12 h-96 w-full max-w-[760px] rounded-xl" />}
     >
       <Setup searchParams={searchParams} />
     </Suspense>

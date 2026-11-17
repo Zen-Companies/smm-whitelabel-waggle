@@ -35,8 +35,11 @@ function href(p: { topic?: string; q?: string; from?: string; suggestion?: strin
 
 export async function KbList({
   searchParams,
+  top,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+  /** Under the Teach Waggle tabs (the "Get Waggle ready" line). */
+  top?: React.ReactNode;
 }) {
   const params = await searchParams;
   const str = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
@@ -77,7 +80,7 @@ export async function KbList({
 
   return (
     <>
-      <TeachHeader />
+      <TeachHeader>{top}</TeachHeader>
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex flex-1 flex-col gap-1">
           <h2 className="section-title">Business info</h2>
