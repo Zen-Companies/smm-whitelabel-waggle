@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {
+    agentUpgrade: "security",
     // Post images (up to 5 MB, T14) go through the compose Server Action.
     serverActions: { bodySizeLimit: "6mb" },
   },
