@@ -9,7 +9,7 @@ import {
   loadWork,
 } from "@/features/analytics";
 import { searchKbEntries } from "@/features/knowledge-base";
-import { cancelScheduledPost, createPost, POST_TEXT_MAX } from "@/features/publishing";
+import { cancelScheduledPost } from "@/features/publishing";
 import { resolveBrand, ToolError, viaOf } from "../context";
 import {
   brandId,
@@ -23,10 +23,9 @@ import {
   PUBLIC_ACTION,
   READ,
 } from "./define";
-import { platformLabel } from "@/lib/social/platforms";
 
 // Business info, posts and analytics. Analytics read the copies the sync job keeps (no Zernio
-// call); creating or cancelling a post goes through publishing like the compose card.
+// call); cancelling a post goes through publishing like the app. Posting is posting.ts.
 
 const DAY_MS = 86_400_000;
 const period = z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30);
@@ -138,68 +137,6 @@ export const listPosts = defineTool({
       })),
       next_cursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null,
     };
-  },
-});
-
-export const createPostTool = defineTool({
-  name: "create_post",
-  title: "Publish or schedule a post",
-  description:
-    "Publishes a text post now, or schedules it (at least 5 minutes ahead), on one or more of the brand's connected accounts (account_id from list_brands). Only post wording the user approved; never invent prices, offers or promises. Images aren't supported here yet: the owner can add them in Waggle.",
-  access: "act",
-  ability: "posts.write",
-  annotations: PUBLIC_ACTION,
-  wraps: "publishing.createPost",
-  input: z.object({
-    brand_id: brandId,
-    content: z.string().trim().min(1).max(POST_TEXT_MAX),
-    account_ids: z.array(z.uuid()).min(1).max(10),
-    publish_at: z
-      .union([z.literal("now"), z.iso.datetime({ offset: true })])
-      .default("now")
-      .describe('"now", or an ISO date-time with its timezone offset.'),
-  }),
-  output: z.object({
-    post_id: z.uuid(),
-    outcome: z.enum(["published", "scheduled", "waiting", "failed"]),
-    problem: z.string().nullable(),
-  }),
-  async run(ctx, input) {
-    const tenantId = await resolveBrand(ctx, input.brand_id);
-    const r = await createPost(
-      { db: ctx.db, social: ctx.social },
-      {
-        tenantId,
-        userId: ctx.principal.userId,
-        content: input.content,
-        accountIds: input.account_ids,
-        scheduledFor: input.publish_at === "now" ? null : new Date(input.publish_at),
-        via: viaOf(ctx.principal),
-        now: ctx.now?.(),
-      },
-    );
-    if (!r.ok) {
-      if (r.error === "not_accepted") {
-        throw new ToolError(
-          "invalid_input",
-          r.problems.map((p) => `${platformLabel(p.platform)}: ${p.message}`).join(" "),
-        );
-      }
-      const messages = {
-        accounts_not_owned: "Use account_id values of this brand from list_brands.",
-        account_disconnected:
-          "One of these accounts is disconnected; the owner reconnects it in Waggle.",
-        too_soon: "Schedule at least 5 minutes ahead, or use publish_at: now.",
-        save_failed: "The post couldn't be saved. Try again.",
-        consent_required:
-          "TikTok needs the owner's confirmation on every post; the owner posts to TikTok in Waggle.",
-      } as const;
-      throw new ToolError(
-        r.error === "save_failed" ? "unavailable" : "invalid_input",
-        messages[r.error],
-      );
-    }
-    return { post_id: r.postId, outcome: r.outcome, problem: r.error ?? null };
   },
 });
 
@@ -363,7 +300,6 @@ export const getPostPerformance = defineTool({
 export const CONTENT_TOOLS = [
   searchKnowledge,
   listPosts,
-  createPostTool,
   cancelPostTool,
   getAnalytics,
   getPostPerformance,

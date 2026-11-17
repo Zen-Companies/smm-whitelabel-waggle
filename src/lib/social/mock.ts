@@ -11,6 +11,7 @@ import type {
   ProviderMessage,
   ProviderReview,
   ProviderPostStatus,
+  MediaCheck,
   PostValidation,
   ProviderUsage,
   SocialPlatform,
@@ -169,6 +170,51 @@ export class MockSocialProvider implements SocialProvider {
         errors.push({ platform: t.platform, message: `${name} text is too long.` });
     }
     return { valid: errors.length === 0, errors, warnings: [] };
+  }
+
+  /**
+   * Like Zernio's media check, from the link alone: https only, no localhost or private hosts,
+   * "unreachable" or "webpage" in the link fails, and the extension decides image or video.
+   */
+  async validateMedia(input: { url: string }): Promise<MediaCheck> {
+    const bad = (code: string, error: string): MediaCheck => ({
+      valid: false,
+      code,
+      error,
+      type: null,
+      format: null,
+      size: null,
+      platformLimits: {},
+    });
+    let url: URL;
+    try {
+      url = new URL(input.url);
+    } catch {
+      return bad("MEDIA_URL_NOT_ALLOWED", "Not a URL.");
+    }
+    if (url.protocol !== "https:" || /^(localhost|127\.|10\.|192\.168\.)/.test(url.hostname)) {
+      return bad("MEDIA_URL_NOT_ALLOWED", "Not a public HTTPS URL.");
+    }
+    if (/unreachable/.test(url.pathname)) return bad("MEDIA_URL_UNREACHABLE", "HTTP 404.");
+    if (/webpage/.test(url.pathname)) {
+      return bad("MEDIA_URL_UNREACHABLE", "The link returned a web page, not a file.");
+    }
+    const ext = url.pathname.split(".").pop()?.toLowerCase() ?? "";
+    const video = ["mp4", "mov", "webm", "m4v"].includes(ext);
+    const drive = url.hostname === "drive.google.com";
+    return {
+      valid: true,
+      code: null,
+      error: null,
+      type: video ? "video" : "image",
+      format: video ? ext : drive ? "jpeg" : ext || "jpeg",
+      size: video ? 20_000_000 : 400_000,
+      platformLimits: {
+        instagram: { withinLimit: true, limitFormatted: video ? "300 MB" : "8.0 MB" },
+        facebook: { withinLimit: true, limitFormatted: video ? "1.0 GB" : "4.0 MB" },
+        bluesky: { withinLimit: video ? false : true, limitFormatted: video ? "50 MB" : "977 KB" },
+      },
+    };
   }
 
   async getConnectUrl(input: { platform: SocialPlatform; profileId: string; redirectUrl: string }) {

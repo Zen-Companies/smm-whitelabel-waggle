@@ -115,7 +115,7 @@ describe("/api/mcp over HTTP", () => {
     expect(res.status).toBe(401);
   });
 
-  it("tools/list: the 14 tools with titles and annotations", async () => {
+  it("tools/list: the 15 tools with titles and annotations", async () => {
     const { status, json } = await rpc("tools/list", {}, "good-token");
     expect(status).toBe(200);
     const tools = json.result.tools as {
@@ -123,7 +123,12 @@ describe("/api/mcp over HTTP", () => {
       title?: string;
       annotations?: Record<string, unknown>;
     }[];
-    expect(tools).toHaveLength(14);
+    expect(tools).toHaveLength(15);
+    // Posting takes a preview first: create_post only takes its confirmation.
+    const create = tools.find((t) => t.name === "create_post") as unknown as {
+      inputSchema: { properties: Record<string, unknown> };
+    };
+    expect(Object.keys(create.inputSchema.properties).sort()).toEqual(["brand_id", "confirmation"]);
     const approve = tools.find((t) => t.name === "approve_reply")!;
     expect(approve.title).toBe("Approve a reply");
     expect(approve.annotations).toMatchObject({ destructiveHint: true, openWorldHint: true });

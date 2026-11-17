@@ -1531,6 +1531,58 @@ export type Database = {
           },
         ]
       }
+      post_previews: {
+        Row: {
+          account_ids: string[]
+          client_id: string
+          content: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          media: Json
+          post_id: string | null
+          publish_at: string | null
+          publish_mode: string
+          tenant_id: string
+          used_at: string | null
+          youtube_title: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          account_ids: string[]
+          client_id: string
+          content: string
+          created_at?: string
+          created_by: string
+          expires_at: string
+          id?: string
+          media?: Json
+          post_id?: string | null
+          publish_at?: string | null
+          publish_mode: string
+          tenant_id: string
+          used_at?: string | null
+          youtube_title?: string | null
+        }
+        Update: {
+          account_ids?: string[]
+          client_id?: string
+          content?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          media?: Json
+          post_id?: string | null
+          publish_at?: string | null
+          publish_mode?: string
+          tenant_id?: string
+          used_at?: string | null
+          youtube_title?: string | null
+        }
+        Relationships: []
+      }
       posts: {
         Row: {
           attempts: number

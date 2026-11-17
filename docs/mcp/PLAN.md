@@ -388,3 +388,32 @@ Q6 roles are `admin`, `developer`, `support`, `viewer` (Stripe-style), matrix in
   and `user_id_by_email(text)` (auth.users isn't in the Data API); `lib/supabase/users.ts`.
 - Tests: `docs.test.ts`, `admin-filters.test.ts`, `staff/pages.test.ts`,
   `tests/integration/staff-pages.test.ts`, `staff_pages.test.sql`.
+
+## Posting update (2026-11-17)
+
+Why: an owner's assistant (Claude) guessed field names (`text`, `status`, a `note` on
+resolve_item, account names for ids, "today 11:30am"), published wording the owner never saw, and
+planned posts without looking at analytics. Decided by Febron: preview then confirm; media as
+links now, an upload page for photos dropped into a chat next (design-first).
+
+- **Two-step posting.** `preview_post` checks a post (accounts of this brand and connected, no
+  TikTok, the time, each media link, Zernio's dry run) and stores exactly what would go out in
+  `post_previews` (migration `20261118100000`, server-only, refused to OAuth tokens, purged with
+  the brand by a trigger). Its id is a one-time confirmation code, 30 minutes, tied to the brand,
+  the user and the assistant. `create_post` now takes only `confirmation`: it claims the preview
+  atomically and publishes that stored post, so wording, media, accounts and time can't change
+  after the owner saw them, and a repeated call can't post twice.
+- **Photos and videos.** `media: [{ url, alt_text }]`, up to 10: a direct https link to the file
+  or a Google Drive link shared as "Anyone with the link" (Zernio copies it into its storage,
+  docs.zernio.com/guides/media-uploads). Each link is checked with Zernio's
+  `POST /v1/tools/validate/media` (`SocialProvider.validateMedia`): reachable, really a photo or
+  video, within each chosen platform's size; private and localhost links are refused by Zernio.
+  Nothing is downloaded by Waggle.
+- **Times.** `publish_at`: `now`, `queue` (the brand's next free slot) or an ISO date-time with a
+  timezone offset, 5 minutes to a year ahead; errors say exactly what to send.
+- **Server instructions** rewritten as a short playbook: ids from list_brands, exact field names,
+  preview → owner's yes → create_post, media links, read analytics (best times in `audience`) and
+  post performance before planning, no engagement bait, no invented facts or promised follow-ups,
+  the DM window.
+- Not built yet: the upload page for chat photos (canvas proposal), per-platform options
+  (first comment, post type) and TikTok from an assistant.

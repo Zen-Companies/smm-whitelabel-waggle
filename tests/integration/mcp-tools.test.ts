@@ -207,23 +207,86 @@ describe("business info, posts", () => {
     expect(all.entries).toHaveLength(2);
   });
 
-  it("create_post only on this brand's accounts; cancel a scheduled one", async () => {
+  it("posting: preview first, then the owner's yes; only this brand's accounts", async () => {
     expect(
-      await call(claude, "create_post", { content: "Hi", account_ids: [florist.accountId] }),
+      await call(claude, "preview_post", { content: "Hi", account_ids: [florist.accountId] }),
+    ).toEqual({ error: "invalid_input" });
+    expect(
+      await call(claude, "preview_post", {
+        content: "Hi",
+        account_ids: [cafe.accountId],
+        publish_at: "today 11:30am",
+      }),
     ).toEqual({ error: "invalid_input" });
     const at = new Date(Date.now() + 3 * 60 * 60_000).toISOString();
-    const made = (await call(claude, "create_post", {
+    const preview = (await call(claude, "preview_post", {
       content: "Ube pandesal this Saturday",
       account_ids: [cafe.accountId],
+      media: [{ url: "https://cdn.example.com/pandesal.jpg" }],
       publish_at: at,
+    })) as {
+      confirmation: string;
+      preview: { media: { type: string }[]; publish: { mode: string } };
+    };
+    expect(preview.preview.media[0].type).toBe("image");
+    expect(preview.preview.publish.mode).toBe("at");
+    // Nothing is posted by a preview.
+    const before = (await call(claude, "list_posts", { show: "upcoming" })) as {
+      posts: unknown[];
+    };
+    const made = (await call(claude, "create_post", {
+      confirmation: preview.confirmation,
     })) as { post_id: string; outcome: string };
     expect(["scheduled", "waiting"]).toContain(made.outcome);
     const listed = (await call(claude, "list_posts", { show: "upcoming" })) as {
-      posts: { post_id: string }[];
+      posts: { post_id: string; content: string }[];
     };
-    expect(listed.posts.map((p) => p.post_id)).toContain(made.post_id);
+    expect(listed.posts).toHaveLength(before.posts.length + 1);
+    expect(listed.posts.find((p) => p.post_id === made.post_id)?.content).toBe(
+      "Ube pandesal this Saturday",
+    );
+    // A confirmation posts once.
+    expect(await call(claude, "create_post", { confirmation: preview.confirmation })).toEqual({
+      error: "already_decided",
+    });
     expect(await call(claude, "cancel_post", { post_id: made.post_id })).toEqual({
       cancelled: true,
     });
+  });
+
+  it("a confirmation only works for the assistant that asked, and not after 30 minutes", async () => {
+    const preview = (await call(claude, "preview_post", {
+      content: "Fresh ensaymada",
+      account_ids: [cafe.accountId],
+      publish_at: "queue",
+    })) as { confirmation: string };
+    const otherAssistant = { ...claude, clientId: "client_chatgpt", clientName: "ChatGPT" };
+    expect(
+      await call(otherAssistant, "create_post", { confirmation: preview.confirmation }),
+    ).toEqual({ error: "invalid_input" });
+    await db
+      .from("post_previews")
+      .update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+      .eq("id", preview.confirmation);
+    expect(await call(claude, "create_post", { confirmation: preview.confirmation })).toEqual({
+      error: "invalid_input",
+    });
+  });
+
+  it("a media link that isn't a file is refused before anything is saved", async () => {
+    expect(
+      await call(claude, "preview_post", {
+        content: "Our new menu",
+        account_ids: [cafe.accountId],
+        media: [{ url: "https://dropbox.example/webpage/menu.jpg" }],
+      }),
+    ).toEqual({ error: "invalid_input" });
+    expect(
+      await call(claude, "preview_post", {
+        content: "Our new menu",
+        account_ids: [cafe.accountId],
+        media: [{ url: "http://cdn.example.com/menu.jpg" }],
+      }),
+    ).toEqual({ error: "invalid_input" });
   });
 });

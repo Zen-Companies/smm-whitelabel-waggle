@@ -3,7 +3,7 @@ import { TOOLS } from "./registry";
 
 // The registry is the contract with Claude, ChatGPT and Grok (docs/mcp/PLAN.md §3).
 describe("MCP tool registry", () => {
-  it("has the 14 planned tools, unique snake_case names, a title and a description each", () => {
+  it("has the 15 planned tools, unique snake_case names, a title and a description each", () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual(
       [
         "approve_reply",
@@ -16,6 +16,7 @@ describe("MCP tool registry", () => {
         "list_brands",
         "list_inbox",
         "list_posts",
+        "preview_post",
         "resolve_item",
         "search_knowledge",
         "undo_reply",
