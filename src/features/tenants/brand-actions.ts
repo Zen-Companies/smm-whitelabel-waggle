@@ -24,7 +24,7 @@ export type AddBrandState = { error?: string; name?: string };
 const nameSchema = z
   .string()
   .trim()
-  .min(1, "Enter the brand's name.")
+  .min(1, "Enter the name.")
   .max(BRAND_NAME_MAX, `Keep the name under ${BRAND_NAME_MAX} characters.`);
 
 /**
@@ -82,6 +82,6 @@ export async function addBrand(_prev: AddBrandState, formData: FormData): Promis
     Sentry.captureException(e, { extra: { tenantId } });
   }
   await openBrand(tenantId);
-  // T73b: a new brand starts with the 4-step setup.
+  // A new brand starts with Get Waggle ready (5 steps).
   redirect("/setup");
 }

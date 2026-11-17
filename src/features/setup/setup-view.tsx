@@ -9,9 +9,8 @@ import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { platformLabel } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { cn } from "cn";
 import { saveAnswersStep, saveBusinessStep, saveRepliesStep } from "./actions";
-import { nextReadyStep, PRACTICE_GOAL, type ReadyStep } from "./checklist";
+import { nextReadyStep, PRACTICE_GOAL } from "./checklist";
 import { loadReadySteps } from "./ready-data";
 import {
   BUSINESS_KINDS,
@@ -21,47 +20,12 @@ import {
   type SetupStepNumber,
 } from "./starter";
 import { StepForm } from "./step-form";
+import { Stepper } from "./stepper";
 
 const FIRST_ACCOUNTS = [
   { platform: "instagram", does: "Comments and DMs" },
   { platform: "facebook", does: "Comments, DMs and reviews" },
 ] as const;
-
-function Stepper({ step, steps }: { step: SetupStepNumber; steps: ReadyStep[] }) {
-  return (
-    <ol className="flex flex-wrap gap-x-4 gap-y-2 text-sm" aria-label="Setup steps">
-      {steps.map((s) => {
-        // Ticked by what's really done, so a skipped step stays open.
-        const done = s.done && step !== s.n;
-        const current = step === s.n;
-        return (
-          <li
-            key={s.n}
-            aria-current={current ? "step" : undefined}
-            className={cn(
-              "flex items-center gap-2",
-              current ? "text-ink font-semibold" : "text-ink-3",
-            )}
-          >
-            <span
-              className={cn(
-                "inline-flex size-6 items-center justify-center rounded-full text-xs font-semibold",
-                done
-                  ? "bg-ink text-surface"
-                  : current
-                    ? "bg-honey text-ink"
-                    : "border-line-strong border",
-              )}
-            >
-              {done ? <Check className="size-3.5" strokeWidth={2.4} aria-hidden /> : s.n}
-            </span>
-            {s.label}
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
 
 function SkipLink({ to }: { to: SetupStepNumber }) {
   return (

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
+import { StepsAhead } from "@/features/setup";
 import { AddBrandForm, getOpenOrg } from "@/features/tenants";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -36,6 +37,64 @@ async function loadInvites(userId: string) {
   );
 }
 
+type Invite = Awaited<ReturnType<typeof loadInvites>>[number];
+
+/** Invites to this login's email, on top of /welcome in both versions. */
+function InviteList({ invites, email }: { invites: Invite[]; email: string | undefined }) {
+  if (invites.length === 0) return null;
+  return (
+    <section
+      aria-labelledby="invites-heading"
+      className="border-honey bg-honey-tint/60 flex flex-col gap-3 rounded-xl border p-5"
+    >
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 id="invites-heading" className="text-base font-semibold">
+          {invites.length === 1 ? "An invite is" : `${invites.length} invites are`} waiting for you
+        </h2>
+        <span className="text-honey-text text-xs">Sent to {email}</span>
+      </div>
+      {invites.map((i) => (
+        <div
+          key={i.id}
+          className="border-line bg-surface flex flex-wrap items-center gap-3 rounded-lg border p-3"
+        >
+          <span
+            aria-hidden
+            className="bg-honey-tint text-honey-text inline-flex size-9 shrink-0 items-center justify-center rounded-md text-xs font-bold"
+          >
+            {initialsOf(i.orgName)}
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <b className="font-semibold">{i.orgName}</b>
+            <span className="text-ink-2 text-sm">
+              {i.inviter} invited you as {i.role} · {i.scope}
+            </span>
+          </span>
+          <form action={respondToInvite} className="flex gap-2">
+            <input type="hidden" name="inviteId" value={i.id} />
+            <button
+              type="submit"
+              name="intent"
+              value="join"
+              className={buttonVariants({ variant: "primary" })}
+            >
+              Join
+            </button>
+            <button
+              type="submit"
+              name="intent"
+              value="decline"
+              className={buttonVariants({ variant: "secondary" })}
+            >
+              Decline
+            </button>
+          </form>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 async function Content({ beta }: { beta: boolean }) {
   const [user, org] = await Promise.all([getCurrentUser(), getOpenOrg()]);
   if (!org) redirect("/login");
@@ -49,16 +108,58 @@ async function Content({ beta }: { beta: boolean }) {
 
   const mayAdd = can(org.role, "brands.add");
   const invites = await loadInvites(user.id);
+  const name = firstName(user.user_metadata, user.email);
+  const betaBanner = beta && (
+    <p role="status" className="banner">
+      You&apos;re in the beta. Thanks for trying Waggle early: tell us anything with the Feedback
+      button on every page.
+    </p>
+  );
+
+  // On your own (the organization made at sign-up): step 0 of Get Waggle ready, approved 17 Nov
+  // ("Before setup: name your business"). Next makes the brand and opens setup step 1.
+  if (org.personal && mayAdd) {
+    return (
+      <>
+        {betaBanner}
+        <InviteList invites={invites} email={user.email} />
+        {invites.length === 0 && (
+          <div className="flex flex-col gap-2">
+            <StepsAhead />
+            <span className="text-ink-3 text-sm">Before you start</span>
+          </div>
+        )}
+        <section aria-labelledby="first-brand" className="flex flex-col gap-5">
+          <div className="flex flex-col gap-1.5">
+            <h1 id="first-brand" className="page-title">
+              {invites.length > 0
+                ? "Or start your own: what\u2019s your business called?"
+                : `Welcome, ${name}. What\u2019s your business called?`}
+            </h1>
+            {invites.length === 0 && (
+              <p className="text-ink-2 text-[15px]">
+                Waggle answers your customers as this business. Then five short steps, and each one
+                can wait.
+              </p>
+            )}
+          </div>
+          <AddBrandForm orgId={org.id} orgName={org.name} submitLabel="Next" first />
+        </section>
+        {invites.length === 0 && (
+          <p className="border-line text-ink-2 border-t pt-4 text-sm">
+            Joining someone&apos;s team instead? Ask them to invite{" "}
+            <b className="text-ink font-semibold">{user.email}</b>. The invite shows up right here.
+          </p>
+        )}
+      </>
+    );
+  }
+
   return (
     <>
-      {beta && (
-        <p role="status" className="banner">
-          You&apos;re in the beta. Thanks for trying Waggle early: tell us anything with the
-          Feedback button on every page.
-        </p>
-      )}
+      {betaBanner}
       <div className="flex flex-col gap-1.5">
-        <h1 className="page-title">Welcome, {firstName(user.user_metadata, user.email)}</h1>
+        <h1 className="page-title">Welcome, {name}</h1>
         <p className="text-ink-2 text-[15px]">
           {org.personal ? (
             <>
@@ -74,58 +175,7 @@ async function Content({ beta }: { beta: boolean }) {
         </p>
       </div>
 
-      {invites.length > 0 && (
-        <section
-          aria-labelledby="invites-heading"
-          className="border-honey bg-honey-tint/60 flex flex-col gap-3 rounded-xl border p-5"
-        >
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 id="invites-heading" className="text-base font-semibold">
-              {invites.length === 1 ? "An invite is" : `${invites.length} invites are`} waiting for
-              you
-            </h2>
-            <span className="text-honey-text text-xs">Sent to {user.email}</span>
-          </div>
-          {invites.map((i) => (
-            <div
-              key={i.id}
-              className="border-line bg-surface flex flex-wrap items-center gap-3 rounded-lg border p-3"
-            >
-              <span
-                aria-hidden
-                className="bg-honey-tint text-honey-text inline-flex size-9 shrink-0 items-center justify-center rounded-md text-xs font-bold"
-              >
-                {initialsOf(i.orgName)}
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col">
-                <b className="font-semibold">{i.orgName}</b>
-                <span className="text-ink-2 text-sm">
-                  {i.inviter} invited you as {i.role} · {i.scope}
-                </span>
-              </span>
-              <form action={respondToInvite} className="flex gap-2">
-                <input type="hidden" name="inviteId" value={i.id} />
-                <button
-                  type="submit"
-                  name="intent"
-                  value="join"
-                  className={buttonVariants({ variant: "primary" })}
-                >
-                  Join
-                </button>
-                <button
-                  type="submit"
-                  name="intent"
-                  value="decline"
-                  className={buttonVariants({ variant: "secondary" })}
-                >
-                  Decline
-                </button>
-              </form>
-            </div>
-          ))}
-        </section>
-      )}
+      <InviteList invites={invites} email={user.email} />
 
       <section aria-labelledby="first-brand" className="card flex flex-col gap-4 p-5 md:p-6">
         <h2 id="first-brand" className="text-base font-semibold">
@@ -177,7 +227,7 @@ async function WithParams({ searchParams }: PageProps<"/welcome">) {
 
 export default function WelcomePage(props: PageProps<"/welcome">) {
   return (
-    <main className="mx-auto flex w-full max-w-[720px] flex-col gap-6 px-4 py-10 md:px-8 md:py-12">
+    <main className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 py-10 md:px-8 md:py-12">
       <Suspense fallback={<div className="skeleton h-64 rounded-xl" />}>
         <WithParams {...props} />
       </Suspense>

@@ -10,6 +10,8 @@ import { BRAND_NAME_MAX } from "./brand-pick";
 /**
  * Add a brand (T47, T54): the name, then Waggle opens the new brand. It goes into `orgId`'s
  * organization. A name already used there is refused under the field; no toasts (design.md §4).
+ * `first`: /welcome on your own (approved 17 Nov, "Before setup: name your business"): just the
+ * business name and Next, no bill note, nothing to skip to.
  */
 export function AddBrandForm({
   orgId,
@@ -18,6 +20,7 @@ export function AddBrandForm({
   cancelLabel = "Cancel",
   submitLabel = "Add brand",
   autoFocus = true,
+  first = false,
 }: {
   orgId: string;
   orgName: string;
@@ -26,6 +29,7 @@ export function AddBrandForm({
   cancelLabel?: string;
   submitLabel?: string;
   autoFocus?: boolean;
+  first?: boolean;
 }) {
   const [state, action, pending] = useActionState<AddBrandState, FormData>(addBrand, {});
   return (
@@ -33,7 +37,7 @@ export function AddBrandForm({
       <input type="hidden" name="orgId" value={orgId} />
       <div className="flex flex-col gap-1.5">
         <label htmlFor="brand-name" className="font-semibold">
-          Brand name
+          {first ? "Business name" : "Brand name"}
         </label>
         <input
           id="brand-name"
@@ -49,7 +53,9 @@ export function AddBrandForm({
           className="field"
         />
         <span id="brand-name-hint" className="text-ink-3 text-sm">
-          The name customers know. Waggle uses it in replies.
+          {first
+            ? "The name customers know. You can change it later in Settings."
+            : "The name customers know. Waggle uses it in replies."}
         </span>
         {state.error && (
           <p id="brand-name-error" role="alert" className="text-danger text-sm">
@@ -58,25 +64,27 @@ export function AddBrandForm({
         )}
       </div>
 
-      <div className="border-line bg-subtle/60 flex items-start gap-3 rounded-xl border px-4 py-3.5">
-        <CreditCard
-          className="text-ink-2 mt-0.5 size-[18px] shrink-0"
-          strokeWidth={1.75}
-          aria-hidden
-        />
-        <span className="flex flex-col gap-0.5">
-          <b className="font-semibold">On {orgName}&apos;s bill</b>
-          <span className="text-ink-2">
-            One bill covers all of {orgName}&apos;s brands. Its Owner manages it.
+      {!first && (
+        <div className="border-line bg-subtle/60 flex items-start gap-3 rounded-xl border px-4 py-3.5">
+          <CreditCard
+            className="text-ink-2 mt-0.5 size-[18px] shrink-0"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <span className="flex flex-col gap-0.5">
+            <b className="font-semibold">On {orgName}&apos;s bill</b>
+            <span className="text-ink-2">
+              One bill covers all of {orgName}&apos;s brands. Its Owner manages it.
+            </span>
           </span>
-        </span>
-      </div>
+        </div>
+      )}
 
-      <div className="flex items-center gap-2">
+      <div className={first ? "flex items-center justify-end gap-2" : "flex items-center gap-2"}>
         <Button type="submit" variant="primary" disabled={pending} data-busy={pending || undefined}>
           {pending ? "Adding…" : submitLabel}
         </Button>
-        {cancelHref && (
+        {cancelHref && !first && (
           <Link
             href={cancelHref}
             className={buttonVariants({
