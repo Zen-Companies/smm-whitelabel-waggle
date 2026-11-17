@@ -1,14 +1,16 @@
 "use client";
 
-import { Check, Clock3 } from "lucide-react";
-import Link from "next/link";
+import { Check, Clock3, Plus } from "lucide-react";
 import { useActionState, useState } from "react";
 import { shortTime } from "@/components/app/time";
+import { BeeBody } from "@/components/app/bee";
+import { BeeCarrying, TryCombs } from "@/components/app/bee-setup";
 import { Button } from "@/components/ui/button";
 import { cn } from "cn";
 import {
   runRecentMessages,
   saveCorrection,
+  teachAndRetry,
   tryMessage,
   type CorrectionState,
   type PracticeState,
@@ -18,7 +20,9 @@ import {
 import {
   CORRECTION_CHOICES,
   FEEDBACK_NOTE,
+  questionFromMessage,
   triesLeftText,
+  tryStatus,
   type PracticeCard,
 } from "./practice-copy";
 
@@ -80,8 +84,124 @@ function Feedback({ tried }: { tried: PracticeTry }) {
   );
 }
 
+/**
+ * "Add an answer", right there (approved 17 Nov, "Setup round 2"): the question from the message
+ * (editable) and the answer; Save and try again adds it to Business info and runs the same
+ * message again, so the reply changes in front of the owner. Never leaves the page.
+ */
+function TeachForm({
+  kind,
+  text,
+  onCancel,
+}: {
+  kind: "comment" | "dm";
+  text: string;
+  onCancel: () => void;
+}) {
+  const [state, action, pending] = useActionState<PracticeState, FormData>(teachAndRetry, {});
+  if (state.saved) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p role="status" className="flex items-center gap-2 text-sm">
+          <span className="bee-bob inline-block" aria-hidden>
+            <svg width="24" height="16" viewBox="0 0 24 16">
+              <BeeBody />
+            </svg>
+          </span>
+          Saved to Business info as &ldquo;{state.saved}&rdquo;.{" "}
+          {state.tried ? "Here's the same message again:" : state.error}
+        </p>
+        {state.tried && <ResultCard tried={state.tried} />}
+      </div>
+    );
+  }
+  return (
+    <form
+      action={action}
+      className="border-honey bg-honey-tint/40 flex flex-col gap-3 rounded-xl border-[1.5px] p-4"
+    >
+      <b className="text-sm font-semibold">Teach Waggle this one</b>
+      <input type="hidden" name="kind" value={kind} />
+      <input type="hidden" name="text" value={text} />
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-ink-2">The question</span>
+        <input
+          name="question"
+          defaultValue={questionFromMessage(text)}
+          required
+          maxLength={200}
+          className="field"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="text-ink-2">Your answer</span>
+        <textarea
+          name="answer"
+          rows={2}
+          required
+          autoFocus
+          placeholder="Your answer, the way you'd say it"
+          className="field"
+        />
+      </label>
+      {state.error && (
+        <p role="alert" className="text-danger text-sm">
+          {state.error}
+        </p>
+      )}
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" variant="quiet" onClick={onCancel} disabled={pending}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" disabled={pending} data-busy={pending || undefined}>
+          {pending ? "Saving…" : "Save and try again"}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** What happened, as quiet text with a dot: grey not answered, green answered from an answer. */
+function TryStatus({ card }: { card: PracticeCard }) {
+  const s = tryStatus(card);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-sm",
+        s.tone === "answered" ? "text-success" : "text-ink-2",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "size-2 rounded-full",
+          s.tone === "answered" ? "bg-success" : "border-line-strong border-[1.5px]",
+        )}
+      />
+      {s.text}
+    </span>
+  );
+}
+
+function AddAnswerButton({ onClick }: { onClick: () => void }) {
+  return (
+    <Button type="button" variant="secondary" onClick={onClick}>
+      <Plus className="size-4" strokeWidth={2} aria-hidden />
+      Add an answer
+    </Button>
+  );
+}
+
 /** What would happen, in the inbox's own shape: their message, the reply, one plain line. */
-function Outcome({ card }: { card: PracticeCard }) {
+function Outcome({
+  card,
+  message,
+}: {
+  card: PracticeCard;
+  /** The message tried, for Add an answer in place. */
+  message?: { kind: "comment" | "dm"; text: string };
+}) {
+  const [teaching, setTeaching] = useState(false);
   return (
     <>
       {card.looksLike && (
@@ -107,12 +227,16 @@ function Outcome({ card }: { card: PracticeCard }) {
       >
         {card.tone === "reply" && <Clock3 className="size-4" strokeWidth={1.75} aria-hidden />}
         {card.next}
-        {card.offerAddAnswer && (
-          <Link href="/knowledge-base?topic=new" className="text-honey-text">
-            Add an answer
-          </Link>
-        )}
       </p>
+      {card.offerAddAnswer &&
+        message &&
+        (teaching ? (
+          <TeachForm kind={message.kind} text={message.text} onCancel={() => setTeaching(false)} />
+        ) : (
+          <span className="self-start">
+            <AddAnswerButton onClick={() => setTeaching(true)} />
+          </span>
+        ))}
       {card.leadDetails && (
         <span className="meta">Details I&apos;d save to Leads: {card.leadDetails}</span>
       )}
@@ -131,11 +255,13 @@ function ResultCard({ tried }: { tried: PracticeTry }) {
         <span className="meta">{tried.kind === "dm" ? "A DM" : "A comment"}</span>
         <p className="bg-subtle rounded-[16px_16px_16px_4px] px-3.5 py-2.5">{tried.text}</p>
       </div>
-      <Outcome card={tried.card} />
+      <Outcome card={tried.card} message={tried} />
       {tried.card.tone !== "error" && <Feedback key={tried.id} tried={tried} />}
     </article>
   );
 }
+
+const SHOWN_TRIES = 5;
 
 function RecentTries({
   tries,
@@ -144,45 +270,47 @@ function RecentTries({
   tries: PracticeTry[];
   onTryAgain: (t: PracticeTry) => void;
 }) {
+  const [teaching, setTeaching] = useState<string | null>(null);
   if (tries.length === 0) return null;
+  // Newest 5 on the page; the rest open with See all (Teach Waggle, approved 16 Nov).
+  const row = (t: PracticeTry) => (
+    <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 py-2.5">
+      <span className="flex min-w-0 flex-[1_1_240px] flex-col">
+        <span className="truncate text-sm font-medium">&ldquo;{t.text}&rdquo;</span>
+        <span className="meta">
+          {t.kind === "dm" ? "DM" : "Comment"} · {shortTime(t.at)}
+        </span>
+      </span>
+      <TryStatus card={t.card} />
+      {t.card.offerAddAnswer ? (
+        teaching !== t.id && <AddAnswerButton onClick={() => setTeaching(t.id)} />
+      ) : (
+        <Button variant="secondary" onClick={() => onTryAgain(t)}>
+          Try again
+        </Button>
+      )}
+      {teaching === t.id && (
+        <div className="basis-full">
+          <TeachForm kind={t.kind} text={t.text} onCancel={() => setTeaching(null)} />
+        </div>
+      )}
+    </li>
+  );
   return (
     <section aria-labelledby="recent-tries" className="card flex flex-col gap-1 p-5">
       <h2 id="recent-tries" className="font-semibold">
         Your recent tries
       </h2>
       <p className="meta">Try one again after you add business info to see the difference.</p>
-      <ul className="flex flex-col divide-y">
-        {tries.map((t) => (
-          <li key={t.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2.5">
-            <span className="flex min-w-0 flex-[1_1_240px] flex-col">
-              <span className="truncate text-sm font-medium">&ldquo;{t.text}&rdquo;</span>
-              <span className="meta">
-                {t.kind === "dm" ? "DM" : "Comment"} · {shortTime(t.at)}
-              </span>
-            </span>
-            <span
-              className={cn(
-                "text-sm",
-                t.card.tone === "owner" ? "text-honey-text font-medium" : "text-ink-2",
-              )}
-            >
-              {t.card.offerAddAnswer ? "Your info doesn't answer it" : t.card.next.split(":")[0]}
-            </span>
-            {t.card.offerAddAnswer ? (
-              <Link
-                href="/knowledge-base?topic=new"
-                className="text-honey-text flex min-h-11 items-center text-sm font-medium"
-              >
-                Add an answer
-              </Link>
-            ) : (
-              <Button variant="quiet" onClick={() => onTryAgain(t)}>
-                Try again
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
+      <ul className="flex flex-col divide-y">{tries.slice(0, SHOWN_TRIES).map(row)}</ul>
+      {tries.length > SHOWN_TRIES && (
+        <details className="group">
+          <summary className="action-link with-arrow mt-1 cursor-pointer list-none text-sm group-open:hidden [&::-webkit-details-marker]:hidden">
+            See all {tries.length}
+          </summary>
+          <ul className="flex flex-col divide-y">{tries.slice(SHOWN_TRIES).map(row)}</ul>
+        </details>
+      )}
     </section>
   );
 }
@@ -243,7 +371,7 @@ function RecentMessages({ triesLeft }: { triesLeft: number }) {
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Outcome card={r.card} />
+                  <Outcome card={r.card} message={{ kind: r.kind, text: r.text }} />
                   <span className="meta">{r.then}</span>
                 </div>
               </li>
@@ -260,11 +388,17 @@ export function PracticeBox({
   examples,
   examplesFromTopics,
   recentTries,
+  goal,
 }: {
   triesLeft: number;
   examples: string[];
   examplesFromTopics: boolean;
   recentTries: PracticeTry[];
+  /**
+   * Setup's step 4 (approved 17 Nov): the step's count leads ("1 of 3 tried" with honeycombs);
+   * the daily limit only shows once the step is done or the tries run out.
+   */
+  goal?: { done: number; of: number };
 }) {
   const [state, action, pending] = useActionState<PracticeState, FormData>(tryMessage, {});
   const [view, setView] = useState<"type" | "recent">("type");
@@ -282,7 +416,16 @@ export function PracticeBox({
           <h2 id="practice-heading" className="section-title">
             Try a message
           </h2>
-          <span className="meta">{triesLeftText(left)}</span>
+          {goal ? (
+            <span className="flex items-center gap-2">
+              <TryCombs done={Math.min(goal.done, goal.of)} of={goal.of} />
+              <span className="text-sm font-semibold">
+                {Math.min(goal.done, goal.of)} of {goal.of} tried
+              </span>
+            </span>
+          ) : (
+            <span className="meta">{triesLeftText(left)}</span>
+          )}
         </div>
         <div role="tablist" aria-label="How to try" className="segmented self-start">
           {(
@@ -361,6 +504,9 @@ export function PracticeBox({
               >
                 {pending ? "Trying…" : "Try it"}
               </Button>
+              {goal && (goal.done >= goal.of || left <= 0) && (
+                <span className="meta">{left <= 0 ? triesLeftText(0) : `${left} more today`}</span>
+              )}
               {state.error && (
                 <span role="alert" className="text-danger text-sm">
                   {state.error}
@@ -373,6 +519,12 @@ export function PracticeBox({
         )}
       </section>
 
+      {view === "type" && pending && (
+        <div className="flex items-center gap-3" role="status">
+          <BeeCarrying className="max-w-full" />
+          <span className="text-ink-2 text-sm">Waggle is writing…</span>
+        </div>
+      )}
       {view === "type" && state.tried && !pending && <ResultCard tried={state.tried} />}
       {view === "type" && (
         <RecentTries

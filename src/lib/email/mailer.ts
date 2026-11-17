@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 // Owner emails (PRD F11/F12) go through Resend's REST API: POST https://api.resend.com/emails
-// { from, to, subject, text, html } with an Idempotency-Key (24 h) → { id }.
+// { from, to, subject, text, html, reply_to? } with an Idempotency-Key (24 h) → { id }.
+// EMAIL_REPLY_TO (e.g. hello@gowaggle.ai) makes replies land in a real inbox: the sending
+// address isn't read by anyone, and Resend doesn't receive mail.
 // Without RESEND_API_KEY + ALERT_FROM_EMAIL, and always under Vitest, alerts are logged instead
 // (or, locally with MAILPIT_URL, caught by Mailpit).
 
@@ -38,6 +40,8 @@ const sentSchema = z.object({ id: z.string().min(1) });
 export function createResendMailer(opts: {
   apiKey: string;
   from: string;
+  /** Where replies go; without it they go back to `from`. */
+  replyTo?: string;
   fetch?: typeof fetch;
 }): Mailer {
   const doFetch = opts.fetch ?? fetch;
@@ -56,6 +60,7 @@ export function createResendMailer(opts: {
           subject: email.subject,
           text: email.text,
           html: email.html,
+          ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
         }),
         signal: options?.signal ?? AbortSignal.timeout(20_000),
       });
@@ -88,6 +93,7 @@ const mailpitSentSchema = z.object({ ID: z.string().min(1) });
 export function createMailpitMailer(opts: {
   url: string;
   from: string;
+  replyTo?: string;
   fetch?: typeof fetch;
 }): Mailer {
   const doFetch = opts.fetch ?? fetch;
@@ -102,6 +108,7 @@ export function createMailpitMailer(opts: {
           Subject: email.subject,
           Text: email.text,
           HTML: email.html,
+          ...(opts.replyTo ? { ReplyTo: [{ Email: opts.replyTo }] } : {}),
           Headers: { "X-Idempotency-Key": email.idempotencyKey },
         }),
         signal: options?.signal ?? AbortSignal.timeout(10_000),
@@ -119,14 +126,16 @@ export function createMailpitMailer(opts: {
  * Vercel deployment); else log. Always log under Vitest.
  */
 export function getMailer(env: Record<string, string | undefined> = process.env): Mailer {
+  const replyTo = env.EMAIL_REPLY_TO?.trim() || undefined;
   if (env.VITEST) return logMailer;
   if (env.RESEND_API_KEY && env.ALERT_FROM_EMAIL) {
-    return createResendMailer({ apiKey: env.RESEND_API_KEY, from: env.ALERT_FROM_EMAIL });
+    return createResendMailer({ apiKey: env.RESEND_API_KEY, from: env.ALERT_FROM_EMAIL, replyTo });
   }
   if (env.MAILPIT_URL && !env.VERCEL) {
     return createMailpitMailer({
       url: env.MAILPIT_URL,
       from: env.ALERT_FROM_EMAIL || "waggle@localhost",
+      replyTo,
     });
   }
   return logMailer;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeWork, type WorkInput } from "./work";
+import { summarizeWork, workHeadline, type WorkInput } from "./work";
 
 const base: WorkInput = {
   days: ["2026-11-04", "2026-11-05"],
@@ -100,5 +100,19 @@ describe("summarizeWork", () => {
     expect(empty.waggleShare).toBeNull();
     expect(empty.firstReplyWaggle).toBeNull();
     expect(empty.messagesInDelta).toBeNull();
+  });
+});
+
+describe("workHeadline (T74b)", () => {
+  it("says it in plain words", () => {
+    expect(workHeadline({ messagesIn: 140, byWaggle: 100, byYou: 42, leads: 9 })).toBe(
+      "Every message got an answer. 9 turned into leads.",
+    );
+    expect(workHeadline({ messagesIn: 10, byWaggle: 6, byYou: 1, leads: 1 })).toBe(
+      "7 of 10 messages got an answer. 1 turned into a lead.",
+    );
+    expect(workHeadline({ messagesIn: 0, byWaggle: 0, byYou: 0, leads: 0 })).toBe(
+      "No messages came in yet in this period.",
+    );
   });
 });

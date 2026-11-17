@@ -112,6 +112,10 @@ describe("ZernioSocialProvider", () => {
     expect(req.url.pathname).toBe("/api/v1/connect/instagram");
     expect(req.url.searchParams.get("profileId")).toBe("prof_1");
     expect(req.url.searchParams.get("redirect_url")).toBe("https://app.test/settings");
+    // Whitelabel (T68): Waggle's welcome screen, never Zernio's name.
+    expect(req.url.searchParams.get("welcome")).toBe("true");
+    expect(req.url.searchParams.get("brandName")).toBe("Waggle");
+    expect(req.url.searchParams.get("primaryColor")).toBe("#F6B21B");
   });
 
   it("connectBluesky sends the app password with state {userId}-{profileId}", async () => {
@@ -250,6 +254,728 @@ describe("ZernioSocialProvider", () => {
     expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_p/pinterest-boards");
   });
 
+  it("createPost into the queue sends queuedFromProfile, no time, and reads back Zernio's time (T75)", async () => {
+    respond = () =>
+      json(
+        { post: { _id: "post_q", status: "scheduled", scheduledFor: "2026-11-17T01:00:00.000Z" } },
+        201,
+      );
+    await expect(
+      provider.createPost({
+        content: "Ube is back",
+        targets: [{ platform: "instagram", accountId: "acc_ig" }],
+        publishAt: null,
+        idempotencyKey: "k-q",
+        queueProfileId: "prof_1",
+      }),
+    ).resolves.toEqual({
+      providerPostId: "post_q",
+      status: "scheduled",
+      scheduledFor: "2026-11-17T01:00:00.000Z",
+    });
+    const body = captured[0].body as Record<string, unknown>;
+    expect(body.queuedFromProfile).toBe("prof_1");
+    expect(body).not.toHaveProperty("publishNow");
+    expect(body).not.toHaveProperty("scheduledFor");
+  });
+
+  it("createPost sends each platform's own text and options (T75)", async () => {
+    respond = () => json({ post: { _id: "post_o", status: "published" } }, 201);
+    await provider.createPost({
+      content: "Shared",
+      targets: [
+        { platform: "instagram", accountId: "acc_ig" },
+        { platform: "linkedin", accountId: "acc_li" },
+      ],
+      publishAt: null,
+      idempotencyKey: "k-o",
+      extras: {
+        instagram: { platformSpecificData: { contentType: "story" } },
+        linkedin: { customContent: "Longer text", platformSpecificData: { firstComment: "x" } },
+      },
+    });
+    expect((captured[0].body as { platforms: unknown[] }).platforms).toEqual([
+      {
+        platform: "instagram",
+        accountId: "acc_ig",
+        platformSpecificData: { contentType: "story" },
+      },
+      {
+        platform: "linkedin",
+        accountId: "acc_li",
+        customContent: "Longer text",
+        platformSpecificData: { firstComment: "x" },
+      },
+    ]);
+  });
+
+  it("createWhatsAppBroadcast targets subscribed people with the tag, then fills from them (T78b)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/broadcasts"
+        ? json({ success: true, broadcast: { id: "bc_1" } })
+        : json({ success: true, added: 42, skipped: 0 });
+    await expect(
+      provider.createWhatsAppBroadcast({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        name: "Promo",
+        template: { name: "weekend_promo", language: "en", nameVariable: true },
+        tag: "regular",
+      }),
+    ).resolves.toEqual({ id: "bc_1", recipients: 42 });
+    expect(captured[0].body).toMatchObject({
+      platform: "whatsapp",
+      template: {
+        name: "weekend_promo",
+        language: "en",
+        variableMapping: { "1": { field: "name" } },
+      },
+      segmentFilters: { isSubscribed: true, tags: ["regular"] },
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/broadcasts/bc_1/recipients");
+    expect(captured[1].body).toEqual({ useSegment: true });
+    await provider.startBroadcast({ id: "bc_1", at: "2026-11-15T00:00:00.000Z" });
+    expect(captured[2].url.pathname).toBe("/api/v1/broadcasts/bc_1/schedule");
+  });
+
+  it("own keys (T80): Shopify, WordPress and Webflow return the account; WhatsApp too", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/connect/whatsapp/credentials"
+        ? json({
+            account: { accountId: "acc_wa", username: "harbourbean", phoneNumber: "+639175550100" },
+          })
+        : json({
+            account: {
+              _id: "acc_site",
+              platform: "shopify",
+              username: "hb",
+              displayName: "Harbour Bean",
+            },
+          });
+    await expect(
+      provider.connectSiteWithKeys({
+        profileId: "prof_1",
+        keys: { kind: "shopify", shop: "hb.myshopify.com", accessToken: "shpat_x" },
+      }),
+    ).resolves.toEqual({ accountId: "acc_site", name: "Harbour Bean" });
+    expect(captured[0].url.pathname).toBe("/api/v1/connect/shopify/token");
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      shop: "hb.myshopify.com",
+      accessToken: "shpat_x",
+    });
+
+    await provider.connectSiteWithKeys({
+      profileId: "prof_1",
+      keys: {
+        kind: "wordpress",
+        siteUrl: "https://hb.ph",
+        username: "m",
+        applicationPassword: "a b",
+      },
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/connect/wordpress/token");
+    await provider.connectSiteWithKeys({
+      profileId: "prof_1",
+      keys: { kind: "webflow", siteToken: "t" },
+    });
+    expect(captured[2].url.pathname).toBe("/api/v1/connect/webflow/token");
+
+    await expect(
+      provider.connectWhatsAppWithKeys({
+        profileId: "prof_1",
+        accessToken: "EAAG",
+        wabaId: "1",
+        phoneNumberId: "2",
+      }),
+    ).resolves.toEqual({ accountId: "acc_wa", username: "harbourbean" });
+    expect(captured[3].body).toEqual({
+      profileId: "prof_1",
+      accessToken: "EAAG",
+      wabaId: "1",
+      phoneNumberId: "2",
+    });
+  });
+
+  it("texting (T82c): only the registrations naming this number; enable returns the texting account", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/sms/registrations"
+        ? json({
+            registrations: [
+              {
+                id: "r_mine",
+                registrationType: "standard_10dlc",
+                status: "pending",
+                awaitingOtp: false,
+                phoneNumbers: ["+14155550142"],
+              },
+              {
+                id: "r_other",
+                registrationType: "sole_prop_10dlc",
+                status: "approved",
+                awaitingOtp: false,
+                phoneNumbers: ["+12125550000"],
+              },
+            ],
+          })
+        : json({
+            enabled: true,
+            id: "acc_sms",
+            smsCapable: true,
+            needsRegistration: true,
+            notReady: false,
+          });
+    await expect(provider.listSmsRegistrations({ phoneNumber: "+14155550142" })).resolves.toEqual([
+      {
+        id: "r_mine",
+        type: "standard_10dlc",
+        status: "pending",
+        declineReason: null,
+        awaitingOtp: false,
+        phoneNumbers: ["+14155550142"],
+      },
+    ]);
+    await expect(provider.enableSms({ numberId: "num_1" })).resolves.toEqual({
+      enabled: true,
+      accountId: "acc_sms",
+      notCapable: false,
+      notReady: false,
+      needsRegistration: true,
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/phone-numbers/num_1/sms");
+  });
+
+  it("phone numbers (T82a): buy never connects WhatsApp; ID and payment answers carry no link", async () => {
+    let answer: unknown = {
+      message: "ok",
+      phoneNumber: {
+        id: "num_1",
+        phoneNumber: "+14155550142",
+        status: "active",
+        profileId: "prof_1",
+      },
+    };
+    respond = () => json(answer);
+    const buy = () =>
+      provider.purchasePhoneNumber({
+        profileId: "prof_1",
+        country: "US",
+        numberType: "local",
+        phoneNumber: "+14155550142",
+        wantsSms: true,
+        purchaseIntentId: "intent-1",
+      });
+    await expect(buy()).resolves.toEqual({
+      kind: "bought",
+      id: "num_1",
+      phoneNumber: "+14155550142",
+      profileId: "prof_1",
+    });
+    expect(captured[0].body).toMatchObject({
+      connectWhatsapp: false,
+      purchaseIntentId: "intent-1",
+    });
+    answer = {
+      status: "already_purchased",
+      numberId: "num_1",
+      phoneNumber: "+14155550142",
+      profileId: "prof_1",
+    };
+    await expect(buy()).resolves.toMatchObject({ kind: "bought", id: "num_1" });
+    answer = { status: "kyc_required", country: "GB", kycUrl: "https://example.test/kyc/x" };
+    await expect(buy()).resolves.toEqual({ kind: "needs_id" });
+    answer = { message: "pay", checkoutUrl: "https://example.test/checkout" };
+    await expect(buy()).resolves.toEqual({ kind: "needs_payment" });
+  });
+
+  it("calendar (T81d): events without cancelled ones; adding a booking", async () => {
+    respond = (req) =>
+      req.method === "GET"
+        ? json({
+            data: [
+              {
+                id: "e1",
+                title: "Supplier",
+                start: "2026-11-14T09:00:00+08:00",
+                end: "2026-11-14T09:30:00+08:00",
+                allDay: false,
+              },
+              {
+                id: "e2",
+                title: "Gone",
+                start: "2026-11-14T10:00:00+08:00",
+                end: "2026-11-14T11:00:00+08:00",
+                allDay: false,
+                status: "cancelled",
+              },
+              {
+                id: "e3",
+                title: "Free",
+                start: "2026-11-14T12:00:00+08:00",
+                end: "2026-11-14T13:00:00+08:00",
+                allDay: false,
+                busy: false,
+              },
+            ],
+            pagination: { hasMore: false, nextCursor: null },
+          })
+        : json({ data: { id: "e9" } }, 201);
+    await expect(
+      provider.listCalendarEvents({
+        accountId: "acc_g",
+        from: "2026-11-14T00:00:00Z",
+        to: "2026-11-15T00:00:00Z",
+      }),
+    ).resolves.toEqual([
+      {
+        id: "e1",
+        title: "Supplier",
+        start: "2026-11-14T09:00:00+08:00",
+        end: "2026-11-14T09:30:00+08:00",
+        allDay: false,
+        busy: true,
+      },
+      {
+        id: "e3",
+        title: "Free",
+        start: "2026-11-14T12:00:00+08:00",
+        end: "2026-11-14T13:00:00+08:00",
+        allDay: false,
+        busy: false,
+      },
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/calendar/events");
+    expect(captured[0].url.searchParams.get("accountId")).toBe("acc_g");
+    await expect(
+      provider.createCalendarEvent({
+        accountId: "acc_g",
+        title: "Maria: booking",
+        start: "2026-11-21T09:00:00+08:00",
+        end: "2026-11-21T10:00:00+08:00",
+      }),
+    ).resolves.toEqual({ id: "e9" });
+    expect(captured[1].body).toMatchObject({ accountId: "acc_g", title: "Maria: booking" });
+  });
+
+  it("Gmail sign-in (T81c) asks for the email and calendar areas, with no welcome screen", async () => {
+    respond = () =>
+      json({ authUrl: "https://accounts.google.com/o/oauth2/v2/auth?x=1", state: "s" });
+    await expect(
+      provider.getMailConnectUrl({
+        platform: "google",
+        profileId: "prof_1",
+        redirectUrl: "https://app.test/settings",
+        scopes: ["email", "calendar"],
+      }),
+    ).resolves.toEqual({ authUrl: "https://accounts.google.com/o/oauth2/v2/auth?x=1" });
+    expect(captured[0].url.pathname).toBe("/api/v1/connect/google");
+    expect(captured[0].url.searchParams.get("scopes")).toBe("email,calendar");
+    expect(captured[0].url.searchParams.get("welcome")).toBeNull();
+  });
+
+  it("email and LINE (T80b): discovery, a failed sign-in with the provider's fix, LINE's state", async () => {
+    respond = (req) => {
+      const p = req.url.pathname;
+      if (p === "/api/v1/email/imap/discover")
+        return json({
+          data: {
+            route: "imap",
+            provider: { id: "zoho", name: "Zoho Mail" },
+            auth: {
+              kind: "app_password",
+              label: "App password",
+              helpUrl: "https://z.example",
+              steps: ["a"],
+            },
+            preflight: [{ id: "enable_imap", text: "Turn on IMAP.", url: null }],
+          },
+        });
+      if (p === "/api/v1/email/imap/accounts")
+        return json(
+          {
+            code: "imap_auth_failed",
+            details: {
+              title: "Couldn't sign in to Zoho Mail",
+              body: "Check the password.",
+              guidance: { helpUrl: "https://z.example/app", steps: ["s1"] },
+            },
+          },
+          422,
+        );
+      if (p === "/api/v1/users") return json({ currentUserId: "user_1", users: [] });
+      return json({
+        account: { accountId: "acc_line", username: "@hb", displayName: "Harbour Bean" },
+        webhook: { configured: true, testSucceeded: true },
+      });
+    };
+    await expect(provider.discoverEmail({ email: "ana@zoho.com" })).resolves.toEqual({
+      route: "imap",
+      providerName: "Zoho Mail",
+      passwordLabel: "App password",
+      helpUrl: "https://z.example",
+      steps: ["a"],
+      preflight: [{ text: "Turn on IMAP.", url: null }],
+    });
+    expect(captured[0].headers.get("Authorization")).toBe("Bearer sk_test_zernio");
+
+    await expect(
+      provider.connectEmail({ profileId: "prof_1", email: "ana@zoho.com", password: "x" }),
+    ).rejects.toMatchObject({
+      details: {
+        status: 422,
+        code: "imap_auth_failed",
+        info: {
+          title: "Couldn't sign in to Zoho Mail",
+          helpUrl: "https://z.example/app",
+          steps: ["s1"],
+        },
+      },
+    });
+
+    await expect(
+      provider.connectLine({ profileId: "prof_1", channelId: "2001234567", channelSecret: "s" }),
+    ).resolves.toEqual({ accountId: "acc_line", name: "Harbour Bean", webhookReady: true });
+    expect(captured.at(-1)!.body).toEqual({
+      channelId: "2001234567",
+      channelSecret: "s",
+      state: "user_1-prof_1",
+    });
+  });
+
+  it("ads (T79): connect, boost with its key, campaigns with results, pause", async () => {
+    respond = (req) => {
+      const p = req.url.pathname;
+      if (p === "/api/v1/connect/facebook/ads")
+        return json({ alreadyConnected: true, accountId: "c_meta" });
+      if (p === "/api/v1/ads/boost")
+        return json({ ad: { _id: "ad_1", status: "pending_review" }, message: "ok" }, 201);
+      if (p === "/api/v1/ads/campaigns")
+        return json({
+          campaigns: [
+            {
+              platformCampaignId: "cmp_1",
+              platform: "facebook",
+              campaignName: "Boost: Ube",
+              status: "active",
+              budget: { amount: 300, type: "daily" },
+              currency: "PHP",
+              metrics: { spend: 612, reach: 9800, clicks: 214 },
+            },
+            { nope: true },
+          ],
+        });
+      return json({ status: "paused", updated: 1, skipped: 0 });
+    };
+    await expect(
+      provider.connectMetaAds({
+        profileId: "prof_1",
+        facebookAccountId: "acc_fb",
+        redirectUrl: "https://app.test/x",
+      }),
+    ).resolves.toEqual({ connectionId: "c_meta" });
+    expect(captured[0].url.searchParams.get("loginMode")).toBe("classic");
+    expect(captured[0].url.searchParams.get("accountId")).toBe("acc_fb");
+
+    await expect(
+      provider.boostPost({
+        body: { postId: "zp_1", accountId: "c_meta" },
+        idempotencyKey: "boost-key",
+      }),
+    ).resolves.toEqual({ id: "ad_1", status: "pending_review" });
+    expect(captured[1].headers.get("Idempotency-Key")).toBe("boost-key");
+
+    await expect(provider.listAdCampaigns({ connectionId: "c_meta" })).resolves.toEqual([
+      {
+        id: "cmp_1",
+        platform: "facebook",
+        name: "Boost: Ube",
+        status: "active",
+        budget: { amount: 300, type: "daily" },
+        currency: "PHP",
+        spend: 612,
+        reach: 9800,
+        clicks: 214,
+      },
+    ]);
+    expect(captured[2].url.searchParams.get("accountId")).toBe("c_meta");
+
+    await provider.setAdCampaignStatus({
+      campaignId: "cmp_1",
+      platform: "facebook",
+      status: "paused",
+    });
+    expect(captured[3].url.pathname).toBe("/api/v1/ads/campaigns/cmp_1/status");
+    expect(captured[3].body).toEqual({ status: "paused", platform: "facebook" });
+  });
+
+  it("listAdLeads reads Meta leads for the Pages; createLeadForm returns the form id (T78c)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/ads/leads"
+        ? json({
+            success: true,
+            leads: [
+              {
+                id: "lead_1",
+                formName: "Catering",
+                createdTime: "2026-11-13T02:00:00.000Z",
+                fields: { full_name: "Ana Cruz", email: "ana@example.com" },
+                consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
+                status: "weird",
+              },
+              { nope: true },
+            ],
+          })
+        : json({ success: true, form: { id: "form_1" } });
+    const leads = await provider.listAdLeads({ accountIds: ["acc_fb", "acc_fb2"] });
+    expect(captured[0].url.searchParams.get("accountIds")).toBe("acc_fb,acc_fb2");
+    expect(captured[0].url.searchParams.get("platform")).toBe("meta");
+    expect(leads).toEqual([
+      {
+        id: "lead_1",
+        formName: "Catering",
+        createdAt: "2026-11-13T02:00:00.000Z",
+        fields: { full_name: "Ana Cruz", email: "ana@example.com" },
+        consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
+        status: "new",
+        contactId: null,
+      },
+    ]);
+    await expect(
+      provider.createLeadForm({ body: { accountId: "acc_fb", name: "Catering" } }),
+    ).resolves.toEqual({
+      id: "form_1",
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/ads/lead-forms");
+  });
+
+  it("createContact puts a WhatsApp number on the contact; importContacts sends rows (T78a)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/contacts"
+        ? json({ success: true, contact: { id: "c_1" } })
+        : json({ success: true, created: 2, skipped: 1, errors: ["bad row"] });
+    await expect(
+      provider.createContact({
+        profileId: "prof_1",
+        name: "Ana",
+        tags: ["regular"],
+        subscribed: true,
+        channel: { accountId: "acc_wa", platform: "whatsapp", identifier: "+639175550142" },
+      }),
+    ).resolves.toEqual({ id: "c_1" });
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      name: "Ana",
+      tags: ["regular"],
+      isSubscribed: true,
+      accountId: "acc_wa",
+      platform: "whatsapp",
+      platformIdentifier: "+639175550142",
+      displayIdentifier: "+639175550142",
+    });
+    await expect(
+      provider.importContacts({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        rows: [{ name: "Jun", identifier: "+639185550199", tags: [] }],
+      }),
+    ).resolves.toEqual({ created: 2, skipped: 1, errors: 1 });
+    expect(captured[1].url.pathname).toBe("/api/v1/contacts/bulk");
+  });
+
+  it("createSequence sends the steps; enrollInSequence adds contacts (T77c)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/sequences"
+        ? json({ success: true, sequence: { id: "seq_1" } })
+        : json({ success: true, enrolled: 2, failed: 1 });
+    const steps = [{ order: 1, delayMinutes: 0, message: { text: "Hi" } }];
+    await expect(
+      provider.createSequence({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        platform: "whatsapp",
+        name: "Welcome",
+        steps,
+        exitOnReply: true,
+        exitOnUnsubscribe: true,
+      }),
+    ).resolves.toEqual({ id: "seq_1" });
+    expect(captured[0].body).toMatchObject({ platform: "whatsapp", steps, exitOnReply: true });
+    await expect(
+      provider.enrollInSequence({ id: "seq_1", contactIds: ["c1", "c2", "c3"] }),
+    ).resolves.toEqual({ enrolled: 2, failed: 1 });
+    expect(captured[1].url.pathname).toBe("/api/v1/sequences/seq_1/enroll");
+    expect(captured[1].body).toEqual({ contactIds: ["c1", "c2", "c3"] });
+  });
+
+  it("createWorkflow sends the graph, setWorkflowActive activates or pauses (T77b)", async () => {
+    respond = (req) =>
+      req.url.pathname === "/api/v1/workflows"
+        ? json({ success: true, workflow: { id: "wf_1", status: "draft" } }, 201)
+        : json({ success: true });
+    const graph = {
+      nodes: [
+        { id: "trigger", type: "trigger", config: { triggerType: "inbound_message" } },
+        { id: "end", type: "end" },
+      ],
+      edges: [{ id: "e0", source: "trigger", target: "end" }],
+      entryNodeId: "trigger",
+    };
+    await expect(
+      provider.createWorkflow({
+        profileId: "prof_1",
+        accountId: "acc_wa",
+        platform: "whatsapp",
+        name: "Book",
+        graph,
+      }),
+    ).resolves.toEqual({ id: "wf_1" });
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      accountId: "acc_wa",
+      platform: "whatsapp",
+      name: "Book",
+      nodes: graph.nodes,
+      edges: graph.edges,
+      entryNodeId: "trigger",
+    });
+    await provider.setWorkflowActive({ id: "wf_1", active: true });
+    expect(captured[1].url.pathname).toBe("/api/v1/workflows/wf_1/activate");
+    await provider.setWorkflowActive({ id: "wf_1", active: false });
+    expect(captured[2].url.pathname).toBe("/api/v1/workflows/wf_1/pause");
+  });
+
+  it("createCommentAutomation sends the DM, button, reply and once-per-person (T77a)", async () => {
+    respond = () => json({ success: true, automation: { id: "ca_1" } }, 201);
+    await expect(
+      provider.createCommentAutomation({
+        profileId: "prof_1",
+        isActive: true,
+        automation: {
+          name: "MENU",
+          accountId: "acc_ig",
+          keywords: ["MENU"],
+          matchMode: "word",
+          dmMessage: "Hi {{first_name}}",
+          button: { title: "Menu", url: "https://a.b/menu" },
+          commentReply: "Sent!",
+          once: true,
+        },
+      }),
+    ).resolves.toEqual({ id: "ca_1" });
+    expect(captured[0].url.pathname).toBe("/api/v1/comment-automations");
+    expect(captured[0].body).toEqual({
+      profileId: "prof_1",
+      accountId: "acc_ig",
+      trigger: "comment",
+      isActive: true,
+      name: "MENU",
+      keywords: ["MENU"],
+      matchMode: "word",
+      dmMessage: "Hi {{first_name}}",
+      buttons: [{ type: "url", title: "Menu", url: "https://a.b/menu" }],
+      commentReply: "Sent!",
+      repeatPolicy: { mode: "once" },
+    });
+  });
+
+  it("listCommentAutomations reads each automation and its numbers (T77a)", async () => {
+    respond = () =>
+      json({
+        automations: [
+          {
+            id: "ca_1",
+            name: "MENU",
+            platform: "instagram",
+            accountId: "acc_ig",
+            keywords: ["MENU"],
+            dmMessage: "Hi",
+            buttons: [{ type: "url", title: "Menu", url: "https://a.b" }],
+            repeatPolicy: { mode: "every_comment", cooldownHours: 24 },
+            isActive: true,
+            stats: { triggered: 5, dmsSent: 4, dmsFailed: 1 },
+          },
+          { bad: true },
+        ],
+      });
+    const [a, ...rest] = await provider.listCommentAutomations({ profileId: "prof_1" });
+    expect(rest).toEqual([]);
+    expect(a).toMatchObject({
+      id: "ca_1",
+      button: { title: "Menu", url: "https://a.b" },
+      once: false,
+      matchMode: "contains",
+      stats: { triggered: 5, dmsSent: 4, dmsFailed: 1, linkClicks: 0 },
+    });
+  });
+
+  it("getGoogleBusinessPerformance returns each metric's total (T76)", async () => {
+    respond = () =>
+      json({
+        success: true,
+        metrics: {
+          CALL_CLICKS: { total: 14, values: [] },
+          WEBSITE_CLICKS: { total: 22 },
+          BUSINESS_BOOKINGS: {},
+        },
+      });
+    await expect(
+      provider.getGoogleBusinessPerformance({
+        accountId: "acc_g",
+        fromDate: "2026-10-14",
+        toDate: "2026-11-13",
+      }),
+    ).resolves.toEqual({ CALL_CLICKS: 14, WEBSITE_CLICKS: 22, BUSINESS_BOOKINGS: 0 });
+    expect(captured[0].url.pathname).toBe("/api/v1/analytics/googlebusiness/performance");
+    expect(captured[0].url.searchParams.get("accountId")).toBe("acc_g");
+  });
+
+  it("getQueue reads the default queue; none yet is null (T75)", async () => {
+    respond = () =>
+      json({
+        exists: true,
+        schedule: { timezone: "Asia/Manila", slots: [{ dayOfWeek: 1, time: "09:00" }, { bad: 1 }] },
+        nextSlots: ["2026-11-17T01:00:00Z"],
+      });
+    await expect(provider.getQueue({ profileId: "prof_1" })).resolves.toEqual({
+      timezone: "Asia/Manila",
+      slots: [{ dayOfWeek: 1, time: "09:00" }],
+      nextSlots: ["2026-11-17T01:00:00Z"],
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/queue/slots");
+    expect(captured[0].url.searchParams.get("profileId")).toBe("prof_1");
+
+    respond = () => json({ exists: false });
+    await expect(provider.getQueue({ profileId: "prof_2" })).resolves.toBeNull();
+  });
+
+  it("saveQueue creates the queue the first time, then updates it (T75)", async () => {
+    let n = 0;
+    respond = (req) => {
+      n += 1;
+      if (req.method === "GET")
+        return json(
+          n === 1 ? { exists: false } : { exists: true, schedule: { timezone: "UTC", slots: [] } },
+        );
+      return json({
+        schedule: { timezone: "Asia/Manila", slots: [{ dayOfWeek: 2, time: "18:00" }] },
+        nextSlots: [],
+      });
+    };
+    await provider.saveQueue({
+      profileId: "prof_1",
+      timezone: "Asia/Manila",
+      slots: [{ dayOfWeek: 2, time: "18:00" }],
+    });
+    expect(captured[1].method).toBe("POST");
+    expect(captured[1].body).toMatchObject({
+      profileId: "prof_1",
+      name: "Posting times",
+      timezone: "Asia/Manila",
+    });
+    await provider.saveQueue({ profileId: "prof_1", timezone: "Asia/Manila", slots: [] });
+    expect(captured[3].method).toBe("PUT");
+  });
+
   it("createPost pins to the chosen board (T64)", async () => {
     respond = () => json({ post: { _id: "post_p", status: "scheduled" } }, 201);
     await provider.createPost({
@@ -367,7 +1093,7 @@ describe("ZernioSocialProvider", () => {
         publishAt: new Date("2026-11-01T09:00:00Z"),
         idempotencyKey: "post-key",
       }),
-    ).resolves.toEqual({ providerPostId: "post_1", status: "scheduled" });
+    ).resolves.toMatchObject({ providerPostId: "post_1", status: "scheduled" });
 
     const [req] = captured;
     expect(req.url.pathname).toBe("/api/v1/posts");

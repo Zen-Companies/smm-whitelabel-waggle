@@ -15,11 +15,9 @@ describe("analytics controls", () => {
 
   it("builds links that keep the other controls", () => {
     const current = { section: "overview", period: 30, platform: "all" } as const;
-    expect(analyticsHref(current, { period: 7 })).toBe(
-      "/analytics?section=overview&period=7&platform=all",
-    );
+    expect(analyticsHref(current, { period: 7 })).toBe("/insights?period=7&platform=all");
     expect(analyticsHref(current, { section: "posts", sort: "likes", type: undefined })).toBe(
-      "/analytics?section=posts&period=30&platform=all&sort=likes",
+      "/insights/posts?period=30&platform=all&sort=likes",
     );
   });
 });

@@ -86,7 +86,9 @@ select is_empty(
                                 'staff_members', 'staff_role_permissions', 'organizations',
                                 'organization_members', 'organization_invites', 'organization_audit',
                                 'beta_codes', 'beta_access', 'beta_attempts',
-                                'feedback_nudges')
+                                'feedback_nudges',
+                                -- billing belongs to the organization (T86), server-only.
+                                'plan_settings', 'org_billing', 'reply_top_ups')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

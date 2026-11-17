@@ -36,6 +36,9 @@ export function BrandSetup({ brandName }: { brandName: string }) {
         <p className="text-ink-2 text-[15px]">
           Two steps and Waggle starts answering for this brand.
         </p>
+        <Link href="/setup" className="action-link with-arrow mt-1 self-start">
+          Or follow the 4-step setup
+        </Link>
       </div>
       <ol className="border-line flex flex-col rounded-xl border">
         <Step n={1} done>
@@ -54,7 +57,7 @@ export function BrandSetup({ brandName }: { brandName: string }) {
                 </Button>
               </form>
             ))}
-            <Link href="/settings?section=accounts" className="text-sm font-medium">
+            <Link href="/settings/accounts" className="text-sm font-medium">
               TikTok, Google, YouTube and more
             </Link>
           </span>
@@ -65,7 +68,7 @@ export function BrandSetup({ brandName }: { brandName: string }) {
             <span className="text-ink-2">
               Hours, prices, delivery, how to order. Waggle only answers from what you write here.
             </span>
-            <Link href="/knowledge-base" className="mt-1.5 font-medium">
+            <Link href="/teach/business-info" className="mt-1.5 font-medium">
               Fill in Business info
             </Link>
           </span>

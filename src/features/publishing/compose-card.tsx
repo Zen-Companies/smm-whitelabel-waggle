@@ -3,6 +3,7 @@ import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { platformOf } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { ComposeForm } from "./compose-form";
+import { loadQueue } from "./queue-data";
 
 /**
  * The composer, always beside the calendar (design v2). `day` comes from a clicked day; `time`
@@ -11,21 +12,38 @@ import { ComposeForm } from "./compose-form";
 export async function ComposeCard({
   day = null,
   time = null,
+  bare = false,
 }: {
   day?: string | null;
   time?: string | null;
+  /** Inside the side panel: no card and no heading (the panel has them). */
+  bare?: boolean;
 }) {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
-  const { data: accounts } = await supabase
-    .from("social_accounts")
-    .select("id, platform, username, pinterest_board_id, pinterest_board_name")
-    .eq("tenant_id", tenant.id)
-    .eq("status", "active")
-    .order("created_at");
+  const [{ data: accounts }, { data: down }] = await Promise.all([
+    supabase
+      .from("social_accounts")
+      .select("id, platform, username, pinterest_board_id, pinterest_board_name")
+      .eq("tenant_id", tenant.id)
+      .eq("status", "active")
+      .order("created_at"),
+    // T74a: accounts that stopped connecting show as "Reconnect to post here".
+    supabase
+      .from("social_accounts")
+      .select("platform, username")
+      .eq("tenant_id", tenant.id)
+      .eq("status", "disconnected")
+      .order("created_at"),
+  ]);
+  const queue = await loadQueue(tenant.zernioProfileId);
   return (
-    <section className="card-lifted flex flex-col gap-4 p-5" aria-labelledby="compose-heading">
-      <div className="flex flex-col">
+    <section
+      className={bare ? "flex flex-col gap-4" : "card-lifted flex flex-col gap-4 p-5"}
+      aria-labelledby={bare ? undefined : "compose-heading"}
+      aria-label={bare ? "New post" : undefined}
+    >
+      <div className={bare ? "hidden" : "flex flex-col"}>
         <h2 id="compose-heading" className="section-title">
           New post
         </h2>
@@ -56,6 +74,9 @@ export async function ComposeCard({
             }))}
           day={day}
           time={time}
+          nextSlot={queue?.nextSlots[0] ?? null}
+          brandName={tenant.name}
+          disconnected={(down ?? []).filter((a) => platformOf(a.platform)?.post)}
         />
       ) : (
         <ReadOnlyNote role={tenant.role} what="the posts" />

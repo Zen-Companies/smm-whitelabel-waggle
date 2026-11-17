@@ -69,6 +69,17 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
   const itemHref = row.item_id ? `/inbox/items/${row.item_id}` : "/inbox";
   switch (row.kind) {
     case "lead": {
+      if (row.details.source === "ad_form") {
+        const form = typeof row.details.formName === "string" ? row.details.formName : null;
+        return {
+          ...base,
+          tone: "lead",
+          title: "New lead from your ad",
+          meta: form ? `Filled ${form}` : "Someone filled your lead form",
+          href: "/contacts/ad-leads",
+          action: "Open",
+        };
+      }
       const lead = l.leads.get(String(row.details.leadId ?? ""));
       return {
         ...base,
@@ -80,6 +91,17 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
       };
     }
     case "needs_you": {
+      // T82b: a missed call or voicemail.
+      if (item?.kind === "call") {
+        return {
+          ...base,
+          tone: "attention",
+          title: `${who} called`,
+          meta: "Missed call. Listen and call back from the inbox.",
+          href: itemHref,
+          action: "Open",
+        };
+      }
       const failed = item?.status === "failed" || row.details.status === "failed";
       return {
         ...base,
@@ -97,13 +119,31 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
       };
     }
     case "account": {
+      if (row.details.source === "rcs") {
+        const titles: Record<string, string> = {
+          changes_requested: "Branded texts: your request needs a fix",
+          testing: row.details.reason
+            ? "Branded texts: the launch details came back"
+            : "Branded texts are ready to test",
+          live: "Branded texts are live",
+          rejected: "Branded texts weren't approved",
+        };
+        return {
+          ...base,
+          tone: row.details.status === "live" ? "post" : "attention",
+          title: titles[String(row.details.status)] ?? "Branded texts changed",
+          meta: "Settings · Messaging",
+          href: "/settings/messaging",
+          action: "Open",
+        };
+      }
       const a = row.social_account_id ? l.accounts.get(row.social_account_id) : undefined;
       return {
         ...base,
         tone: "attention",
         title: `${platform(a?.platform)}${a?.username ? ` @${a.username}` : ""} disconnected`,
         meta: "New messages wait until you reconnect.",
-        href: "/settings",
+        href: "/settings/accounts",
         action: "Reconnect",
       };
     }
@@ -148,7 +188,7 @@ export function describeNotification(row: NotificationRow, l: Lookups): Notifica
         tone: "success",
         title: n === 1 ? "1 reply sent automatically" : `${n} replies sent automatically`,
         meta: "From your business info, on auto-reply",
-        href: "/inbox?tab=answered",
+        href: "/inbox/answered",
         action: null,
       };
     }

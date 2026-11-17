@@ -11,11 +11,11 @@ const NEXT: Partial<Record<EmailOtpType, string>> = {
   signup: "/welcome",
   email: "/welcome",
   recovery: "/reset",
-  email_change: "/settings?section=account&email=changed",
+  email_change: "/settings/account?email=changed",
 };
 const FAIL: Partial<Record<EmailOtpType, string>> = {
   recovery: "/forgot?expired=1",
-  email_change: "/settings?section=account&email=expired",
+  email_change: "/settings/account?email=expired",
 };
 
 export async function GET(request: NextRequest) {

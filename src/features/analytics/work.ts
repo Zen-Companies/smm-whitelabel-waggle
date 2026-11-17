@@ -145,3 +145,25 @@ export function summarizeWork(input: WorkInput): WorkSummary {
     neededYou: [...merged.values()].sort(byCountDesc),
   };
 }
+
+/**
+ * T74b: the line over "What Waggle did for you" (design "6 · Insights"): "Every message got an
+ * answer. 9 turned into leads."
+ */
+export function workHeadline(
+  work: Pick<WorkSummary, "messagesIn" | "byWaggle" | "byYou" | "leads">,
+): string {
+  const answered = work.byWaggle + work.byYou;
+  if (work.messagesIn === 0) return "No messages came in yet in this period.";
+  const first =
+    answered >= work.messagesIn
+      ? "Every message got an answer."
+      : `${answered} of ${work.messagesIn} messages got an answer.`;
+  const leads =
+    work.leads === 0
+      ? ""
+      : work.leads === 1
+        ? " 1 turned into a lead."
+        : ` ${work.leads} turned into leads.`;
+  return first + leads;
+}

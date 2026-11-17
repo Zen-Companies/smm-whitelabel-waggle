@@ -1,0 +1,19 @@
+{
+  "id": "evt_rcs_status_01",
+  "event": "rcs.agent.status_updated",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "agent": {
+    "id": "6aba8af3e7aba406647e82a1",
+    "displayName": "Harbour Bean",
+    "profileId": "__PROFILE_ID__",
+    "accountId": null
+  },
+  "status": "changes_requested",
+  "reason": "The EIN does not match the legal name on file. Send the name exactly as it appears on your IRS letter.",
+  "timestamp": "2026-11-14T10:12:00.000Z"
+}

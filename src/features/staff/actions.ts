@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isBrandSwitchKey, setBrandSwitch } from "@/lib/flags/brand-switch";
 import { getServiceClient } from "@/lib/supabase/service";
 import { addStaffMember, changeStaffRole, removeStaffMember } from "./members";
 import { STAFF_ROLES } from "./permissions";
@@ -58,5 +59,25 @@ export async function removeStaff(
   const out = await removeStaffMember(getServiceClient(), actor, userId.data);
   if ("error" in out) return { error: out.error };
   revalidatePath("/admin/staff");
+  return { saved: true };
+}
+
+/** Feature switches: a paid channel (Phone, Messaging) on or off for one brand. */
+export async function switchBrand(_prev: StaffFormState, f: FormData): Promise<StaffFormState> {
+  const access = await currentStaffAccess();
+  if (!access.permissions.has("flags.manage")) return { error: "Not available." };
+  const key = f.get("key");
+  if (!isBrandSwitchKey(key)) return { error: "Not available." };
+  const tenantId = z.uuid().safeParse(f.get("tenantId"));
+  if (!tenantId.success) return { error: "That brand wasn't found." };
+  const done = await setBrandSwitch(
+    getServiceClient(),
+    access.userId,
+    key,
+    tenantId.data,
+    f.get("on") === "true",
+  );
+  if (!done) return { error: "That brand wasn't found." };
+  revalidatePath("/admin/switches");
   return { saved: true };
 }

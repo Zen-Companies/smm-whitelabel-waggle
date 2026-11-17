@@ -21,6 +21,14 @@ export const PLATFORM_IDS = [
   "discord",
   "reddit",
   "snapchat",
+  "line",
+  "imap",
+  "google",
+  "microsoft",
+  "phone",
+  "sms",
+  "rcs",
+  "imessage",
 ] as const;
 export type PlatformId = (typeof PLATFORM_IDS)[number];
 
@@ -160,7 +168,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     }),
     inbox: { comments: true, dms: true, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   threads: {
     id: "threads",
@@ -173,7 +181,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ videoMaxSeconds: 300, textMax: 500, maxImages: 20, imageMaxBytes: 8 * MB }),
     inbox: { comments: true, dms: false, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   youtube: {
     id: "youtube",
@@ -186,7 +194,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ textMax: 5000, mediaRequired: true, videoOnly: true, maxImages: 0 }),
     inbox: { comments: true, dms: false, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   linkedin: {
     id: "linkedin",
@@ -199,7 +207,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ textMax: 3000, maxImages: 20, imageMaxBytes: 8 * MB }),
     inbox: { comments: true, dms: false, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   bluesky: {
     id: "bluesky",
@@ -212,14 +220,15 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({ videoMaxSeconds: 60, textMax: 300, maxImages: 4, imageMaxBytes: 1_000_000 }),
     inbox: { comments: true, dms: true, reviews: false },
     inboxLive: true,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   twitter: {
     id: "twitter",
     label: "X",
     mark: { text: "X", bg: "#F4F4F5", fg: "#18181B" },
     kind: "answers",
-    connect: "oauth",
+    // Off until the beta is deployed (owner, 2026-11-12): shown under Coming soon.
+    connect: "none",
     line: "Answers mentions and DMs",
     needs: "Each X call costs extra",
     post: rules({
@@ -276,7 +285,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     }),
     inbox: { comments: false, dms: false, reviews: false },
     inboxLive: false,
-    analyticsLive: false,
+    analyticsLive: true,
   },
   discord: {
     id: "discord",
@@ -297,7 +306,7 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     mark: { text: "R", bg: "#FFEDD5", fg: "#9A3412" },
     kind: "soon",
     connect: "none",
-    line: "Turned off by Zernio for now",
+    line: "Not available yet",
     needs: null,
     post: null,
     inbox: { comments: true, dms: true, reviews: false },
@@ -315,6 +324,118 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: null,
     inbox: { comments: false, dms: false, reviews: false },
     inboxLive: false,
+    analyticsLive: false,
+  },
+  line: {
+    id: "line",
+    label: "LINE",
+    mark: { text: "LN", bg: "#DCFCE7", fg: "#166534" },
+    kind: "answers",
+    connect: "setup",
+    line: "Answers chats",
+    needs: "Needs a LINE Official Account",
+    // No feed: LINE VOOM has no API.
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  imap: {
+    id: "imap",
+    label: "Email",
+    mark: { text: "@", bg: "#FEF3C7", fg: "#92400E" },
+    kind: "answers",
+    // Connected from More connections (our own email form), not a tile.
+    connect: "none",
+    line: "Answers email in the same thread",
+    needs: "Any provider with an app password",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  google: {
+    id: "google",
+    label: "Gmail",
+    mark: { text: "G", bg: "#FEE2E2", fg: "#991B1B" },
+    kind: "answers",
+    // Signed in from More connections with the email and calendar areas, not a tile.
+    connect: "none",
+    line: "Answers email in the same thread",
+    needs: "Sends up to 200 emails a day (500 on Google Workspace)",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  microsoft: {
+    id: "microsoft",
+    label: "Outlook",
+    mark: { text: "O", bg: "#DBEAFE", fg: "#1E40AF" },
+    kind: "answers",
+    connect: "none",
+    line: "Answers email in the same thread",
+    needs: "Outlook or Microsoft 365",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  phone: {
+    id: "phone",
+    label: "Phone",
+    mark: { text: "☎", bg: "#E0F2FE", fg: "#075985" },
+    kind: "answers",
+    // Bought in Settings → Phone (T82a), not a tile. Missed calls and voicemails come in as call
+    // items (T82b); they're never drafted, so it isn't a message channel.
+    connect: "none",
+    line: "Missed calls and voicemail",
+    needs: null,
+    post: null,
+    inbox: { comments: false, dms: false, reviews: false },
+    inboxLive: false,
+    analyticsLive: false,
+  },
+  sms: {
+    id: "sms",
+    label: "Texts",
+    mark: { text: "SMS", bg: "#DCFCE7", fg: "#166534" },
+    kind: "answers",
+    // Turned on in Settings → Phone (T82c) on the brand's number, not a tile.
+    connect: "none",
+    line: "Answers texts",
+    needs: "US numbers send once carriers approve the business",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  rcs: {
+    id: "rcs",
+    label: "RCS",
+    mark: { text: "RCS", bg: "#E0E7FF", fg: "#3730A3" },
+    kind: "answers",
+    // Requested in Settings → Messaging (T83a); the account appears once carriers have the agent.
+    connect: "none",
+    line: "Answers branded texts",
+    needs: "Carriers approve the business first",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
+    analyticsLive: false,
+  },
+  imessage: {
+    id: "imessage",
+    label: "iMessage",
+    mark: { text: "iM", bg: "#DBEAFE", fg: "#1D4ED8" },
+    kind: "answers",
+    // Ordered in Settings → Messaging (T83c); the account appears when the number turns on.
+    connect: "none",
+    line: "Answers iMessages",
+    needs: "A US or UK iMessage number",
+    post: null,
+    inbox: { comments: false, dms: true, reviews: false },
+    inboxLive: true,
     analyticsLive: false,
   },
 };
@@ -347,7 +468,10 @@ export const PASSWORD_CONNECT = PLATFORM_IDS.filter((id) => PLATFORMS[id].connec
  */
 export const SETUP_IN_WAGGLE = PLATFORM_IDS.filter(
   (id) =>
-    PLATFORMS[id].connect === "password" || PLATFORMS[id].connect === "code" || id === "whatsapp",
+    PLATFORMS[id].connect === "password" ||
+    PLATFORMS[id].connect === "code" ||
+    id === "whatsapp" ||
+    id === "line",
 );
 export const hasSetupCard = (id: string): boolean =>
   (SETUP_IN_WAGGLE as readonly string[]).includes(id);
@@ -423,6 +547,18 @@ const INBOX_RULES: Partial<Record<PlatformId, Partial<InboxRules>>> = {
   twitter: { hide: true, replyMax: 280 },
   // T67: free replies for 24 hours after the customer's last message, then only a template.
   whatsapp: { dmWindow: { hours: 24, maxReplies: null }, replyMax: 4096 },
+  // T81a: no reply window (a reply after about a minute is a push, counted on the LINE plan).
+  line: { replyMax: 5000 },
+  // T81b: email has no reply window; replies go from the owner's own mailbox, in the thread.
+  imap: {},
+  google: {},
+  microsoft: {},
+  // T82c: no reply window; up to 10 segments (Zernio's cap), about 1,530 characters.
+  sms: { replyMax: 1530 },
+  // T83d: inbox replies go out as plain RCS text (Zernio documents no length limit).
+  rcs: {},
+  // T83d: under 10,000 characters (docs.zernio.com/platforms/imessage/inbox).
+  imessage: { replyMax: 9999 },
 };
 
 export function inboxRules(platform: string): InboxRules {

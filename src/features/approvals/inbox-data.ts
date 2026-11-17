@@ -1,5 +1,6 @@
 import type { Database } from "@/lib/supabase/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseAttachments, type Attachment } from "./attachments";
 import { dmWindowClosesAt, dmWindowFor } from "./policy";
 import { type ActivityEntry, mergeActivity } from "./today-activity";
 
@@ -7,7 +8,7 @@ import { type ActivityEntry, mergeActivity } from "./today-activity";
 
 export interface InboxEntry {
   itemId: string;
-  kind: "comment" | "dm" | "review";
+  kind: "comment" | "dm" | "review" | "call";
   platform: string;
   authorName: string | null;
   text: string;
@@ -33,6 +34,10 @@ export interface InboxEntry {
   attempts: number;
   /** DMs: when the platform's reply window closes (null if unknown or the platform has none). */
   dmWindowClosesAt: string | null;
+  /** Email (T81b): the thread's subject, when known. */
+  subject?: string | null;
+  /** T82b: a missed call or voicemail. */
+  call?: { voicemail: boolean; durationSeconds: number } | null;
   /** DMs on a platform with a reply cap (TikTok, T61): replies left in this window. */
   dmRepliesLeft?: number | null;
   /** Comments: the post on Instagram/Facebook, for "Open in Instagram" (null if not known). */
@@ -45,6 +50,10 @@ export interface InboxEntry {
   reviewRating?: number | null;
   /** T65: the owner answered on the platform itself (Google), so Waggle's draft wasn't sent. */
   answeredOnPlatformAt?: string | null;
+  /** T72: what the message carried besides words (kinds only). */
+  attachments?: Attachment[];
+  /** T72: false when the account it came in on stopped connecting (sending can't work). */
+  accountActive?: boolean;
 }
 
 export interface InboxData {
@@ -61,14 +70,37 @@ export type InboxTab = "for_you" | "answered" | "ignored";
 export const INBOX_TABS: { key: InboxTab; label: string; statuses: string[] }[] = [
   { key: "for_you", label: "For you", statuses: [...NEEDS_OWNER] },
   { key: "answered", label: "Answered", statuses: ["sending", "sent"] },
-  // Spam, plus messages the owner marked as handled or chose not to answer.
-  { key: "ignored", label: "Ignored", statuses: ["ignored", "handled", "rejected"] },
+  // T72 "Hidden": spam, plus messages the owner marked as handled or chose not to answer.
+  { key: "ignored", label: "Hidden", statuses: ["ignored", "handled", "rejected"] },
 ];
+
+/** T72: who answered, for the Answered filter (All, Waggle on its own, You approved, You wrote). */
+export type AnsweredBy = "auto" | "approved" | "wrote";
+export const ANSWERED_FILTERS: { key: AnsweredBy | "all"; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "auto", label: "Waggle on its own" },
+  { key: "approved", label: "You approved" },
+  { key: "wrote", label: "You wrote" },
+];
+
+/** Pure: who answered a reply that went out (null when there's no draft). */
+export function answeredBy(entry: Pick<InboxEntry, "draft">): AnsweredBy | null {
+  const d = entry.draft;
+  if (!d) return null;
+  if (!d.decidedByOwner) return "auto";
+  return d.editedBody !== null && d.editedBody.trim() !== d.body.trim() ? "wrote" : "approved";
+}
+
+/** Pure: the ?by= value, including the older "auto" links. */
+export function normalizeAnsweredBy(param: string | undefined): AnsweredBy | "all" {
+  return param === "auto" || param === "approved" || param === "wrote" ? param : "all";
+}
 
 /** Pure: a ?tab= value, including the old To approve / Needs you / Sent links (emails, bookmarks). */
 export function normalizeTab(param: string | undefined): InboxTab {
   if (param === "waiting" || param === "needs") return "for_you";
   if (param === "sent") return "answered";
+  if (param === "hidden") return "ignored";
   return INBOX_TABS.some((t) => t.key === param) ? (param as InboxTab) : "for_you";
 }
 
@@ -97,12 +129,73 @@ export interface TodaySummary {
   hidden: number;
 }
 
-/** Pure: the gray line under the headline (design.md §4). */
+/** Pure: the gray line under the headline (design.md §4); no zeros (rule 4, 16 Nov). */
 export function todayLine(today: Pick<TodaySummary, "answered" | "ignored" | "hidden">): string {
-  const hid = today.hidden === 1 ? "hid 1 spam comment" : `hid ${today.hidden} spam comments`;
-  return today.hidden > 0
-    ? `Today Waggle answered ${today.answered}, ignored ${today.ignored} and ${hid}.`
-    : `Today Waggle answered ${today.answered} and ignored ${today.ignored}.`;
+  const parts: string[] = [];
+  if (today.answered) parts.push(`answered ${today.answered}`);
+  if (today.ignored) parts.push(`ignored ${today.ignored}`);
+  if (today.hidden)
+    parts.push(today.hidden === 1 ? "hid 1 spam comment" : `hid ${today.hidden} spam comments`);
+  if (parts.length === 0) return "Nothing answered on its own yet today.";
+  const list =
+    parts.length === 1
+      ? parts[0]
+      : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return `Today Waggle ${list}.`;
+}
+
+/**
+ * Pure: the search box's words as an ilike pattern, safe inside a PostgREST or() filter (no
+ * commas, brackets, quotes or wildcards of its own). Null under two letters.
+ */
+export function searchPattern(q: string | undefined): string | null {
+  const words = (q ?? "")
+    .replace(/[%_*,()"\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return words.length >= 2 ? `%${words}%` : null;
+}
+
+/** Pure: which tab a status lives in (search results say where each one is). */
+export function tabOf(status: string): InboxTab | null {
+  return INBOX_TABS.find((t) => t.statuses.includes(status))?.key ?? null;
+}
+
+/**
+ * Search (Inbox polish, approved 16 Nov): names, the customer's words and Waggle's replies,
+ * across all three tabs, newest first.
+ */
+export async function searchInbox(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  pattern: string,
+): Promise<(InboxEntry & { status: string })[]> {
+  const statuses = INBOX_TABS.flatMap((t) => t.statuses);
+  const quoted = `"${pattern}"`;
+  const [{ data: items }, { data: drafts }] = await Promise.all([
+    supabase
+      .from("inbound_items")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .in("status", statuses)
+      .or(`text.ilike.${quoted},author_name.ilike.${quoted}`)
+      .order("received_at", { ascending: false })
+      .limit(50),
+    supabase
+      .from("drafts")
+      .select("item_id")
+      .eq("tenant_id", tenantId)
+      .or(`body.ilike.${quoted},edited_body.ilike.${quoted}`)
+      .order("created_at", { ascending: false })
+      .limit(50),
+  ]);
+  const ids = [
+    ...new Set([...(items ?? []).map((i) => i.id), ...(drafts ?? []).map((d) => d.item_id)]),
+  ];
+  if (ids.length === 0) return [];
+  const found = await loadEntries(supabase, tenantId, { itemIds: ids, statuses });
+  return found.reverse();
 }
 
 /** Pure: midnight UTC of `now`'s day ("today" until businesses have a time zone). */
@@ -326,8 +419,8 @@ export async function loadEntries(
   let query = supabase
     .from("inbound_items")
     .select(
-      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, " +
-        "social_accounts (platform), conversations (last_customer_message_at)",
+      "id, kind, status, attempts, author_name, text, received_at, category, confidence, classifier_used, permalink, hidden_on_platform_at, review_recommends, review_rating, conversation_id, answered_on_platform_at, call_voicemail, call_duration_seconds, attachments, " +
+        "social_accounts (platform, status), conversations (last_customer_message_at, subject)",
     )
     .eq("tenant_id", tenantId);
   if (filter.statuses) query = query.in("status", filter.statuses);
@@ -338,7 +431,7 @@ export async function loadEntries(
   if (error) throw new Error(`inbox load failed: ${error.message}`);
   const rows = (items ?? []) as unknown as {
     id: string;
-    kind: "comment" | "dm" | "review";
+    kind: "comment" | "dm" | "review" | "call";
     status: string;
     attempts: number;
     author_name: string | null;
@@ -353,8 +446,11 @@ export async function loadEntries(
     review_rating: number | null;
     conversation_id: string | null;
     answered_on_platform_at: string | null;
-    social_accounts: { platform: string } | null;
-    conversations: { last_customer_message_at: string | null } | null;
+    call_voicemail: boolean | null;
+    call_duration_seconds: number | null;
+    attachments: unknown;
+    social_accounts: { platform: string; status: string } | null;
+    conversations: { last_customer_message_at: string | null; subject: string | null } | null;
   }[];
   if (rows.length === 0) return [];
 
@@ -415,6 +511,13 @@ export async function loadEntries(
       reviewRecommends: r.review_recommends,
       reviewRating: r.review_rating,
       answeredOnPlatformAt: r.answered_on_platform_at,
+      attachments: parseAttachments(r.attachments),
+      accountActive: (r.social_accounts?.status ?? "active") === "active",
+      subject: r.conversations?.subject ?? null,
+      call:
+        r.kind === "call"
+          ? { voicemail: r.call_voicemail === true, durationSeconds: r.call_duration_seconds ?? 0 }
+          : null,
       dmWindowClosesAt:
         r.kind === "dm"
           ? (dmWindowClosesAt(platform, last ? new Date(last) : null)?.toISOString() ?? null)

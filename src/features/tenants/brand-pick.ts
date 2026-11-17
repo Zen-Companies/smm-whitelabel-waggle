@@ -40,16 +40,20 @@ export function pickOpenBrand<T extends { id: string; organization_id: string | 
 }
 
 /**
- * Where to land after switching brand: the same section of the app ("/posts/abc" → "/posts"),
- * because a page for one brand's item, post or entry doesn't exist in the other. Anything that
- * isn't a plain in-app path goes to the inbox.
+ * Where to land after switching brand: the same place in the app ("/settings/team" stays,
+ * "/posts/<id>" → "/posts"), because a page for one brand's item, post or entry doesn't exist in
+ * the other. A sub-place is a plain word ("team", "business-info"); ids have digits. Anything
+ * that isn't a plain in-app path goes to the inbox.
  */
 export function sectionPath(path: string | null | undefined): string {
   if (!path || !path.startsWith("/") || path.startsWith("//") || path.includes("\\")) {
     return "/inbox";
   }
-  const section = path.split(/[?#]/)[0].split("/")[1];
+  const [, section, place] = path.split(/[?#]/)[0].split("/");
   if (!section || !/^[a-z0-9-]+$/.test(section) || section === "brands") return "/inbox";
+  if (place && /^[a-z]+(-[a-z]+)*$/.test(place) && place !== "items") {
+    return `/${section}/${place}`;
+  }
   return `/${section}`;
 }
 

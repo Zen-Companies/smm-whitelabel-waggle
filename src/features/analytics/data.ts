@@ -14,9 +14,10 @@ import {
   type AudienceSnapshot,
   type FollowersSnapshot,
 } from "./schemas";
-import { audienceKey, BEST_TIME_KEY, dashboardKey, FOLLOWERS_KEY } from "./sync";
+import { audienceKey, BEST_TIME_KEY, dashboardKey, FOLLOWERS_KEY, gbpKey } from "./sync";
 import type { AnalyticsPeriod, AnalyticsPlatform } from "./sync";
 import { summarizeWork, type WorkSummary } from "./work";
+import { googleBusinessLine, platformLine, type PlatformMetric } from "./platform-words";
 
 // Read side of Analytics (T49-T52). Every loader takes a client and the open brand's id and
 // filters on it: RLS lets a login read all its brands, so the filter is what keeps them apart.
@@ -306,6 +307,8 @@ export interface OverviewData {
   /** The same days of the period just before, aligned with `summary.daily` (null if not stored). */
   previousDaily: DashboardSummary["daily"] | null;
   reachByPlatform: { platform: string; reach: number }[];
+  /** Each platform's numbers in its own words (T76), Google Business included. */
+  byPlatform: { platform: string; metrics: PlatformMetric[] }[];
   posts: PostMetricRow[];
   bestTimes: BestTimeSlot[] | null;
   waggleComments: { comments: number; answered: number } | null;
@@ -319,13 +322,22 @@ export async function loadOverview(
     platform: AnalyticsPlatform;
     platforms: string[];
     now: Date;
+    /** Connected Google Business Profile accounts (their report is stored per account). */
+    gbpAccountIds?: string[];
   },
 ): Promise<OverviewData> {
   const { period, platform, platforms, now } = input;
   const key = dashboardKey(period, platform);
   const longKey = dashboardKey(90, platform);
   const perPlatform = platforms.map((p) => dashboardKey(period, p as AnalyticsPlatform));
-  const snaps = await loadSnapshots(db, tenantId, [key, longKey, BEST_TIME_KEY, ...perPlatform]);
+  const gbpKeys = (input.gbpAccountIds ?? []).map((id) => gbpKey(period, id));
+  const snaps = await loadSnapshots(db, tenantId, [
+    key,
+    longKey,
+    BEST_TIME_KEY,
+    ...perPlatform,
+    ...gbpKeys,
+  ]);
   const snap = snaps.get(key);
   const summary = snap ? parseOrNull(dashboardSchema, snap.data) : null;
 
@@ -346,8 +358,26 @@ export async function loadOverview(
   const reachByPlatform = platforms.flatMap((p) => {
     const s = snaps.get(dashboardKey(period, p as AnalyticsPlatform));
     const parsed = s ? parseOrNull(dashboardSchema, s.data) : null;
-    return parsed ? [{ platform: p, reach: parsed.totals.reach }] : [];
+    // Some platforms don't count reach at all (TikTok, YouTube, Bluesky…): left out, not zero.
+    return parsed && parsed.totals.reach > 0 ? [{ platform: p, reach: parsed.totals.reach }] : [];
   });
+  const byPlatform: OverviewData["byPlatform"] = platforms.flatMap((p) => {
+    const s = snaps.get(dashboardKey(period, p as AnalyticsPlatform));
+    const parsed = s ? parseOrNull(dashboardSchema, s.data) : null;
+    if (!parsed) return [];
+    const metrics = platformLine(p, parsed.totals, parsed.followers.gained);
+    return metrics.length ? [{ platform: p, metrics }] : [];
+  });
+  const gbpTotals: Record<string, number> = {};
+  for (const k of gbpKeys) {
+    const raw = snaps.get(k)?.data as { metrics?: Record<string, unknown> } | undefined;
+    for (const [name, v] of Object.entries(raw?.metrics ?? {})) {
+      if (typeof v === "number") gbpTotals[name] = (gbpTotals[name] ?? 0) + v;
+    }
+  }
+  if (gbpKeys.some((k) => snaps.has(k))) {
+    byPlatform.push({ platform: "googlebusiness", metrics: googleBusinessLine(gbpTotals) });
+  }
 
   const window = summary
     ? {
@@ -377,6 +407,7 @@ export async function loadOverview(
     syncedAt: snap?.syncedAt ?? null,
     previousDaily,
     reachByPlatform,
+    byPlatform,
     posts,
     bestTimes: best ? (parseOrNull(bestTimeSchema, best.data)?.slots ?? null) : null,
     waggleComments,

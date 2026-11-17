@@ -1,0 +1,36 @@
+{
+  "id": "evt_lead_received_01",
+  "event": "lead.received",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "lead": {
+    "id": "adlead_01",
+    "platform": "meta",
+    "leadgenId": "5566778899001122",
+    "formId": "1029384756102938",
+    "formName": "Catering inquiry",
+    "adId": "120260000000000000",
+    "adsetId": null,
+    "campaignId": null,
+    "fields": {
+      "full_name": "Maria Santos",
+      "email": "maria@example.com",
+      "phone_number": "+639175550142",
+      "q1": "40 people"
+    },
+    "consents": [{ "checkboxKey": "waggle_messages", "isChecked": true }],
+    "isOrganic": false,
+    "createdAt": "2026-11-13T02:00:00.000Z"
+  },
+  "account": {
+    "id": "__ACCOUNT_ID__",
+    "accountId": "__ACCOUNT_ID__",
+    "platform": "facebook",
+    "profileId": "__PROFILE_ID__"
+  },
+  "timestamp": "2026-11-13T02:00:01.000Z"
+}

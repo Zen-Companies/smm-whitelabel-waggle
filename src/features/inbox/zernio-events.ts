@@ -53,8 +53,22 @@ export const messageEventSchema = z.object({
     id: z.string().min(1),
     conversationId: z.string().min(1),
     platform: z.string(),
+    // T72: the platform's own id, which the attachment endpoint takes.
+    platformMessageId: z.string().optional(),
     direction: z.enum(["incoming", "outgoing"]),
     text: z.string().nullable(),
+    // T72: only the kind of each attachment is kept; its url expires
+    // (docs.zernio.com/webhooks/inbox/message-received).
+    attachments: z
+      .array(
+        z.object({
+          type: z.string().max(40),
+          originalType: z.string().max(40).optional(),
+        }),
+      )
+      .max(20)
+      .optional()
+      .catch([]),
     sender: z.object({
       id: z.string(),
       name: z.string().optional(),
@@ -66,6 +80,18 @@ export const messageEventSchema = z.object({
     .object({ participantName: z.string().optional(), participantUsername: z.string().optional() })
     .optional(),
   account: accountBlock,
+  // Email (T81b): Zernio puts the subject and other email fields under `metadata.email`
+  // (docs.zernio.com/platforms/google/webhooks). The field names aren't documented, so the
+  // subject is read only when it is a plain string, and ignored otherwise. VERIFY with Zernio.
+  metadata: z
+    .object({
+      email: z
+        .object({ subject: z.string().max(998).optional().catch(undefined) })
+        .nullish()
+        .catch(null),
+    })
+    .nullish()
+    .catch(null),
 });
 
 /**
@@ -148,6 +174,62 @@ export const accountDisconnectedSchema = z.object({
     disconnectionType: z.string().optional(),
     reason: z.string().optional(),
   }),
+});
+
+/** A lead from an ad's form (T78d, `lead.received`). Answers stay in webhook_events only. */
+export const leadReceivedSchema = z.object({
+  event: z.literal("lead.received"),
+  lead: z.object({
+    id: z.string().min(1),
+    platform: z.string().nullish(),
+    leadgenId: z.string().min(1),
+    formId: z.string().min(1),
+    formName: z.string().nullish(),
+  }),
+  account: z.object({
+    id: z.string().min(1),
+    accountId: z.string().min(1).optional(),
+    platform: z.string(),
+    profileId: z.string().nullable(),
+  }),
+});
+
+/** A call ended (T82b, `call.ended`): missed and voicemail calls become inbox items. */
+export const callEndedSchema = z.object({
+  event: z.literal("call.ended"),
+  call: z.object({
+    id: z.string().min(1),
+    direction: z.enum(["inbound", "outbound"]),
+    from: z.string(),
+    startedAt: z.string(),
+    durationSeconds: z.number().int().nonnegative().catch(0),
+    endReason: z.enum(["hangup", "no_answer", "rejected", "error"]).catch("error"),
+    isVoicemail: z.boolean().catch(false),
+  }),
+  account: accountBlock,
+});
+
+/** An RCS agent moved status (T83b, `rcs.agent.status_updated`). `reason` is the partner's note. */
+export const rcsStatusSchema = z.object({
+  event: z.literal("rcs.agent.status_updated"),
+  agent: z.object({
+    id: z.string().min(1),
+    displayName: z.string().nullish(),
+    profileId: z.string().min(1),
+    accountId: z.string().nullish(),
+  }),
+  status: z.enum([
+    "changes_requested",
+    "brand_vetting",
+    "agent_review",
+    "testing",
+    "launch_review",
+    "launching",
+    "live",
+    "rejected",
+    "deactivated",
+  ]),
+  reason: z.string().nullish(),
 });
 
 /** The accountId field is canonical; `id` carries the same value (docs.zernio.com/webhooks). */

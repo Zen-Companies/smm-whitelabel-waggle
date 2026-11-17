@@ -84,7 +84,7 @@ export async function denyConnection(formData: FormData): Promise<void> {
     .string()
     .regex(/^[A-Za-z0-9_-]{1,100}$/)
     .safeParse(formData.get("authorizationId"));
-  if (!id.success) redirect("/settings?section=ai-assistants");
+  if (!id.success) redirect("/settings/ai-assistants");
   await getCurrentUser();
   const supabase = await createServerSupabase();
   const { data } = await supabase.auth.oauth.denyAuthorization(id.data, {
@@ -92,9 +92,7 @@ export async function denyConnection(formData: FormData): Promise<void> {
   });
   // Only back to an assistant we support; otherwise just leave the page.
   const back = data?.redirect_url;
-  redirect(
-    back && redirectAllowed(back, redirectAllowlist()) ? back : "/settings?section=ai-assistants",
-  );
+  redirect(back && redirectAllowed(back, redirectAllowlist()) ? back : "/settings/ai-assistants");
 }
 
 export interface GrantFormState {
@@ -144,7 +142,7 @@ export async function updateGrantBrands(
             : "Pick your own brands only.",
     };
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { saved: true };
 }
 
@@ -160,5 +158,5 @@ export async function disconnectAssistant(formData: FormData): Promise<void> {
     Sentry.captureException(error, { extra: { userId: user.id } });
   }
   await deleteGrant(getServiceClient(), { userId: user.id, clientId: clientId.data });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
 }

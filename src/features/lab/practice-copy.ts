@@ -165,6 +165,29 @@ export function practiceCard(result: PreviewResult): PracticeCard {
   }
 }
 
+/**
+ * What happened to a try, as a quiet status (approved 17 Nov: status is text, the action is a
+ * button). none: not in the answers yet; answered: a reply from an answer; other: the rest.
+ */
+export function tryStatus(card: PracticeCard): {
+  text: string;
+  tone: "none" | "answered" | "other";
+} {
+  if (card.offerAddAnswer) return { text: "Not in your answers yet", tone: "none" };
+  if (card.reply && card.basedOn)
+    return { text: `Answered from “${card.basedOn}”`, tone: "answered" };
+  if (card.reply) return { text: "Would reply", tone: "answered" };
+  // The first sentence, up to a colon: "Complaints always come to you".
+  return { text: card.next.split(/[:.](?:\s|$)/)[0], tone: "other" };
+}
+
+/** Pure: the question to suggest from a customer's message (tidied, short, editable). */
+export function questionFromMessage(text: string, max = 120): string {
+  const one = text.replace(/\s+/g, " ").trim();
+  if (one.length <= max) return one;
+  return `${one.slice(0, max - 1).replace(/\s+\S*$/, "")}…`;
+}
+
 export function triesLeftText(left: number): string {
   if (left <= 0) return "No tries left today. More tomorrow.";
   return left === 1 ? "1 try left today" : `${left} tries left today`;

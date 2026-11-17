@@ -170,6 +170,45 @@ describe("alerts", () => {
     expect(mine[0].text).toContain(`${APP}/inbox/items/${id}`);
   });
 
+  it("a lead from an ad's form emails its answers and whether they agreed to messages (T78d)", async () => {
+    const eventId = `evt_${randomUUID()}`;
+    await db.from("webhook_events").insert({
+      id: eventId,
+      source: "zernio",
+      event_type: "lead.received",
+      payload: {
+        lead: {
+          formName: "Catering inquiry",
+          fields: { full_name: "Maria Santos", email: "maria@example.com" },
+          consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
+        },
+      },
+    });
+    await db.from("alerts").insert({
+      tenant_id: tenantId,
+      kind: "ad_lead",
+      social_account_id: accountId,
+      details: { source: "ad_form", eventId, formName: "Catering inquiry" },
+      dedupe_key: `ad_lead:${eventId}`,
+    });
+    const before = sent.length;
+    await deliver();
+
+    const mine = sent.slice(before);
+    expect(mine).toHaveLength(1);
+    expect(mine[0].subject).toBe("Alerts Cafe: new lead from Maria Santos");
+    expect(mine[0].text).toContain("Email: maria@example.com");
+    expect(mine[0].text).toContain("They agreed to get messages");
+    expect(mine[0].text).toContain(`${APP}/contacts/ad-leads`);
+    const { data: bell } = await db
+      .from("notifications")
+      .select("kind, needs_action")
+      .eq("tenant_id", tenantId)
+      .eq("details->>eventId", eventId)
+      .single();
+    expect(bell).toEqual({ kind: "lead", needs_action: true });
+  });
+
   it("a disconnect sends one email per drop, linking to settings", async () => {
     const before = sent.length;
     await db.from("social_accounts").update({ status: "disconnected" }).eq("id", accountId);

@@ -7,7 +7,7 @@ export type AlertContent =
   | {
       kind: "escalation";
       itemId: string;
-      itemKind: "comment" | "dm" | "review";
+      itemKind: "comment" | "dm" | "review" | "call";
       platform: string;
       authorName: string | null;
       category: string | null;
@@ -18,14 +18,27 @@ export type AlertContent =
       kind: "lead";
       itemId: string;
       platform: string;
-      itemKind: "comment" | "dm" | "review";
+      itemKind: "comment" | "dm" | "review" | "call";
       authorName: string | null;
       name: string | null;
       contact: string | null;
       request: string | null;
     }
+  | {
+      kind: "ad_lead";
+      formName: string | null;
+      /** Question key -> answer, as the form sent them. */
+      fields: Record<string, string>;
+      agreedToMessages: boolean;
+    }
   | { kind: "disconnect"; platform: string; username: string | null }
-  | { kind: "draft_waiting"; count: number };
+  | { kind: "draft_waiting"; count: number }
+  | {
+      kind: "rcs_status";
+      status: "changes_requested" | "testing" | "live" | "rejected";
+      /** The review note, when there is one. */
+      reason: string | null;
+    };
 
 export interface ComposedEmail {
   subject: string;
@@ -34,8 +47,8 @@ export interface ComposedEmail {
 }
 
 const platformName = platformLabel;
-const where = (platform: string, kind: "comment" | "dm" | "review") =>
-  `${platformName(platform)} ${kind === "dm" ? "DM" : kind}`;
+const where = (platform: string, kind: "comment" | "dm" | "review" | "call") =>
+  kind === "call" ? "phone call" : `${platformName(platform)} ${kind === "dm" ? "DM" : kind}`;
 
 /** Why an item came to the owner, from the policy / send step / runner reason codes. */
 export function escalationReason(reason: string | null, status: string): string {
@@ -54,6 +67,8 @@ export function escalationReason(reason: string | null, status: string): string 
     tenant_inactive: "Your subscription isn't active, so the reply wasn't sent.",
     send_rejected: "The platform refused the reply.",
     retries_exhausted: "Waggle couldn't process or send it after 3 tries.",
+    missed_call: "Nobody picked up. Call them back when you can.",
+    voicemail: "They left a voicemail. Listen to it in Waggle.",
     delivery_failed: "The reply was sent but not delivered.",
     no_approved_draft: "There was no approved reply to send.",
   };
@@ -108,6 +123,24 @@ export function composeAlert(
         { href: itemUrl(appUrl, content.itemId), label: "Open the conversation" },
       );
     }
+    case "ad_lead": {
+      const get = (...keys: string[]) => keys.map((k) => content.fields[k]?.trim()).find(Boolean);
+      const name =
+        get("full_name", "name") ??
+        ([get("first_name"), get("last_name")].filter(Boolean).join(" ") || null);
+      const label = (k: string) => k.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+      return render(
+        `${businessName}: new lead from ${name ?? "your ad"}`,
+        [
+          `Someone filled ${content.formName ?? "your lead form"} in your ad.`,
+          ...Object.entries(content.fields).map(([k, v]) => `${label(k)}: ${v}`),
+          content.agreedToMessages
+            ? "They agreed to get messages from you on WhatsApp."
+            : "They didn't tick the messages box: reply to them directly, not with broadcasts.",
+        ],
+        { href: `${appUrl}/contacts/ad-leads`, label: "Open your leads" },
+      );
+    }
     case "disconnect": {
       const account = `${platformName(content.platform)}${content.username ? ` @${content.username}` : ""}`;
       return render(
@@ -116,8 +149,49 @@ export function composeAlert(
           `${account} is no longer connected, so Waggle can't see or answer its messages.`,
           "Messages that arrive meanwhile wait until you reconnect.",
         ],
-        { href: `${appUrl}/settings`, label: "Reconnect" },
+        { href: `${appUrl}/settings/accounts`, label: "Reconnect" },
       );
+    }
+    case "rcs_status": {
+      const href = `${appUrl}/settings/messaging`;
+      const note = content.reason ? [`The note: “${content.reason}”`] : [];
+      switch (content.status) {
+        case "changes_requested":
+          return render(
+            `${businessName}: your branded texts request needs a fix`,
+            ["Before it goes to the carriers, a detail needs changing.", ...note],
+            { href, label: "Fix the request" },
+          );
+        case "testing":
+          return content.reason
+            ? render(
+                `${businessName}: your launch details came back`,
+                ["The carriers' review needs another look at the launch details.", ...note],
+                { href, label: "Send them again" },
+              )
+            : render(
+                `${businessName}: branded texts are ready to test`,
+                [
+                  "Carriers approved your business. Invite your phone, try a few messages, then send the launch details.",
+                ],
+                { href, label: "Start testing" },
+              );
+        case "live":
+          return render(
+            `${businessName}: branded texts are live`,
+            [
+              "Your texts now show your name, logo and a verified tick. Replies arrive in the inbox.",
+            ],
+            { href: `${appUrl}/inbox`, label: "Open the inbox" },
+          );
+        case "rejected":
+          return render(
+            `${businessName}: carriers didn't approve your branded texts`,
+            [...note, "You can send a new request from Settings."],
+            { href, label: "Open Messaging" },
+          );
+      }
+      break;
     }
     case "draft_waiting": {
       const n = content.count;

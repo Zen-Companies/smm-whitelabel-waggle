@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useActionState } from "react";
+import { Brand } from "@/components/app/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
@@ -35,13 +36,16 @@ export function AuthForm({
   const isSignup = mode === "signup";
 
   return (
-    <div className="card w-full max-w-md p-6 md:p-8">
-      <div className="mb-6 flex flex-col gap-2">
-        <h1 className="display-title">{isSignup ? "Create your Waggle login" : "Welcome back"}</h1>
+    <div className="card w-full max-w-[420px] rounded-3xl px-6 pt-8 pb-6 shadow-[0_24px_60px_rgba(60,40,0,0.12)] md:px-[34px] md:pt-9">
+      <Brand />
+      <div className="mt-6 mb-6 flex flex-col gap-2">
+        <h1 className="display-title">
+          {isSignup ? "Answer every message in about a minute, in your words" : "Welcome back"}
+        </h1>
         <p className="text-ink-2">
           {isSignup
-            ? "Just you for now. You'll add your business, or join a team, next."
-            : "Sign in to see what's waiting for you."}
+            ? "AI-assisted. You write the answers, you set the rules. Waggle gets them out fast."
+            : "Your socials, handled. Sign in to see what Waggle answered while you were away."}
         </p>
       </div>
       {error && LINK_ERRORS[error] && (
@@ -119,31 +123,45 @@ export function AuthForm({
           {pending ? "Please wait…" : isSignup ? "Create login" : "Sign in"}
         </Button>
         {isSignup && (
-          <p className="text-ink-3 text-center text-xs">
-            By continuing you agree to the{" "}
-            <a href="https://gowaggle.ai/terms" className="underline underline-offset-2">
-              Terms
-            </a>{" "}
-            and{" "}
-            <a href="https://gowaggle.ai/privacy" className="underline underline-offset-2">
-              Privacy Policy
-            </a>
-            .
-          </p>
+          <ol className="bg-subtle text-ink-2 flex flex-col gap-2 rounded-2xl px-4 py-3.5 text-[13px]">
+            {[
+              "Connect where customers message you",
+              "Write your top 3 answers",
+              "Choose Ask me first or Reply on its own",
+            ].map((s, i) => (
+              <li key={s} className="flex items-center gap-2.5">
+                <b className="bg-honey inline-flex size-[22px] flex-none items-center justify-center rounded-full text-xs text-[#17140f]">
+                  {i + 1}
+                </b>
+                {s}
+              </li>
+            ))}
+          </ol>
         )}
+        <p className="text-ink-3 text-center text-xs">
+          By continuing you agree to the{" "}
+          <a href="https://gowaggle.ai/terms" className="link-inline">
+            Terms
+          </a>{" "}
+          and{" "}
+          <a href="https://gowaggle.ai/privacy" className="link-inline">
+            Privacy Policy
+          </a>
+          .
+        </p>
         <p className="text-ink-2 text-center text-sm">
           {isSignup ? (
             <>
               Already have an account?{" "}
-              <Link href="/login" className="text-ink font-medium underline underline-offset-4">
+              <Link href="/login" className="link-inline">
                 Sign in
               </Link>
             </>
           ) : (
             <>
-              New here?{" "}
-              <Link href="/signup" className="text-ink font-medium underline underline-offset-4">
-                Create an account
+              New to Waggle?{" "}
+              <Link href="/signup" className="link-inline">
+                Start with your beta code
               </Link>
             </>
           )}

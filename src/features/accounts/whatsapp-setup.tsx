@@ -38,7 +38,7 @@ export function WhatsAppSetup() {
             Continue with Meta
           </Button>
         </form>
-        <Link href="/settings?section=accounts" className={buttonVariants({ variant: "ghost" })}>
+        <Link href="/settings/accounts" className={buttonVariants({ variant: "ghost" })}>
           Cancel
         </Link>
       </div>

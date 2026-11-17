@@ -282,6 +282,146 @@ describe("POST /api/webhooks/zernio", () => {
     expect(item?.status).toBe("paused");
   });
 
+  it("a voicemail becomes a call item for the owner; a redelivery adds nothing; answered calls none (T82b)", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const payload = fixture("call-ended");
+    payload.call.id = `call_${suffix}`;
+    payload.call.accountId = payload.account.id = payload.account.accountId = `acc_phone_${suffix}`;
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "call_item_created" });
+
+    const { data: item } = await db
+      .from("inbound_items")
+      .select("kind, status, author_name, text, call_voicemail, call_duration_seconds")
+      .eq("zernio_call_id", payload.call.id)
+      .single();
+    expect(item).toEqual({
+      kind: "call",
+      status: "escalated",
+      author_name: "+14155550110",
+      text: "Left a voicemail",
+      call_voicemail: true,
+      call_duration_seconds: 24,
+    });
+
+    const again = fixture("call-ended");
+    again.call = { ...payload.call };
+    again.account = { ...payload.account };
+    expect(await (await deliver(again)).json()).toEqual({
+      outcome: "processed",
+      detail: "item_exists",
+    });
+
+    const answered = fixture("call-ended");
+    answered.call = {
+      ...payload.call,
+      id: `call_answered_${suffix}`,
+      isVoicemail: false,
+      endReason: "hangup",
+    };
+    answered.account = { ...payload.account };
+    expect(await (await deliver(answered)).json()).toEqual({
+      outcome: "skipped",
+      reason: "answered_call",
+    });
+  });
+
+  it("an email lands as a chat item, its thread keeping the subject (T81b)", async () => {
+    const payload = fixture("message-received-email");
+    const suffix = randomUUID().slice(0, 8);
+    payload.message.id = `msg_email_${suffix}`;
+    payload.message.conversationId = `conv_email_${suffix}`;
+    payload.account.id = payload.account.accountId = `acc_imap_${suffix}`;
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "item_created" });
+
+    const { data: conv } = await db
+      .from("conversations")
+      .select("platform, subject")
+      .eq("zernio_conversation_id", payload.message.conversationId)
+      .single();
+    expect(conv).toEqual({ platform: "imap", subject: "Catering for 30 people?" });
+    expect(await count("inbound_items", "zernio_message_id", payload.message.id)).toBe(1);
+  });
+
+  it("an iMessage lands as a chat item; STOP never does (T83d)", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const payload = fixture("message-received-imessage");
+    payload.message.id = `msg_imsg_${suffix}`;
+    payload.message.conversationId = `conv_imsg_${suffix}`;
+    payload.account.id = payload.account.accountId = `acc_imsg_${suffix}`;
+    expect(await (await deliver(payload)).json()).toEqual({
+      outcome: "processed",
+      detail: "item_created",
+    });
+    const { data: conv } = await db
+      .from("conversations")
+      .select("platform")
+      .eq("zernio_conversation_id", payload.message.conversationId)
+      .single();
+    expect(conv).toEqual({ platform: "imessage" });
+
+    const stop = fixture("message-received-imessage");
+    stop.message.id = `msg_imsg_stop_${suffix}`;
+    stop.message.conversationId = payload.message.conversationId;
+    stop.account.id = stop.account.accountId = payload.account.id;
+    stop.message.text = "STOP";
+    expect(await (await deliver(stop)).json()).toMatchObject({ outcome: "skipped" });
+    expect(await count("inbound_items", "zernio_message_id", stop.message.id)).toBe(0);
+  });
+
+  it("rcs.agent.status_updated alerts the owner only when it needs them (T83b)", async () => {
+    const payload = fixture("rcs-agent-status-updated");
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "rcs_status" });
+    const { data: alerts } = await db
+      .from("alerts")
+      .select("kind, details")
+      .eq("dedupe_key", `rcs_status:${payload.id}`);
+    expect(alerts).toHaveLength(1);
+    expect(alerts![0]).toMatchObject({
+      kind: "rcs_status",
+      details: { source: "rcs", status: "changes_requested", agentId: payload.agent.id },
+    });
+
+    const quiet = fixture("rcs-agent-status-updated");
+    quiet.status = "agent_review";
+    delete quiet.reason;
+    expect(await (await deliver(quiet)).json()).toEqual({
+      outcome: "processed",
+      detail: "rcs_status_noted",
+    });
+
+    const other = fixture("rcs-agent-status-updated");
+    other.agent.profileId = "someone_elses_profile";
+    expect(await (await deliver(other)).json()).toMatchObject({ outcome: "rejected" });
+  });
+
+  it("lead.received queues one ad-lead alert per lead, holding ids only (T78d)", async () => {
+    const leadgenId = `lg_${randomUUID().slice(0, 8)}`;
+    const payload = fixture("lead-received");
+    payload.lead.leadgenId = leadgenId;
+    const res = await deliver(payload);
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "ad_lead" });
+
+    // Same lead under a new event id (a redelivery): still one alert.
+    const again = fixture("lead-received");
+    again.lead.leadgenId = leadgenId;
+    await deliver(again);
+
+    const { data: alerts } = await db
+      .from("alerts")
+      .select("kind, details")
+      .eq("dedupe_key", `ad_lead:${leadgenId}`);
+    expect(alerts).toHaveLength(1);
+    expect(alerts![0].details).toMatchObject({
+      source: "ad_form",
+      eventId: payload.id,
+      formName: "Catering inquiry",
+    });
+    expect(JSON.stringify(alerts![0].details)).not.toContain("Maria");
+  });
+
   it("post.* events update the post's status and error", async () => {
     const postId = `post_${randomUUID().slice(0, 8)}`;
     const { data: account } = await db

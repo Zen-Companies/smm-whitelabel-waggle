@@ -48,8 +48,11 @@ describe("sectionPath", () => {
     ["/inbox", "/inbox"],
     ["/posts/123?x=1", "/posts"],
     ["/inbox/items/abc", "/inbox"],
-    ["/knowledge-base#faq", "/knowledge-base"],
+    ["/teach/business-info#faq", "/teach/business-info"],
     ["/settings", "/settings"],
+    ["/settings/team?x=1", "/settings/team"],
+    ["/posts/3f2a9c1e-0b7d-4e8a-9a1f-2c3d4e5f6a7b", "/posts"],
+    ["/contacts/leads", "/contacts/leads"],
   ])("%s → %s", (from, to) => {
     expect(sectionPath(from)).toBe(to);
   });

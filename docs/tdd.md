@@ -82,6 +82,21 @@ supabase/
 
 Rules: features expose a public API via `index.ts` and never import another feature's internals. Code moves to `lib/` only when a second feature needs it.
 
+### Routes (16 Nov)
+
+Places are paths; filters and selections stay as query (`?item=`, `?q=`, `?by=`, `?period=`, `?topic=`, page numbers). `src/lib/routes.ts` builds the links and maps old addresses.
+
+| Page | Paths |
+|---|---|
+| Contacts | `/contacts` (People), `/contacts/people`, `/contacts/leads` (+ `/export`), `/contacts/ad-leads`, `/contacts/broadcasts` |
+| Teach Waggle | `/teach` (Overview), `/teach/business-info`, `/teach/automations` (Comment to DM), `/teach/automations/<kind>`, `/teach/lab` |
+| Inbox | `/inbox` (For you), `/inbox/answered`, `/inbox/hidden`, `/inbox/items/<id>` (redirects to its tab) |
+| Insights | `/insights` (Overview), `/insights/<work, posts, audience>`, `/insights/posts.csv` |
+| Settings | `/settings` (Connected accounts), `/settings/<section>` (account, general, team, billing, accounts, notifications, business, ai-assistants, whatsapp, phone, messaging) |
+| Organization settings | `/orgs/settings` (Team), `/orgs/settings/<account, general, team, billing>` |
+
+Old addresses forward permanently (308) from `src/proxy.ts` through `legacyPath`: `/leads`, `/knowledge-base`, `/automations?kind=`, `/lab`, `/analytics?section=`, `/settings?section=` (`replies` goes to `/teach#replies`), `/orgs/settings?section=`, `/inbox?tab=` (including the older `waiting`, `needs`, `sent`), keeping the rest of the query. Feedback keeps its old page keys for moved pages (`features/feedback/pages.ts`). Section mentions below that predate this (`/leads`, `/knowledge-base`, `/lab`, `/analytics`, `?tab=`) are history.
+
 ## 4. Multi-tenancy
 
 - One `tenant` per business; one Zernio **profile** per tenant with `externalId = tenant.id`.
@@ -213,7 +228,7 @@ As built (T13, `features/alerts`, `features/leads`):
 - **Nudge.** `public.enqueue_draft_nudges('30 minutes')` (job route): pending drafts of `awaiting_approval` items older than 30 min with `drafts.nudged_at` null are marked nudged and queued as one `draft_waiting` alert per tenant ("2 replies are waiting…"). Each draft is nudged once.
 - **DM window.** `escalateClosingDmWindows` (`features/approvals/sweeps.ts`, job route): an `awaiting_approval` DM whose customer message is more than 23 h old → `escalated` (`policyReason: dm_window_closing`), which queues the escalation email while the owner can still reply on the platform. This follows §7.2 literally; the draft can no longer be approved in the app after that (see open questions).
 - **Delivery** (`deliverPendingAlerts`, job route, after the item steps, until 10 s remain): due `pending` alerts (batch 20) are claimed by bumping `attempts` conditionally, composed (`compose.ts`, pure) and sent to every owner's auth email (admin API) with `Idempotency-Key` = alert id. Success → `sent` (or `logged`), `provider_id`, `alert_sent` audit. Failure → retry after 2^attempts min; the 5th failure, or a permanent problem (item/lead/account gone, no owner email) → `failed`, `alert_failed` audit, Sentry.
-- **Mailer.** `createResendMailer` calls Resend's REST API directly (`POST https://api.resend.com/emails` `{ from, to, subject, text, html }`, `Authorization: Bearer`, `Idempotency-Key`, 24 h; response `{ id }`; checked against resend.com/docs). No SDK dependency. Without `RESEND_API_KEY` and `ALERT_FROM_EMAIL`, and always under Vitest, `logMailer` logs the alert id and recipient count (no addresses or content) and the alert is marked `logged`.
+- **Mailer.** `createResendMailer` calls Resend's REST API directly (`POST https://api.resend.com/emails` `{ from, to, subject, text, html }`, `Authorization: Bearer`, `Idempotency-Key`, 24 h; response `{ id }`; checked against resend.com/docs). No SDK dependency. Without `RESEND_API_KEY` and `ALERT_FROM_EMAIL`, and always under Vitest, `logMailer` logs the alert id and recipient count (no addresses or content) and the alert is marked `logged`. **Replies (2026-11-13):** with `EMAIL_REPLY_TO` set, every email carries `reply_to` (Mailpit: `ReplyTo`), so replies reach a real inbox (hello@gowaggle.ai, which GHL/Mailgun receives); the sending address isn't read and Resend only sends. Supabase's auth emails have no reply-to: their sender is set in Supabase → Auth → SMTP.
 - **In-app notification center** (docs/design.md §5, migration `notifications`, `features/alerts/notification-*.tsx`): `public.notifications` (tenant_id, kind `lead` / `needs_you` / `account` / `replies_waiting` / `post_published` / `post_failed` / `auto_sent`, `needs_action`, item/account/post ids, details with ids and counts, unique `dedupe_key`, `read_at`) is filled by triggers in the same transaction as the event: every `alerts` insert (so each alert is both an email and a notification), post status changes (published = update; failed / partial / cancelled-with-a-reason = needs action), and drafts sent with no owner decision (auto-send), batched into one row per tenant per day ("5 replies sent automatically", made unread again by each new one). Owners read their own through RLS and may only set `read_at`. The bell (sidebar) shows a violet count of unread rows that need action; the panel (All / Needs you / Updates, grouped Today / Earlier) loads through Server Actions; opening an item anywhere marks its notifications read. Not in the Realtime publication (rule 15): the badge refreshes on navigation and every 30 s.
 - **Content.** Escalation: who (author), where (platform + comment/DM), why (reason code → sentence), link to `/inbox/items/<id>`. Never the customer's message: it stays in the app. Lead: name, contact and request (the point of the email), link to the conversation. Disconnect: account, link to `/settings`. Nudge: count, link to `/inbox`.
 - **Pages.** `/leads` lists leads newest first (name, request, contact, source, time) with "View conversation". The inbox (design v2) shows the selected item as its conversation: for a DM, every message in it and the sent replies, interleaved by time; the waiting draft as the composer at the bottom; a context panel with the customer, the lead and the activity (`features/approvals/conversation-data.ts`). `/inbox/items/[id]` (linked from alert emails and notifications) redirects to `/inbox?tab=…&item=<id>`. Both read through RLS.
@@ -555,10 +570,15 @@ As built (T10, `features/approvals`):
 
 ## 12. Billing
 
-- Stripe Checkout for the subscription; webhook `/api/webhooks/stripe` verifies the signature and handles `checkout.session.completed`, `customer.subscription.updated`, `customer.subscription.deleted` → update `tenants.subscription_status`.
-- Stripe events also go through `webhook_events` for dedupe.
-- Gate: job processing skips tenants not `active`/`trialing` (items → `paused`).
-- One bill per brand (T47): billing stays per tenant, so an owner with three brands has three subscriptions.
+_Built 2026-11-17 (T86, Pricing Bible; design "Settings · Your plan, with the bee"). **Changed** from the first plan: one bill per **organization** (decided 10 and 17 Nov), not per brand, and the organization's plan is stored in its own table, not on `tenants`._
+
+- **Catalog:** `pnpm stripe:catalog` creates the products, prices (lookup keys `waggle_<plan>_<monthly|yearly>`, `waggle_extra_account_<monthly|yearly>`, `waggle_top_up_200`), the founding coupon (`waggle_founding_business`: $20 off Business for 6 months, 50 redemptions) and the customer portal settings, idempotently, and prints the ids. The app finds prices by lookup key: no price id in the environment. Refuses a live key without `--live`.
+- **Tables:** `org_billing` (one row per organization: Stripe customer and subscription, plan, interval, status, trial end, period end, ending, extra accounts, founding, automatic top-up, the time of the Stripe event it came from) and `reply_top_ups` (one row per paid 200, unique Stripe reference). RLS on, no policies: server only.
+- **Checkout:** Settings → Your plan (Owner only, `billing.view`, checked again in the actions). No plan: Stripe Checkout, subscription mode, card up front, 7-day trial the first time, the founding coupon on Business monthly while spots last (also marked `founding=1` in the subscription's metadata, since subscription events list discounts by id only), USD only (adaptive pricing off). With a plan: the item is switched in place, prorated; extra accounts are a second item at the plan's interval. Top-ups: one-time Checkout. Card, invoices, cancelling: Stripe's customer portal.
+- **Webhook** `/api/webhooks/stripe`: verifies the signature, dedupes in `webhook_events` (a failed event is applied again on retry), then writes only to the database (rule 3): `customer.subscription.*` → `org_billing` (older events never overwrite newer ones); `checkout.session.completed` with `kind=top_up` and `invoice.paid` with `kind=auto_top_up` → `reply_top_ups`. A cancel by date (`cancel_at`, what the portal sets on current API versions) counts as ending.
+- **Limits:** a plan applies while the subscription is trialing, active or past due. `billing.plans` (staff switch) still gates every limit; with it off nothing is limited. At 100% drafting pauses; with automatic top-up on (not during the trial) the card on the subscription is charged for 200 more, at most twice a month, then checked again.
+- **Notes:** Today shows the 80% note and the 100% banner, the Inbox the 100% banner, all with the comb and the bee. Not built: the 80%/100% emails (`limitEmailDue` exists) and dismissing the 80% note.
+- Local: `stripe listen --forward-to localhost:3000/api/webhooks/stripe` prints the webhook secret for `STRIPE_WEBHOOK_SECRET`.
 
 ## 13. Security
 
@@ -619,7 +639,7 @@ ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET
 JEV_API_URL, JEV_API_KEY, JEV_MODEL, JEV_TIMEOUT_MS, JEV_COST_PER_MTOK_INPUT
 LLM_PROVIDER (openrouter), OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL
 EMBEDDING_PROVIDER (openrouter), EMBEDDING_MODEL
-RESEND_API_KEY, ALERT_FROM_EMAIL, OPERATOR_ALERT_EMAIL
+RESEND_API_KEY, ALERT_FROM_EMAIL, EMAIL_REPLY_TO, OPERATOR_ALERT_EMAIL
 SOCIAL_PROVIDER_MODE (mock | zernio)
 STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PRICE_ID
 CRON_SECRET

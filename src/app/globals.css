@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Design system: docs/design.md (Waggle Paper, v3). Components use these tokens, never raw hex. */
+/* Design system: docs/design.md (Waggle Hive, v4). Components use these tokens, never raw hex. */
 
 @theme inline {
   /* Palette (design.md §3) */
@@ -48,48 +48,48 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Type: Inter for everything (design.md §3) */
+  /* Type: Outfit for headings and the wordmark, Inter for the rest (design.md §3) */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-outfit), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-heading: var(--font-display);
 
-  /* Radius: 8 controls · 12 panels; nothing rounder except avatars and dots */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 12px;
-  --radius-3xl: 12px;
+  /* Radius: 12 controls · 18 cards and panels (design.md §3) */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 18px;
+  --radius-3xl: 20px;
 
   /* Depth: borders do the work; one shadow, only on overlays */
-  --shadow-overlay: 0 12px 32px rgba(24, 24, 27, 0.12);
+  --shadow-overlay: 0 12px 32px rgba(23, 20, 15, 0.14);
 }
 
 :root {
   color-scheme: light;
-  --page: #ffffff;
+  --page: #faf8f3;
   --surface: #ffffff;
-  --subtle: #f5f5f4;
-  --line: #e7e5e4;
-  --line-strong: #d6d3d1;
-  --ink: #18181b;
-  --ink-2: #52525b;
-  --ink-3: #71717a;
-  --ink-4: #a1a1aa;
-  --honey: #f5b014;
+  --subtle: #f4f1e9;
+  --line: #ece8df;
+  --line-strong: #d9d2c2;
+  --ink: #17140f;
+  --ink-2: #4f4a40;
+  --ink-3: #6b6458;
+  --ink-4: #a39b8b;
+  --honey: #f6b21b;
   --honey-hover: #e5a50f;
-  --honey-text: #92600a;
-  --honey-tint: #fff7e0;
-  --honey-border: #f5d98c;
-  --danger: #b42318;
-  --danger-soft: #fef3f2;
-  --danger-border: #fecdca;
-  --success: #15803d;
-  --success-soft: #f0fdf4;
-  /* Staff-only marks (Playground, staff role); never on owner screens. */
-  --info: #1e4f8a;
-  --info-soft: #e0edfb;
-  --focus-ring: rgba(24, 24, 27, 0.08);
+  --honey-text: #7a4f00;
+  --honey-tint: #fff9ea;
+  --honey-border: #f3dfa8;
+  --danger: #8c2a1e;
+  --danger-soft: #fce8e6;
+  --danger-border: #f2c6bf;
+  --success: #1c5b36;
+  --success-soft: #e7f4ec;
+  /* Neutral notes; staff-only marks (Playground, staff role) too. */
+  --info: #3a4250;
+  --info-soft: #eef0f3;
+  --focus-ring: rgba(23, 20, 15, 0.1);
 
   --background: var(--page);
   --foreground: var(--ink);
@@ -98,7 +98,8 @@
   --popover: var(--surface);
   --popover-foreground: var(--ink);
   --primary: var(--honey);
-  --primary-foreground: var(--ink);
+  /* Text on honey is always dark, in both themes. */
+  --primary-foreground: #17140f;
   --secondary: var(--surface);
   --secondary-foreground: var(--ink);
   --muted: var(--subtle);
@@ -109,7 +110,43 @@
   --border: var(--line);
   --input: var(--line-strong);
   --ring: var(--ink);
-  --radius: 8px;
+  --radius: 12px;
+}
+
+/* Dark (design.md §3): chosen in the account menu or Settings, or "match device". */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #14110c;
+  --surface: #1f1a13;
+  --subtle: #2a241a;
+  --line: #3a3226;
+  --line-strong: #4a4033;
+  --ink: #f5f1e8;
+  --ink-2: #d8d0c0;
+  --ink-3: #aba290;
+  --ink-4: #6b6458;
+  --honey-hover: #f6c350;
+  --honey-text: #f6c350;
+  --honey-tint: #2b2312;
+  --honey-border: #6b5420;
+  --danger: #f2a093;
+  --danger-soft: #3a1712;
+  --danger-border: #5a2a22;
+  --success: #7fd3a0;
+  --success-soft: #12301f;
+  --info: #b8c2d3;
+  --info-soft: #252a33;
+  --focus-ring: rgba(245, 241, 232, 0.16);
+}
+
+/* On a honey fill, text stays dark in both themes. */
+.bg-honey,
+.bg-primary {
+  --ink: #17140f;
+  --ink-2: #4f4a40;
+  --ink-3: #4f4a40;
+  --honey-text: #4a3000;
+  color: #17140f;
 }
 
 @layer base {
@@ -142,13 +179,15 @@
 @layer components {
   /* Type roles (design.md §3) */
   .page-title {
-    font-size: 24px;
-    line-height: 1.25;
+    font-family: var(--font-display);
+    font-size: 32px;
+    line-height: 1.2;
     font-weight: 600;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.6px;
     color: var(--ink);
   }
   .display-title {
+    font-family: var(--font-display);
     font-size: 20px;
     line-height: 1.3;
     font-weight: 600;
@@ -156,7 +195,8 @@
     color: var(--ink);
   }
   .section-title {
-    font-size: 16px;
+    font-family: var(--font-display);
+    font-size: 18px;
     line-height: 1.4;
     font-weight: 600;
     color: var(--ink);
@@ -178,8 +218,9 @@
 
   /* Wordmark (design.md §2): lowercase, Inter 700, tight tracking. */
   .wordmark {
+    font-family: var(--font-display);
     font-weight: 700;
-    letter-spacing: -0.035em;
+    letter-spacing: -0.5px;
     line-height: 1;
     color: var(--ink);
   }
@@ -293,14 +334,118 @@
     color: var(--ink-4);
     font-variant-numeric: tabular-nums;
   }
-  .tabs > [data-active] {
+  .tabs > [data-active],
+  .tabs > [aria-current="page"] {
     color: var(--ink);
     font-weight: 600;
     box-shadow: inset 0 -2px 0 var(--ink);
   }
-  .tabs > [data-active] > span {
+  .tabs > [data-active] > span,
+  .tabs > [aria-current="page"] > span {
     color: var(--ink-3);
     font-weight: 500;
+  }
+
+  /* Beyond text (design.md §4, approved 16 Nov). Rule 1: a card's action has an arrow. */
+  .action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: -6px -10px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color 150ms ease-out;
+  }
+  .action-link:hover,
+  .action-link:focus-visible {
+    background: var(--subtle);
+  }
+  .action-link.with-arrow::after {
+    content: "→";
+    display: inline-block;
+    transition: transform 150ms ease-out;
+  }
+  .action-link.with-arrow:hover::after,
+  .action-link.with-arrow:focus-visible::after {
+    transform: translateX(3px);
+  }
+  /* Rule 5 (option B): a link inside a sentence sits on a honey highlight. */
+  .link-inline {
+    color: var(--ink);
+    font-weight: 600;
+    text-decoration: none;
+    padding: 0 2px;
+    border-radius: 3px;
+    background: linear-gradient(
+      transparent 58%,
+      color-mix(in srgb, var(--honey) 45%, transparent) 58%
+    );
+    transition: background 150ms ease-out;
+  }
+  .link-inline:hover,
+  .link-inline:focus-visible {
+    background: color-mix(in srgb, var(--honey) 45%, transparent);
+  }
+  /* Rule 4 (option B): the empty honeycomb cell; it fills with honey where it can be filled. */
+  .empty-cell-hex {
+    fill: none;
+    stroke: var(--ink-3);
+    transition:
+      fill 150ms ease-out,
+      stroke 150ms ease-out;
+  }
+  .empty-cell-plus {
+    stroke: var(--ink-2);
+  }
+  .empty-slot {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border-radius: 12px;
+    color: var(--ink-3);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 150ms ease-out;
+  }
+  .empty-slot:hover,
+  .empty-slot:focus-visible {
+    color: var(--honey-text);
+  }
+  .empty-slot:hover .empty-cell-hex,
+  .empty-slot:focus-visible .empty-cell-hex {
+    fill: var(--honey-tint);
+    stroke: var(--honey);
+    stroke-dasharray: none;
+  }
+  .empty-slot .empty-slot-text {
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+  }
+  .empty-slot:hover .empty-slot-text,
+  .empty-slot:focus-visible .empty-slot-text {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .action-link,
+    .action-link.with-arrow::after,
+    .link-inline,
+    .empty-cell-hex,
+    .empty-slot,
+    .empty-slot .empty-slot-text {
+      transition: none;
+    }
+    .action-link.with-arrow:hover::after {
+      transform: none;
+    }
   }
 
   /* Account-wide banner (design.md §4) */
@@ -466,6 +611,97 @@
   transform-origin: 50% 10%;
   animation: bee-wiggle 600ms ease-in-out 1;
 }
+/* Get Waggle ready (approved 17 Nov): the dance flown once, then the bee rests where it began. */
+.bee-fly-once {
+  position: absolute;
+  top: 0;
+  left: 0;
+  offset-rotate: auto;
+  animation: bee-along 2.6s ease-in-out 1 both;
+}
+.bee-trace-slow {
+  stroke-dasharray: 100;
+  animation: bee-trace 2.6s ease-in-out both;
+}
+/* Your plan: a faint honeycomb behind the plan header. */
+.hexbg {
+  background-color: var(--honey-tint);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='48' viewBox='0 0 28 48'%3E%3Cpath d='M14 0l14 8v16L14 32 0 24V8z M14 32v16' fill='none' stroke='%23E9A30C' stroke-opacity='.22' stroke-width='1'/%3E%3C/svg%3E");
+}
+/* Your plan (approved 17 Nov): replies poured into the comb, the bee resting when they run out. */
+@keyframes comb-pour {
+  from {
+    fill: var(--surface);
+  }
+  to {
+    fill: var(--honey);
+  }
+}
+.comb-pour {
+  animation: comb-pour 500ms ease-out both;
+}
+@keyframes bee-sway {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(1px) rotate(-4deg);
+  }
+}
+.bee-sway {
+  animation: bee-sway 3s ease-in-out infinite;
+}
+@keyframes bee-zz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(8px, -14px);
+  }
+}
+.bee-zz {
+  opacity: 0;
+  animation: bee-zz 2.4s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bee-zz {
+    animation: none;
+    opacity: 1;
+  }
+}
+/* Step 4: the message carried across while Waggle writes. */
+@keyframes bee-carry {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+.bee-carry {
+  position: absolute;
+  top: 0;
+  left: 0;
+  offset-rotate: auto;
+  animation: bee-carry 1.8s ease-in-out infinite;
+}
+/* Step 5: each choice's bee moves only while that choice is picked. */
+label:not(:has(:checked)) .choice-bee *,
+label:not(:has(:checked)) .choice-bee {
+  animation-play-state: paused;
+}
 /* The landing page's flight path (features/landing/flight-path.tsx): the hero keeps its own loop
    until the first scroll, then the one bee follows the scroll along the page-long trail. The
    hand-off is a 150ms fade (rule 8). */
@@ -535,6 +771,99 @@
 @media (prefers-reduced-motion: reduce) {
   .feedback-bee,
   .feedback-pop {
+    animation: none;
+  }
+}
+
+/* Sign-in wall (client redesign "0 · Sign in"): columns drift in turn, fading at the edges. */
+.auth-wall {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 14%,
+    #000 86%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+}
+.auth-col {
+  animation: auth-drift linear infinite;
+  will-change: transform;
+}
+.auth-col-rev {
+  animation-direction: reverse;
+}
+.auth-wall:hover .auth-col,
+.auth-wall[data-paused="true"] .auth-col {
+  animation-play-state: paused;
+}
+@keyframes auth-drift {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-50% - 10px));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-col {
+    animation: none;
+  }
+}
+
+/* Modern scrollbars, everywhere (the page and every scroll area): thin, rounded, no arrows, the track
+   out of the way; the thumb darkens on hover. Chrome, Edge and Safari use the -webkit- rules
+   (which drop the arrow buttons); Firefox gets the standard properties. Both follow the tokens. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--ink-4);
+}
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+}
+
+/* Side panel (Posts composer, approved 16 Nov): slides in from the right; still when motion is off. */
+.side-panel {
+  animation: side-panel-in 220ms ease-out;
+}
+.side-panel-backdrop {
+  animation: side-panel-fade 220ms ease-out;
+}
+@keyframes side-panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+@keyframes side-panel-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-panel,
+  .side-panel-backdrop {
     animation: none;
   }
 }

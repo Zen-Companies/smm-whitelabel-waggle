@@ -11,8 +11,10 @@ import { connectAccount } from "./actions";
 import { BlueskySetup } from "./bluesky-setup";
 import { TelegramSetup } from "./telegram-setup";
 import { WhatsAppSetup } from "./whatsapp-setup";
+import { LineSetup } from "./line-setup";
 import { connectBanner } from "./connect-banner";
 import { ConnectTiles } from "./connect-tiles";
+import { MoreConnections } from "./more-connections";
 
 /** Connected accounts (Settings). Status is inline text + icon, never a colored chip. */
 export async function AccountsCard({
@@ -40,6 +42,8 @@ export async function AccountsCard({
     <TelegramSetup />
   ) : params.setup === "whatsapp" ? (
     <WhatsAppSetup />
+  ) : params.setup === "line" ? (
+    <LineSetup />
   ) : null;
   const tiles = !mayConnect ? (
     <ReadOnlyNote role={tenant.role} what="the connected accounts" />
@@ -47,6 +51,7 @@ export async function AccountsCard({
     <>
       {setup}
       <ConnectTiles exclude={connected} />
+      <MoreConnections />
     </>
   );
 
@@ -98,7 +103,11 @@ export async function AccountsCard({
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">
                       {name(account.platform)}
-                      {account.username ? ` @${account.username}` : ""}
+                      {account.username
+                        ? account.username.includes("@")
+                          ? ` ${account.username}`
+                          : ` @${account.username}`
+                        : ""}
                     </span>
                     {(() => {
                       // T66: what Waggle does here, and a gray line only when it differs.

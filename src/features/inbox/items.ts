@@ -9,7 +9,14 @@ export type NewInboundItem = {
   receivedAt: string;
 } & (
   | { kind: "comment"; zernioCommentId: string; zernioPostId: string; permalink?: string | null }
-  | { kind: "dm"; zernioMessageId: string; conversationId: string }
+  | {
+      kind: "dm";
+      zernioMessageId: string;
+      conversationId: string;
+      /** T72: the platform's message id and what it carried besides text (kinds only). */
+      platformMessageId?: string | null;
+      attachments?: { type: string; originalType?: string }[];
+    }
   /** T42: a Facebook Page review (polled); T61: a Google review (webhook), with its stars. */
   | {
       kind: "review";
@@ -18,6 +25,8 @@ export type NewInboundItem = {
       rating?: number | null;
       permalink?: string | null;
     }
+  /** T82b: an inbound call nobody answered, or that went to voicemail. */
+  | { kind: "call"; zernioCallId: string; voicemail: boolean; durationSeconds: number }
 );
 
 /**
@@ -37,6 +46,7 @@ export async function insertInboundItem(
     received_at: item.receivedAt,
   };
   if (item.kind === "review") return insertReview(db, item, common);
+  if (item.kind === "call") return insertCall(db, item, common);
   const [row, conflictColumn, zernioId] =
     item.kind === "comment"
       ? [
@@ -54,6 +64,8 @@ export async function insertInboundItem(
             ...common,
             zernio_message_id: item.zernioMessageId,
             conversation_id: item.conversationId,
+            platform_message_id: item.platformMessageId ?? null,
+            attachments: item.attachments ?? [],
           },
           "zernio_message_id" as const,
           item.zernioMessageId,
@@ -129,5 +141,49 @@ async function insertReview(
     .eq("zernio_review_id", item.zernioReviewId)
     .single();
   if (lookupError) throw new Error(`inbound_items review lookup failed: ${lookupError.message}`);
+  return { itemId: existing.id, created: false };
+}
+
+async function insertCall(
+  db: ServiceClient,
+  item: Extract<NewInboundItem, { kind: "call" }>,
+  common: Record<string, string | null>,
+): Promise<{ itemId: string; created: boolean }> {
+  const { data: inserted, error } = await db
+    .from("inbound_items")
+    .upsert(
+      {
+        ...(common as {
+          tenant_id: string;
+          social_account_id: string;
+          kind: string;
+          text: string;
+          received_at: string;
+        }),
+        zernio_call_id: item.zernioCallId,
+        call_voicemail: item.voicemail,
+        call_duration_seconds: item.durationSeconds,
+      },
+      { onConflict: "zernio_call_id", ignoreDuplicates: true },
+    )
+    .select("id");
+  if (error) throw new Error(`inbound_items insert failed: ${error.message}`);
+  if (inserted.length > 0) {
+    const itemId = inserted[0].id;
+    await writeAudit(db, {
+      tenantId: item.tenantId,
+      itemId,
+      action: "item_received",
+      actor: "system",
+      details: { kind: "call", socialAccountId: item.socialAccountId, voicemail: item.voicemail },
+    });
+    return { itemId, created: true };
+  }
+  const { data: existing, error: lookupError } = await db
+    .from("inbound_items")
+    .select("id")
+    .eq("zernio_call_id", item.zernioCallId)
+    .single();
+  if (lookupError) throw new Error(`inbound_items lookup failed: ${lookupError.message}`);
   return { itemId: existing.id, created: false };
 }

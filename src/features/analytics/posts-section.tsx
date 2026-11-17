@@ -295,7 +295,7 @@ function PostDetailPanel({
                 {comments.leads.slice(0, 3).map((l, i) => (
                   <span key={l.id}>
                     {i > 0 && ", "}
-                    <Link href={`/leads?lead=${l.id}`} className="font-medium">
+                    <Link href={`/contacts/leads?lead=${l.id}`} className="font-medium">
                       {l.label}
                     </Link>
                   </span>

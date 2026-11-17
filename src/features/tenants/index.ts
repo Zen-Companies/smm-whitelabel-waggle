@@ -1,5 +1,5 @@
-export { signIn, signOut, signUp } from "./actions";
-export type { AuthFormState } from "./actions";
+export { signIn, signOut, signUp, updateBusinessProfile } from "./actions";
+export type { AuthFormState, ProfileFormState } from "./actions";
 export { AuthForm } from "./auth-form";
 export { BusinessSettings } from "./business-settings";
 export { getCurrentTenant, getTenantFor, NOT_ALLOWED } from "./current-tenant";

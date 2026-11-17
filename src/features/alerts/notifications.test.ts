@@ -37,6 +37,33 @@ describe("describeNotification", () => {
       href: "/inbox/items/i2",
       unread: true,
     });
+    expect(
+      describeNotification(
+        row({ kind: "account", details: { source: "rcs", status: "testing", reason: null } }),
+        lookups,
+      ),
+    ).toMatchObject({
+      tone: "attention",
+      title: "Branded texts are ready to test",
+      href: "/settings/messaging",
+    });
+    expect(
+      describeNotification(
+        row({ kind: "account", details: { source: "rcs", status: "live" } }),
+        lookups,
+      ),
+    ).toMatchObject({ tone: "post", title: "Branded texts are live" });
+    expect(
+      describeNotification(
+        row({ kind: "lead", details: { source: "ad_form", formName: "Catering inquiry" } }),
+        lookups,
+      ),
+    ).toMatchObject({
+      tone: "lead",
+      title: "New lead from your ad",
+      meta: "Filled Catering inquiry",
+      href: "/contacts/ad-leads",
+    });
   });
 
   it("needs you: amber, who and why", () => {
@@ -54,7 +81,7 @@ describe("describeNotification", () => {
     ).toMatchObject({
       title: "Instagram @harbourbean disconnected",
       action: "Reconnect",
-      href: "/settings",
+      href: "/settings/accounts",
     });
     expect(
       describeNotification(

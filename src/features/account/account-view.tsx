@@ -9,6 +9,7 @@ import {
   PasswordRow,
   SignOutEverywhere,
 } from "./account-forms";
+import { ThemeChoice } from "@/components/app/theme-choice";
 
 const notice: Record<string, string> = {
   changed: "Your email is changed. Sign in with the new one from now on.",
@@ -47,6 +48,14 @@ export async function AccountSection({ emailNotice }: { emailNotice?: string }) 
         <h3 className="text-base font-semibold">Profile</h3>
         <NameForm name={name} />
         <EmailRow email={email} />
+      </section>
+
+      <section className="card flex flex-col gap-3 p-5" aria-labelledby="appearance-title">
+        <h3 id="appearance-title" className="text-base font-semibold">
+          Appearance
+        </h3>
+        <p className="text-ink-2 text-sm">Light, dark, or whatever your device uses. Saved on this device.</p>
+        <ThemeChoice className="self-start" />
       </section>
 
       <section className="card flex flex-col gap-4 p-5">
@@ -89,7 +98,7 @@ export async function AccountSection({ emailNotice }: { emailNotice?: string }) 
             You&apos;re the only Owner of{" "}
             <b className="font-semibold">{blockers.map((b) => b.organization_name).join(", ")}</b>.
             Make another member Owner on its{" "}
-            <Link href="/settings?section=team" className="font-medium">
+            <Link href="/settings/team" className="font-medium">
               Team page
             </Link>{" "}
             first, or close it.

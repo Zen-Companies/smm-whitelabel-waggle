@@ -12,6 +12,7 @@ import { KbEntryForm } from "./kb-entry-form";
 import { KB_TITLE_MAX } from "./limits";
 import { SuggestButton } from "./suggest-button";
 import { matchTopics, usageByEntry, usageText } from "./usage";
+import { TeachHeader } from "@/components/app/teach-header";
 
 // Business info (design v2): topics with search and how often each was used | the one topic being
 // edited | questions customers asked that the info didn't answer, with "Add an answer" and the gap
@@ -29,13 +30,16 @@ function href(p: { topic?: string; q?: string; from?: string; suggestion?: strin
   if (p.from) s.set("from", p.from);
   if (p.suggestion) s.set("suggestion", p.suggestion);
   const out = s.toString();
-  return out ? `/knowledge-base?${out}` : "/knowledge-base";
+  return out ? `/teach/business-info?${out}` : "/teach/business-info";
 }
 
 export async function KbList({
   searchParams,
+  top,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
+  /** Under the Teach Waggle tabs (the "Get Waggle ready" line). */
+  top?: React.ReactNode;
 }) {
   const params = await searchParams;
   const str = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
@@ -76,25 +80,22 @@ export async function KbList({
 
   return (
     <>
+      <TeachHeader>{top}</TeachHeader>
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex flex-1 flex-col gap-1">
-          <h1 className="page-title">Business info</h1>
+          <h2 className="section-title">Business info</h2>
           <p className="text-ink-2">
             The only facts Waggle uses in replies. If it isn&apos;t here, it asks you.
           </p>
         </div>
-        {mayEdit && (
-          <Link href={href({ topic: "new", q })} className={buttonVariants({ variant: "primary" })}>
-            Add a topic
-          </Link>
-        )}
       </header>
 
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,320px)]">
-        <div className="flex flex-col gap-2">
+      {/* Each area scrolls on its own; on a wide screen the page fits it (approved 16 Nov). */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,320px)] xl:grid-rows-[minmax(0,1fr)]">
+        <div className="card flex min-h-0 flex-col gap-2 p-3">
           {entries.length > 0 ? (
             <>
-              <form action="/knowledge-base" className="flex flex-col gap-2" role="search">
+              <form action="/teach/business-info" className="flex flex-col gap-2" role="search">
                 <label htmlFor="find" className="meta">
                   Find a topic
                 </label>
@@ -107,7 +108,13 @@ export async function KbList({
                   className="field"
                 />
               </form>
-              <ul aria-label="Topics" className="mt-1 flex flex-col">
+              <p className="meta px-1">
+                {entries.length === 1 ? "1 topic" : `${entries.length} topics`}
+              </p>
+              <ul
+                aria-label="Topics"
+                className="-mx-1 flex min-h-0 flex-1 flex-col overflow-y-auto px-1"
+              >
                 {shown.map((e) => (
                   <li key={e.id}>
                     <Link
@@ -133,33 +140,43 @@ export async function KbList({
               No topics yet. Start with the basics: hours, location, prices and what you offer.
             </p>
           )}
+          {mayEdit && (
+            <Link
+              href={href({ topic: "new", q })}
+              className={cn(buttonVariants({ variant: "primary" }), "mt-auto w-full")}
+            >
+              + Add a topic
+            </Link>
+          )}
         </div>
 
-        <RoleGate allowed={mayEdit} role={tenant.role} what="the business info">
-          {selected ? (
-            <KbEntryForm
-              key={selected.id}
-              entry={{
-                id: selected.id,
-                title: selected.title,
-                content: selected.content,
-                searchable: selected.embedding !== null,
-              }}
-              changed={dayOnly(shortTime(selected.updated_at))}
-            />
-          ) : (
-            <KbEntryForm
-              key={`new-${from ?? ""}-${suggestion?.id ?? ""}`}
-              prefillTitle={prefill}
-              prefillContent={suggestion?.content}
-              suggestionId={suggestion?.id}
-            />
-          )}
-        </RoleGate>
+        <div className="min-h-0 overflow-y-auto">
+          <RoleGate allowed={mayEdit} role={tenant.role} what="the business info">
+            {selected ? (
+              <KbEntryForm
+                key={selected.id}
+                entry={{
+                  id: selected.id,
+                  title: selected.title,
+                  content: selected.content,
+                  searchable: selected.embedding !== null,
+                }}
+                changed={dayOnly(shortTime(selected.updated_at))}
+              />
+            ) : (
+              <KbEntryForm
+                key={`new-${from ?? ""}-${suggestion?.id ?? ""}`}
+                prefillTitle={prefill}
+                prefillContent={suggestion?.content}
+                suggestionId={suggestion?.id}
+              />
+            )}
+          </RoleGate>
+        </div>
 
         <aside
           aria-labelledby="gaps"
-          className="card flex flex-col gap-3 p-4 lg:col-start-2 xl:col-start-3"
+          className="card flex min-h-0 flex-col gap-3 overflow-y-auto p-4 lg:col-start-2 xl:col-start-3"
         >
           <h2 id="gaps" className="font-semibold">
             Questions your info didn&apos;t answer

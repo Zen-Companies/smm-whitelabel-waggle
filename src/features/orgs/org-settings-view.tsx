@@ -74,7 +74,7 @@ export async function OrgGeneralSection({ orgId }: { orgId: string }) {
           <h3 className="text-base font-semibold">You&apos;re the only Owner</h3>
           <p className="text-ink-2">
             Make another member Owner on the{" "}
-            <Link href="/settings?section=team" className="font-medium">
+            <Link href="/settings/team" className="font-medium">
               Team page
             </Link>{" "}
             before you leave, or close the organization.
@@ -86,55 +86,6 @@ export async function OrgGeneralSection({ orgId }: { orgId: string }) {
       {can(org.role, "org.close") && !org.personal && (
         <CloseOrgForm orgId={org.id} orgName={org.name} brands={data.brands} />
       )}
-    </div>
-  );
-}
-
-/** Settings → Organization → Billing (T57): one bill for every brand; Owner only for details. */
-export async function OrgBillingSection({ orgId }: { orgId: string }) {
-  const data = await load(orgId);
-  if (!data) return null;
-  const { org } = data;
-  const owner = can(org.role, "billing.view");
-  const row = "border-line flex justify-between gap-4 border-b py-2.5 last:border-b-0";
-  return (
-    <div className="flex max-w-[720px] flex-col gap-5">
-      <div className="flex flex-col gap-1">
-        <h2 className="section-title">Billing</h2>
-        <p className="text-ink-2">
-          One bill for the whole of {org.name}, covering all its brands.{" "}
-          {owner
-            ? "You manage it as its Owner."
-            : `Managed by ${data.owners.join(" and ")} (Owner).`}
-        </p>
-      </div>
-      <section className="card flex flex-col p-5">
-        <div className={row}>
-          <span className="text-ink-2">Brands</span>
-          <b className="font-semibold">{data.brands}</b>
-        </div>
-        <div className={row}>
-          <span className="text-ink-2">Connected accounts</span>
-          <b className="font-semibold">{data.accounts}</b>
-        </div>
-        <div className={row}>
-          <span className="text-ink-2">Plan and price</span>
-          <span className="text-ink-3">Comes with billing (T15)</span>
-        </div>
-        {owner && (
-          <>
-            <div className={row}>
-              <span className="text-ink-2">Payment method</span>
-              <span className="text-ink-3">Not set up yet</span>
-            </div>
-            <div className={row}>
-              <span className="text-ink-2">Invoices</span>
-              <span className="text-ink-3">None yet</span>
-            </div>
-          </>
-        )}
-      </section>
-      {!owner && <p className="meta">You see what&apos;s counted, not the card or invoices.</p>}
     </div>
   );
 }

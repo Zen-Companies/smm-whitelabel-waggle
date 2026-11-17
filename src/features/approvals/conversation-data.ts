@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
+import { parseAttachments, type Attachment } from "./attachments";
 
 // The middle and right panes of the inbox (design v2): the conversation thread, who the customer
 // is, the lead if any, and what has happened, in plain words. Read with the owner's client (RLS).
@@ -12,6 +13,8 @@ export interface ThreadMessage {
   /** Business messages: who approved it ("you") or auto-send ("auto"). */
   by?: "you" | "auto";
   itemId: string;
+  /** T72: customer messages: what they sent besides words. */
+  attachments?: Attachment[];
 }
 
 export interface ActivityLine {
@@ -23,7 +26,7 @@ export interface ConversationContext {
   customer: {
     name: string;
     platform: string;
-    kind: "comment" | "dm" | "review";
+    kind: "comment" | "dm" | "review" | "call";
     messages: number;
     firstSeenAt: string;
   };
@@ -146,7 +149,7 @@ export async function loadConversation(
   if (!itemRow) return null;
   const item = itemRow as unknown as {
     id: string;
-    kind: "comment" | "dm" | "review";
+    kind: "comment" | "dm" | "review" | "call";
     conversation_id: string | null;
     author_name: string | null;
     category: string | null;
@@ -156,7 +159,7 @@ export async function loadConversation(
   const { data: threadItems } = item.conversation_id
     ? await supabase
         .from("inbound_items")
-        .select("id, text, received_at, status")
+        .select("id, text, received_at, status, attachments")
         .eq("tenant_id", tenantId)
         .eq("conversation_id", item.conversation_id)
         .neq("status", "ignored")
@@ -164,7 +167,7 @@ export async function loadConversation(
         .limit(50)
     : await supabase
         .from("inbound_items")
-        .select("id, text, received_at, status")
+        .select("id, text, received_at, status, attachments")
         .eq("id", item.id);
   const ids = (threadItems ?? []).map((t) => t.id);
 
@@ -205,6 +208,7 @@ export async function loadConversation(
       text: t.text,
       at: t.received_at,
       itemId: t.id,
+      attachments: parseAttachments(t.attachments),
     });
   }
   for (const d of drafts ?? []) {
@@ -258,4 +262,12 @@ export async function loadConversation(
       ),
     },
   };
+}
+
+/** Pure: the honeycomb beside an activity line (Inbox polish, approved 16 Nov). */
+export function activityState(text: string): "needs" | "waiting" | "working" {
+  if (/^(Handed to you|Couldn't be sent|Reply not delivered)/.test(text)) return "needs";
+  if (/^(Waiting for your OK|Waiting for the account|Reply drafted, needs)/.test(text))
+    return "waiting";
+  return "working";
 }

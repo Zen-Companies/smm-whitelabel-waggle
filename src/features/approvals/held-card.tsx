@@ -1,10 +1,21 @@
 "use client";
 
-import { CircleAlert } from "lucide-react";
-import { useActionState, useState } from "react";
+import { CircleAlert, CircleCheck } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { markHandledAction, replyPubliclyAction, type DecisionFormState } from "./actions";
+import {
+  markHandledAction,
+  ownerReplyAction,
+  replyPubliclyAction,
+  type DecisionFormState,
+  type OwnerReplyState,
+} from "./actions";
 import type { InboxEntry } from "./inbox-data";
+import { REPLY_MAX } from "./limits";
+import { reasonChip, URGENT_CHIPS } from "./reason-chip";
+import { StateLabel } from "@/components/app/state-mark";
 import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 /** Reasons that mean a reply was ready but couldn't go out (danger box, §4 "Couldn't send"). */
@@ -81,23 +92,6 @@ export function lookedLike(reason: string | null, entry: Pick<InboxEntry, "categ
   return guess ? `It looked most like ${guess}.` : null;
 }
 
-/** Each platform's own DM inbox on the web. */
-const DM_INBOX: Record<string, string> = {
-  instagram: "https://www.instagram.com/direct/inbox/",
-  facebook: "https://www.facebook.com/messages/",
-  tiktok: "https://www.tiktok.com/messages",
-  bluesky: "https://bsky.app/messages",
-  whatsapp: "https://web.whatsapp.com/",
-};
-
-/** Where to answer it yourself: the post for a comment, the platform's inbox for a DM. */
-export function openOnPlatformHref(
-  entry: Pick<InboxEntry, "kind" | "platform" | "permalink">,
-): string | null {
-  if (entry.kind === "comment" || entry.kind === "review") return entry.permalink;
-  return DM_INBOX[entry.platform] ?? null;
-}
-
 export function heldText(reason: string | null, entry: InboxEntry): string {
   if (reason && HELD[reason]) {
     const extra =
@@ -137,34 +131,63 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
   const canHide = entry.kind !== "comment" || inboxRules(entry.platform).hide;
   const unsure = !failed && !!reason && UNSURE.has(reason) && canHide;
   const guess = lookedLike(reason, entry);
-  const openHref = openOnPlatformHref(entry);
+
+  const chip = reasonChip({ ...entry, status: failed ? "failed" : "escalated" });
+  // T72: the owner can answer here in their own words (not after a send failed: that needs
+  // the platform itself, and not where the reply rules don't allow a reply).
+  const canWrite =
+    !failed &&
+    (entry as { status?: string }).status !== "failed" &&
+    entry.kind !== "call" &&
+    !unsureSpam(reason, entry);
 
   return (
     <div id={`item-${entry.itemId}`} className="flex flex-col gap-3">
+      {failed ? (
+        // One box (Inbox polish, approved 16 Nov): what went wrong and what to do, said once.
+        <div role="alert" className="danger-box flex flex-col gap-1">
+          <StateLabel state="needs" className="font-semibold">
+            Couldn&apos;t send
+          </StateLabel>
+          <p className="text-ink">
+            {failedText(reason, platform, failed)}{" "}
+            {reply
+              ? `Copy the reply, answer ${entry.authorName ?? "them"} on ${platform}, then mark it handled.`
+              : `Answer ${entry.authorName ?? "them"} on ${platform}, then mark it handled.`}
+          </p>
+        </div>
+      ) : (
+        <p className="flex flex-wrap items-center gap-2 text-[13px]">
+          <StateLabel
+            state={URGENT_CHIPS.has(chip) ? "needs" : "waiting"}
+            className="font-semibold"
+          >
+            {chip}
+          </StateLabel>
+          <span className="text-ink-2">Waggle never answers these on its own.</span>
+        </p>
+      )}
       {reply && (
-        <div className="border-line-strong flex flex-col gap-2 rounded-xl border p-4">
-          <p className="text-ink-2 text-sm font-medium">
+        <div className="border-line-strong flex flex-col gap-1.5 rounded-xl border p-4">
+          <p className="text-ink-3 text-xs font-semibold">
             {failed ? "The reply that couldn't go out" : "Suggested reply"}
           </p>
           <p className="whitespace-pre-wrap">{reply}</p>
         </div>
       )}
-      {failed ? (
-        <div role="alert" className="danger-box flex flex-col gap-1">
-          <p className="font-semibold">Couldn&apos;t send: {failed}</p>
-          <p>
-            Reply on {platform} yourself{reply ? " (copy the reply above)" : ""}, then mark it as
-            handled.
-          </p>
-        </div>
-      ) : (
+      {!failed && (
         <p className="bg-subtle text-ink-2 rounded-xl px-4 py-3">
           {heldText(reason, entry)} {guess ? `${guess} ` : ""}
-          {unsure
-            ? `Reply on ${platform} and mark it as handled, or hide it if it's spam.`
-            : `Reply on ${platform}, then mark it as handled.`}
+          {canWrite
+            ? unsure
+              ? "Write your reply below, mark it as handled, or hide it if it's spam."
+              : "Write your reply below, or mark it as handled if you answered elsewhere."
+            : unsure
+              ? `Reply on ${platform} and mark it as handled, or hide it if it's spam.`
+              : `Reply on ${platform}, then mark it as handled.`}
         </p>
       )}
+      {canWrite && <OwnReply entry={entry} />}
       <form action={action} className="flex flex-wrap items-center gap-2">
         <input type="hidden" name="itemId" value={entry.itemId} />
         <Button type="submit" variant="primary" disabled={pending}>
@@ -188,16 +211,6 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
             {copied ? "Copied" : "Copy reply"}
           </Button>
         )}
-        {openHref && (
-          <a
-            href={openHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-ink-2 hover:bg-subtle flex min-h-11 items-center rounded-md px-3 text-sm font-medium"
-          >
-            Open in {platform}
-          </a>
-        )}
         {state.error && (
           <p role="alert" className="text-danger text-sm">
             {state.error}
@@ -205,5 +218,88 @@ function HeldCardBody({ entry, reason }: { entry: InboxEntry; reason: string | n
         )}
       </form>
     </div>
+  );
+}
+
+/** The first sentence of the "Couldn't send" box: which window closed, by name. */
+function failedText(reason: string | null, platform: string, fallback: string): string {
+  if (reason === "dm_window_closed") return `${platform}'s reply window closed before it went out.`;
+  return fallback;
+}
+
+/** A spam-looking comment the owner should hide, not answer. */
+function unsureSpam(reason: string | null, entry: InboxEntry) {
+  return reason === "spam" && entry.category === "spam";
+}
+
+/**
+ * "Your reply" (design "Inbox: approve in one tap", T72): the owner's own words, sent on the
+ * platform as them. When the account stopped connecting, the button says so and offers Reconnect.
+ */
+function OwnReply({ entry }: { entry: InboxEntry }) {
+  const router = useRouter();
+  const [state, action, pending] = useActionState<OwnerReplyState, FormData>(ownerReplyAction, {});
+  const [text, setText] = useState("");
+  const platform = platformLabel(entry.platform);
+  const max = Math.min(REPLY_MAX, inboxRules(entry.platform).replyMax ?? REPLY_MAX);
+  useEffect(() => {
+    if (!state.sent) return;
+    const t = setTimeout(() => router.refresh(), 9_000);
+    return () => clearTimeout(t);
+  }, [state.sent, router]);
+
+  if (state.sent) {
+    return (
+      <p role="status" className="text-success flex items-center gap-2 text-sm font-semibold">
+        <CircleCheck className="size-4" strokeWidth={2} aria-hidden />
+        Sent. {entry.authorName ?? "They"} will see it on {platform}.
+      </p>
+    );
+  }
+  return (
+    <form action={action} className="border-line-strong flex flex-col gap-2 rounded-xl border p-4">
+      <input type="hidden" name="itemId" value={entry.itemId} />
+      <label htmlFor={`own-${entry.itemId}`} className="text-sm font-semibold">
+        Your reply
+      </label>
+      <textarea
+        id={`own-${entry.itemId}`}
+        name="body"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={max}
+        rows={3}
+        className="field"
+      />
+      {entry.accountActive === false ? (
+        <p className="text-danger flex flex-wrap items-center gap-2 text-sm">
+          <CircleAlert className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+          <span>
+            <b className="font-semibold">Can&apos;t send on {platform}.</b> {platform} stopped
+            connecting.
+          </span>
+          <Link
+            href="/settings/accounts"
+            className="bg-honey text-ink hover:bg-honey-hover inline-flex min-h-9 items-center rounded-md px-3.5 font-semibold no-underline"
+          >
+            Reconnect
+          </Link>
+        </p>
+      ) : (
+        <Button
+          type="submit"
+          variant="primary"
+          className="self-start"
+          disabled={pending || !text.trim()}
+        >
+          {pending ? "Sending…" : `Send on ${platform}`}
+        </Button>
+      )}
+      {state.error && (
+        <p role="alert" className="text-danger text-sm">
+          {state.error}
+        </p>
+      )}
+    </form>
   );
 }

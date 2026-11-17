@@ -61,9 +61,7 @@ export function TelegramSetup() {
         });
       } else if (result.status === "connected") {
         stopped = true;
-        router.push(
-          `/settings?section=accounts&${result.username ? "connected" : "connecting"}=telegram`,
-        );
+        router.push(`/settings/accounts?${result.username ? "connected" : "connecting"}=telegram`);
       }
     }, POLL_MS);
     return () => {
@@ -145,7 +143,7 @@ export function TelegramSetup() {
         Waggle posts to that channel or group. Answering messages there comes in an update.
       </span>
       <Link
-        href="/settings?section=accounts"
+        href="/settings/accounts"
         className={`${buttonVariants({ variant: "ghost" })} self-start`}
       >
         Cancel

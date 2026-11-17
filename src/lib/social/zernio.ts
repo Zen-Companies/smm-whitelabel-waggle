@@ -22,10 +22,73 @@ import {
   type ProviderMessage,
   type ProviderPostStatus,
   type PostValidation,
+  type PostingQueue,
+  type AdAccount,
+  type SmsOnNumber,
+  type SmsRegistration,
+  RCS_AGENT_STATUSES,
+  type BlogArticleView,
+  type DriveItem,
+  type OrderView,
+  type ProductView,
+  IMESSAGE_SENDER_STATUSES,
+  type ImessageSenderView,
+  type ImessageOrderResult,
+  type RcsAgentView,
+  type VoiceSettings,
+  type OwnedNumber,
+  type PhoneCountry,
+  type PhoneNumberType,
+  type PurchaseResult,
+  type CalendarEventSummary,
+  type EmailDiscovery,
+  type ProviderErrorInfo,
+  type Integration,
+  type SiteKeys,
+  type AdCampaignSummary,
+  type AdConnection,
+  type AdLead,
+  type AdRuleSummary,
+  type AdLeadStatus,
+  type Broadcast,
+  type LeadForm,
+  type ChatFlow,
+  type Contact,
+  type Sequence,
+  type SequenceStep,
+  type CommentAutomation,
+  type WorkflowGraph,
+  type CommentAutomationInput,
+  type CommentAutomationLogEntry,
   type ProviderUsage,
   type SocialPlatform,
   type SocialProvider,
+  type TargetExtras,
 } from "./types";
+import { connectBranding } from "./whitelabel";
+
+const blogArticleSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().catch(""),
+  url: z.string().nullish(),
+  isPublished: z.boolean().catch(false),
+  status: z.string().nullish(),
+  publishedAt: z.string().nullish(),
+  publishDate: z.string().nullish(),
+});
+
+function blogArticleView(a: z.infer<typeof blogArticleSchema>): BlogArticleView {
+  return {
+    id: a.id,
+    title: a.title,
+    url: a.url?.startsWith("https://") || a.url?.startsWith("http://") ? a.url : null,
+    isPublished: a.isPublished,
+    status: a.status ?? null,
+    date: a.publishDate ?? a.publishedAt ?? null,
+  };
+}
+
+const moneySchema = z.object({ amount: z.string(), currency: z.string() }).nullish().catch(null);
 
 // The SDK's 300 s default is the whole job route budget; inbox and profile calls are fast.
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -64,7 +127,199 @@ const postSchema = z.object({
       "failed",
       "cancelled",
     ]),
+    scheduledFor: z.string().nullish().catch(null),
   }),
+});
+const queueSlotSchema = z.object({ dayOfWeek: z.number().int().min(0).max(6), time: z.string() });
+const queueSchema = z.object({
+  exists: z.boolean().optional(),
+  schedule: z
+    .object({
+      timezone: z.string().optional(),
+      slots: z.array(queueSlotSchema.nullable().catch(null)).optional(),
+    })
+    .nullish(),
+  nextSlots: z.array(z.string()).optional(),
+});
+const gbpPerformanceSchema = z.object({
+  metrics: z
+    .record(z.string(), z.object({ total: z.number().optional() }).nullable().catch(null))
+    .optional(),
+});
+const leadStatusSchema = z
+  .enum(["new", "contacted", "unreachable", "qualified", "converted", "disqualified"])
+  .catch("new");
+const adLeadsSchema = z.object({
+  leads: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          formName: z.string().nullish().catch(null),
+          createdTime: z.string().nullish().catch(null),
+          fields: z.record(z.string(), z.string()).catch({}),
+          consents: z
+            .array(z.object({ checkboxKey: z.string(), isChecked: z.boolean() }))
+            .nullish()
+            .catch(null),
+          status: leadStatusSchema,
+          contactId: z.string().nullish().catch(null),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+});
+const adCampaignStatusSchema = z
+  .enum(["active", "paused", "pending_review", "rejected", "completed", "cancelled", "error"])
+  .catch("error");
+const num = z.number().nullish().catch(null);
+const adCampaignsSchema = z.object({
+  campaigns: z
+    .array(
+      z
+        .object({
+          platformCampaignId: z.string().min(1),
+          platform: z.string().catch("facebook"),
+          campaignName: z.string().nullish().catch(null),
+          status: adCampaignStatusSchema,
+          budget: z
+            .object({ amount: z.number(), type: z.enum(["daily", "lifetime"]) })
+            .nullish()
+            .catch(null),
+          currency: z.string().nullish().catch(null),
+          metrics: z.object({ spend: num, reach: num, clicks: num }).nullish().catch(null),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+});
+const broadcastsSchema = z.object({
+  broadcasts: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          name: z.string().catch(""),
+          platform: z.string().catch(""),
+          status: z
+            .enum(["draft", "scheduled", "sending", "completed", "failed", "cancelled"])
+            .catch("draft"),
+          messagePreview: z.string().catch(""),
+          scheduledAt: z.string().nullish().catch(null),
+          completedAt: z.string().nullish().catch(null),
+          recipientCount: z.number().catch(0),
+          sentCount: z.number().catch(0),
+          deliveredCount: z.number().catch(0),
+          readCount: z.number().catch(0),
+          failedCount: z.number().catch(0),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+});
+const contactSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().catch(""),
+  email: z.string().nullish().catch(null),
+  tags: z.array(z.string()).catch([]),
+  isSubscribed: z.boolean().catch(false),
+  platform: z.string().nullish().catch(null),
+  displayIdentifier: z.string().nullish().catch(null),
+  platformIdentifier: z.string().nullish().catch(null),
+  lastMessageReceivedAt: z.string().nullish().catch(null),
+  lastMessageSentAt: z.string().nullish().catch(null),
+});
+const contactsSchema = z.object({
+  contacts: z.array(contactSchema.nullable().catch(null)).catch([]),
+  pagination: z.object({ total: z.number().optional() }).nullish().catch(null),
+});
+const sequencesSchema = z.object({
+  sequences: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          name: z.string().catch(""),
+          platform: z.string().catch(""),
+          status: z.enum(["draft", "active", "paused"]).catch("draft"),
+          accountId: z.string().catch(""),
+          stepsCount: z.number().optional(),
+          messagePreview: z.string().optional(),
+          totalEnrolled: z.number().optional(),
+          totalCompleted: z.number().optional(),
+          totalExited: z.number().optional(),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+});
+const workflowsSchema = z.object({
+  workflows: z
+    .array(
+      z
+        .object({
+          id: z.string().min(1),
+          name: z.string().catch(""),
+          description: z.string().catch(""),
+          platform: z.string().catch(""),
+          status: z.enum(["draft", "active", "paused"]).catch("draft"),
+          totalStarted: z.number().optional(),
+          totalCompleted: z.number().optional(),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+});
+const commentAutomationSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().catch(""),
+  platform: z.string().catch(""),
+  accountId: z.string().catch(""),
+  keywords: z.array(z.string()).catch([]),
+  matchMode: z.enum(["exact", "contains", "word"]).catch("contains"),
+  dmMessage: z.string().nullish().catch(null),
+  buttons: z
+    .array(z.object({ type: z.string(), title: z.string(), url: z.string().optional() }))
+    .nullish()
+    .catch(null),
+  commentReply: z.string().nullish().catch(null),
+  repeatPolicy: z.object({ mode: z.string() }).nullish().catch(null),
+  postTitle: z.string().nullish().catch(null),
+  isActive: z.boolean().catch(false),
+  stats: z
+    .object({
+      triggered: z.number().optional(),
+      dmsSent: z.number().optional(),
+      dmsFailed: z.number().optional(),
+      linkClicks: z.number().optional(),
+    })
+    .nullish()
+    .catch(null),
+});
+const commentAutomationsSchema = z.object({
+  automations: z.array(commentAutomationSchema.nullable().catch(null)).catch([]),
+});
+const commentAutomationLogsSchema = z.object({
+  logs: z
+    .array(
+      z
+        .object({
+          id: z.string().catch(""),
+          commenterName: z.string().nullish(),
+          commenterUsername: z.string().nullish(),
+          status: z.enum(["pending", "sent", "failed", "skipped", "gated"]).catch("pending"),
+          createdAt: z.string().nullish(),
+        })
+        .nullable()
+        .catch(null),
+    )
+    .catch([]),
+  misses: z.object({ total: z.number().optional() }).nullish().catch(null),
 });
 const presignSchema = z.object({ uploadUrl: z.url(), publicUrl: z.url() });
 const replySchema = z.object({ data: z.object({ commentId: z.string().min(1) }) });
@@ -304,6 +559,34 @@ async function ignoreGone(run: Promise<void>): Promise<void> {
   }
 }
 
+/** The provider's fix from a Zernio error body (`details.title/body/guidance`), when present. */
+function errorInfo(body: unknown): ProviderErrorInfo | undefined {
+  const d = z
+    .object({
+      details: z
+        .object({
+          title: z.string().nullish(),
+          body: z.string().nullish(),
+          helpUrl: z.string().nullish(),
+          guidance: z
+            .object({ helpUrl: z.string().nullish(), steps: z.array(z.string()).nullish() })
+            .nullish()
+            .catch(null),
+        })
+        .nullish()
+        .catch(null),
+    })
+    .safeParse(body);
+  const det = d.success ? d.data.details : null;
+  if (!det) return undefined;
+  return {
+    title: det.title ?? null,
+    body: det.body ?? null,
+    helpUrl: det.guidance?.helpUrl ?? det.helpUrl ?? null,
+    steps: det.guidance?.steps ?? [],
+  };
+}
+
 export class ZernioSocialProvider implements SocialProvider {
   constructor(private readonly zernio: Zernio) {}
 
@@ -336,7 +619,11 @@ export class ZernioSocialProvider implements SocialProvider {
       const { data } = await this.zernio.connect.getConnectUrl(
         withFetch({
           path: { platform: input.platform },
-          query: { profileId: input.profileId, redirect_url: input.redirectUrl },
+          query: {
+            profileId: input.profileId,
+            redirect_url: input.redirectUrl,
+            ...connectBranding(process.env.APP_URL ?? ""),
+          },
         }),
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
@@ -415,15 +702,22 @@ export class ZernioSocialProvider implements SocialProvider {
             content: input.content,
             mediaItems: input.mediaUrls?.map((url) => ({ url })),
             platforms: await this.postTargets(input),
-            ...(input.publishAt
-              ? { scheduledFor: input.publishAt.toISOString() }
-              : { publishNow: true }),
+            // The queue picks (and holds) the time itself; never pass its next slot as a time.
+            ...(input.queueProfileId
+              ? { queuedFromProfile: input.queueProfileId }
+              : input.publishAt
+                ? { scheduledFor: input.publishAt.toISOString() }
+                : { publishNow: true }),
           },
           headers: { "Idempotency-Key": input.idempotencyKey },
         }),
       );
       const { post } = parse(postSchema, data, "createPost");
-      return { providerPostId: post._id, status: post.status };
+      return {
+        providerPostId: post._id,
+        status: post.status,
+        scheduledFor: post.scheduledFor ?? null,
+      };
     });
   }
 
@@ -434,21 +728,9 @@ export class ZernioSocialProvider implements SocialProvider {
   private async postTargets(input: CreatePostInput) {
     return Promise.all(
       input.targets.map(async (t) => {
-        if (t.platform === "pinterest" && input.pinterestBoardId) {
-          return {
-            platform: t.platform,
-            accountId: t.accountId,
-            platformSpecificData: { boardId: input.pinterestBoardId },
-          };
-        }
-        if (t.platform === "youtube" && input.youtubeTitle) {
-          return {
-            platform: t.platform,
-            accountId: t.accountId,
-            platformSpecificData: { title: input.youtubeTitle },
-          };
-        }
-        if (t.platform !== "tiktok") return { platform: t.platform, accountId: t.accountId };
+        const extra = input.extras?.[t.platform] ?? legacyExtras(t.platform, input);
+        if (t.platform !== "tiktok")
+          return { platform: t.platform, accountId: t.accountId, ...extra };
         if (!input.tiktokConsent) {
           throw new SocialProviderError("TikTok needs the owner's consent for this post", {
             code: "TIKTOK_CONSENT_REQUIRED",
@@ -468,7 +750,9 @@ export class ZernioSocialProvider implements SocialProvider {
         return {
           platform: t.platform,
           accountId: t.accountId,
+          ...(extra.customContent ? { customContent: extra.customContent } : {}),
           platformSpecificData: {
+            ...extra.platformSpecificData,
             ...(privacyLevel ? { privacyLevel } : {}),
             contentPreviewConfirmed: true,
             expressConsentGiven: true,
@@ -508,6 +792,2499 @@ export class ZernioSocialProvider implements SocialProvider {
           message: w.warning ?? "",
         })),
       };
+    });
+  }
+
+  /**
+   * A JSON call for routes the installed SDK doesn't have yet (T80b: email, LINE). Same auth,
+   * base URL and error mapping as the SDK calls.
+   */
+  private async raw<T>(
+    operation: string,
+    path: string,
+    schema: z.ZodType<T>,
+    init: { method: "GET" | "POST"; body?: unknown; signal?: AbortSignal },
+  ): Promise<T> {
+    let res: Response;
+    try {
+      res = await globalThis.fetch(`${this.zernio.baseURL}${path}`, {
+        method: init.method,
+        headers: {
+          Authorization: `Bearer ${this.zernio.apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+        signal: init.signal,
+      });
+    } catch (error) {
+      throw toSocialError(error, operation);
+    }
+    const body: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      const code = z.object({ code: z.string() }).safeParse(body);
+      const info = errorInfo(body);
+      throw new SocialProviderError(`Zernio ${operation} failed (${res.status})`, {
+        status: res.status,
+        ...(code.success ? { code: code.data.code } : {}),
+        ambiguous: res.status >= 500,
+        retryAfterSeconds: parseRetryAfter(res.headers.get("Retry-After")),
+        ...(info ? { info } : {}),
+      });
+    }
+    return parse(schema, body, operation);
+  }
+
+  private async userId(signal?: AbortSignal): Promise<string> {
+    if (!this.currentUserId) {
+      this.currentUserId = await call("listUsers", async (withFetch) => {
+        const { data } = await this.zernio.users.listUsers(withFetch({ signal }));
+        return parse(usersSchema, data, "listUsers").currentUserId;
+      });
+    }
+    return this.currentUserId;
+  }
+
+  async discoverEmail(input: { email: string; signal?: AbortSignal }): Promise<EmailDiscovery> {
+    const { data } = await this.raw(
+      "discoverEmail",
+      "/v1/email/imap/discover",
+      z.object({
+        data: z.object({
+          route: z.enum(["imap", "google_oauth", "microsoft_oauth", "unsupported"]),
+          provider: z.object({ name: z.string().nullish() }).nullish().catch(null),
+          auth: z
+            .object({
+              label: z.string().nullish(),
+              helpUrl: z.string().nullish(),
+              steps: z.array(z.string()).nullish(),
+            })
+            .nullish()
+            .catch(null),
+          preflight: z
+            .array(z.object({ text: z.string(), url: z.string().nullish() }))
+            .nullish()
+            .catch(null),
+        }),
+      }),
+      { method: "POST", body: { email: input.email }, signal: input.signal },
+    );
+    return {
+      route: data.route,
+      providerName: data.provider?.name ?? null,
+      passwordLabel: data.auth?.label ?? null,
+      helpUrl: data.auth?.helpUrl ?? null,
+      steps: data.auth?.steps ?? [],
+      preflight: (data.preflight ?? []).map((p) => ({ text: p.text, url: p.url ?? null })),
+    };
+  }
+
+  async connectEmail(input: {
+    profileId: string;
+    email: string;
+    password: string;
+    name?: string;
+    signal?: AbortSignal;
+  }) {
+    // Success body isn't documented; the caller reads the new mailbox from the profile's accounts.
+    await this.raw("connectEmail", "/v1/email/imap/accounts", z.unknown(), {
+      method: "POST",
+      body: {
+        profileId: input.profileId,
+        email: input.email,
+        password: input.password,
+        ...(input.name ? { name: input.name } : {}),
+      },
+      signal: input.signal,
+    });
+  }
+
+  async connectLine(input: {
+    profileId: string;
+    channelId: string;
+    channelSecret: string;
+    signal?: AbortSignal;
+  }) {
+    const userId = await this.userId(input.signal);
+    const r = await this.raw(
+      "connectLine",
+      "/v1/connect/line/credentials",
+      z.object({
+        account: z.object({
+          accountId: z.string().min(1),
+          username: z.string().nullish(),
+          displayName: z.string().nullish(),
+        }),
+        webhook: z.object({ configured: z.boolean() }).nullish().catch(null),
+      }),
+      {
+        method: "POST",
+        body: {
+          channelId: input.channelId,
+          channelSecret: input.channelSecret,
+          state: `${userId}-${input.profileId}`,
+        },
+        signal: input.signal,
+      },
+    );
+    return {
+      accountId: r.account.accountId,
+      name: r.account.displayName ?? r.account.username ?? "LINE",
+      webhookReady: r.webhook?.configured === true,
+    };
+  }
+
+  async getMailConnectUrl(input: {
+    platform: "google" | "microsoft";
+    profileId: string;
+    redirectUrl: string;
+    scopes: readonly ("email" | "calendar" | "files")[];
+    signal?: AbortSignal;
+  }) {
+    return call("getConnectUrl", async (withFetch) => {
+      const { data } = await this.zernio.connect.getConnectUrl(
+        withFetch({
+          signal: input.signal,
+          path: { platform: input.platform },
+          query: {
+            profileId: input.profileId,
+            redirect_url: input.redirectUrl,
+            scopes: input.scopes.join(","),
+          },
+        }),
+      );
+      return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
+    });
+  }
+
+  async enableSms(input: { numberId: string; signal?: AbortSignal }): Promise<SmsOnNumber> {
+    return call("enableSmsOnNumber", async (withFetch) => {
+      const { data } = await this.zernio.sms.enableSmsOnNumber(
+        withFetch({ signal: input.signal, path: { id: input.numberId } }),
+      );
+      const r = parse(
+        z.object({
+          enabled: z.boolean().catch(false),
+          id: z.string().nullish(),
+          smsCapable: z.boolean().nullish(),
+          notReady: z.boolean().nullish(),
+          needsRegistration: z.boolean().nullish(),
+        }),
+        data,
+        "enableSmsOnNumber",
+      );
+      return {
+        enabled: r.enabled,
+        accountId: r.enabled ? (r.id ?? null) : null,
+        notCapable: r.smsCapable === false,
+        notReady: r.notReady === true,
+        needsRegistration: r.needsRegistration === true,
+      };
+    });
+  }
+
+  async listSmsRegistrations(input: { phoneNumber: string; signal?: AbortSignal }) {
+    return call("listSmsRegistrations", async (withFetch) => {
+      const { data } = await this.zernio.sms.listSmsRegistrations(
+        withFetch({ signal: input.signal }),
+      );
+      const rows = parse(
+        z.object({
+          registrations: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  registrationType: z.enum(["standard_10dlc", "sole_prop_10dlc", "toll_free"]),
+                  status: z.enum([
+                    "requested",
+                    "changes_requested",
+                    "pending",
+                    "approved",
+                    "rejected",
+                    "deactivated",
+                  ]),
+                  declineReason: z.string().nullish(),
+                  awaitingOtp: z.boolean().catch(false),
+                  phoneNumbers: z.array(z.string()).catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listSmsRegistrations",
+      ).registrations;
+      return rows.flatMap((r): SmsRegistration[] =>
+        r && r.phoneNumbers.includes(input.phoneNumber)
+          ? [
+              {
+                id: r.id,
+                type: r.registrationType,
+                status: r.status,
+                declineReason: r.declineReason ?? null,
+                awaitingOtp: r.awaitingOtp,
+                phoneNumbers: [input.phoneNumber],
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async startSmsRegistration(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("startSmsRegistration", async (withFetch) => {
+      const { data } = await this.zernio.sms.startSmsRegistration(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      const r = parse(
+        z.object({
+          registrationId: z.string().min(1),
+          status: z
+            .enum([
+              "requested",
+              "changes_requested",
+              "pending",
+              "approved",
+              "rejected",
+              "deactivated",
+            ])
+            .catch("pending"),
+          awaitingOtp: z.boolean().catch(false),
+        }),
+        data,
+        "startSmsRegistration",
+      );
+      return { id: r.registrationId, status: r.status, awaitingOtp: r.awaitingOtp };
+    });
+  }
+
+  async verifySmsRegistrationCode(input: { id: string; code: string; signal?: AbortSignal }) {
+    await call("verifySmsRegistrationOtp", async (withFetch) => {
+      await this.zernio.sms.verifySmsRegistrationOtp(
+        withFetch({ signal: input.signal, path: { id: input.id }, body: { otpPin: input.code } }),
+      );
+    });
+  }
+
+  async resendSmsRegistrationCode(input: { id: string; signal?: AbortSignal }) {
+    await call("resendSmsRegistrationOtp", async (withFetch) => {
+      await this.zernio.sms.resendSmsRegistrationOtp(
+        withFetch({ signal: input.signal, path: { id: input.id } }),
+      );
+    });
+  }
+
+  async listFiles(input: {
+    accountId: string;
+    folderId?: string;
+    q?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("listFiles", async (withFetch) => {
+      const { data } = await this.zernio.files.listFiles(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            limit: 100,
+            ...(input.folderId ? { folderId: input.folderId } : {}),
+            ...(input.q ? { q: input.q } : {}),
+          },
+        }),
+      );
+      return parse(
+        z.object({
+          data: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  name: z.string().catch(""),
+                  kind: z.enum(["file", "folder"]),
+                  mimeType: z.string().nullish(),
+                  size: z.number().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listFiles",
+      ).data.flatMap((f): DriveItem[] =>
+        f
+          ? [
+              {
+                id: f.id,
+                name: f.name,
+                kind: f.kind,
+                mimeType: f.mimeType ?? null,
+                size: f.size ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async copyFileToMedia(input: {
+    accountId: string;
+    fileId: string;
+    maxBytes: number;
+    signal?: AbortSignal;
+  }) {
+    const operation = "downloadFile";
+    let res: Response;
+    try {
+      res = await globalThis.fetch(
+        `${this.zernio.baseURL}/v1/files/${encodeURIComponent(input.fileId)}/download?accountId=${encodeURIComponent(input.accountId)}`,
+        { headers: { Authorization: `Bearer ${this.zernio.apiKey}` }, signal: input.signal },
+      );
+    } catch (error) {
+      throw toSocialError(error, operation);
+    }
+    if (!res.ok) {
+      const body: unknown = await res.json().catch(() => null);
+      const code = z.object({ code: z.string() }).safeParse(body);
+      throw new SocialProviderError(`Zernio ${operation} failed (${res.status})`, {
+        status: res.status,
+        ...(code.success ? { code: code.data.code } : {}),
+        ambiguous: false,
+      });
+    }
+    const declared = Number(res.headers.get("Content-Length") ?? "0");
+    if (declared > input.maxBytes) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new SocialProviderError(`Zernio ${operation} failed (413)`, {
+        status: 413,
+        ambiguous: false,
+      });
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > input.maxBytes) {
+      throw new SocialProviderError(`Zernio ${operation} failed (413)`, {
+        status: 413,
+        ambiguous: false,
+      });
+    }
+    const contentType = (res.headers.get("Content-Type") ?? "application/octet-stream")
+      .split(";")[0]
+      .trim();
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const name =
+      /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1] ??
+      /filename="?([^";]+)"?/i.exec(disposition)?.[1] ??
+      "file";
+    const { publicUrl } = await this.uploadMedia({
+      filename: decodeURIComponent(name),
+      contentType,
+      bytes,
+      signal: input.signal,
+    });
+    return { publicUrl, contentType, name: decodeURIComponent(name), size: bytes.byteLength };
+  }
+
+  async getStore(input: { accountId: string; signal?: AbortSignal }) {
+    try {
+      return await call("getCommerceStore", async (withFetch) => {
+        const { data } = await this.zernio.commerce.getCommerceStore(
+          withFetch({ signal: input.signal, query: { accountId: input.accountId } }),
+        );
+        const s = parse(
+          z.object({
+            store: z.object({
+              accountId: z.string().min(1),
+              platform: z.enum(["shopify", "woocommerce"]),
+              name: z.string().catch(""),
+              domain: z.string().catch(""),
+              url: z.string().nullish(),
+              currency: z.string().catch(""),
+              capabilities: z.array(z.string()).catch([]),
+            }),
+          }),
+          data,
+          "getCommerceStore",
+        ).store;
+        return { ...s, url: s.url ?? null };
+      });
+    } catch (error) {
+      if (error instanceof SocialProviderError && error.details.status === 400) return null;
+      throw error;
+    }
+  }
+
+  async listProducts(input: { accountId: string; cursor?: string; signal?: AbortSignal }) {
+    return call("listCommerceProducts", async (withFetch) => {
+      const { data } = await this.zernio.commerce.listCommerceProducts(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            limit: 50,
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          products: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  title: z.string().catch(""),
+                  status: z.string().catch("active"),
+                  url: z.string().nullish(),
+                  featuredImage: z.object({ url: z.string().nullish() }).nullish().catch(null),
+                  variants: z
+                    .array(
+                      z
+                        .object({
+                          id: z.string().min(1),
+                          title: z.string().catch(""),
+                          price: moneySchema,
+                          inventoryQuantity: z.number().nullish(),
+                        })
+                        .nullable()
+                        .catch(null),
+                    )
+                    .catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+          nextCursor: z.string().nullish(),
+        }),
+        data,
+        "listCommerceProducts",
+      );
+      return {
+        products: r.products.flatMap((p): ProductView[] =>
+          p
+            ? [
+                {
+                  id: p.id,
+                  title: p.title,
+                  status: p.status,
+                  imageUrl: p.featuredImage?.url ?? null,
+                  url: p.url ?? null,
+                  variants: p.variants.flatMap((v) =>
+                    v
+                      ? [
+                          {
+                            id: v.id,
+                            title: v.title,
+                            price: v.price ?? null,
+                            stock: v.inventoryQuantity ?? null,
+                          },
+                        ]
+                      : [],
+                  ),
+                },
+              ]
+            : [],
+        ),
+        nextCursor: r.nextCursor ?? null,
+      };
+    });
+  }
+
+  async listStockLocations(input: { accountId: string; signal?: AbortSignal }) {
+    return call("listCommerceLocations", async (withFetch) => {
+      const { data } = await this.zernio.commerce.listCommerceLocations(
+        withFetch({ signal: input.signal, query: { accountId: input.accountId } }),
+      );
+      return parse(
+        z.object({
+          locations: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  name: z.string().catch(""),
+                  isActive: z.boolean().catch(true),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listCommerceLocations",
+      ).locations.flatMap((l) => (l && l.isActive ? [{ id: l.id, name: l.name }] : []));
+    });
+  }
+
+  async setStock(input: {
+    accountId: string;
+    productId: string;
+    variantId: string;
+    locationId: string;
+    quantity: number;
+    signal?: AbortSignal;
+  }) {
+    await call("changeCommerceInventory", async (withFetch) => {
+      await this.zernio.commerce.changeCommerceInventory(
+        withFetch({
+          signal: input.signal,
+          path: { productId: input.productId },
+          body: {
+            accountId: input.accountId,
+            mode: "set",
+            changes: [
+              {
+                variantId: input.variantId,
+                locationId: input.locationId,
+                quantity: input.quantity,
+              },
+            ],
+          },
+        }),
+      );
+    });
+  }
+
+  async listOrders(input: { accountId: string; cursor?: string; signal?: AbortSignal }) {
+    return call("listCommerceOrders", async (withFetch) => {
+      const { data } = await this.zernio.commerce.listCommerceOrders(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            limit: 25,
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          orders: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  number: z.string().catch(""),
+                  status: z.string().nullish(),
+                  paymentStatus: z.string().nullish(),
+                  total: moneySchema,
+                  createdAt: z.string().nullish(),
+                  customer: z
+                    .object({ firstName: z.string().nullish(), lastName: z.string().nullish() })
+                    .nullish()
+                    .catch(null),
+                  lineItems: z
+                    .array(
+                      z
+                        .object({ title: z.string().catch(""), quantity: z.number().catch(1) })
+                        .nullable()
+                        .catch(null),
+                    )
+                    .catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+          nextCursor: z.string().nullish(),
+        }),
+        data,
+        "listCommerceOrders",
+      );
+      return {
+        orders: r.orders.flatMap((o): OrderView[] => {
+          if (!o) return [];
+          const name = [o.customer?.firstName, o.customer?.lastName].filter(Boolean).join(" ");
+          return [
+            {
+              id: o.id,
+              number: o.number,
+              status: o.status ?? null,
+              paymentStatus: o.paymentStatus ?? null,
+              total: o.total ?? null,
+              createdAt: o.createdAt ?? null,
+              items: o.lineItems
+                .flatMap((l) => (l ? [l.quantity > 1 ? `${l.title} ×${l.quantity}` : l.title] : []))
+                .join(", "),
+              customerName: name || null,
+            },
+          ];
+        }),
+        nextCursor: r.nextCursor ?? null,
+      };
+    });
+  }
+
+  async listBlogs(input: { accountId: string; signal?: AbortSignal }) {
+    return call("listBlogs", async (withFetch) => {
+      const { data } = await this.zernio.blogs.listBlogs(
+        withFetch({
+          signal: input.signal,
+          path: { accountId: input.accountId },
+          query: { limit: 50 },
+        }),
+      );
+      return parse(
+        z.object({
+          blogs: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  title: z.string().catch(""),
+                  handle: z.string().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listBlogs",
+      ).blogs.flatMap((b) => (b ? [{ id: b.id, title: b.title, handle: b.handle ?? null }] : []));
+    });
+  }
+
+  async listBlogArticles(input: {
+    accountId: string;
+    blogId: string;
+    cursor?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("listBlogArticles", async (withFetch) => {
+      const { data } = await this.zernio.blogs.listBlogArticles(
+        withFetch({
+          signal: input.signal,
+          path: { accountId: input.accountId, blogId: input.blogId },
+          query: { limit: 20, ...(input.cursor ? { cursor: input.cursor } : {}) },
+        }),
+      );
+      const r = parse(
+        z.object({
+          articles: z.array(blogArticleSchema.nullable().catch(null)).catch([]),
+          nextCursor: z.string().nullish(),
+        }),
+        data,
+        "listBlogArticles",
+      );
+      return {
+        articles: r.articles.flatMap((a) => (a ? [blogArticleView(a)] : [])),
+        nextCursor: r.nextCursor ?? null,
+      };
+    });
+  }
+
+  async createBlogArticle(input: {
+    accountId: string;
+    blogId: string;
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }) {
+    return call("createBlogArticle", async (withFetch) => {
+      const { data } = await this.zernio.blogs.createBlogArticle(
+        withFetch({
+          signal: input.signal,
+          path: { accountId: input.accountId, blogId: input.blogId },
+          body: input.body as never,
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      return blogArticleView(
+        parse(z.object({ article: blogArticleSchema }), data, "createBlogArticle").article,
+      );
+    });
+  }
+
+  async listRcsAgents(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listRcsAgents", async (withFetch) => {
+      const { data } = await this.zernio.rcs.listRcsAgents(
+        withFetch({ signal: input.signal, query: { includeClosed: true } }),
+      );
+      const record = z.record(z.string(), z.unknown());
+      const rows = parse(
+        z.object({
+          agents: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  profileId: z.string().nullish(),
+                  accountId: z.string().nullish(),
+                  country: z.string().nullish(),
+                  status: z.enum(RCS_AGENT_STATUSES),
+                  displayName: z.string().catch(""),
+                  useCase: z.string().nullish(),
+                  reviewNote: z.string().nullish(),
+                  declineReason: z.string().nullish(),
+                  launchRequest: record.nullish().catch(null),
+                  profile: record.nullish().catch(null),
+                  brand: record.nullish().catch(null),
+                  testDevices: z
+                    .array(
+                      z
+                        .object({
+                          testDeviceId: z.string().min(1),
+                          phoneNumber: z.string().min(1),
+                          inviteStatus: z
+                            .enum(["PENDING", "ACCEPTED", "DECLINED"])
+                            .catch("PENDING"),
+                        })
+                        .nullable()
+                        .catch(null),
+                    )
+                    .catch([]),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listRcsAgents",
+      ).agents;
+      return rows.flatMap((a): RcsAgentView[] =>
+        a && a.profileId === input.profileId
+          ? [
+              {
+                id: a.id,
+                status: a.status,
+                country: a.country ?? null,
+                displayName: a.displayName,
+                useCase: a.useCase ?? null,
+                accountId: a.accountId ?? null,
+                reviewNote: a.reviewNote ?? null,
+                declineReason: a.declineReason ?? null,
+                launchSent: !!a.launchRequest,
+                testDevices: a.testDevices.flatMap((d) =>
+                  d
+                    ? [
+                        {
+                          id: d.testDeviceId,
+                          phoneNumber: d.phoneNumber,
+                          inviteStatus: d.inviteStatus,
+                        },
+                      ]
+                    : [],
+                ),
+                filed: { brand: a.brand ?? null, profile: a.profile ?? null },
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async requestRcsAgent(input: {
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }) {
+    return call("createRcsAgent", async (withFetch) => {
+      const { data } = await this.zernio.rcs.createRcsAgent(
+        withFetch({
+          signal: input.signal,
+          body: input.body as never,
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      const a = parse(
+        z.object({
+          agent: z.object({
+            id: z.string().min(1),
+            status: z.enum(RCS_AGENT_STATUSES).catch("requested"),
+          }),
+        }),
+        data,
+        "createRcsAgent",
+      ).agent;
+      return { id: a.id, status: a.status };
+    });
+  }
+
+  async updateRcsAgent(input: {
+    agentId: string;
+    body: Record<string, unknown>;
+    signal?: AbortSignal;
+  }) {
+    await call("updateRcsAgent", async (withFetch) => {
+      await this.zernio.rcs.updateRcsAgent(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId },
+          body: input.body as never,
+        }),
+      );
+    });
+  }
+
+  async uploadRcsAsset(input: { file: Blob; kind: "logo" | "banner"; signal?: AbortSignal }) {
+    return call("uploadRcsAsset", async (withFetch) => {
+      const { data } = await this.zernio.rcs.uploadRcsAsset(
+        withFetch({ signal: input.signal, body: { file: input.file, kind: input.kind } }),
+      );
+      return { url: parse(z.object({ url: z.url() }), data, "uploadRcsAsset").url };
+    });
+  }
+
+  async addRcsTestDevice(input: { agentId: string; phoneNumber: string; signal?: AbortSignal }) {
+    await call("addRcsTestDevice", async (withFetch) => {
+      await this.zernio.rcs.addRcsTestDevice(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId },
+          body: { phoneNumber: input.phoneNumber },
+        }),
+      );
+    });
+  }
+
+  async removeRcsTestDevice(input: {
+    agentId: string;
+    testDeviceId: string;
+    signal?: AbortSignal;
+  }) {
+    await call("removeRcsTestDevice", async (withFetch) => {
+      await this.zernio.rcs.removeRcsTestDevice(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId, testDeviceId: input.testDeviceId },
+        }),
+      );
+    });
+  }
+
+  async requestRcsLaunch(input: {
+    agentId: string;
+    body: Record<string, unknown>;
+    signal?: AbortSignal;
+  }) {
+    await call("requestRcsAgentLaunch", async (withFetch) => {
+      await this.zernio.rcs.requestRcsAgentLaunch(
+        withFetch({
+          signal: input.signal,
+          path: { agentId: input.agentId },
+          body: input.body as never,
+        }),
+      );
+    });
+  }
+
+  async listImessageSenders(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listImessageSenderOrders", async (withFetch) => {
+      const { data } = await this.zernio.imessage.listImessageSenderOrders(
+        withFetch({ signal: input.signal }),
+      );
+      const rows = parse(
+        z.object({
+          senders: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  profileId: z.string().nullish(),
+                  status: z.enum(IMESSAGE_SENDER_STATUSES),
+                  region: z.enum(["US", "GB"]).nullish().catch(null),
+                  handle: z.string().nullish(),
+                  optInLink: z.string().nullish(),
+                  priceCents: z.number().nullish(),
+                  displayName: z.string().nullish(),
+                  failureReason: z.string().nullish(),
+                  accountId: z.string().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listImessageSenderOrders",
+      ).senders;
+      return rows.flatMap((s): ImessageSenderView[] =>
+        s && s.profileId === input.profileId && s.status !== "canceled"
+          ? [
+              {
+                id: s.id,
+                status: s.status,
+                region: s.region ?? null,
+                handle: s.handle ?? null,
+                // Only the app link: the provider's hosted page would show its name.
+                optInLink: s.optInLink?.startsWith("imessage:") ? s.optInLink : null,
+                priceCents: s.priceCents ?? null,
+                displayName: s.displayName ?? null,
+                failureReason: s.failureReason ?? null,
+                accountId: s.accountId ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async listImessageNumbers(input: { region: "US" | "GB"; signal?: AbortSignal }) {
+    return call("listImessageAvailableNumbers", async (withFetch) => {
+      const { data } = await this.zernio.imessage.listImessageAvailableNumbers(
+        withFetch({ signal: input.signal, query: { region: input.region } }),
+      );
+      return parse(
+        z.object({
+          numbers: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  phone: z.string().min(1),
+                  location: z.string().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listImessageAvailableNumbers",
+      ).numbers.flatMap((n) =>
+        n ? [{ id: n.id, phone: n.phone, location: n.location ?? null }] : [],
+      );
+    });
+  }
+
+  async orderImessageSender(input: {
+    profileId: string;
+    region: "US" | "GB";
+    availableNumberId?: string;
+    zipCode?: string;
+    displayName: string;
+    contact: { firstName: string; lastName?: string };
+    purchaseIntentId: string;
+    signal?: AbortSignal;
+  }): Promise<ImessageOrderResult> {
+    try {
+      return await call("orderImessageSender", async (withFetch) => {
+        const { data } = await this.zernio.imessage.orderImessageSender(
+          withFetch({
+            signal: input.signal,
+            body: {
+              profileId: input.profileId,
+              kind: "phone",
+              region: input.region,
+              ...(input.availableNumberId ? { availableNumberId: input.availableNumberId } : {}),
+              ...(input.zipCode ? { zipCode: input.zipCode } : {}),
+              displayName: input.displayName,
+              contact: input.contact,
+              purchaseIntentId: input.purchaseIntentId,
+            },
+          }),
+        );
+        const s = parse(
+          z.object({
+            sender: z.object({
+              id: z.string().min(1),
+              status: z.enum(IMESSAGE_SENDER_STATUSES).catch("ordering"),
+            }),
+          }),
+          data,
+          "orderImessageSender",
+        ).sender;
+        return { kind: "ordered" as const, id: s.id, status: s.status };
+      });
+    } catch (error) {
+      const status = error instanceof SocialProviderError ? error.details.status : undefined;
+      if (status === 402 || status === 422) return { kind: "billing" };
+      if (status === 502) return { kind: "refused" };
+      throw error;
+    }
+  }
+
+  async updateImessageSender(input: {
+    senderId: string;
+    displayName: string;
+    contact: { firstName: string; lastName?: string };
+    signal?: AbortSignal;
+  }) {
+    await call("updateImessageSender", async (withFetch) => {
+      await this.zernio.imessage.updateImessageSender(
+        withFetch({
+          signal: input.signal,
+          path: { senderId: input.senderId },
+          body: { displayName: input.displayName, contact: input.contact },
+        }),
+      );
+    });
+  }
+
+  async cancelImessageSender(input: { senderId: string; signal?: AbortSignal }) {
+    await call("cancelImessageSender", async (withFetch) => {
+      await this.zernio.imessage.cancelImessageSender(
+        withFetch({ signal: input.signal, path: { senderId: input.senderId } }),
+      );
+    });
+  }
+
+  async setVoice(input: {
+    numberId: string;
+    settings: Partial<{
+      forwardTo: string;
+      voicemailGreeting: string;
+      businessHoursEnabled: boolean;
+      businessHoursTimezone: string;
+      businessHours: { day: number; open: string; close: string }[];
+    }>;
+    signal?: AbortSignal;
+  }): Promise<VoiceSettings> {
+    return call("enableVoiceOnNumber", async (withFetch) => {
+      const { data } = await this.zernio.voice.enableVoiceOnNumber(
+        withFetch({
+          signal: input.signal,
+          path: { id: input.numberId },
+          body: { ...input.settings, recordingEnabled: false },
+        }),
+      );
+      const r = parse(
+        z.object({
+          enabled: z.boolean().catch(false),
+          pstnForwardTo: z.string().nullish(),
+          voicemailGreeting: z.string().nullish(),
+          businessHoursEnabled: z.boolean().catch(false),
+          businessHoursTimezone: z.string().nullish(),
+          businessHours: z
+            .array(z.object({ day: z.number().int(), open: z.string(), close: z.string() }))
+            .catch([]),
+        }),
+        data,
+        "enableVoiceOnNumber",
+      );
+      return {
+        enabled: r.enabled,
+        forwardTo: r.pstnForwardTo || null,
+        voicemailGreeting: r.voicemailGreeting || null,
+        businessHoursEnabled: r.businessHoursEnabled,
+        businessHoursTimezone: r.businessHoursTimezone ?? null,
+        businessHours: r.businessHours,
+      };
+    });
+  }
+
+  async getCallRecordingUrl(input: { callId: string; signal?: AbortSignal }) {
+    try {
+      return await call("getCallRecording", async (withFetch) => {
+        const { data } = await this.zernio.calls.getCallRecording(
+          withFetch({ signal: input.signal, path: { id: input.callId }, query: { as: "json" } }),
+        );
+        return parse(z.object({ url: z.url() }), data, "getCallRecording").url;
+      });
+    } catch (error) {
+      // No recording (a missed call with no voicemail): nothing to play.
+      if (error instanceof SocialProviderError && error.details.status === 404) return null;
+      throw error;
+    }
+  }
+
+  async listPhoneCountries(input?: { signal?: AbortSignal }): Promise<PhoneCountry[]> {
+    return call("listPhoneNumberCountries", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.listPhoneNumberCountries(
+        withFetch({ signal: input?.signal }),
+      );
+      const typeSchema = z.object({
+        numberType: z.enum(["local", "mobile", "national", "toll_free"]),
+        monthlyCents: z.number(),
+        needsKyc: z.boolean().catch(true),
+        callsAvailable: z.boolean().catch(false),
+        smsAvailable: z.boolean().catch(false),
+        inStock: z.boolean().catch(false),
+        fulfilment: z.string().nullish(),
+      });
+      const countries = parse(
+        z.object({
+          countries: z
+            .array(
+              z.object({
+                code: z.string().length(2),
+                types: z.array(typeSchema.nullable().catch(null)).catch([]),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listPhoneNumberCountries",
+      ).countries;
+      return countries.map((c) => ({
+        code: c.code,
+        types: c.types.flatMap((t) =>
+          t
+            ? [
+                {
+                  numberType: t.numberType,
+                  monthlyCents: t.monthlyCents,
+                  needsKyc: t.needsKyc,
+                  callsAvailable: t.callsAvailable,
+                  smsAvailable: t.smsAvailable,
+                  inStock: t.inStock,
+                  instant: t.fulfilment !== "request",
+                },
+              ]
+            : [],
+        ),
+      }));
+    });
+  }
+
+  async searchPhoneNumbers(input: {
+    country: string;
+    numberType: PhoneNumberType;
+    areaCode?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("searchAvailablePhoneNumbers", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.searchAvailablePhoneNumbers(
+        withFetch({
+          signal: input.signal,
+          query: {
+            country: input.country,
+            numberType: input.numberType,
+            limit: 10,
+            ...(input.areaCode ? { areaCode: input.areaCode } : {}),
+          },
+        }),
+      );
+      const numbers = parse(
+        z.object({
+          numbers: z
+            .array(
+              z.object({
+                phoneNumber: z.string().min(4),
+                features: z.array(z.string()).catch([]),
+                locality: z.string().nullish(),
+                bestEffort: z.boolean().nullish(),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "searchAvailablePhoneNumbers",
+      ).numbers;
+      return numbers
+        .filter((n) => !n.bestEffort)
+        .map((n) => ({
+          phoneNumber: n.phoneNumber,
+          locality: n.locality ?? null,
+          features: n.features,
+        }));
+    });
+  }
+
+  async purchasePhoneNumber(input: {
+    profileId: string;
+    country: string;
+    numberType: PhoneNumberType;
+    phoneNumber: string;
+    wantsSms: boolean;
+    purchaseIntentId: string;
+    signal?: AbortSignal;
+  }): Promise<PurchaseResult> {
+    return call("purchasePhoneNumber", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.purchasePhoneNumber(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            country: input.country,
+            numberType: input.numberType,
+            phoneNumber: input.phoneNumber,
+            wantsSms: input.wantsSms,
+            connectWhatsapp: false,
+            purchaseIntentId: input.purchaseIntentId,
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          status: z.string().nullish(),
+          checkoutUrl: z.string().nullish(),
+          numberId: z.string().nullish(),
+          phoneNumber: z
+            .union([
+              z.string(),
+              z.object({
+                id: z.string(),
+                phoneNumber: z.string(),
+                profileId: z.string().nullish(),
+              }),
+            ])
+            .nullish(),
+          profileId: z.string().nullish(),
+        }),
+        data,
+        "purchasePhoneNumber",
+      );
+      if (r.status === "kyc_required") return { kind: "needs_id" };
+      if (r.checkoutUrl) return { kind: "needs_payment" };
+      if (r.phoneNumber && typeof r.phoneNumber === "object") {
+        return {
+          kind: "bought",
+          id: r.phoneNumber.id,
+          phoneNumber: r.phoneNumber.phoneNumber,
+          profileId: r.phoneNumber.profileId ?? null,
+        };
+      }
+      if (r.status === "already_purchased" && r.numberId && typeof r.phoneNumber === "string") {
+        return {
+          kind: "bought",
+          id: r.numberId,
+          phoneNumber: r.phoneNumber,
+          profileId: r.profileId ?? null,
+        };
+      }
+      throw new SocialProviderError("Zernio purchasePhoneNumber: unexpected response shape", {
+        ambiguous: true,
+      });
+    });
+  }
+
+  async listOwnedNumbers(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listPhoneNumbers", async (withFetch) => {
+      const { data } = await this.zernio.phonenumbers.listPhoneNumbers(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      const numbers = parse(
+        z.object({
+          numbers: z
+            .array(
+              z
+                .object({
+                  _id: z.string().min(1),
+                  phoneNumber: z.string().min(1),
+                  country: z.string().catch(""),
+                  numberType: z.string().nullish(),
+                  status: z.string(),
+                  monthlyCents: z.number().nullish(),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listPhoneNumbers",
+      ).numbers;
+      return numbers.flatMap((n): OwnedNumber[] =>
+        n && n.status !== "released" && n.status !== "releasing"
+          ? [
+              {
+                id: n._id,
+                phoneNumber: n.phoneNumber,
+                country: n.country,
+                numberType: n.numberType ?? null,
+                status: n.status,
+                monthlyCents: n.monthlyCents ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async releasePhoneNumber(input: { id: string; signal?: AbortSignal }) {
+    await call("releasePhoneNumber", async (withFetch) => {
+      await this.zernio.phonenumbers.releasePhoneNumber(
+        withFetch({ signal: input.signal, path: { id: input.id } }),
+      );
+    });
+  }
+
+  async listCalendarEvents(input: {
+    accountId: string;
+    from: string;
+    to: string;
+    signal?: AbortSignal;
+  }): Promise<CalendarEventSummary[]> {
+    return call("listCalendarEvents", async (withFetch) => {
+      const { data } = await this.zernio.calendar.listCalendarEvents(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            from: input.from,
+            to: input.to,
+            limit: 100,
+            sortOrder: "asc",
+          },
+        }),
+      );
+      const rows = parse(
+        z.object({
+          data: z
+            .array(
+              z
+                .object({
+                  id: z.string().min(1),
+                  title: z.string().nullish(),
+                  start: z.string().min(1),
+                  end: z.string().min(1),
+                  allDay: z.boolean().catch(false),
+                  busy: z.boolean().nullish().catch(null),
+                  status: z.string().nullish().catch(null),
+                })
+                .nullable()
+                .catch(null),
+            )
+            .catch([]),
+        }),
+        data,
+        "listCalendarEvents",
+      ).data;
+      return rows.flatMap((e): CalendarEventSummary[] =>
+        e && e.status !== "cancelled"
+          ? [
+              {
+                id: e.id,
+                title: e.title ?? "Busy",
+                start: e.start,
+                end: e.end,
+                allDay: e.allDay,
+                busy: e.busy !== false,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createCalendarEvent(input: {
+    accountId: string;
+    title: string;
+    start: string;
+    end: string;
+    description?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("createCalendarEvent", async (withFetch) => {
+      const { data } = await this.zernio.calendar.createCalendarEvent(
+        withFetch({
+          signal: input.signal,
+          body: {
+            accountId: input.accountId,
+            title: input.title,
+            start: input.start,
+            end: input.end,
+            ...(input.description ? { description: input.description } : {}),
+          } as never,
+        }),
+      );
+      return {
+        id: parse(
+          z.object({ data: z.object({ id: z.string().min(1) }) }),
+          data,
+          "createCalendarEvent",
+        ).data.id,
+      };
+    });
+  }
+
+  async listIntegrations(input: {
+    profileId: string;
+    platforms: readonly string[];
+    signal?: AbortSignal;
+  }) {
+    return call("listIntegrations", async (withFetch) => {
+      const { data } = await this.zernio.accounts.listAccounts(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 100 } }),
+      );
+      const accounts = parse(
+        z.object({
+          accounts: z
+            .array(
+              z.object({
+                _id: z.string().min(1),
+                platform: z.string(),
+                username: z.string().nullish(),
+                displayName: z.string().nullish(),
+                isActive: z.boolean().catch(false),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listIntegrations",
+      ).accounts;
+      return accounts
+        .filter((a) => input.platforms.includes(a.platform))
+        .map((a): Integration => ({
+          id: a._id,
+          platform: a.platform,
+          name: a.displayName ?? a.username ?? a.platform,
+          active: a.isActive,
+        }));
+    });
+  }
+
+  async connectSiteWithKeys(input: { profileId: string; keys: SiteKeys; signal?: AbortSignal }) {
+    const accountSchema = z.object({
+      account: z.object({
+        _id: z.string().min(1),
+        username: z.string().nullish(),
+        displayName: z.string().nullish(),
+      }),
+    });
+    const k = input.keys;
+    return call(`connect_${k.kind}`, async (withFetch) => {
+      const { data } =
+        k.kind === "shopify"
+          ? await this.zernio.connect.connectShopifyWithToken(
+              withFetch({
+                signal: input.signal,
+                body: { profileId: input.profileId, shop: k.shop, accessToken: k.accessToken },
+              }),
+            )
+          : k.kind === "wordpress"
+            ? await this.zernio.connect.connectWordPressWithApplicationPassword(
+                withFetch({
+                  signal: input.signal,
+                  body: {
+                    profileId: input.profileId,
+                    siteUrl: k.siteUrl,
+                    username: k.username,
+                    applicationPassword: k.applicationPassword,
+                  },
+                }),
+              )
+            : await this.zernio.connect.connectWebflowWithSiteToken(
+                withFetch({
+                  signal: input.signal,
+                  body: { profileId: input.profileId, siteToken: k.siteToken },
+                }),
+              );
+      const a = parse(accountSchema, data, `connect_${k.kind}`).account;
+      return { accountId: a._id, name: a.displayName ?? a.username ?? k.kind };
+    });
+  }
+
+  async connectWhatsAppWithKeys(input: {
+    profileId: string;
+    accessToken: string;
+    wabaId: string;
+    phoneNumberId: string;
+    pin?: string;
+    signal?: AbortSignal;
+  }) {
+    return call("connectWhatsAppCredentials", async (withFetch) => {
+      const { data } = await this.zernio.connect.connectWhatsAppCredentials(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accessToken: input.accessToken,
+            wabaId: input.wabaId,
+            phoneNumberId: input.phoneNumberId,
+            ...(input.pin ? { pin: input.pin } : {}),
+          },
+        }),
+      );
+      const a = parse(
+        z.object({
+          account: z.object({
+            accountId: z.string().min(1),
+            username: z.string().nullish(),
+            phoneNumber: z.string().nullish(),
+          }),
+        }),
+        data,
+        "connectWhatsAppCredentials",
+      ).account;
+      return { accountId: a.accountId, username: a.username ?? a.phoneNumber ?? "WhatsApp" };
+    });
+  }
+
+  async connectMetaAds(input: {
+    profileId: string;
+    facebookAccountId: string;
+    redirectUrl: string;
+    signal?: AbortSignal;
+  }) {
+    return call("connectAds", async (withFetch) => {
+      const { data } = await this.zernio.connect.connectAds(
+        withFetch({
+          signal: input.signal,
+          path: { platform: "facebook" },
+          query: {
+            profileId: input.profileId,
+            accountId: input.facebookAccountId,
+            loginMode: "classic",
+            redirect_url: input.redirectUrl,
+          },
+        }),
+      );
+      const r = parse(
+        z.object({ accountId: z.string().nullish(), authUrl: z.url().nullish() }),
+        data,
+        "connectAds",
+      );
+      if (r.authUrl) return { authUrl: r.authUrl };
+      if (r.accountId) return { connectionId: r.accountId };
+      throw new SocialProviderError("Zernio connectAds: neither a connection nor a link", {
+        ambiguous: false,
+      });
+    });
+  }
+
+  async connectSameTokenAds(input: {
+    profileId: string;
+    platform: "linkedin" | "pinterest";
+    postingAccountId: string;
+    redirectUrl: string;
+    signal?: AbortSignal;
+  }) {
+    try {
+      return await call("connectAds", async (withFetch) => {
+        const { data } = await this.zernio.connect.connectAds(
+          withFetch({
+            signal: input.signal,
+            path: { platform: input.platform },
+            query: {
+              profileId: input.profileId,
+              accountId: input.postingAccountId,
+              redirect_url: input.redirectUrl,
+            },
+          }),
+        );
+        const r = parse(
+          z.object({ accountId: z.string().nullish(), authUrl: z.url().nullish() }),
+          data,
+          "connectAds",
+        );
+        // An authUrl means a full sign-in on the partner's app: the owner reconnects the
+        // posting account through our own connect flow instead.
+        if (r.accountId && !r.authUrl) return { connectionId: r.accountId };
+        return { needsReconnect: true as const };
+      });
+    } catch (error) {
+      // 400 reconnect_required: the posting account's token can't reach ad accounts.
+      if (error instanceof SocialProviderError && error.details.status === 400) {
+        return { needsReconnect: true as const };
+      }
+      throw error;
+    }
+  }
+
+  async getMessageAttachmentUrl(input: {
+    accountId: string;
+    conversationId: string;
+    platformMessageId: string;
+    index: number;
+    signal?: AbortSignal;
+  }) {
+    return call("getMessageAttachment", async (withFetch) => {
+      const { data } = await this.zernio.messages.getMessageAttachment(
+        withFetch({
+          signal: input.signal,
+          path: {
+            conversationId: input.conversationId,
+            messageId: input.platformMessageId,
+            index: input.index,
+          },
+          query: { accountId: input.accountId, format: "json" },
+        }),
+      );
+      const r = parse(z.object({ url: z.url().nullish() }), data, "getMessageAttachment");
+      return r.url ?? null;
+    });
+  }
+
+  async connectOpenAiAds(input: { profileId: string; apiKey: string; signal?: AbortSignal }) {
+    return call("connectOpenAIAdsCredentials", async (withFetch) => {
+      const { data } = await this.zernio.connect.connectOpenAIAdsCredentials(
+        withFetch({
+          signal: input.signal,
+          body: { apiKey: input.apiKey, profileId: input.profileId },
+        }),
+      );
+      const r = parse(
+        z.object({ accountId: z.string().min(1), adAccountName: z.string().nullish() }),
+        data,
+        "connectOpenAIAdsCredentials",
+      );
+      return { connectionId: r.accountId, name: r.adAccountName ?? "ChatGPT ads" };
+    });
+  }
+
+  async createAd(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("createStandaloneAd", async (withFetch) => {
+      const { data } = await this.zernio.adcampaigns.createStandaloneAd(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      const ad = parse(
+        z.object({ ad: z.object({ _id: z.string().min(1), status: adCampaignStatusSchema }) }),
+        data,
+        "createStandaloneAd",
+      ).ad;
+      return { id: ad._id, status: ad.status };
+    });
+  }
+
+  async setAdCampaignBudget(input: {
+    campaignId: string;
+    platform: string;
+    amount: number;
+    type: "daily";
+    signal?: AbortSignal;
+  }) {
+    await call("updateAdCampaign", async (withFetch) => {
+      await this.zernio.adcampaigns.updateAdCampaign(
+        withFetch({
+          signal: input.signal,
+          path: { campaignId: input.campaignId },
+          body: {
+            platform: input.platform as never,
+            budget: { amount: input.amount, type: input.type },
+          },
+        } as never),
+      );
+    });
+  }
+
+  async listAdConnections(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listAdConnections", async (withFetch) => {
+      const { data } = await this.zernio.accounts.listAccounts(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, category: "ads" } }),
+      );
+      const accounts = parse(
+        z.object({
+          accounts: z
+            .array(
+              z.object({
+                _id: z.string().min(1),
+                platform: z.string(),
+                username: z.string().nullish(),
+                displayName: z.string().nullish(),
+                parentAccountId: z.string().nullish(),
+                isActive: z.boolean().catch(false),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listAdConnections",
+      ).accounts;
+      return accounts.map((a): AdConnection => ({
+        id: a._id,
+        platform: a.platform,
+        name: a.displayName ?? a.username ?? a.platform,
+        parentAccountId: a.parentAccountId ?? null,
+        active: a.isActive,
+      }));
+    });
+  }
+
+  async listAdAccounts(input: { connectionId: string; signal?: AbortSignal }) {
+    return call("listAdAccounts", async (withFetch) => {
+      const { data } = await this.zernio.adaccounts.listAdAccounts(
+        withFetch({ signal: input.signal, query: { accountId: input.connectionId } }),
+      );
+      const accounts = parse(
+        z.object({
+          accounts: z
+            .array(
+              z.object({
+                id: z.string().min(1),
+                name: z.string().nullish(),
+                currency: z.string().nullish(),
+                minimumDailyBudget: z.number().nullish(),
+                billingStatus: z.enum(["ok", "missing", "unknown"]).nullish().catch(null),
+                selectable: z.boolean().nullish(),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listAdAccounts",
+      ).accounts;
+      return accounts.map((a): AdAccount => ({
+        id: a.id,
+        name: a.name ?? a.id,
+        currency: a.currency ?? "USD",
+        minDailyBudget: a.minimumDailyBudget ?? null,
+        billing: a.billingStatus ?? "unknown",
+        usable: a.selectable !== false,
+      }));
+    });
+  }
+
+  async boostPost(input: {
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }) {
+    return call("boostPost", async (withFetch) => {
+      const { data } = await this.zernio.adcampaigns.boostPost(
+        withFetch({
+          signal: input.signal,
+          body: input.body as never,
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      const ad = parse(
+        z.object({ ad: z.object({ _id: z.string().min(1), status: adCampaignStatusSchema }) }),
+        data,
+        "boostPost",
+      ).ad;
+      return { id: ad._id, status: ad.status };
+    });
+  }
+
+  async listAdCampaigns(input: { connectionId: string; signal?: AbortSignal }) {
+    return call("listAdCampaigns", async (withFetch) => {
+      const { data } = await this.zernio.adcampaigns.listAdCampaigns(
+        withFetch({ signal: input.signal, query: { accountId: input.connectionId, limit: 50 } }),
+      );
+      return parse(adCampaignsSchema, data, "listAdCampaigns").campaigns.flatMap(
+        (c): AdCampaignSummary[] =>
+          c
+            ? [
+                {
+                  id: c.platformCampaignId,
+                  platform: c.platform,
+                  name: c.campaignName ?? "Ad",
+                  status: c.status,
+                  budget: c.budget ?? null,
+                  currency: c.currency ?? null,
+                  spend: c.metrics?.spend ?? 0,
+                  reach: c.metrics?.reach ?? 0,
+                  clicks: c.metrics?.clicks ?? 0,
+                },
+              ]
+            : [],
+      );
+    });
+  }
+
+  async setAdCampaignStatus(input: {
+    campaignId: string;
+    platform: string;
+    status: "active" | "paused";
+    signal?: AbortSignal;
+  }) {
+    await call("updateAdCampaignStatus", async (withFetch) => {
+      await this.zernio.adcampaigns.updateAdCampaignStatus(
+        withFetch({
+          signal: input.signal,
+          path: { campaignId: input.campaignId },
+          body: { status: input.status, platform: input.platform as never },
+        }),
+      );
+    });
+  }
+
+  async listAdRules(input: { connectionId: string; signal?: AbortSignal }) {
+    return call("listAdRules", async (withFetch) => {
+      const { data } = await this.zernio.adrules.listAdRules(
+        withFetch({ signal: input.signal, query: { accountId: input.connectionId, limit: 50 } }),
+      );
+      return parse(
+        z.object({
+          rules: z
+            .array(
+              z.object({
+                id: z.string().min(1),
+                name: z.string(),
+                adAccountId: z.string(),
+                enabled: z.boolean(),
+              }),
+            )
+            .catch([]),
+        }),
+        data,
+        "listAdRules",
+      ).rules.map((r): AdRuleSummary => ({ ...r }));
+    });
+  }
+
+  async createAdRule(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("createAdRule", async (withFetch) => {
+      const { data } = await this.zernio.adrules.createAdRule(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      return {
+        id: parse(z.object({ rule: z.object({ id: z.string().min(1) }) }), data, "createAdRule")
+          .rule.id,
+      };
+    });
+  }
+
+  async setAdRuleEnabled(input: { id: string; enabled: boolean; signal?: AbortSignal }) {
+    await call("updateAdRule", async (withFetch) => {
+      await this.zernio.adrules.updateAdRule(
+        withFetch({
+          signal: input.signal,
+          path: { ruleId: input.id },
+          body: { enabled: input.enabled },
+        }),
+      );
+    });
+  }
+
+  async deleteAdRule(input: { id: string; signal?: AbortSignal }) {
+    await call("deleteAdRule", async (withFetch) => {
+      await this.zernio.adrules.deleteAdRule(
+        withFetch({ signal: input.signal, path: { ruleId: input.id } }),
+      );
+    });
+  }
+
+  async listLeadForms(input: { accountId: string; signal?: AbortSignal }): Promise<LeadForm[]> {
+    return call("listLeadForms", async (withFetch) => {
+      const { data } = await this.zernio.leadgen.listLeadForms(
+        withFetch({ signal: input.signal, query: { accountId: input.accountId, limit: 50 } }),
+      );
+      const forms = parse(
+        z.object({ forms: z.array(z.record(z.string(), z.unknown())).catch([]) }),
+        data,
+        "listLeadForms",
+      ).forms;
+      return forms.flatMap((f): LeadForm[] => {
+        const id = typeof f.id === "string" ? f.id : null;
+        if (!id) return [];
+        return [
+          {
+            id,
+            name: typeof f.name === "string" ? f.name : "Lead form",
+            status: typeof f.status === "string" ? f.status.toLowerCase() : "active",
+          },
+        ];
+      });
+    });
+  }
+
+  async createLeadForm(input: { body: Record<string, unknown>; signal?: AbortSignal }) {
+    return call("createLeadForm", async (withFetch) => {
+      const { data } = await this.zernio.leadgen.createLeadForm(
+        withFetch({ signal: input.signal, body: input.body as never }),
+      );
+      return {
+        id: parse(z.object({ form: z.object({ id: z.string().min(1) }) }), data, "createLeadForm")
+          .form.id,
+      };
+    });
+  }
+
+  async listAdLeads(input: { accountIds: string[]; status?: AdLeadStatus; signal?: AbortSignal }) {
+    return call("listLeads", async (withFetch) => {
+      const { data } = await this.zernio.leadgen.listLeads(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountIds: input.accountIds.join(","),
+            platform: "meta",
+            limit: 100,
+            ...(input.status ? { status: input.status } : {}),
+          },
+        }),
+      );
+      return parse(adLeadsSchema, data, "listLeads").leads.flatMap((l): AdLead[] =>
+        l
+          ? [
+              {
+                id: l.id,
+                formName: l.formName ?? "Lead form",
+                createdAt: l.createdTime ?? null,
+                fields: l.fields,
+                consents: l.consents ?? [],
+                status: l.status,
+                contactId: l.contactId ?? null,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async updateAdLeadStatus(input: { id: string; status: AdLeadStatus; signal?: AbortSignal }) {
+    await call("updateLead", async (withFetch) => {
+      await this.zernio.leadgen.updateLead(
+        withFetch({ signal: input.signal, path: { id: input.id }, body: { status: input.status } }),
+      );
+    });
+  }
+
+  async listBroadcasts(input: { profileId: string; signal?: AbortSignal }): Promise<Broadcast[]> {
+    return call("listBroadcasts", async (withFetch) => {
+      const { data } = await this.zernio.broadcasts.listBroadcasts(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 50 } }),
+      );
+      return parse(broadcastsSchema, data, "listBroadcasts").broadcasts.flatMap((b): Broadcast[] =>
+        b
+          ? [
+              {
+                id: b.id,
+                name: b.name,
+                platform: b.platform,
+                status: b.status,
+                preview: b.messagePreview,
+                scheduledAt: b.scheduledAt ?? null,
+                completedAt: b.completedAt ?? null,
+                recipients: b.recipientCount,
+                sent: b.sentCount,
+                delivered: b.deliveredCount,
+                read: b.readCount,
+                failed: b.failedCount,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createWhatsAppBroadcast(input: {
+    profileId: string;
+    accountId: string;
+    name: string;
+    template: { name: string; language: string; nameVariable: boolean };
+    tag: string | null;
+    signal?: AbortSignal;
+  }): Promise<{ id: string; recipients: number }> {
+    const { id } = await call("createBroadcast", async (withFetch) => {
+      const { data } = await this.zernio.broadcasts.createBroadcast(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            platform: "whatsapp",
+            name: input.name,
+            template: {
+              name: input.template.name,
+              language: input.template.language,
+              ...(input.template.nameVariable
+                ? { variableMapping: { "1": { field: "name" } } }
+                : {}),
+            },
+            // Only people who agreed to messages, ever.
+            segmentFilters: { isSubscribed: true, ...(input.tag ? { tags: [input.tag] } : {}) },
+          },
+        }),
+      );
+      return parse(
+        z.object({ broadcast: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createBroadcast",
+      ).broadcast;
+    });
+    const added = await call("addBroadcastRecipients", async (withFetch) => {
+      const { data } = await this.zernio.broadcasts.addBroadcastRecipients(
+        withFetch({ signal: input.signal, path: { broadcastId: id }, body: { useSegment: true } }),
+      );
+      return parse(z.object({ added: z.number().catch(0) }), data, "addBroadcastRecipients").added;
+    });
+    return { id, recipients: added };
+  }
+
+  async startBroadcast(input: { id: string; at: string | null; signal?: AbortSignal }) {
+    await call(input.at ? "scheduleBroadcast" : "sendBroadcast", async (withFetch) => {
+      if (input.at) {
+        await this.zernio.broadcasts.scheduleBroadcast(
+          withFetch({
+            signal: input.signal,
+            path: { broadcastId: input.id },
+            body: { scheduledAt: input.at },
+          }),
+        );
+      } else {
+        await this.zernio.broadcasts.sendBroadcast(
+          withFetch({ signal: input.signal, path: { broadcastId: input.id } }),
+        );
+      }
+    });
+  }
+
+  async cancelBroadcast(input: { id: string; signal?: AbortSignal }) {
+    await call("cancelBroadcast", async (withFetch) => {
+      await this.zernio.broadcasts.cancelBroadcast(
+        withFetch({ signal: input.signal, path: { broadcastId: input.id } }),
+      );
+    });
+  }
+
+  async listContacts(input: {
+    profileId: string;
+    search?: string;
+    tag?: string;
+    skip?: number;
+    signal?: AbortSignal;
+  }): Promise<{ contacts: Contact[]; total: number }> {
+    return call("listContacts", async (withFetch) => {
+      const { data } = await this.zernio.contacts.listContacts(
+        withFetch({
+          signal: input.signal,
+          query: {
+            profileId: input.profileId,
+            limit: 50,
+            skip: input.skip ?? 0,
+            ...(input.search ? { search: input.search } : {}),
+            ...(input.tag ? { tag: input.tag } : {}),
+          },
+        }),
+      );
+      const parsed = parse(contactsSchema, data, "listContacts");
+      const contacts = parsed.contacts.flatMap((c): Contact[] =>
+        c
+          ? [
+              {
+                id: c.id,
+                name: c.name,
+                email: c.email ?? null,
+                tags: c.tags,
+                subscribed: c.isSubscribed,
+                platform: c.platform ?? null,
+                identifier: c.displayIdentifier ?? c.platformIdentifier ?? null,
+                lastMessageAt: c.lastMessageReceivedAt ?? c.lastMessageSentAt ?? null,
+              },
+            ]
+          : [],
+      );
+      return { contacts, total: parsed.pagination?.total ?? contacts.length };
+    });
+  }
+
+  async createContact(input: {
+    profileId: string;
+    name: string;
+    email?: string;
+    tags: string[];
+    subscribed: boolean;
+    channel?: { accountId: string; platform: string; identifier: string };
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createContact", async (withFetch) => {
+      const { data } = await this.zernio.contacts.createContact(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            name: input.name,
+            ...(input.email ? { email: input.email } : {}),
+            tags: input.tags,
+            isSubscribed: input.subscribed,
+            ...(input.channel
+              ? {
+                  accountId: input.channel.accountId,
+                  platform: input.channel.platform as "whatsapp",
+                  platformIdentifier: input.channel.identifier,
+                  displayIdentifier: input.channel.identifier,
+                }
+              : {}),
+          },
+        }),
+      );
+      return {
+        id: parse(z.object({ contact: z.object({ id: z.string().min(1) }) }), data, "createContact")
+          .contact.id,
+      };
+    });
+  }
+
+  async importContacts(input: {
+    profileId: string;
+    accountId?: string;
+    rows: { name: string; identifier?: string; email?: string; tags: string[] }[];
+    signal?: AbortSignal;
+  }) {
+    return call("bulkCreateContacts", async (withFetch) => {
+      const { data } = await this.zernio.contacts.bulkCreateContacts(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            ...(input.accountId ? { accountId: input.accountId } : {}),
+            contacts: input.rows.map((r) => ({
+              name: r.name,
+              ...(input.accountId && r.identifier
+                ? { platformIdentifier: r.identifier, displayIdentifier: r.identifier }
+                : {}),
+              ...(r.email ? { email: r.email } : {}),
+              tags: r.tags,
+            })),
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({
+          created: z.number().catch(0),
+          skipped: z.number().catch(0),
+          errors: z.array(z.string()).catch([]),
+        }),
+        data,
+        "bulkCreateContacts",
+      );
+      return { created: parsed.created, skipped: parsed.skipped, errors: parsed.errors.length };
+    });
+  }
+
+  async updateContact(input: {
+    id: string;
+    tags?: string[];
+    subscribed?: boolean;
+    signal?: AbortSignal;
+  }) {
+    await call("updateContact", async (withFetch) => {
+      await this.zernio.contacts.updateContact(
+        withFetch({
+          signal: input.signal,
+          path: { contactId: input.id },
+          body: {
+            ...(input.tags ? { tags: input.tags } : {}),
+            ...(input.subscribed !== undefined ? { isSubscribed: input.subscribed } : {}),
+          },
+        }),
+      );
+    });
+  }
+
+  async listSequences(input: { profileId: string; signal?: AbortSignal }): Promise<Sequence[]> {
+    return call("listSequences", async (withFetch) => {
+      const { data } = await this.zernio.sequences.listSequences(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 100 } }),
+      );
+      return parse(sequencesSchema, data, "listSequences").sequences.flatMap((s): Sequence[] =>
+        s
+          ? [
+              {
+                id: s.id,
+                name: s.name,
+                platform: s.platform,
+                accountId: s.accountId,
+                status: s.status,
+                steps: s.stepsCount ?? 0,
+                preview: s.messagePreview ?? "",
+                enrolled: s.totalEnrolled ?? 0,
+                completed: s.totalCompleted ?? 0,
+                exited: s.totalExited ?? 0,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createSequence(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    steps: SequenceStep[];
+    exitOnReply: boolean;
+    exitOnUnsubscribe: boolean;
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createSequence", async (withFetch) => {
+      const { data } = await this.zernio.sequences.createSequence(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            platform: input.platform as "whatsapp",
+            name: input.name,
+            steps: input.steps,
+            exitOnReply: input.exitOnReply,
+            exitOnUnsubscribe: input.exitOnUnsubscribe,
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({ sequence: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createSequence",
+      );
+      return { id: parsed.sequence.id };
+    });
+  }
+
+  async setSequenceActive(input: { id: string; active: boolean; signal?: AbortSignal }) {
+    await call(input.active ? "activateSequence" : "pauseSequence", async (withFetch) => {
+      const opts = withFetch({ signal: input.signal, path: { sequenceId: input.id } });
+      if (input.active) await this.zernio.sequences.activateSequence(opts);
+      else await this.zernio.sequences.pauseSequence(opts);
+    });
+  }
+
+  async deleteSequence(input: { id: string; signal?: AbortSignal }) {
+    await call("deleteSequence", async (withFetch) => {
+      await this.zernio.sequences.deleteSequence(
+        withFetch({ signal: input.signal, path: { sequenceId: input.id } }),
+      );
+    });
+  }
+
+  async enrollInSequence(input: { id: string; contactIds: string[]; signal?: AbortSignal }) {
+    return call("enrollContacts", async (withFetch) => {
+      const { data } = await this.zernio.sequences.enrollContacts(
+        withFetch({
+          signal: input.signal,
+          path: { sequenceId: input.id },
+          body: { contactIds: input.contactIds },
+        }),
+      );
+      const parsed = parse(
+        z.object({ enrolled: z.number().catch(0), failed: z.number().catch(0) }),
+        data,
+        "enrollContacts",
+      );
+      return { enrolled: parsed.enrolled, failed: parsed.failed };
+    });
+  }
+
+  async listContactIdsByTag(input: {
+    profileId: string;
+    accountId: string;
+    tag: string;
+    signal?: AbortSignal;
+  }): Promise<string[]> {
+    return call("listContacts", async (withFetch) => {
+      const { data } = await this.zernio.contacts.listContacts(
+        withFetch({
+          signal: input.signal,
+          query: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            tag: input.tag,
+            isSubscribed: "true",
+            limit: 1000,
+          },
+        }),
+      );
+      return parse(
+        z.object({
+          contacts: z.array(z.object({ id: z.string().optional() }).catch({})).catch([]),
+        }),
+        data,
+        "listContacts",
+      ).contacts.flatMap((c) => (c.id ? [c.id] : []));
+    });
+  }
+
+  async listWorkflows(input: { profileId: string; signal?: AbortSignal }): Promise<ChatFlow[]> {
+    return call("listWorkflows", async (withFetch) => {
+      const { data } = await this.zernio.workflows.listWorkflows(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId, limit: 100 } }),
+      );
+      return parse(workflowsSchema, data, "listWorkflows").workflows.flatMap((w): ChatFlow[] =>
+        w
+          ? [
+              {
+                id: w.id,
+                name: w.name,
+                description: w.description,
+                platform: w.platform,
+                status: w.status,
+                started: w.totalStarted ?? 0,
+                completed: w.totalCompleted ?? 0,
+              },
+            ]
+          : [],
+      );
+    });
+  }
+
+  async createWorkflow(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    description?: string;
+    graph: WorkflowGraph;
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createWorkflow", async (withFetch) => {
+      const { data } = await this.zernio.workflows.createWorkflow(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.accountId,
+            platform: input.platform as "whatsapp",
+            name: input.name,
+            ...(input.description ? { description: input.description } : {}),
+            nodes: input.graph.nodes as never,
+            edges: input.graph.edges,
+            entryNodeId: input.graph.entryNodeId,
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({ workflow: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createWorkflow",
+      );
+      return { id: parsed.workflow.id };
+    });
+  }
+
+  async setWorkflowActive(input: { id: string; active: boolean; signal?: AbortSignal }) {
+    await call(input.active ? "activateWorkflow" : "pauseWorkflow", async (withFetch) => {
+      const opts = withFetch({ signal: input.signal, path: { workflowId: input.id } });
+      if (input.active) await this.zernio.workflows.activateWorkflow(opts);
+      else await this.zernio.workflows.pauseWorkflow(opts);
+    });
+  }
+
+  async deleteWorkflow(input: { id: string; signal?: AbortSignal }) {
+    await call("deleteWorkflow", async (withFetch) => {
+      await this.zernio.workflows.deleteWorkflow(
+        withFetch({ signal: input.signal, path: { workflowId: input.id } }),
+      );
+    });
+  }
+
+  async listCommentAutomations(input: { profileId: string; signal?: AbortSignal }) {
+    return call("listCommentAutomations", async (withFetch) => {
+      const { data } = await this.zernio.commentautomations.listCommentAutomations(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      return parse(commentAutomationsSchema, data, "listCommentAutomations").automations.flatMap(
+        (a): CommentAutomation[] =>
+          a
+            ? [
+                {
+                  id: a.id,
+                  name: a.name,
+                  platform: a.platform,
+                  accountId: a.accountId,
+                  keywords: a.keywords,
+                  matchMode: a.matchMode,
+                  dmMessage: a.dmMessage ?? null,
+                  button: (() => {
+                    const b = a.buttons?.find((x) => x.type === "url" && x.url);
+                    return b?.url ? { title: b.title, url: b.url } : null;
+                  })(),
+                  commentReply: a.commentReply ?? null,
+                  once: a.repeatPolicy?.mode !== "every_comment",
+                  postTitle: a.postTitle ?? null,
+                  isActive: a.isActive,
+                  stats: {
+                    triggered: a.stats?.triggered ?? 0,
+                    dmsSent: a.stats?.dmsSent ?? 0,
+                    dmsFailed: a.stats?.dmsFailed ?? 0,
+                    linkClicks: a.stats?.linkClicks ?? 0,
+                  },
+                },
+              ]
+            : [],
+      );
+    });
+  }
+
+  async createCommentAutomation(input: {
+    profileId: string;
+    automation: CommentAutomationInput;
+    isActive: boolean;
+    signal?: AbortSignal;
+  }): Promise<{ id: string }> {
+    return call("createCommentAutomation", async (withFetch) => {
+      const { data } = await this.zernio.commentautomations.createCommentAutomation(
+        withFetch({
+          signal: input.signal,
+          body: {
+            profileId: input.profileId,
+            accountId: input.automation.accountId,
+            trigger: "comment",
+            isActive: input.isActive,
+            ...automationBody(input.automation),
+          },
+        }),
+      );
+      const parsed = parse(
+        z.object({ automation: z.object({ id: z.string().min(1) }) }),
+        data,
+        "createCommentAutomation",
+      );
+      return { id: parsed.automation.id };
+    });
+  }
+
+  async updateCommentAutomation(input: {
+    id: string;
+    automation?: CommentAutomationInput;
+    isActive?: boolean;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    await call("updateCommentAutomation", async (withFetch) => {
+      await this.zernio.commentautomations.updateCommentAutomation(
+        withFetch({
+          signal: input.signal,
+          path: { automationId: input.id },
+          body: {
+            ...(input.automation ? automationBody(input.automation) : {}),
+            ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+          },
+        }),
+      );
+    });
+  }
+
+  async deleteCommentAutomation(input: { id: string; signal?: AbortSignal }): Promise<void> {
+    await call("deleteCommentAutomation", async (withFetch) => {
+      await this.zernio.commentautomations.deleteCommentAutomation(
+        withFetch({ signal: input.signal, path: { automationId: input.id } }),
+      );
+    });
+  }
+
+  async listCommentAutomationLogs(input: { id: string; limit?: number; signal?: AbortSignal }) {
+    return call("listCommentAutomationLogs", async (withFetch) => {
+      const { data } = await this.zernio.commentautomations.listCommentAutomationLogs(
+        withFetch({
+          signal: input.signal,
+          path: { automationId: input.id },
+          query: { limit: input.limit ?? 10 },
+        }),
+      );
+      const parsed = parse(commentAutomationLogsSchema, data, "listCommentAutomationLogs");
+      return {
+        entries: parsed.logs.flatMap((l): CommentAutomationLogEntry[] =>
+          l
+            ? [
+                {
+                  id: l.id,
+                  who: l.commenterUsername
+                    ? `@${l.commenterUsername}`
+                    : (l.commenterName ?? "Someone"),
+                  status: l.status,
+                  at: l.createdAt ?? null,
+                },
+              ]
+            : [],
+        ),
+        misses: parsed.misses?.total ?? 0,
+      };
+    });
+  }
+
+  async getQueue(input: { profileId: string; signal?: AbortSignal }): Promise<PostingQueue | null> {
+    return call("getQueue", async (withFetch) => {
+      const { data } = await this.zernio.queue.listQueueSlots(
+        withFetch({ signal: input.signal, query: { profileId: input.profileId } }),
+      );
+      const q = parse(queueSchema, data, "getQueue");
+      if (q.exists === false || !q.schedule) return null;
+      return toQueue(q);
+    });
+  }
+
+  async saveQueue(input: {
+    profileId: string;
+    timezone: string;
+    slots: { dayOfWeek: number; time: string }[];
+    signal?: AbortSignal;
+  }): Promise<PostingQueue> {
+    const existing = await this.getQueue({ profileId: input.profileId, signal: input.signal });
+    return call("saveQueue", async (withFetch) => {
+      const body = { profileId: input.profileId, timezone: input.timezone, slots: input.slots };
+      const { data } = existing
+        ? await this.zernio.queue.updateQueueSlot(withFetch({ signal: input.signal, body }))
+        : await this.zernio.queue.createQueueSlot(
+            withFetch({ signal: input.signal, body: { ...body, name: "Posting times" } }),
+          );
+      return toQueue(parse(queueSchema, data, "saveQueue"));
     });
   }
 
@@ -576,6 +3353,26 @@ export class ZernioSocialProvider implements SocialProvider {
     await call("deletePost", async (withFetch) => {
       await this.zernio.posts.deletePost(
         withFetch({ signal: input.signal, path: { postId: input.postId } }),
+      );
+    });
+  }
+
+  async unpublishPost(input: {
+    postId: string;
+    platform: string;
+    accountId?: string;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    await call("unpublishPost", async (withFetch) => {
+      await this.zernio.posts.unpublishPost(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          body: {
+            platform: input.platform as "facebook",
+            ...(input.accountId ? { accountId: input.accountId } : {}),
+          },
+        }),
       );
     });
   }
@@ -796,6 +3593,26 @@ export class ZernioSocialProvider implements SocialProvider {
               }),
             );
       return toDemographics(data);
+    });
+  }
+
+  async getGoogleBusinessPerformance(input: {
+    accountId: string;
+    fromDate: string;
+    toDate: string;
+    signal?: AbortSignal;
+  }): Promise<Record<string, number>> {
+    return call("getGoogleBusinessPerformance", async (withFetch) => {
+      const { data } = await this.zernio.analytics.getGoogleBusinessPerformance(
+        withFetch({
+          signal: input.signal,
+          query: { accountId: input.accountId, fromDate: input.fromDate, toDate: input.toDate },
+        }),
+      );
+      const parsed = parse(gbpPerformanceSchema, data, "getGoogleBusinessPerformance");
+      return Object.fromEntries(
+        Object.entries(parsed.metrics ?? {}).map(([k, v]) => [k, v?.total ?? 0]),
+      );
     });
   }
 
@@ -1138,4 +3955,36 @@ export function createZernioProvider(options: {
       timeout: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     }),
   );
+}
+
+/** The YouTube title and Pinterest board passed the T63/T64 way (no `extras` for the platform). */
+function legacyExtras(platform: string, input: CreatePostInput): TargetExtras {
+  if (platform === "pinterest" && input.pinterestBoardId) {
+    return { platformSpecificData: { boardId: input.pinterestBoardId } };
+  }
+  if (platform === "youtube" && input.youtubeTitle) {
+    return { platformSpecificData: { title: input.youtubeTitle } };
+  }
+  return {};
+}
+
+function toQueue(q: z.infer<typeof queueSchema>): PostingQueue {
+  return {
+    timezone: q.schedule?.timezone ?? "UTC",
+    slots: (q.schedule?.slots ?? []).flatMap((s) => (s ? [s] : [])),
+    nextSlots: q.nextSlots ?? [],
+  };
+}
+
+/** The create/update body of a comment automation (T77a). */
+function automationBody(a: CommentAutomationInput) {
+  return {
+    name: a.name,
+    keywords: a.keywords,
+    matchMode: a.matchMode,
+    ...(a.dmMessage ? { dmMessage: a.dmMessage } : {}),
+    buttons: a.button ? [{ type: "url" as const, title: a.button.title, url: a.button.url }] : [],
+    ...(a.commentReply ? { commentReply: a.commentReply } : {}),
+    repeatPolicy: { mode: a.once ? ("once" as const) : ("every_comment" as const) },
+  };
 }

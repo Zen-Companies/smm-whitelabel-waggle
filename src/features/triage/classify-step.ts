@@ -19,13 +19,17 @@ export function createClassifyStep(deps: { classifier: Classifier }): Step {
     if (error) throw new Error(`classify: item lookup failed: ${error.message}`);
     const { text, kind, tenants } = row as unknown as {
       text: string;
-      kind: "comment" | "dm" | "review";
+      kind: "comment" | "dm" | "review" | "call";
       tenants: {
         name: string;
         business_profile: string;
         business_profile_updated_at: string | null;
       };
     };
+    // T82b: a missed call or voicemail goes to the owner; nothing is sent to a classifier.
+    if (kind === "call") {
+      return { event: "escalate", details: { policyReason: "missed_call", classified: false } };
+    }
     // The owner's profile when there is one, else the name (T25). Recorded below by source and
     // timestamp, never as text.
     const context = businessContext({

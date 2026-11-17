@@ -124,7 +124,7 @@ export function InviteForm({
           </span>
           <button
             type="button"
-            className="text-ink w-fit text-sm font-medium underline underline-offset-4"
+            className="action-link mx-0 w-fit"
             onClick={() => {
               const at = state.sent!.at;
               void navigator.clipboard?.writeText(state.sent!.link).then(() => setCopiedAt(at));

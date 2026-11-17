@@ -48,3 +48,16 @@ describe("MockSocialProvider", () => {
     expect(a.profileId).toBe(b.profileId);
   });
 });
+
+describe("demo contacts", () => {
+  it("a demo business starts with its Inbox people; other businesses start empty", async () => {
+    const p = new MockSocialProvider();
+    const demo = await p.listContacts({ profileId: "demo_profile_harbour_bean" });
+    expect(demo.total).toBe(8);
+    expect(demo.contacts.map((c) => c.name)).toContain("Liza Tan");
+    expect(
+      (await p.listContacts({ profileId: "demo_profile_harbour_bean", tag: "events" })).total,
+    ).toBe(2);
+    expect((await p.listContacts({ profileId: "mock_profile_x" })).total).toBe(0);
+  });
+});

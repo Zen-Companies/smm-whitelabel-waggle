@@ -28,6 +28,13 @@ export function periodWindow(days: number, now: Date): { fromDate: string; toDat
   return { fromDate, toDate };
 }
 
+/** Google Business Profile's performance report for one account and period (T76). */
+export const gbpKey = (period: AnalyticsPeriod, socialAccountId: string) =>
+  `gbp:${period}:${socialAccountId}`;
+
+/** Only Instagram and Facebook have audience breakdowns (age, gender, places). */
+const BREAKDOWNS = new Set(["instagram", "facebook"]);
+
 export const dashboardKey = (period: AnalyticsPeriod, platform: AnalyticsPlatform) =>
   `dashboard:${period}:${platform}`;
 export const audienceKey = (socialAccountId: string) => `audience:${socialAccountId}`;
@@ -180,6 +187,23 @@ async function syncTenant(
     }
   }
 
+  // 1b. Google Business Profile has no dashboard: its own performance report, per account.
+  for (const account of (accounts ?? []).filter((a) => a.platform === "googlebusiness")) {
+    for (const period of ANALYTICS_PERIODS) {
+      if (!shouldContinue()) throw new RateLimited("out of time");
+      const metrics = await social
+        .getGoogleBusinessPerformance({
+          accountId: account.zernio_account_id,
+          ...periodWindow(period, now),
+        })
+        .catch((e) => {
+          if (isRateLimit(e)) throw e;
+          return null;
+        });
+      if (metrics) await save(gbpKey(period, account.id), { metrics });
+    }
+  }
+
   // 2. Posts: the last 30 days hourly, the last 12 months when the weekly pass is due.
   const full = due(tenant.analytics_full_at, ANALYTICS_FULL_MS, now);
   const window = periodWindow(full ? 366 : 30, now);
@@ -212,7 +236,7 @@ async function syncTenant(
     });
     await save(BEST_TIME_KEY, { slots: await social.getBestTimeToPost({ profileId }) });
     for (const account of accounts ?? []) {
-      if (!isAnalyticsLive(account.platform)) continue;
+      if (!BREAKDOWNS.has(account.platform)) continue;
       const platform = account.platform as SocialPlatform;
       // Meta refuses breakdowns under 100 followers: that's a normal state, kept as a reason.
       const demographics = await social

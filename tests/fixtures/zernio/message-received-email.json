@@ -1,0 +1,45 @@
+{
+  "id": "evt_message_email_01",
+  "event": "message.received",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "message": {
+    "id": "msg_email_01",
+    "conversationId": "conv_email_01",
+    "platform": "imap",
+    "platformMessageId": "<CAF0123@mail.zoho.com>",
+    "direction": "incoming",
+    "text": "Hi! Do you cater office events? We need coffee and pastries for 30 people on Friday.",
+    "attachments": [],
+    "sender": {
+      "id": "maria@example.com",
+      "name": "Maria Santos"
+    },
+    "sentAt": "2026-11-13T02:00:00.000Z",
+    "isRead": false
+  },
+  "conversation": {
+    "id": "conv_email_01",
+    "platformConversationId": "<CAF0123@mail.zoho.com>",
+    "participantId": "maria@example.com",
+    "participantName": "Maria Santos",
+    "status": "active"
+  },
+  "account": {
+    "id": "acc_imap_fixture",
+    "accountId": "acc_imap_fixture",
+    "platform": "imap",
+    "username": "hello@harbourbean.ph",
+    "profileId": "__PROFILE_ID__"
+  },
+  "metadata": {
+    "email": {
+      "subject": "Catering for 30 people?"
+    }
+  },
+  "timestamp": "2026-11-13T02:00:01.000Z"
+}

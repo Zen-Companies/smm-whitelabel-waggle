@@ -14,7 +14,10 @@ async function DashboardFeedback() {
 // gutters (16 on phones). Each page sets its own width inside.
 export default function DashboardLayout({ children }: LayoutProps<"/">) {
   return (
-    <div className="flex min-h-dvh flex-col">
+    // Phones: room under the content for the bottom tabs.
+    // A page marked data-fit-screen (the Inbox) fills exactly the screen on desktop and never
+    // scrolls; its own areas scroll instead.
+    <div className="flex min-h-dvh flex-col pb-16 md:pb-0 lg:has-[[data-fit-screen]]:h-dvh">
       <Suspense fallback={<div className="border-line h-14 border-b" />}>
         <AppHeader bell={<Bell />} needsYouStatuses={NEEDS_OWNER} />
       </Suspense>

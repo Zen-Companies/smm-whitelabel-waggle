@@ -1,0 +1,220 @@
+import "server-only";
+import type Stripe from "stripe";
+import { writeAudit } from "@/lib/audit";
+import { monthStart } from "@/lib/llm/spend";
+import type { Database } from "@/lib/supabase/database.types";
+import type { ServiceClient } from "@/lib/supabase/service";
+import { EXTRAS, PLANS, type PlanId } from "./plans";
+import { billingFromSubscription, carriedReplies, planIsLive } from "./subscription";
+
+// The organization's bill as Waggle stores it (org_billing, reply_top_ups), and the Stripe events
+// that keep it current. Database only: no calls to Stripe here.
+
+export type BillingRecord = Database["public"]["Tables"]["org_billing"]["Row"];
+
+export async function loadBilling(db: ServiceClient, orgId: string): Promise<BillingRecord | null> {
+  const { data, error } = await db
+    .from("org_billing")
+    .select("*")
+    .eq("organization_id", orgId)
+    .maybeSingle();
+  if (error) throw new Error(`billing: reading the bill failed: ${error.message}`);
+  return data;
+}
+
+/** The brand an organization-level audit row is written against (audit_log is per brand). */
+export async function auditBrand(db: ServiceClient, orgId: string): Promise<string | null> {
+  const { data } = await db
+    .from("tenants")
+    .select("id")
+    .eq("organization_id", orgId)
+    .is("offboarded_at", null)
+    .order("created_at", { ascending: true })
+    .limit(1);
+  return data?.[0]?.id ?? null;
+}
+
+export async function auditOrg(
+  db: ServiceClient,
+  orgId: string,
+  action: string,
+  actor: string,
+  details: Record<string, string | number | boolean | null> = {},
+): Promise<void> {
+  const tenantId = await auditBrand(db, orgId);
+  if (tenantId) await writeAudit(db, { tenantId, action, actor, details: { ...details, orgId } });
+}
+
+/** AI replies sent between two dates across an organization's brands (only sent ones count). */
+export async function countOrgReplies(
+  db: ServiceClient,
+  orgId: string,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  const { data: brands } = await db.from("tenants").select("id").eq("organization_id", orgId);
+  const ids = (brands ?? []).map((b) => b.id);
+  if (ids.length === 0) return 0;
+  const { count, error } = await db
+    .from("drafts")
+    .select("id", { count: "exact", head: true })
+    .in("tenant_id", ids)
+    .eq("owner_written", false)
+    .gte("sent_at", from.toISOString())
+    .lt("sent_at", to.toISOString());
+  if (error) throw new Error(`billing: counting replies failed: ${error.message}`);
+  return count ?? 0;
+}
+
+export interface TopUps {
+  thisMonth: number;
+  automaticThisMonth: number;
+  carried: number;
+}
+
+/** This month's top-ups, and last month's unused replies carried over. */
+export async function loadTopUps(
+  db: ServiceClient,
+  orgId: string,
+  plan: PlanId,
+  now: Date,
+): Promise<TopUps> {
+  const start = monthStart(now);
+  const lastStart = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() - 1, 1));
+  const { data } = await db
+    .from("reply_top_ups")
+    .select("replies, automatic, created_at")
+    .eq("organization_id", orgId)
+    .gte("created_at", lastStart.toISOString());
+  const rows = data ?? [];
+  const mine = rows.filter((r) => new Date(r.created_at) >= start);
+  const last = rows.filter((r) => new Date(r.created_at) < start);
+  const lastReplies = last.reduce((n, r) => n + r.replies, 0);
+  const carried =
+    lastReplies === 0
+      ? 0
+      : carriedReplies({
+          planReplies: PLANS[plan].replies,
+          topUpReplies: lastReplies,
+          used: await countOrgReplies(db, orgId, lastStart, start),
+        });
+  return {
+    thisMonth: mine.reduce((n, r) => n + r.replies, 0) / EXTRAS.topUp.replies,
+    automaticThisMonth: mine.filter((r) => r.automatic).length,
+    carried,
+  };
+}
+
+/** The organization id a subscription belongs to: its metadata, else the stored customer. */
+async function orgForCustomer(
+  db: ServiceClient,
+  metadataOrg: string | undefined,
+  customer: string,
+) {
+  if (metadataOrg) return metadataOrg;
+  const { data } = await db
+    .from("org_billing")
+    .select("organization_id")
+    .eq("stripe_customer_id", customer)
+    .maybeSingle();
+  return data?.organization_id ?? null;
+}
+
+const customerId = (c: string | { id: string } | null) =>
+  c ? (typeof c === "string" ? c : c.id) : null;
+
+/**
+ * Applies one verified Stripe event to the stored bill. Returns what it did, for the webhook
+ * row. Only database writes, no calls out (CLAUDE.md rule 3).
+ */
+export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): Promise<string> {
+  switch (event.type) {
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted":
+    case "customer.subscription.trial_will_end":
+    case "customer.subscription.paused":
+    case "customer.subscription.resumed": {
+      const sub = event.data.object;
+      const row = billingFromSubscription(sub);
+      const orgId = await orgForCustomer(db, sub.metadata.organization_id, row.stripe_customer_id);
+      if (!orgId) return "ignored: no organization";
+      const before = await loadBilling(db, orgId);
+      const eventAt = new Date(event.created * 1000).toISOString();
+      // Out of order: an older event never overwrites what a newer one stored.
+      if (
+        before?.stripe_event_at &&
+        before.stripe_subscription_id === sub.id &&
+        before.stripe_event_at > eventAt
+      ) {
+        return "ignored: older than the stored subscription";
+      }
+      // An old subscription's events never overwrite a newer one.
+      if (
+        before?.stripe_subscription_id &&
+        before.stripe_subscription_id !== sub.id &&
+        !planIsLive(row.status)
+      ) {
+        return "ignored: an older subscription";
+      }
+      const { error } = await db.from("org_billing").upsert(
+        {
+          organization_id: orgId,
+          ...row,
+          stripe_event_at: eventAt,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "organization_id" },
+      );
+      if (error) throw new Error(`billing: saving the subscription failed: ${error.message}`);
+      if (before?.plan !== row.plan || before?.status !== row.status) {
+        await auditOrg(db, orgId, "billing.subscription", "system", {
+          plan: row.plan,
+          status: row.status,
+          was: before ? `${before.plan}/${before.status}` : null,
+        });
+      }
+      return `subscription ${row.plan}/${row.status}`;
+    }
+    case "checkout.session.completed":
+    case "checkout.session.async_payment_succeeded": {
+      const s = event.data.object;
+      if (s.metadata?.kind !== "top_up" || s.payment_status !== "paid") return "ignored";
+      const orgId = s.metadata.organization_id;
+      if (!orgId) return "ignored: no organization";
+      return addTopUp(db, orgId, s.id, false);
+    }
+    case "invoice.paid": {
+      const inv = event.data.object;
+      if (inv.metadata?.kind !== "auto_top_up") return "ignored";
+      const orgId =
+        inv.metadata.organization_id ??
+        (await orgForCustomer(db, undefined, customerId(inv.customer) ?? ""));
+      if (!orgId || !inv.id) return "ignored: no organization";
+      return addTopUp(db, orgId, inv.id, true);
+    }
+    default:
+      return "ignored";
+  }
+}
+
+async function addTopUp(
+  db: ServiceClient,
+  orgId: string,
+  ref: string,
+  automatic: boolean,
+): Promise<string> {
+  const { error } = await db
+    .from("reply_top_ups")
+    .upsert(
+      { organization_id: orgId, replies: EXTRAS.topUp.replies, stripe_ref: ref, automatic },
+      { onConflict: "stripe_ref", ignoreDuplicates: true },
+    );
+  if (error) throw new Error(`billing: saving the top-up failed: ${error.message}`);
+  await auditOrg(db, orgId, "billing.top_up", "system", {
+    replies: EXTRAS.topUp.replies,
+    automatic,
+    ref,
+  });
+  return `top-up +${EXTRAS.topUp.replies}${automatic ? " (automatic)" : ""}`;
+}

@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   const invite = INVITE_PATH.exec(next);
   if (invite && (await acceptInviteAndOpen(invite[1], data.user.id))) {
-    return NextResponse.redirect(siteUrl(request, "/inbox"));
+    return NextResponse.redirect(siteUrl(request, "/today"));
   }
   return NextResponse.redirect(siteUrl(request, next));
 }

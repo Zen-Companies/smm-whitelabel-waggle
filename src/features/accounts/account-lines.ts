@@ -20,6 +20,11 @@ export function accountLines(
 ): AccountLines {
   const p = platformOf(platform);
   if (!p) return { does: "Connected", note: null };
+  // T82b: the business number brings missed calls and voicemails to the inbox.
+  if (platform === "phone") return { does: "Missed calls and voicemails", note: null };
+  if (platform === "sms") return { does: "Answers texts", note: null };
+  if (platform === "rcs") return { does: "Answers branded texts", note: null };
+  if (platform === "imessage") return { does: "Answers iMessages", note: null };
   const rules = inboxRules(platform);
 
   if (!p.inboxLive) {

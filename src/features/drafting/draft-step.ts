@@ -7,6 +7,8 @@ import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { generateDraft } from "./generate";
 import { loadThreadHistory } from "./history";
 import { DRAFT_PROMPT_VERSION } from "./prompts";
+import { loadBusyTimes } from "@/features/calendar";
+import { replyLimitReached } from "@/features/billing";
 
 const PRE_DRAFT_EVENTS: Record<"pause" | "ignore" | "escalate", StatusEvent> = {
   pause: "pause",
@@ -35,7 +37,11 @@ export function createDraftStep(deps: {
     let pre = triage(input);
     if (pre.decision === "draft") {
       const spend = await loadTenantAiSpend(db, item.tenantId, now);
-      pre = triage({ ...input, aiCapReached: spend.level === "reached" });
+      // The plan's AI replies a month (Pricing Bible): the same pause as the spend cap. Off until
+      // billing ships (no plans yet, `billing.plans` off).
+      const outOfReplies =
+        spend.level !== "reached" && (await replyLimitReached(db, item.tenantId, now));
+      pre = triage({ ...input, aiCapReached: spend.level === "reached" || outOfReplies });
     }
     // T40: a spam comment with auto-hide on is hidden on the post, then ignored. If hiding
     // doesn't work, it comes to the owner to hide instead of staying public unnoticed.
@@ -104,6 +110,11 @@ export function createDraftStep(deps: {
 
     // T30: earlier messages of a DM thread, so a short follow-up keeps its meaning.
     const history = await loadThreadHistory(db, item.id);
+    // T81d: a booking request sees the owner's busy times when a calendar is connected.
+    const calendar =
+      category === "lead" && deps.social
+        ? await loadBusyTimes({ db, social: deps.social() }, item.tenantId, now, ctx.callSignal())
+        : null;
     const { result, facts, model, issues, needsHuman, needsHumanReason } = await generateDraft(
       { db, llm: deps.llm },
       {
@@ -115,6 +126,7 @@ export function createDraftStep(deps: {
         text,
         history,
         platform: social_accounts.platform,
+        calendar,
         signal: ctx.callSignal,
       },
     );

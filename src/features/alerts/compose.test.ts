@@ -62,6 +62,70 @@ describe("composeAlert", () => {
     expect(email.text).toContain("https://app.test/inbox/items/item-2");
   });
 
+  it("a missed call or voicemail: who called and what to do (T82b)", () => {
+    const email = composeAlert(
+      {
+        kind: "escalation",
+        itemId: "item-9",
+        itemKind: "call",
+        platform: "phone",
+        authorName: "+14155550110",
+        category: null,
+        status: "escalated",
+        reason: "voicemail",
+      },
+      ctx,
+    );
+    expect(email.subject).toBe("Harbour Bean: a phone call from +14155550110 needs you");
+    expect(email.text).toContain("They left a voicemail.");
+    expect(email.text).toContain("https://app.test/inbox/items/item-9");
+  });
+
+  it("rcs status: what to do next, the review note, a link to Messaging (T83b)", () => {
+    const fix = composeAlert(
+      { kind: "rcs_status", status: "changes_requested", reason: "Use the IRS name." },
+      ctx,
+    );
+    expect(fix.subject).toBe("Harbour Bean: your branded texts request needs a fix");
+    expect(fix.text).toContain("The note: “Use the IRS name.”");
+    expect(fix.text).toContain("https://app.test/settings/messaging");
+    expect(composeAlert({ kind: "rcs_status", status: "testing", reason: null }, ctx).subject).toBe(
+      "Harbour Bean: branded texts are ready to test",
+    );
+    expect(
+      composeAlert({ kind: "rcs_status", status: "testing", reason: "No STOP reply." }, ctx)
+        .subject,
+    ).toBe("Harbour Bean: your launch details came back");
+    expect(composeAlert({ kind: "rcs_status", status: "live", reason: null }, ctx).text).toContain(
+      "https://app.test/inbox",
+    );
+    expect(
+      composeAlert({ kind: "rcs_status", status: "rejected", reason: "Brand not verified." }, ctx)
+        .text,
+    ).toContain("Brand not verified.");
+  });
+
+  it("ad lead: every answer, the consent, and a link to the leads (T78d)", () => {
+    const email = composeAlert(
+      {
+        kind: "ad_lead",
+        formName: "Catering inquiry",
+        fields: { first_name: "Ana", last_name: "Cruz", phone_number: "+639175550142", q1: "40" },
+        agreedToMessages: false,
+      },
+      ctx,
+    );
+    expect(email.subject).toBe("Harbour Bean: new lead from Ana Cruz");
+    expect(email.text).toContain("Someone filled Catering inquiry in your ad.");
+    expect(email.text).toContain("Phone number: +639175550142");
+    expect(email.text).toContain("didn't tick the messages box");
+    expect(email.text).toContain("https://app.test/contacts/ad-leads");
+    expect(
+      composeAlert({ kind: "ad_lead", formName: null, fields: {}, agreedToMessages: true }, ctx)
+        .subject,
+    ).toBe("Harbour Bean: new lead from your ad");
+  });
+
   it("disconnect links to settings; nudge counts drafts", () => {
     expect(
       composeAlert({ kind: "disconnect", platform: "instagram", username: "harbourbean" }, ctx),

@@ -108,6 +108,6 @@ export async function updateBusinessProfile(
     actor: tenant.userId,
     details: { length: parsed.data.length },
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
   return { saved: true };
 }

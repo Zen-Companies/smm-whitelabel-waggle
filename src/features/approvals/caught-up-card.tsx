@@ -1,3 +1,4 @@
+import { inboxHref } from "@/lib/routes";
 import Link from "next/link";
 import { Bee } from "@/components/app/bee";
 import { clockTime } from "@/components/app/time";
@@ -20,7 +21,7 @@ export function CaughtUpCard({ activity }: { activity: ActivityEntry[] }) {
             All caught up
           </h2>
           <p className="text-ink-2">
-            Nothing needs you. Go run the shop; we&apos;ll email you when a customer does.
+            Nothing needs you. Go run the business; we&apos;ll email you when a customer does.
           </p>
         </div>
       </div>
@@ -35,20 +36,23 @@ export function CaughtUpCard({ activity }: { activity: ActivityEntry[] }) {
               >
                 <span className="meta w-16 shrink-0 tabular-nums">{clockTime(a.at)}</span>
                 <span className="min-w-0 flex-1">
-                  <b className="font-semibold">{a.what === "answered" ? "Answered" : "Ignored"}</b>{" "}
+                  <b className="font-semibold">{a.what === "answered" ? "Answered" : "Hidden"}</b>{" "}
                   {activitySubject(a)}
                   {a.what === "answered" && <span className="text-ink-2">: {snippet(a.text)}</span>}
                 </span>
                 <Link
-                  href={`/inbox?tab=${a.what}&item=${a.itemId}`}
-                  className="text-[13px] font-medium"
+                  href={inboxHref(a.what, { item: a.itemId })}
+                  className="action-link with-arrow text-[13px]"
                 >
                   Open
                 </Link>
               </li>
             ))}
           </ul>
-          <Link href="/inbox?tab=answered" className="pt-1.5 text-[13px] font-medium">
+          <Link
+            href="/inbox/answered"
+            className="action-link with-arrow mt-2 self-start text-[13px]"
+          >
             All answered
           </Link>
         </div>

@@ -4,12 +4,17 @@ import { FOLLOW_UP, pageInfo } from "./pages";
 
 describe("pageInfo", () => {
   it("names the page and never keeps ids or queries", () => {
-    expect(pageInfo("/analytics?period=30")).toMatchObject({
+    expect(pageInfo("/insights/work?period=30")).toMatchObject({
       page: "analytics",
-      name: "Analytics",
+      name: "Insights",
     });
+    expect(pageInfo("/contacts/leads")).toMatchObject({ page: "leads", name: "Leads" });
+    expect(pageInfo("/teach/lab")).toMatchObject({ page: "lab", name: "Lab" });
     expect(pageInfo("/inbox/items/123")).toMatchObject({ page: "inbox", name: "Inbox" });
-    expect(pageInfo("/knowledge-base")).toMatchObject({ name: "Business info" });
+    expect(pageInfo("/teach/business-info")).toMatchObject({
+      page: "knowledge-base",
+      name: "Business info",
+    });
     expect(pageInfo("/somewhere-new")).toMatchObject({ page: "other", name: "Waggle" });
   });
 });

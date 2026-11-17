@@ -11,7 +11,10 @@ import {
   accountConnectedSchema,
   accountDisconnectedSchema,
   commentEventSchema,
+  callEndedSchema,
   envelopeSchema,
+  leadReceivedSchema,
+  rcsStatusSchema,
   messageEventSchema,
   messageFailedSchema,
   postEventSchema,
@@ -20,6 +23,8 @@ import {
   zernioAccountIdOf,
   type ZernioEnvelope,
 } from "./zernio-events";
+import { customerText } from "@/lib/social/whitelabel";
+import { isOptKeyword } from "./opt-keywords";
 
 // Webhook mapping (docs/tdd.md §7.1): dedupe on the event id, then map to rows. DB writes only,
 // no external calls. Never logs payloads (they hold customer text); logs event ids.
@@ -170,6 +175,9 @@ async function mapEvent(
     "account.connected": (t) => mapAccountConnected(deps, t, payload),
     "account.disconnected": (t) => mapAccountDisconnected(deps, t, payload),
     "message.failed": (t) => mapMessageFailed(deps.db, t.tenantId, payload),
+    "lead.received": (t) => mapLeadReceived(deps.db, t, event.id, payload),
+    "rcs.agent.status_updated": (t) => mapRcsStatus(deps.db, t, event.id, payload),
+    "call.ended": (t) => mapCallEnded(deps, t.tenantId, payload),
   };
   const handler = handlers[event.event];
   if (!handler) return skipped("not_mapped");
@@ -177,6 +185,123 @@ async function mapEvent(
   const tenant = await resolveTenant(deps.db, event.profiles);
   if (!tenant) return rejected("unknown_tenant");
   return handler(tenant);
+}
+
+/**
+ * T82b: an inbound call nobody answered, or that went to voicemail, becomes a `call` item that
+ * goes straight to the owner (escalated: never classified or drafted). Answered and outgoing
+ * calls create nothing. Phone accounts only (WhatsApp calls come later).
+ */
+async function mapCallEnded(
+  deps: IngestDeps,
+  tenantId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(callEndedSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (e.call.direction !== "inbound") return skipped("outgoing_call");
+  const missed = e.call.isVoicemail || e.call.endReason === "no_answer";
+  if (!missed) return skipped("answered_call");
+  if (e.account.platform !== "phone") return skipped("unsupported_platform");
+
+  const resolved = await accountFor(deps, tenantId, { ...e.account, platform: "phone" });
+  if ("rejected" in resolved) return rejected(resolved.rejected);
+  const voicemail = e.call.isVoicemail;
+  const { itemId, created } = await insertInboundItem(deps.db, {
+    kind: "call",
+    tenantId,
+    socialAccountId: resolved.accountId,
+    zernioCallId: e.call.id,
+    voicemail,
+    durationSeconds: e.call.durationSeconds,
+    authorName: e.call.from || null,
+    // What the inbox shows; not customer text.
+    text: voicemail ? "Left a voicemail" : "Missed call",
+    receivedAt: e.call.startedAt,
+  });
+  if (created) {
+    await transitionItem(deps.db, {
+      itemId,
+      from: "new",
+      event: "escalate",
+      details: { policyReason: voicemail ? "voicemail" : "missed_call" },
+    });
+  }
+  return { outcome: "processed", detail: created ? "call_item_created" : "item_exists" };
+}
+
+/**
+ * A lead from an ad's form (T78d): one 'ad_lead' alert (email + bell) per lead. The answers stay
+ * in the stored event; the alert keeps ids and the form name only (rule 10).
+ */
+async function mapLeadReceived(
+  db: ServiceClient,
+  tenant: { tenantId: string; profileId: string },
+  eventId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(leadReceivedSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (e.account.profileId !== tenant.profileId) return rejected("profile_mismatch");
+  const { data: account } = await db
+    .from("social_accounts")
+    .select("id")
+    .eq("tenant_id", tenant.tenantId)
+    .eq("zernio_account_id", e.account.accountId ?? e.account.id)
+    .maybeSingle();
+  if (!account) return skipped("unknown_account");
+  const { error } = await db.from("alerts").upsert(
+    {
+      tenant_id: tenant.tenantId,
+      kind: "ad_lead",
+      social_account_id: account.id,
+      details: {
+        source: "ad_form",
+        eventId,
+        zernioLeadId: e.lead.id,
+        formName: e.lead.formName ?? null,
+        platform: e.lead.platform ?? "meta",
+      },
+      dedupe_key: `ad_lead:${e.lead.leadgenId}`,
+    },
+    { onConflict: "dedupe_key", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`ad lead alert insert failed: ${error.message}`);
+  return { outcome: "processed", detail: "ad_lead" };
+}
+
+/** RCS statuses the owner acts on (T83b); the others show on the Messaging page only. */
+const RCS_ALERT_STATUSES = new Set(["changes_requested", "testing", "live", "rejected"]);
+
+/** An RCS agent moved status (T83b): one 'rcs_status' alert (email + bell) when it needs the owner. */
+async function mapRcsStatus(
+  db: ServiceClient,
+  tenant: { tenantId: string; profileId: string },
+  eventId: string,
+  payload: unknown,
+): Promise<IngestResult> {
+  const e = parse(rcsStatusSchema, payload);
+  if (!e) return rejected("invalid_payload");
+  if (e.agent.profileId !== tenant.profileId) return rejected("profile_mismatch");
+  if (!RCS_ALERT_STATUSES.has(e.status))
+    return { outcome: "processed", detail: "rcs_status_noted" };
+  const { error } = await db.from("alerts").upsert(
+    {
+      tenant_id: tenant.tenantId,
+      kind: "rcs_status",
+      details: {
+        source: "rcs",
+        agentId: e.agent.id,
+        status: e.status,
+        // The partner's review note (never customer text); shown to the owner as written.
+        reason: e.reason?.slice(0, 1000) ?? null,
+      },
+      dedupe_key: `rcs_status:${eventId}`,
+    },
+    { onConflict: "dedupe_key", ignoreDuplicates: true },
+  );
+  if (error) throw new Error(`rcs status alert insert failed: ${error.message}`);
+  return { outcome: "processed", detail: "rcs_status" };
 }
 
 /** A reply we sent was not delivered: its draft and item fail, and the owner is told (T13). */
@@ -402,6 +527,8 @@ async function mapMessage(
   if (e.message.direction !== "incoming") return skipped("outgoing_message");
   const account = supportedAccount(e.account);
   if (!account) return skipped("unsupported_platform");
+  // T83d: STOP and START on texting channels are handled upstream, never answered.
+  if (isOptKeyword(account.platform, e.message.text)) return skipped("opt_keyword");
 
   const resolved = await accountFor(deps, tenantId, account);
   if ("rejected" in resolved) return rejected(resolved.rejected);
@@ -417,6 +544,7 @@ async function mapMessage(
       platform: account.platform,
       participant_name: participantName,
       participant_external_id: e.message.sender.id,
+      subject: e.metadata?.email?.subject?.trim() || null,
     },
     { onConflict: "zernio_conversation_id", ignoreDuplicates: true },
   );
@@ -444,8 +572,13 @@ async function mapMessage(
     socialAccountId: resolved.accountId,
     zernioMessageId: e.message.id,
     conversationId: conversation.id,
+    platformMessageId: e.message.platformMessageId ?? null,
+    attachments: (e.message.attachments ?? []).map((a) => ({
+      type: a.type,
+      ...(a.originalType ? { originalType: a.originalType } : {}),
+    })),
     authorName: participantName,
-    // Attachment-only messages have no text.
+    // Attachment-only messages have no text ("Sent a photo", T72).
     text: e.message.text ?? "",
     receivedAt: e.message.sentAt,
   });
@@ -476,9 +609,9 @@ async function mapPost(
   const status = POST_STATUS[e.event];
   const errors = e.post.platforms
     .filter((p) => p.error)
-    .map((p) => `${p.platform}: ${p.error}`)
+    .map((p) => `${p.platform}: ${customerText(p.error ?? "")}`)
     .join("; ");
-  let failureReason: "zernio_paused" | "account_removed" | null = null;
+  let failureReason: "zernio_paused" | "account_removed" | "taken_down" | null = null;
   if (status === "failed") {
     const { data: pause } = await db
       .from("platform_state")
@@ -488,8 +621,17 @@ async function mapPost(
     const paused = !!(pause?.value as { pausedAt?: string } | null)?.pausedAt;
     if (paused || PAYMENT_ERROR.test(errors)) failureReason = "zernio_paused";
   }
-  // Cancelled by Zernio: its only account was removed after the disconnect grace period.
-  if (status === "cancelled") failureReason = "account_removed";
+  // Cancelled: the owner took it down here (T75c), or its only account was removed after the
+  // disconnect grace period.
+  if (status === "cancelled") {
+    const { data: row } = await db
+      .from("posts")
+      .select("taken_down_at")
+      .eq("tenant_id", tenantId)
+      .eq("zernio_post_id", e.post.id)
+      .maybeSingle();
+    failureReason = row?.taken_down_at ? "taken_down" : "account_removed";
+  }
 
   const { data, error } = await db
     .from("posts")
@@ -501,7 +643,7 @@ async function mapPost(
         platform: p.platform,
         status: p.status,
         url: p.publishedUrl ?? null,
-        error: p.error ?? null,
+        error: customerText(p.error ?? null),
       })),
       ...(e.post.publishedAt ? { published_at: e.post.publishedAt } : {}),
     })

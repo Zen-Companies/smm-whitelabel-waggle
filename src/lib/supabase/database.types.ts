@@ -374,6 +374,7 @@ export type Database = {
           participant_external_id: string | null
           participant_name: string | null
           platform: string
+          subject: string | null
           social_account_id: string
           tenant_id: string
           zernio_conversation_id: string
@@ -386,6 +387,7 @@ export type Database = {
           participant_external_id?: string | null
           participant_name?: string | null
           platform: string
+          subject?: string | null
           social_account_id: string
           tenant_id: string
           zernio_conversation_id: string
@@ -397,6 +399,7 @@ export type Database = {
           participant_external_id?: string | null
           participant_name?: string | null
           platform?: string
+          subject?: string | null
           social_account_id?: string
           tenant_id?: string
           zernio_conversation_id?: string
@@ -634,8 +637,11 @@ export type Database = {
       inbound_items: {
         Row: {
           answered_on_platform_at: string | null
+          attachments: Json
           attempts: number
           author_name: string | null
+          call_duration_seconds: number | null
+          call_voicemail: boolean | null
           category: string | null
           classifier_scores: Json | null
           classifier_used: string | null
@@ -649,6 +655,7 @@ export type Database = {
           locked_at: string | null
           next_run_at: string | null
           permalink: string | null
+          platform_message_id: string | null
           received_at: string
           review_recommends: boolean | null
           review_rating: number | null
@@ -656,6 +663,7 @@ export type Database = {
           status: string
           tenant_id: string
           text: string
+          zernio_call_id: string | null
           zernio_comment_id: string | null
           zernio_message_id: string | null
           zernio_post_id: string | null
@@ -664,8 +672,11 @@ export type Database = {
         ComputedFields: never
         Insert: {
           answered_on_platform_at?: string | null
+          attachments?: Json
           attempts?: number
           author_name?: string | null
+          call_duration_seconds?: number | null
+          call_voicemail?: boolean | null
           category?: string | null
           classifier_scores?: Json | null
           classifier_used?: string | null
@@ -679,6 +690,7 @@ export type Database = {
           locked_at?: string | null
           next_run_at?: string | null
           permalink?: string | null
+          platform_message_id?: string | null
           received_at: string
           review_recommends?: boolean | null
           review_rating?: number | null
@@ -686,6 +698,7 @@ export type Database = {
           status?: string
           tenant_id: string
           text: string
+          zernio_call_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null
@@ -693,8 +706,11 @@ export type Database = {
         }
         Update: {
           answered_on_platform_at?: string | null
+          attachments?: Json
           attempts?: number
           author_name?: string | null
+          call_duration_seconds?: number | null
+          call_voicemail?: boolean | null
           category?: string | null
           classifier_scores?: Json | null
           classifier_used?: string | null
@@ -708,6 +724,7 @@ export type Database = {
           locked_at?: string | null
           next_run_at?: string | null
           permalink?: string | null
+          platform_message_id?: string | null
           received_at?: string
           review_recommends?: boolean | null
           review_rating?: number | null
@@ -715,6 +732,7 @@ export type Database = {
           status?: string
           tenant_id?: string
           text?: string
+          zernio_call_id?: string | null
           zernio_comment_id?: string | null
           zernio_message_id?: string | null
           zernio_post_id?: string | null
@@ -930,6 +948,8 @@ export type Database = {
           item_id: string
           name: string | null
           request: string | null
+          stage: string | null
+          stage_changed_at: string | null
           tenant_id: string
         }
         ComputedFields: never
@@ -940,6 +960,8 @@ export type Database = {
           item_id: string
           name?: string | null
           request?: string | null
+          stage?: string | null
+          stage_changed_at?: string | null
           tenant_id: string
         }
         Update: {
@@ -949,6 +971,8 @@ export type Database = {
           item_id?: string
           name?: string | null
           request?: string | null
+          stage?: string | null
+          stage_changed_at?: string | null
           tenant_id?: string
         }
         Relationships: [
@@ -1324,6 +1348,80 @@ export type Database = {
         }
         Relationships: []
       }
+      org_billing: {
+        Row: {
+          auto_top_up: boolean
+          billing_interval: string | null
+          cancel_at_period_end: boolean
+          current_period_end: string | null
+          extra_accounts: number
+          founding: boolean
+          organization_id: string
+          plan: string | null
+          status: string | null
+          stripe_customer_id: string
+          stripe_event_at: string | null
+          stripe_subscription_id: string | null
+          trial_ends_at: string | null
+          updated_at: string
+        }
+        ComputedFields: never
+        Insert: {
+          auto_top_up?: boolean
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          extra_accounts?: number
+          founding?: boolean
+          organization_id: string
+          plan?: string | null
+          status?: string | null
+          stripe_customer_id: string
+          stripe_event_at?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_top_up?: boolean
+          billing_interval?: string | null
+          cancel_at_period_end?: boolean
+          current_period_end?: string | null
+          extra_accounts?: number
+          founding?: boolean
+          organization_id?: string
+          plan?: string | null
+          status?: string | null
+          stripe_customer_id?: string
+          stripe_event_at?: string | null
+          stripe_subscription_id?: string | null
+          trial_ends_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      plan_settings: {
+        Row: {
+          brands_limit: number | null
+          plan: string
+          updated_at: string
+          updated_by: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          brands_limit?: number | null
+          plan: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brands_limit?: number | null
+          plan?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       platform_state: {
         Row: {
           key: string
@@ -1444,11 +1542,13 @@ export type Database = {
           last_error: string | null
           media: Json
           platform_options: Json
+          queued: boolean
           next_attempt_at: string | null
           platform_results: Json
           published_at: string | null
           scheduled_for: string | null
           status: string
+          taken_down_at: string | null
           target_account_ids: string[]
           tenant_id: string
           tiktok_consent_at: string | null
@@ -1465,11 +1565,13 @@ export type Database = {
           last_error?: string | null
           media?: Json
           platform_options?: Json
+          queued?: boolean
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null
           scheduled_for?: string | null
           status?: string
+          taken_down_at?: string | null
           target_account_ids?: string[]
           tenant_id: string
           tiktok_consent_at?: string | null
@@ -1485,11 +1587,13 @@ export type Database = {
           last_error?: string | null
           media?: Json
           platform_options?: Json
+          queued?: boolean
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null
           scheduled_for?: string | null
           status?: string
+          taken_down_at?: string | null
           target_account_ids?: string[]
           tenant_id?: string
           tiktok_consent_at?: string | null
@@ -1504,6 +1608,34 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      reply_top_ups: {
+        Row: {
+          automatic: boolean
+          created_at: string
+          id: string
+          organization_id: string
+          replies: number
+          stripe_ref: string
+        }
+        ComputedFields: never
+        Insert: {
+          automatic?: boolean
+          created_at?: string
+          id?: string
+          organization_id: string
+          replies: number
+          stripe_ref: string
+        }
+        Update: {
+          automatic?: boolean
+          created_at?: string
+          id?: string
+          organization_id?: string
+          replies?: number
+          stripe_ref?: string
+        }
+        Relationships: []
       }
       social_accounts: {
         Row: {

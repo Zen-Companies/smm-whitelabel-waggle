@@ -5,10 +5,9 @@ import { examplesFromTopics } from "./examples";
 import { practiceCard, type PracticeCard } from "./practice-copy";
 import { practiceTriesLeft } from "./practice-limit";
 import type { VariantRun } from "./run";
-import { setupSteps, type SetupStep } from "./setup";
 
 // What the owner's Lab shows (T36): tries left, examples from their topics, their recent tries
-// and the first-day checklist. Business data through RLS; tries (lab_runs) by tenant id with the
+// ("Get Waggle ready" moved to features/setup, approved 17 Nov). Business data through RLS; tries (lab_runs) by tenant id with the
 // service role, since owners have no client access to that table.
 
 export interface RecentTry {
@@ -25,26 +24,13 @@ export interface PracticePage {
   /** false: generic examples, because the business has no topics yet. */
   examplesFromTopics: boolean;
   recentTries: RecentTry[];
-  setup: SetupStep[];
 }
 
 export async function loadPracticePage(db: ServiceClient, tenantId: string): Promise<PracticePage> {
   const supabase = await createServerSupabase();
-  const [
-    triesLeft,
-    { data: topics },
-    { count: accounts },
-    { data: tenant },
-    { data: runs },
-    { count: tries },
-  ] = await Promise.all([
+  const [triesLeft, { data: topics }, { data: runs }] = await Promise.all([
     practiceTriesLeft(db, tenantId),
     supabase.from("kb_entries").select("title").eq("tenant_id", tenantId).order("created_at"),
-    supabase
-      .from("social_accounts")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId),
-    supabase.from("tenants").select("business_profile, created_at").eq("id", tenantId).single(),
     db
       .from("lab_runs")
       .select("id, text, kind, created_at, results")
@@ -52,11 +38,6 @@ export async function loadPracticePage(db: ServiceClient, tenantId: string): Pro
       .eq("origin", "owner")
       .order("created_at", { ascending: false })
       .limit(5),
-    db
-      .from("lab_runs")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .eq("origin", "owner"),
   ]);
 
   const recentTries: RecentTry[] = [];
@@ -77,14 +58,5 @@ export async function loadPracticePage(db: ServiceClient, tenantId: string): Pro
     examples: examplesFromTopics((topics ?? []).map((t) => t.title)),
     examplesFromTopics: (topics?.length ?? 0) > 0,
     recentTries,
-    setup: setupSteps({
-      accountsConnected: accounts ?? 0,
-      topics: topics?.length ?? 0,
-      hasProfile: !!tenant?.business_profile?.trim(),
-      tries: tries ?? 0,
-      daysSinceSignup: tenant
-        ? (Date.now() - new Date(tenant.created_at).getTime()) / (24 * 3_600_000)
-        : 0,
-    }),
   };
 }

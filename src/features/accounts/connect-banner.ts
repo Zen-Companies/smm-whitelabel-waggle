@@ -27,6 +27,13 @@ export function connectBanner(params: Params): ConnectBanner | null {
       text: `We can't add ${platform} for this brand right now: our connection limit is full. We've been alerted; please try again later.`,
     };
   }
+  // The plan's connected accounts are all in use (Pricing Bible): an extra account or a bigger plan.
+  if (first(params.connect_error) === "accounts_full") {
+    return {
+      tone: "error",
+      text: `Your plan's connected accounts are all in use, so ${platform} can't be added yet. Add an extra account for $10 a month, or move to a bigger plan.`,
+    };
+  }
   // T55: only Owners and Admins connect accounts.
   if (first(params.connect_error) === "not_allowed") {
     return { tone: "error", text: "Only Owners and Admins can connect accounts." };

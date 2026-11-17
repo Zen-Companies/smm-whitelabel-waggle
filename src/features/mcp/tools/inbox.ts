@@ -132,7 +132,7 @@ export const listBrands = defineTool({
 
 const entrySummary = z.object({
   item_id: z.uuid(),
-  kind: z.enum(["comment", "dm", "review"]),
+  kind: z.enum(["comment", "dm", "review", "call"]),
   platform: z.string(),
   status: z.string(),
   category: z.string().nullable(),
@@ -199,7 +199,7 @@ export const getConversation = defineTool({
   input: z.object({ brand_id: brandId, item_id: itemId }),
   output: z.object({
     item_id: z.uuid(),
-    kind: z.enum(["comment", "dm", "review"]),
+    kind: z.enum(["comment", "dm", "review", "call"]),
     platform: z.string(),
     status: z.string(),
     category: z.string().nullable(),

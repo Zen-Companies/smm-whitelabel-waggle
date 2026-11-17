@@ -39,7 +39,32 @@ export interface CreatePostInput {
   youtubeTitle?: string;
   /** Pinterest's board (T64); without it Zernio pins to the account's first board. */
   pinterestBoardId?: string;
+  /**
+   * Per platform (T75): text for that platform only and its `platformSpecificData` (post type,
+   * first comment, YouTube/Instagram/Facebook options), already filtered to what it accepts.
+   * When given for a platform it replaces `youtubeTitle` / `pinterestBoardId` there.
+   */
+  extras?: Partial<Record<string, TargetExtras>>;
+  /**
+   * T75: post in the brand's next free queue slot (`queuedFromProfile`); Zernio picks and holds
+   * the time. Wins over `publishAt`.
+   */
+  queueProfileId?: string;
 }
+
+/** A brand's posting times (`/v1/queue/slots`, T75): dayOfWeek 0 = Sunday, time "HH:mm". */
+export type PostingQueue = {
+  timezone: string;
+  slots: { dayOfWeek: number; time: string }[];
+  /** The next free times, ISO, soonest first. */
+  nextSlots: string[];
+};
+
+/** One target's extra createPost fields (T75). */
+export type TargetExtras = {
+  customContent?: string;
+  platformSpecificData?: Record<string, unknown>;
+};
 
 /** A video (or other file) is a video when its URL ends like one; Zernio reads the same. */
 export const isVideoUrl = (url: string): boolean =>
@@ -133,6 +158,451 @@ export type TelegramConnectStatus =
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 
 // Zernio sits behind this interface (CLAUDE.md rule 1). Ids are Zernio ids.
+export type PhoneNumberType = "local" | "mobile" | "national" | "toll_free";
+
+/** A country's phone number offer (T82a, `GET /v1/phone-numbers/countries`). */
+export interface PhoneCountry {
+  code: string;
+  types: {
+    numberType: PhoneNumberType;
+    monthlyCents: number;
+    needsKyc: boolean;
+    callsAvailable: boolean;
+    smsAvailable: boolean;
+    inStock: boolean;
+    /** "request": the number is ordered, not handed over at once. */
+    instant: boolean;
+  }[];
+}
+
+/** A number the brand owns (`GET /v1/phone-numbers?profileId`). */
+export interface OwnedNumber {
+  id: string;
+  phoneNumber: string;
+  country: string;
+  numberType: string | null;
+  status: string;
+  monthlyCents: number | null;
+}
+
+/** Texting on a number (T82c, `POST /v1/phone-numbers/{id}/sms`). */
+export interface SmsOnNumber {
+  enabled: boolean;
+  /** The account texts are sent from and arrive on; null when texting couldn't be turned on. */
+  accountId: string | null;
+  /** The number can't text at all. */
+  notCapable: boolean;
+  /** Still being set up at the carrier: try again shortly. */
+  notReady: boolean;
+  /** US: carriers must approve the business before it can send. */
+  needsRegistration: boolean;
+}
+
+export type SmsRegistrationStatus =
+  "requested" | "changes_requested" | "pending" | "approved" | "rejected" | "deactivated";
+
+/** A US texting registration covering a number (T82c, `/v1/sms/registrations`). */
+export interface SmsRegistration {
+  id: string;
+  type: "standard_10dlc" | "sole_prop_10dlc" | "toll_free";
+  status: SmsRegistrationStatus;
+  declineReason: string | null;
+  /** Sole proprietors: waiting for the code texted to the owner's mobile. */
+  awaitingOtp: boolean;
+  phoneNumbers: string[];
+}
+
+export const RCS_AGENT_STATUSES = [
+  "requested",
+  "changes_requested",
+  "brand_vetting",
+  "agent_review",
+  "testing",
+  "launch_review",
+  "launching",
+  "live",
+  "rejected",
+  "deactivated",
+] as const;
+export type RcsAgentStatus = (typeof RCS_AGENT_STATUSES)[number];
+
+/** A brand's RCS agent (T83, `/v1/rcs/agents`): the verified sender carriers approve. */
+export interface RcsAgentView {
+  id: string;
+  status: RcsAgentStatus;
+  /** Launch market (ISO 2-letter); US agents add a testing step. */
+  country: string | null;
+  displayName: string;
+  useCase: string | null;
+  /** The inbox account, once the agent exists with the carriers. */
+  accountId: string | null;
+  /** The review note while changes are asked for. */
+  reviewNote: string | null;
+  declineReason: string | null;
+  /** The launch details were sent. */
+  launchSent: boolean;
+  testDevices: {
+    id: string;
+    phoneNumber: string;
+    inviteStatus: "PENDING" | "ACCEPTED" | "DECLINED";
+  }[];
+  /** What was filed, to prefill the fix-and-resend form. */
+  filed: { brand: Record<string, unknown> | null; profile: Record<string, unknown> | null };
+}
+
+export const IMESSAGE_SENDER_STATUSES = [
+  "ordering",
+  "awaiting_payment",
+  "activating",
+  "active",
+  "suspended",
+  "canceled",
+  "failed",
+] as const;
+export type ImessageSenderStatus = (typeof IMESSAGE_SENDER_STATUSES)[number];
+
+/** A brand's iMessage number (T83c, `/v1/imessage/senders/order`). */
+export interface ImessageSenderView {
+  id: string;
+  status: ImessageSenderStatus;
+  region: "US" | "GB" | null;
+  /** The number, once activation assigns it. */
+  handle: string | null;
+  /** `imessage://` link that opens Messages on the number with a prefilled text. */
+  optInLink: string | null;
+  priceCents: number | null;
+  displayName: string | null;
+  failureReason: string | null;
+  /** The inbox account, created at activation. */
+  accountId: string | null;
+}
+
+/** A number that turns on the moment it's ordered. */
+export interface ImessageNumber {
+  id: string;
+  phone: string;
+  location: string | null;
+}
+
+export type ImessageOrderResult =
+  | { kind: "ordered"; id: string; status: ImessageSenderStatus }
+  /** The team has no card or isn't on usage billing (402/422): staff must fix it. */
+  | { kind: "billing" }
+  /** The provider refused the order; nothing was charged (502). */
+  | { kind: "refused" };
+
+/** A blog on a connected site (T84a, `/v1/accounts/{id}/blogs`). */
+export interface BlogView {
+  id: string;
+  title: string;
+  /** Slug, or the site's host name on WordPress. */
+  handle: string | null;
+}
+
+/** An article on a connected blog (T84a). */
+export interface BlogArticleView {
+  id: string;
+  title: string;
+  /** Public address while it's published (WordPress); null otherwise. */
+  url: string | null;
+  isPublished: boolean;
+  /** WordPress: `future` is scheduled. */
+  status: string | null;
+  /** When it went out, or when it's scheduled to. */
+  date: string | null;
+}
+
+export interface Money {
+  /** Decimal string in the store currency, e.g. "24.00". */
+  amount: string;
+  currency: string;
+}
+
+/** A connected Shopify or WooCommerce store (T84b, `GET /v1/commerce/store`). */
+export interface StoreView {
+  accountId: string;
+  platform: "shopify" | "woocommerce";
+  name: string;
+  domain: string;
+  url: string | null;
+  currency: string;
+  capabilities: string[];
+}
+
+export interface ProductView {
+  id: string;
+  title: string;
+  status: string;
+  imageUrl: string | null;
+  url: string | null;
+  variants: {
+    id: string;
+    title: string;
+    price: Money | null;
+    /** Units on hand; null when the store doesn't track it. */
+    stock: number | null;
+  }[];
+}
+
+/** An order, with only what the shop list shows (customer details stay on the platform). */
+export interface OrderView {
+  id: string;
+  number: string;
+  status: string | null;
+  paymentStatus: string | null;
+  total: Money | null;
+  createdAt: string | null;
+  /** "Ube cheesecake ×2, Office coffee box" */
+  items: string;
+  customerName: string | null;
+}
+
+/** A OneDrive item (T84c, `GET /v1/files`). */
+export interface DriveItem {
+  id: string;
+  name: string;
+  kind: "file" | "folder";
+  mimeType: string | null;
+  size: number | null;
+}
+
+/** A number's call settings (T82b, `POST /v1/phone-numbers/{id}/voice`). */
+export interface VoiceSettings {
+  enabled: boolean;
+  /** "tel:+E164" (or a SIP address); null when calls go straight to voicemail. */
+  forwardTo: string | null;
+  voicemailGreeting: string | null;
+  businessHoursEnabled: boolean;
+  businessHoursTimezone: string | null;
+  businessHours: { day: number; open: string; close: string }[];
+}
+
+export type PurchaseResult =
+  | { kind: "bought"; id: string; phoneNumber: string; profileId: string | null }
+  /** The country needs an ID check, or the team needs a card: Waggle never shows the link. */
+  | { kind: "needs_id" }
+  | { kind: "needs_payment" };
+
+/** A calendar event (T81d, `GET /v1/calendar/events`): times keep the calendar's own offset. */
+export interface CalendarEventSummary {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  /** False for events marked free; cancelled ones are left out. */
+  busy: boolean;
+}
+
+/** Where an email address connects (T80b, `POST /v1/email/imap/discover`). */
+export interface EmailDiscovery {
+  route: "imap" | "google_oauth" | "microsoft_oauth" | "unsupported";
+  providerName: string | null;
+  /** App password label, e.g. "App-specific password"; null when none is named. */
+  passwordLabel: string | null;
+  helpUrl: string | null;
+  steps: string[];
+  /** Settings to switch on at the provider first. */
+  preflight: { text: string; url: string | null }[];
+}
+
+/** A site, shop or tool connected on the profile (T80: shopify, wordpress, webflow, ...). */
+export interface Integration {
+  id: string;
+  platform: string;
+  name: string;
+  active: boolean;
+}
+
+/** What the owner pastes to connect a site with their own keys (T80, nothing installed). */
+export type SiteKeys =
+  | { kind: "shopify"; shop: string; accessToken: string }
+  | { kind: "wordpress"; siteUrl: string; username: string; applicationPassword: string }
+  | { kind: "webflow"; siteToken: string };
+
+/** An ads connection on the profile (T79, `metaads`, `googleads`, ...). */
+export interface AdConnection {
+  id: string;
+  platform: string;
+  name: string;
+  /** The posting account it was connected from (classic Meta connect). */
+  parentAccountId: string | null;
+  active: boolean;
+}
+
+/** An ad account an ads connection reaches (`GET /v1/ads/accounts`). */
+export interface AdAccount {
+  id: string;
+  name: string;
+  currency: string;
+  minDailyBudget: number | null;
+  /** Whether the ad account has a payment method (Meta). */
+  billing: "ok" | "missing" | "unknown";
+  usable: boolean;
+}
+
+export type AdCampaignStatus =
+  "active" | "paused" | "pending_review" | "rejected" | "completed" | "cancelled" | "error";
+
+/** A campaign as listed (`GET /v1/ads/campaigns`). Money in whole currency units. */
+export interface AdCampaignSummary {
+  id: string;
+  platform: string;
+  name: string;
+  status: AdCampaignStatus;
+  budget: { amount: number; type: "daily" | "lifetime" } | null;
+  currency: string | null;
+  spend: number;
+  reach: number;
+  clicks: number;
+}
+
+/** An automated ad rule (`/v1/ads/rules`); its name says what it does. */
+export interface AdRuleSummary {
+  id: string;
+  name: string;
+  adAccountId: string;
+  enabled: boolean;
+}
+
+/** A lead form in an ad (T78c, `/v1/ads/lead-forms`). */
+export interface LeadForm {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export type AdLeadStatus =
+  "new" | "contacted" | "unreachable" | "qualified" | "converted" | "disqualified";
+
+/** A lead from an ad's form (T78c, `/v1/ads/leads`). */
+export interface AdLead {
+  id: string;
+  formName: string;
+  createdAt: string | null;
+  /** Question key → answer. */
+  fields: Record<string, string>;
+  consents: { checkboxKey: string; isChecked: boolean }[];
+  status: AdLeadStatus;
+  /** Set when Zernio already linked a contact. */
+  contactId: string | null;
+}
+
+/** A broadcast as listed (T78b, `/v1/broadcasts`). */
+export interface Broadcast {
+  id: string;
+  name: string;
+  platform: string;
+  status: "draft" | "scheduled" | "sending" | "completed" | "failed" | "cancelled";
+  preview: string;
+  scheduledAt: string | null;
+  completedAt: string | null;
+  recipients: number;
+  sent: number;
+  delivered: number;
+  read: number;
+  failed: number;
+}
+
+/** A contact (T78a, `/v1/contacts`). */
+export interface Contact {
+  id: string;
+  name: string;
+  email: string | null;
+  tags: string[];
+  /** Agreed to get messages. */
+  subscribed: boolean;
+  /** Where they can be messaged, e.g. whatsapp and "+639175550142". */
+  platform: string | null;
+  identifier: string | null;
+  lastMessageAt: string | null;
+}
+
+/** A Zernio workflow graph (T77b, `/v1/workflows`): nodes, edges and the trigger node. */
+export interface WorkflowGraph {
+  nodes: { id: string; type: string; config?: Record<string, unknown>; label?: string }[];
+  edges: { id: string; source: string; target: string; sourceHandle?: string }[];
+  entryNodeId: string;
+}
+
+/** One sequence step as Zernio takes it (T77c): a wait, then a message or a WhatsApp template. */
+export type SequenceStep = {
+  order: number;
+  delayMinutes: number;
+  message?: { text: string };
+  template?: {
+    name: string;
+    language: string;
+    variableMapping?: Record<string, { field: "name" | "phone" | "email" | "company" | "custom" }>;
+  };
+};
+
+/** A sequence as listed (T77c). */
+export interface Sequence {
+  id: string;
+  name: string;
+  platform: string;
+  /** Zernio account id it sends from. */
+  accountId: string;
+  status: "draft" | "active" | "paused";
+  steps: number;
+  preview: string;
+  enrolled: number;
+  completed: number;
+  exited: number;
+}
+
+/** A chat flow as listed (T77b). */
+export interface ChatFlow {
+  id: string;
+  name: string;
+  /** Free text; a link flow (T77d) keeps its ig.me / m.me link here. */
+  description: string;
+  platform: string;
+  status: "draft" | "active" | "paused";
+  started: number;
+  completed: number;
+}
+
+/** A comment-to-DM automation (T77a, `/v1/comment-automations`). */
+export interface CommentAutomation {
+  id: string;
+  name: string;
+  platform: string;
+  /** Zernio account id. */
+  accountId: string;
+  keywords: string[];
+  matchMode: "exact" | "contains" | "word";
+  dmMessage: string | null;
+  button: { title: string; url: string } | null;
+  commentReply: string | null;
+  /** Only once per person (else every comment). */
+  once: boolean;
+  /** A specific post's title, or null for any post. */
+  postTitle: string | null;
+  isActive: boolean;
+  stats: { triggered: number; dmsSent: number; dmsFailed: number; linkClicks: number };
+}
+
+export interface CommentAutomationInput {
+  name: string;
+  accountId: string;
+  keywords: string[];
+  matchMode: "exact" | "contains" | "word";
+  dmMessage?: string;
+  button?: { title: string; url: string };
+  commentReply?: string;
+  once: boolean;
+}
+
+/** One comment an automation answered, skipped or failed on (the owner sees it; never logged). */
+export interface CommentAutomationLogEntry {
+  id: string;
+  who: string;
+  status: "pending" | "sent" | "failed" | "skipped" | "gated";
+  at: string | null;
+}
+
 export interface SocialProvider {
   /** A 409 for the same externalId returns the existing profile with `alreadyExisted: true`. */
   createProfile(input: {
@@ -165,7 +635,429 @@ export interface SocialProvider {
   checkTelegramConnect(input: { code: string } & CallOptions): Promise<TelegramConnectStatus>;
   createPost(
     input: CreatePostInput,
-  ): Promise<{ providerPostId: string; status: ProviderPostStatus }>;
+  ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }>;
+  /**
+   * Gmail or Outlook sign-in (T81c), asking for the mailbox and calendar areas. No welcome
+   * screen: from the API the owner sees only Google's or Microsoft's own pages.
+   */
+  getMailConnectUrl(
+    input: {
+      platform: "google" | "microsoft";
+      profileId: string;
+      redirectUrl: string;
+      scopes: readonly ("email" | "calendar" | "files")[];
+    } & CallOptions,
+  ): Promise<{ authUrl: string }>;
+  /** Turns texting on for a number (T82c); receiving works at once, US sending after approval. */
+  enableSms(input: { numberId: string } & CallOptions): Promise<SmsOnNumber>;
+  /**
+   * The registrations that cover this number. Zernio lists the whole team's, so this keeps only
+   * the ones naming `phoneNumber` (never another brand's).
+   */
+  listSmsRegistrations(input: { phoneNumber: string } & CallOptions): Promise<SmsRegistration[]>;
+  /** Files a US registration (10DLC); not idempotent upstream, one attempt. */
+  startSmsRegistration(
+    input: { body: Record<string, unknown> } & CallOptions,
+  ): Promise<{ id: string; status: SmsRegistrationStatus; awaitingOtp: boolean }>;
+  verifySmsRegistrationCode(input: { id: string; code: string } & CallOptions): Promise<void>;
+  resendSmsRegistrationCode(input: { id: string } & CallOptions): Promise<void>;
+  /**
+   * The brand's RCS agents (T83a), closed ones included. Zernio lists the whole team's, so this
+   * keeps only the ones on `profileId`.
+   */
+  listRcsAgents(input: { profileId: string } & CallOptions): Promise<RcsAgentView[]>;
+  /** Requests an agent with a new company (never a reused one: brands are team-wide). */
+  requestRcsAgent(
+    input: { body: Record<string, unknown>; idempotencyKey: string } & CallOptions,
+  ): Promise<{ id: string; status: RcsAgentStatus }>;
+  /** Fixes a request after changes were asked for; it goes back to review. */
+  updateRcsAgent(
+    input: { agentId: string; body: Record<string, unknown> } & CallOptions,
+  ): Promise<void>;
+  /** Uploads a logo or banner; Zernio crops it to the carriers' size and returns its URL. */
+  uploadRcsAsset(
+    input: { file: Blob; kind: "logo" | "banner" } & CallOptions,
+  ): Promise<{ url: string }>;
+  /** US testing (T83b): invites a phone to receive the agent's messages. */
+  addRcsTestDevice(input: { agentId: string; phoneNumber: string } & CallOptions): Promise<void>;
+  removeRcsTestDevice(
+    input: { agentId: string; testDeviceId: string } & CallOptions,
+  ): Promise<void>;
+  /**
+   * The brand's iMessage numbers (T83c), canceled ones left out. Zernio lists the whole team's,
+   * so this keeps only the ones on `profileId`.
+   */
+  listImessageSenders(input: { profileId: string } & CallOptions): Promise<ImessageSenderView[]>;
+  /** Numbers that activate the moment they're ordered (the pool can be empty). */
+  listImessageNumbers(input: { region: "US" | "GB" } & CallOptions): Promise<ImessageNumber[]>;
+  /**
+   * Orders a dedicated number ($200 a month). `purchaseIntentId` makes a repeat return the same
+   * order instead of buying twice; the provider order is never retried upstream.
+   */
+  orderImessageSender(
+    input: {
+      profileId: string;
+      region: "US" | "GB";
+      availableNumberId?: string;
+      zipCode?: string;
+      displayName: string;
+      contact: { firstName: string; lastName?: string };
+      purchaseIntentId: string;
+    } & CallOptions,
+  ): Promise<ImessageOrderResult>;
+  /** The name on the number's contact card (what people see when they save it). */
+  updateImessageSender(
+    input: {
+      senderId: string;
+      displayName: string;
+      contact: { firstName: string; lastName?: string };
+    } & CallOptions,
+  ): Promise<void>;
+  /** Cancels the number at once; the started month isn't refunded. */
+  cancelImessageSender(input: { senderId: string } & CallOptions): Promise<void>;
+  /**
+   * A connected site as a store (T84b): currency and what it allows. Null when the site isn't a
+   * store (a WordPress site without WooCommerce, 400 platform_not_supported).
+   */
+  getStore(input: { accountId: string } & CallOptions): Promise<StoreView | null>;
+  listProducts(
+    input: { accountId: string; cursor?: string } & CallOptions,
+  ): Promise<{ products: ProductView[]; nextCursor: string | null }>;
+  /** The store's stock locations (where units are counted). */
+  listStockLocations(
+    input: { accountId: string } & CallOptions,
+  ): Promise<{ id: string; name: string }[]>;
+  /** Sets a variant's units at one location (`mode: set`, safe to repeat). */
+  setStock(
+    input: {
+      accountId: string;
+      productId: string;
+      variantId: string;
+      locationId: string;
+      quantity: number;
+    } & CallOptions,
+  ): Promise<void>;
+  /** The latest orders, newest first. */
+  listOrders(
+    input: { accountId: string; cursor?: string } & CallOptions,
+  ): Promise<{ orders: OrderView[]; nextCursor: string | null }>;
+  /**
+   * A folder of a Microsoft account's OneDrive, or a search by name (T84c). Needs the `files`
+   * area; without it Zernio answers 412 `account_scope_missing`.
+   */
+  listFiles(
+    input: { accountId: string; folderId?: string; q?: string } & CallOptions,
+  ): Promise<DriveItem[]>;
+  /**
+   * Copies a OneDrive file into post media storage and returns its public URL, so a post uses it
+   * like an upload. Refuses files over `maxBytes` (413) without storing anything.
+   */
+  copyFileToMedia(
+    input: { accountId: string; fileId: string; maxBytes: number } & CallOptions,
+  ): Promise<{ publicUrl: string; contentType: string; name: string; size: number }>;
+  /** The blogs on a connected Shopify, WordPress or Webflow site (T84a). */
+  listBlogs(input: { accountId: string } & CallOptions): Promise<BlogView[]>;
+  /** A blog's latest articles, newest first as the platform returns them. */
+  listBlogArticles(
+    input: { accountId: string; blogId: string; cursor?: string } & CallOptions,
+  ): Promise<{ articles: BlogArticleView[]; nextCursor: string | null }>;
+  /**
+   * Creates an article: a draft, published now, or scheduled natively on the platform.
+   * `Idempotency-Key` makes a retry replay the first create instead of posting twice.
+   */
+  createBlogArticle(
+    input: {
+      accountId: string;
+      blogId: string;
+      body: Record<string, unknown>;
+      idempotencyKey: string;
+    } & CallOptions,
+  ): Promise<BlogArticleView>;
+  /** The launch details carriers review (T83b). */
+  requestRcsLaunch(
+    input: { agentId: string; body: Record<string, unknown> } & CallOptions,
+  ): Promise<void>;
+  /**
+   * Turns calls on for a number and changes the fields given (partial update, safe to repeat).
+   * With no fields it changes nothing and returns the current settings: there's no read route.
+   * Recording stays off (held: the consent notice's wording is the partner's, not ours).
+   */
+  setVoice(
+    input: {
+      numberId: string;
+      settings: Partial<{
+        forwardTo: string;
+        voicemailGreeting: string;
+        businessHoursEnabled: boolean;
+        businessHoursTimezone: string;
+        businessHours: { day: number; open: string; close: string }[];
+      }>;
+    } & CallOptions,
+  ): Promise<VoiceSettings>;
+  /** A short-lived link to a call's recording, e.g. a voicemail (T82b; about 10 minutes). */
+  getCallRecordingUrl(input: { callId: string } & CallOptions): Promise<string | null>;
+  /** Countries and number types Zernio sells, with monthly prices (T82a). */
+  listPhoneCountries(input?: CallOptions): Promise<PhoneCountry[]>;
+  /** Numbers for sale; padded "best effort" results are left out. */
+  searchPhoneNumbers(
+    input: { country: string; numberType: PhoneNumberType; areaCode?: string } & CallOptions,
+  ): Promise<{ phoneNumber: string; locality: string | null; features: string[] }[]>;
+  /**
+   * Buys a number for calls (and texts where offered), never WhatsApp. `purchaseIntentId` makes
+   * a retry return the same number.
+   */
+  purchasePhoneNumber(
+    input: {
+      profileId: string;
+      country: string;
+      numberType: PhoneNumberType;
+      phoneNumber: string;
+      wantsSms: boolean;
+      purchaseIntentId: string;
+    } & CallOptions,
+  ): Promise<PurchaseResult>;
+  /** The profile's numbers, released ones left out. */
+  listOwnedNumbers(input: { profileId: string } & CallOptions): Promise<OwnedNumber[]>;
+  /** Gives the number back. Can't be undone. */
+  releasePhoneNumber(input: { id: string } & CallOptions): Promise<void>;
+  /** The primary calendar's events between `from` and `to` (T81d), cancelled ones left out. */
+  listCalendarEvents(
+    input: { accountId: string; from: string; to: string } & CallOptions,
+  ): Promise<CalendarEventSummary[]>;
+  /** Adds an event to the primary calendar (T81d); not idempotent upstream, one attempt. */
+  createCalendarEvent(
+    input: {
+      accountId: string;
+      title: string;
+      start: string;
+      end: string;
+      description?: string;
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  /** Every account on the profile whose platform is in `platforms` (T80). */
+  listIntegrations(
+    input: { profileId: string; platforms: readonly string[] } & CallOptions,
+  ): Promise<Integration[]>;
+  /** Connects a site with the owner's own keys (T80); Zernio checks them before saving. */
+  connectSiteWithKeys(
+    input: { profileId: string; keys: SiteKeys } & CallOptions,
+  ): Promise<{ accountId: string; name: string }>;
+  /** Finds an email address's provider and settings (T80b); 20 a minute upstream. */
+  discoverEmail(input: { email: string } & CallOptions): Promise<EmailDiscovery>;
+  /**
+   * Connects a mailbox with its (app) password (T80b). Zernio signs in to IMAP and SMTP before
+   * storing anything; a failed check is a 422 with the provider's fix in `details.info`.
+   */
+  connectEmail(
+    input: { profileId: string; email: string; password: string; name?: string } & CallOptions,
+  ): Promise<void>;
+  /** Connects a LINE Official Account with its channel keys (T80b). */
+  connectLine(
+    input: { profileId: string; channelId: string; channelSecret: string } & CallOptions,
+  ): Promise<{ accountId: string; name: string; webhookReady: boolean }>;
+  /** Connects WhatsApp with the business's own Meta keys (T80). */
+  connectWhatsAppWithKeys(
+    input: {
+      profileId: string;
+      accessToken: string;
+      wabaId: string;
+      phoneNumberId: string;
+      pin?: string;
+    } & CallOptions,
+  ): Promise<{ accountId: string; username: string }>;
+  /**
+   * Connects Meta ads from the brand's Facebook account (classic login, T79). Returns the
+   * `metaads` connection when no consent is needed, otherwise Meta's consent link.
+   */
+  connectMetaAds(
+    input: { profileId: string; facebookAccountId: string; redirectUrl: string } & CallOptions,
+  ): Promise<{ connectionId: string } | { authUrl: string }>;
+  /**
+   * Connects LinkedIn or Pinterest ads (T79b). The ads connection reuses the posting account's
+   * sign-in, so normally no screen is shown; `needsReconnect` when the posting account has to
+   * sign in again first (its token can't reach ad accounts). We never follow a partner link here.
+   */
+  connectSameTokenAds(
+    input: {
+      profileId: string;
+      platform: "linkedin" | "pinterest";
+      postingAccountId: string;
+      redirectUrl: string;
+    } & CallOptions,
+  ): Promise<{ connectionId: string } | { needsReconnect: true }>;
+  /**
+   * T72: a fresh link to one attachment of an inbound message (Instagram, Facebook, Telegram:
+   * a short-lived platform CDN link). Null when the platform has nothing to give back.
+   */
+  getMessageAttachmentUrl(
+    input: {
+      accountId: string;
+      conversationId: string;
+      platformMessageId: string;
+      index: number;
+    } & CallOptions,
+  ): Promise<string | null>;
+  /**
+   * T79c: connects ChatGPT ads with a key from ChatGPT Ads Manager (no sign-in screen). The key is
+   * passed straight through and never kept or logged by Waggle.
+   */
+  connectOpenAiAds(
+    input: { profileId: string; apiKey: string } & CallOptions,
+  ): Promise<{ connectionId: string; name: string }>;
+  /** T79c: creates an ad from scratch (`POST /v1/ads/create`); sent once, never retried. */
+  createAd(
+    input: { body: Record<string, unknown> } & CallOptions,
+  ): Promise<{ id: string; status: AdCampaignStatus }>;
+  /** T79c: replaces a campaign's spend cap (`PUT /v1/ads/campaigns/{id}`, `budget`). */
+  setAdCampaignBudget(
+    input: {
+      campaignId: string;
+      platform: string;
+      amount: number;
+      type: "daily";
+    } & CallOptions,
+  ): Promise<void>;
+  /** The profile's ads connections. */
+  listAdConnections(input: { profileId: string } & CallOptions): Promise<AdConnection[]>;
+  listAdAccounts(input: { connectionId: string } & CallOptions): Promise<AdAccount[]>;
+  /** Boosts a published post (`POST /v1/ads/boost`); never retried without the same key. */
+  boostPost(
+    input: { body: Record<string, unknown>; idempotencyKey: string } & CallOptions,
+  ): Promise<{ id: string; status: AdCampaignStatus }>;
+  listAdCampaigns(input: { connectionId: string } & CallOptions): Promise<AdCampaignSummary[]>;
+  setAdCampaignStatus(
+    input: { campaignId: string; platform: string; status: "active" | "paused" } & CallOptions,
+  ): Promise<void>;
+  listAdRules(input: { connectionId: string } & CallOptions): Promise<AdRuleSummary[]>;
+  createAdRule(input: { body: Record<string, unknown> } & CallOptions): Promise<{ id: string }>;
+  setAdRuleEnabled(input: { id: string; enabled: boolean } & CallOptions): Promise<void>;
+  deleteAdRule(input: { id: string } & CallOptions): Promise<void>;
+  /** A Facebook Page's lead forms (T78c). */
+  listLeadForms(input: { accountId: string } & CallOptions): Promise<LeadForm[]>;
+  /** Creates a lead form on the Page (Meta shape; never retried: not idempotent upstream). */
+  createLeadForm(input: { body: Record<string, unknown> } & CallOptions): Promise<{ id: string }>;
+  /** Leads from these accounts' forms, newest first. */
+  listAdLeads(
+    input: { accountIds: string[]; status?: AdLeadStatus } & CallOptions,
+  ): Promise<AdLead[]>;
+  updateAdLeadStatus(input: { id: string; status: AdLeadStatus } & CallOptions): Promise<void>;
+  /** The brand's broadcasts, newest first (T78b). */
+  listBroadcasts(input: { profileId: string } & CallOptions): Promise<Broadcast[]>;
+  /**
+   * A WhatsApp broadcast to everyone subscribed (with `tag`, only them), filled from that
+   * audience; returns how many it will reach.
+   */
+  createWhatsAppBroadcast(
+    input: {
+      profileId: string;
+      accountId: string;
+      name: string;
+      template: { name: string; language: string; nameVariable: boolean };
+      tag: string | null;
+    } & CallOptions,
+  ): Promise<{ id: string; recipients: number }>;
+  /** Sends now, or at `at` (ISO). */
+  startBroadcast(input: { id: string; at: string | null } & CallOptions): Promise<void>;
+  cancelBroadcast(input: { id: string } & CallOptions): Promise<void>;
+  /** The brand's contacts, newest first, 50 a page (T78a). */
+  listContacts(
+    input: { profileId: string; search?: string; tag?: string; skip?: number } & CallOptions,
+  ): Promise<{ contacts: Contact[]; total: number }>;
+  /** One contact; with `channel`, reachable there (e.g. a WhatsApp number). */
+  createContact(
+    input: {
+      profileId: string;
+      name: string;
+      email?: string;
+      tags: string[];
+      subscribed: boolean;
+      channel?: { accountId: string; platform: string; identifier: string };
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  /** Up to 1,000 at once; with `accountId`, each row's `identifier` is its handle there. */
+  importContacts(
+    input: {
+      profileId: string;
+      accountId?: string;
+      rows: { name: string; identifier?: string; email?: string; tags: string[] }[];
+    } & CallOptions,
+  ): Promise<{ created: number; skipped: number; errors: number }>;
+  /** Change a contact's tags or whether they agreed to get messages. */
+  updateContact(
+    input: { id: string; tags?: string[]; subscribed?: boolean } & CallOptions,
+  ): Promise<void>;
+  /** The brand's sequences (T77c, `GET /v1/sequences`). */
+  listSequences(input: { profileId: string } & CallOptions): Promise<Sequence[]>;
+  /** Creates a sequence as a draft. */
+  createSequence(
+    input: {
+      profileId: string;
+      accountId: string;
+      platform: string;
+      name: string;
+      steps: SequenceStep[];
+      exitOnReply: boolean;
+      exitOnUnsubscribe: boolean;
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  setSequenceActive(input: { id: string; active: boolean } & CallOptions): Promise<void>;
+  deleteSequence(input: { id: string } & CallOptions): Promise<void>;
+  /** Adds contacts (Zernio contact ids); people already in it or not reachable there fail. */
+  enrollInSequence(
+    input: { id: string; contactIds: string[] } & CallOptions,
+  ): Promise<{ enrolled: number; failed: number }>;
+  /** Ids of the brand's subscribed contacts with a tag on one account (up to 1,000). */
+  listContactIdsByTag(
+    input: { profileId: string; accountId: string; tag: string } & CallOptions,
+  ): Promise<string[]>;
+  /** The brand's chat flows (T77b, `GET /v1/workflows`). */
+  listWorkflows(input: { profileId: string } & CallOptions): Promise<ChatFlow[]>;
+  /** Creates a flow as a draft (`POST /v1/workflows`). */
+  createWorkflow(
+    input: {
+      profileId: string;
+      accountId: string;
+      platform: string;
+      name: string;
+      description?: string;
+      graph: WorkflowGraph;
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  /** Turns a flow on (`/activate`) or pauses it (`/pause`). */
+  setWorkflowActive(input: { id: string; active: boolean } & CallOptions): Promise<void>;
+  deleteWorkflow(input: { id: string } & CallOptions): Promise<void>;
+  /** The brand's comment-to-DM automations (T77a). */
+  listCommentAutomations(input: { profileId: string } & CallOptions): Promise<CommentAutomation[]>;
+  createCommentAutomation(
+    input: {
+      profileId: string;
+      automation: CommentAutomationInput;
+      isActive: boolean;
+    } & CallOptions,
+  ): Promise<{ id: string }>;
+  /** Edits an automation; any field left out stays as it is. */
+  updateCommentAutomation(
+    input: {
+      id: string;
+      automation?: CommentAutomationInput;
+      isActive?: boolean;
+    } & CallOptions,
+  ): Promise<void>;
+  deleteCommentAutomation(input: { id: string } & CallOptions): Promise<void>;
+  /** The latest comments it acted on, newest first, and how many comments matched no keyword. */
+  listCommentAutomationLogs(
+    input: { id: string; limit?: number } & CallOptions,
+  ): Promise<{ entries: CommentAutomationLogEntry[]; misses: number }>;
+  /** The brand's default queue, or null when it has none yet (T75). */
+  getQueue(input: { profileId: string } & CallOptions): Promise<PostingQueue | null>;
+  /** Replaces the brand's default queue (creates it the first time). */
+  saveQueue(
+    input: {
+      profileId: string;
+      timezone: string;
+      slots: { dayOfWeek: number; time: string }[];
+    } & CallOptions,
+  ): Promise<PostingQueue>;
   /**
    * Checks a post against each platform's real rules without publishing
    * (`POST /v1/tools/validate/post`, same body as createPost). The composer's last check.
@@ -198,6 +1090,13 @@ export interface SocialProvider {
   ): Promise<{ publicUrl: string }>;
   /** Cancels a scheduled post (`DELETE /v1/posts/{postId}`). */
   deletePost(input: { postId: string } & CallOptions): Promise<void>;
+  /**
+   * Removes a published post from one platform (`POST /v1/posts/{postId}/unpublish`, T75c).
+   * Not on Instagram, TikTok or Snapchat; permanent on YouTube.
+   */
+  unpublishPost(
+    input: { postId: string; platform: string; accountId?: string } & CallOptions,
+  ): Promise<void>;
   /** `postId` is the Zernio post id or the platform's post id. */
   replyToComment(
     input: {
@@ -258,6 +1157,13 @@ export interface SocialProvider {
   getFollowerStats(
     input: { profileId: string; fromDate: string; toDate: string } & CallOptions,
   ): Promise<FollowerSeries[]>;
+  /**
+   * Google Business Profile's performance report (T76): metric name → total over the window
+   * (`GET /v1/analytics/googlebusiness/performance`; 2–3 days behind).
+   */
+  getGoogleBusinessPerformance(
+    input: { accountId: string; fromDate: string; toDate: string } & CallOptions,
+  ): Promise<Record<string, number>>;
   /** `GET /v1/analytics/best-time`: slots by average engagement, best first (UTC hours). */
   getBestTimeToPost(input: { profileId: string } & CallOptions): Promise<BestTimeSlot[]>;
   /** Instagram (age, gender, city, country) or Facebook (country, city) follower breakdown. */
@@ -363,6 +1269,13 @@ export interface SocialProvider {
   ping(): Promise<void>;
 }
 
+export interface ProviderErrorInfo {
+  title: string | null;
+  body: string | null;
+  helpUrl: string | null;
+  steps: string[];
+}
+
 export class SocialProviderError extends Error {
   constructor(
     message: string,
@@ -378,6 +1291,8 @@ export class SocialProviderError extends Error {
       retryAfterSeconds?: number;
       /** Private reply (T41): this comment's one DM is spent, by this call or an earlier one. */
       privateReplyConsumed?: boolean;
+      /** The provider's own fix for a failed connect (email: `details.title/body/guidance`). */
+      info?: ProviderErrorInfo;
     },
   ) {
     super(message);

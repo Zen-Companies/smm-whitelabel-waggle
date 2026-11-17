@@ -41,6 +41,13 @@ describe("platform registry", () => {
       "linkedin",
       "bluesky",
       "whatsapp",
+      "line",
+      "imap",
+      "google",
+      "microsoft",
+      "sms",
+      "rcs",
+      "imessage",
     ]);
     expect(isInboxLive("twitter")).toBe(false);
   });
@@ -64,8 +71,9 @@ describe("platform registry", () => {
     expect(COMMENTS_LIVE).toContain("youtube");
   });
 
-  it("sets up Bluesky, WhatsApp and Telegram with a card in Waggle", () => {
-    expect(SETUP_IN_WAGGLE).toEqual(["bluesky", "whatsapp", "telegram"]);
+  it("sets up Bluesky, WhatsApp, Telegram and LINE with a card in Waggle", () => {
+    expect(SETUP_IN_WAGGLE).toEqual(["bluesky", "whatsapp", "telegram", "line"]);
+    expect(inboxRules("line")).toMatchObject({ dmWindow: null, replyMax: 5000 });
     expect(inboxRules("whatsapp").dmWindow).toEqual({ hours: 24, maxReplies: null });
   });
 

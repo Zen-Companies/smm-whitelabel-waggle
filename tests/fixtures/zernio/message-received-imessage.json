@@ -1,0 +1,39 @@
+{
+  "id": "evt_message_imessage_01",
+  "event": "message.received",
+  "profiles": [
+    {
+      "id": "__PROFILE_ID__",
+      "externalId": "__TENANT_ID__"
+    }
+  ],
+  "message": {
+    "id": "msg_imessage_01",
+    "conversationId": "conv_imessage_01",
+    "platform": "imessage",
+    "platformMessageId": "imsg_7f3a",
+    "direction": "incoming",
+    "text": "Hi! Do you have oat milk?",
+    "attachments": [],
+    "sender": {
+      "id": "+14155550188",
+      "name": "Sam Rivera",
+      "phoneNumber": "+14155550188"
+    },
+    "sentAt": "2026-11-14T10:00:00.000Z",
+    "isRead": false
+  },
+  "conversation": {
+    "id": "conv_imessage_01",
+    "participantId": "+14155550188",
+    "participantName": "Sam Rivera",
+    "status": "active"
+  },
+  "account": {
+    "id": "__ACCOUNT_ID__",
+    "accountId": "__ACCOUNT_ID__",
+    "platform": "imessage",
+    "username": "+14155550170"
+  },
+  "timestamp": "2026-11-14T10:00:01.000Z"
+}

@@ -6,6 +6,7 @@ import { writeAudit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { parseCapInput } from "./ai-cap";
+import { isPlanId, parseBrandsLimit } from "./plans";
 import { hasPermission } from "@/features/staff";
 
 export type CapFormState = { saved?: boolean; error?: string };
@@ -44,5 +45,32 @@ export async function updateAiCap(_prev: CapFormState, formData: FormData): Prom
     details: { from, to: parsed.cap },
   });
   revalidatePath("/admin/costs");
+  return { saved: true };
+}
+
+export type BrandsLimitState = { saved?: boolean; error?: string };
+
+/**
+ * Staff → Plans: how many brands a plan includes (decided 17 Nov: configurable, not in code).
+ * Admins only (`admin.caps.manage`), checked here too. Who and when: on the row.
+ */
+export async function updateBrandsLimit(
+  _prev: BrandsLimitState,
+  formData: FormData,
+): Promise<BrandsLimitState> {
+  const user = await getCurrentUser();
+  if (!(await hasPermission("admin.caps.manage"))) return { error: "Not available." };
+  const plan = formData.get("plan");
+  if (!isPlanId(plan)) return { error: "That plan wasn't found." };
+  const parsed = parseBrandsLimit(formData.get("brands"));
+  if ("error" in parsed) return { error: parsed.error };
+  const { error } = await getServiceClient().from("plan_settings").upsert({
+    plan,
+    brands_limit: parsed.limit,
+    updated_at: new Date().toISOString(),
+    updated_by: user.id,
+  });
+  if (error) return { error: "Couldn't save. Please try again." };
+  revalidatePath("/admin/plans");
   return { saved: true };
 }

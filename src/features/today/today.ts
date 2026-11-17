@@ -1,0 +1,92 @@
+// Today, the home page (T71, design "1 · Today"): pure wording, tested next to it.
+
+import type { ReasonChip } from "@/features/approvals";
+
+const NOUNS: Record<ReasonChip, [string, string]> = {
+  "Upset customer": ["upset customer", "upset customers"],
+  "Couldn't send": ["reply that couldn't send", "replies that couldn't send"],
+  "Missed call": ["missed call", "missed calls"],
+  Voicemail: ["voicemail", "voicemails"],
+  "Not in your answers": [
+    "question your answers don't cover",
+    "questions your answers don't cover",
+  ],
+  "Sent a photo": ["photo Waggle couldn't read", "photos Waggle couldn't read"],
+  "Not sure what they want": ["unclear message", "unclear messages"],
+  "Wants to buy or book": ["buyer to talk to", "buyers to talk to"],
+  "For you": ["message for you", "messages for you"],
+};
+
+const WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"];
+const count = (n: number) => WORDS[n] ?? String(n);
+
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** "One upset customer and one photo Waggle couldn't read." (largest groups first). */
+export function onlyYouLine(chips: ReasonChip[]): string {
+  if (!chips.length) return "Nothing needs you right now.";
+  const tally = new Map<ReasonChip, number>();
+  for (const c of chips) tally.set(c, (tally.get(c) ?? 0) + 1);
+  const parts = [...tally.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([chip, n]) => `${count(n)} ${NOUNS[chip][n === 1 ? 0 : 1]}`);
+  const line = joinNames(parts);
+  return `${line.charAt(0).toUpperCase()}${line.slice(1)}.`;
+}
+
+/** "Maya wants a showing Saturday. Derek: selling his condo." from the newest leads. */
+export function leadsLine(leads: { name: string | null; request: string | null }[]): string {
+  if (!leads.length) return "No new leads since yesterday.";
+  const shown = leads.slice(0, 2).map((l) => {
+    const who = l.name?.trim() || "Someone";
+    const what = l.request?.trim().replace(/[.!?]+$/, "");
+    return what ? `${who}: ${what}.` : `${who} got in touch.`;
+  });
+  const more = leads.length > 2 ? ` And ${leads.length - 2} more.` : "";
+  return shown.join(" ") + more;
+}
+
+/** "Since yesterday, Waggle answered 12 messages on its own and saved 2 new leads." */
+export function sinceYesterdayLine(answered: number, leads: number): string {
+  const msgs = answered === 1 ? "1 message" : `${answered} messages`;
+  const ld = leads === 1 ? "1 new lead" : `${leads} new leads`;
+  if (answered === 0 && leads === 0) return "Since yesterday, nothing new for Waggle to answer.";
+  if (leads === 0) return `Since yesterday, Waggle answered ${msgs} on its own.`;
+  return `Since yesterday, Waggle answered ${msgs} on its own and saved ${ld}.`;
+}
+
+/** "Good morning" by the viewer's local hour. */
+export function greetingFor(hour: number): string {
+  if (hour < 5) return "Good evening";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+/** The first word of a full name, or null. */
+export function firstName(full: unknown): string | null {
+  if (typeof full !== "string") return null;
+  const first = full.trim().split(/\s+/)[0];
+  return first ? first.slice(0, 40) : null;
+}
+
+/** "just now", "5m ago", "2h ago", "3d ago". */
+export function shortAgo(iso: string, now: Date): string {
+  const s = Math.max(0, Math.round((now.getTime() - Date.parse(iso)) / 1000));
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86_400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86_400)}d ago`;
+}
+
+/** Typical reply time: "48s", "4m", "2h", or "–" with no replies. */
+export function replyTime(seconds: number | null): string {
+  if (seconds === null) return "–";
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+  return `${Math.round(seconds / 3600)}h`;
+}

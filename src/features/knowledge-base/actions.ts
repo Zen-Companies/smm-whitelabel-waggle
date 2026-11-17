@@ -88,9 +88,154 @@ export async function createKbEntry(_prev: KbFormState, formData: FormData): Pro
     }
   }
   embedLater(data.id);
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
+  revalidatePath("/teach");
   // Open the new topic in the editor (design v2: one topic at a time).
-  redirect(`/knowledge-base?topic=${data.id}`);
+  redirect(`/teach/business-info?topic=${data.id}`);
+}
+
+export interface AnswerState {
+  error?: string;
+  /** The question just answered, so the list can move on. */
+  saved?: string;
+  savedAt?: number;
+}
+
+const answerSchema = z.object({
+  question: z.string().trim().min(1).max(2000),
+  answer: z
+    .string()
+    .trim()
+    .min(1, "Write a short answer first.")
+    .max(KB_CONTENT_MAX, "Keep it shorter."),
+});
+
+/**
+ * Teach Waggle (T73): a customer's question the answers don't cover, answered in place. It
+ * becomes an answer titled with the question, so Waggle can use it next time.
+ */
+export async function answerQuestionAction(
+  _prev: AnswerState,
+  formData: FormData,
+): Promise<AnswerState> {
+  const parsed = answerSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const question = parsed.data.question.replace(/\s+/g, " ");
+  const title =
+    question.length > KB_TITLE_MAX ? `${question.slice(0, KB_TITLE_MAX - 1).trimEnd()}…` : question;
+  const supabase = await createServerSupabase();
+  const { data, error } = await supabase
+    .from("kb_entries")
+    .insert({ tenant_id: tenant.id, title, content: parsed.data.answer })
+    .select("id")
+    .single();
+  if (error) return { error: "Couldn't save. Please try again." };
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: "kb_entry_created",
+    actor: tenant.userId,
+    details: { kbEntryId: data.id, from: "teach_question" },
+  });
+  embedLater(data.id);
+  revalidatePath("/teach");
+  revalidatePath("/teach/business-info");
+  return { saved: parsed.data.question, savedAt: Date.now() };
+}
+
+/**
+ * First-time setup (T73b): the owner's answers to the questions their kind of business gets most,
+ * saved as answers titled with the question. One already there with the same title is left alone,
+ * so going back through setup never doubles them. Returns how many were saved.
+ */
+export async function addStarterAnswers(
+  pairs: { question: string; answer: string }[],
+): Promise<{ saved: number } | { error: string }> {
+  const parsed = z.array(answerSchema).max(10).safeParse(pairs);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const supabase = await createServerSupabase();
+  const { data: existing } = await supabase
+    .from("kb_entries")
+    .select("title")
+    .eq("tenant_id", tenant.id);
+  const have = new Set((existing ?? []).map((e) => e.title.trim().toLowerCase()));
+  let saved = 0;
+  for (const p of parsed.data) {
+    const title = p.question.slice(0, KB_TITLE_MAX);
+    if (have.has(title.toLowerCase())) continue;
+    const { data, error } = await supabase
+      .from("kb_entries")
+      .insert({ tenant_id: tenant.id, title, content: p.answer })
+      .select("id")
+      .single();
+    if (error) return { error: "Couldn't save. Please try again." };
+    await writeAudit(getServiceClient(), {
+      tenantId: tenant.id,
+      action: "kb_entry_created",
+      actor: tenant.userId,
+      details: { kbEntryId: data.id, from: "setup" },
+    });
+    embedLater(data.id);
+    have.add(title.toLowerCase());
+    saved += 1;
+  }
+  revalidatePath("/teach");
+  revalidatePath("/teach/business-info");
+  return { saved };
+}
+
+/**
+ * "Add an answer" under a practice try (approved 17 Nov): one answer, made searchable before this
+ * returns so the same message can be tried again right away (a new answer is otherwise embedded
+ * after the response). A question already in Business info is refused in place.
+ */
+export async function addAnswerNow(pair: {
+  question: string;
+  answer: string;
+}): Promise<{ id: string; title: string } | { error: string }> {
+  const parsed = answerSchema.safeParse(pair);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const supabase = await createServerSupabase();
+  const title = parsed.data.question.slice(0, KB_TITLE_MAX);
+  const { data: same } = await supabase
+    .from("kb_entries")
+    .select("id")
+    .eq("tenant_id", tenant.id)
+    .ilike(
+      "title",
+      title.replace(/[\\%_]/g, (c) => `\\${c}`),
+    )
+    .limit(1);
+  if (same?.length) {
+    return { error: "There's already an answer with this question. Change the question a little." };
+  }
+  const { data, error } = await supabase
+    .from("kb_entries")
+    .insert({ tenant_id: tenant.id, title, content: parsed.data.answer })
+    .select("id")
+    .single();
+  if (error) return { error: "Couldn't save. Please try again." };
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: "kb_entry_created",
+    actor: tenant.userId,
+    details: { kbEntryId: data.id, from: "practice" },
+  });
+  const llm = getLlmClientOrNull();
+  try {
+    if (llm) await embedEntry({ db: getServiceClient(), llm }, data.id);
+  } catch (e) {
+    // The sweep embeds it later; the try again just won't find it yet.
+    Sentry.captureException(e, { extra: { kbEntryId: data.id } });
+  }
+  revalidatePath("/teach");
+  revalidatePath("/teach/business-info");
+  return { id: data.id, title };
 }
 
 export async function updateKbEntry(_prev: KbFormState, formData: FormData): Promise<KbFormState> {
@@ -117,7 +262,8 @@ export async function updateKbEntry(_prev: KbFormState, formData: FormData): Pro
   });
   // Unchanged text keeps its embedding; changed text was cleared by the T1 trigger.
   if (data[0].embedding === null) embedLater(id);
-  revalidatePath("/knowledge-base");
+  revalidatePath("/teach/business-info");
+  revalidatePath("/teach");
   return { saved: true };
 }
 
@@ -140,6 +286,7 @@ export async function deleteKbEntry(formData: FormData): Promise<void> {
       details: { kbEntryId: id },
     });
   }
-  revalidatePath("/knowledge-base");
-  redirect("/knowledge-base");
+  revalidatePath("/teach/business-info");
+  revalidatePath("/teach");
+  redirect("/teach/business-info");
 }

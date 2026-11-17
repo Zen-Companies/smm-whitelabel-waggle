@@ -15,6 +15,39 @@ import type {
   ProviderUsage,
   SocialPlatform,
   SocialProvider,
+  PostingQueue,
+  AdAccount,
+  SmsOnNumber,
+  SmsRegistration,
+  RcsAgentView,
+  BlogArticleView,
+  ProductView,
+  DriveItem,
+  ImessageSenderView,
+  VoiceSettings,
+  OwnedNumber,
+  PhoneCountry,
+  PhoneNumberType,
+  PurchaseResult,
+  CalendarEventSummary,
+  EmailDiscovery,
+  Integration,
+  SiteKeys,
+  AdCampaignSummary,
+  AdConnection,
+  AdLead,
+  AdRuleSummary,
+  AdLeadStatus,
+  Broadcast,
+  LeadForm,
+  ChatFlow,
+  Contact,
+  Sequence,
+  SequenceStep,
+  CommentAutomation,
+  CommentAutomationInput,
+  WorkflowGraph,
+  CommentAutomationLogEntry,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
 import { SocialProviderError } from "./types";
@@ -58,6 +91,56 @@ const MEDIA_EXT: Record<string, string> = {
   "video/webm": "webm",
   "video/x-m4v": "m4v",
 };
+
+const DEMO_PROFILE_PREFIX = "demo_profile_";
+
+/** The demo café's customers (scripts/demo-seed.ts), as contacts. Oldest last. */
+const DEMO_CONTACTS: Omit<Contact, "id" | "email" | "lastMessageAt">[] = [
+  {
+    name: "Liza Tan",
+    tags: ["regular"],
+    subscribed: true,
+    platform: "instagram",
+    identifier: "@lizatan",
+  },
+  { name: "aisha.k", tags: [], subscribed: true, platform: "instagram", identifier: "@aisha.k" },
+  {
+    name: "Rico Villanueva",
+    tags: ["regular"],
+    subscribed: true,
+    platform: "facebook",
+    identifier: "Rico Villanueva",
+  },
+  { name: "jen.dc", tags: [], subscribed: false, platform: "instagram", identifier: "@jen.dc" },
+  {
+    name: "Carlo Mendoza",
+    tags: ["events"],
+    subscribed: true,
+    platform: "instagram",
+    identifier: "@carlo.mendoza",
+  },
+  {
+    name: "mika.reyes",
+    tags: [],
+    subscribed: true,
+    platform: "instagram",
+    identifier: "@mika.reyes",
+  },
+  {
+    name: "Ana Gomez",
+    tags: ["events", "regular"],
+    subscribed: true,
+    platform: "whatsapp",
+    identifier: "+639175550142",
+  },
+  {
+    name: "Joel Ramos",
+    tags: ["regular"],
+    subscribed: true,
+    platform: "whatsapp",
+    identifier: "+639175550187",
+  },
+];
 
 export class MockSocialProvider implements SocialProvider {
   readonly sends: MockSend[] = [];
@@ -140,11 +223,1253 @@ export class MockSocialProvider implements SocialProvider {
 
   async createPost(
     input: CreatePostInput,
-  ): Promise<{ providerPostId: string; status: ProviderPostStatus }> {
+  ): Promise<{ providerPostId: string; status: ProviderPostStatus; scheduledFor?: string | null }> {
     const providerPostId = idFrom("mock_post", input.idempotencyKey);
-    const status: ProviderPostStatus = input.publishAt ? "scheduled" : "publishing";
+    const queued = input.queueProfileId
+      ? ((await this.getQueue({ profileId: input.queueProfileId }))?.nextSlots[0] ?? null)
+      : null;
+    const status: ProviderPostStatus = input.publishAt || queued ? "scheduled" : "publishing";
     if (!this.posts.has(providerPostId)) this.posts.set(providerPostId, { ...input, status });
-    return { providerPostId, status };
+    return {
+      providerPostId,
+      status,
+      scheduledFor: queued ?? input.publishAt?.toISOString() ?? null,
+    };
+  }
+
+  /** Sites connected with the owner's keys (T80), per profile. */
+  private integrations = new Map<string, Integration[]>();
+
+  async listIntegrations(input: { profileId: string; platforms: readonly string[] }) {
+    return (this.integrations.get(input.profileId) ?? []).filter((i) =>
+      input.platforms.includes(i.platform),
+    );
+  }
+
+  async connectSiteWithKeys(input: { profileId: string; keys: SiteKeys }) {
+    const k = input.keys;
+    const name =
+      k.kind === "shopify" ? k.shop : k.kind === "wordpress" ? k.siteUrl : "Your Webflow site";
+    const id = idFrom(`mock_${k.kind}`, input.profileId, name);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [...list, { id, platform: k.kind, name, active: true }]);
+    return { accountId: id, name };
+  }
+
+  /** Texting (T82c): every number can text and needs a US registration. */
+  private smsRegistrations: (SmsRegistration & { otp: string | null })[] = [];
+
+  async enableSms(input: { numberId: string }): Promise<SmsOnNumber> {
+    return {
+      enabled: true,
+      accountId: idFrom("mock_sms", input.numberId),
+      notCapable: false,
+      notReady: false,
+      needsRegistration: true,
+    };
+  }
+
+  async listSmsRegistrations(input: { phoneNumber: string }): Promise<SmsRegistration[]> {
+    return this.smsRegistrations
+      .filter((r) => r.phoneNumbers.includes(input.phoneNumber))
+      .map((r) => {
+        const { otp, ...rest } = r;
+        void otp;
+        return rest;
+      });
+  }
+
+  async startSmsRegistration(input: { body: Record<string, unknown> }) {
+    const type = input.body.registrationType as SmsRegistration["type"];
+    const id = idFrom("mock_smsreg", String(this.smsRegistrations.length));
+    const awaitingOtp = type === "sole_prop_10dlc";
+    this.smsRegistrations.push({
+      id,
+      type,
+      status: "pending",
+      declineReason: null,
+      awaitingOtp,
+      phoneNumbers: (input.body.phoneNumbers as string[]) ?? [],
+      otp: awaitingOtp ? "123456" : null,
+    });
+    return { id, status: "pending" as const, awaitingOtp };
+  }
+
+  async verifySmsRegistrationCode(input: { id: string; code: string }) {
+    const r = this.smsRegistrations.find((x) => x.id === input.id);
+    if (!r || r.otp !== input.code) {
+      throw new SocialProviderError("mock verifySmsRegistrationOtp failed (400)", {
+        status: 400,
+        ambiguous: false,
+      });
+    }
+    r.awaitingOtp = false;
+  }
+
+  async resendSmsRegistrationCode(input: { id: string }) {
+    void input.id;
+  }
+
+  /** OneDrive (T84c): a folder with a photo and a video. */
+  async listFiles(input: { accountId: string; folderId?: string; q?: string }) {
+    void input.accountId;
+    const all: DriveItem[] = input.folderId
+      ? [
+          {
+            id: "f_img",
+            name: "ube-cheesecake-hero.jpg",
+            kind: "file",
+            mimeType: "image/jpeg",
+            size: 2_100_000,
+          },
+          {
+            id: "f_vid",
+            name: "barista-latte-art.mp4",
+            kind: "file",
+            mimeType: "video/mp4",
+            size: 38_000_000,
+          },
+        ]
+      : [
+          { id: "d_mkt", name: "Marketing", kind: "folder", mimeType: null, size: null },
+          {
+            id: "f_menu",
+            name: "menu-board-nov.png",
+            kind: "file",
+            mimeType: "image/png",
+            size: 900_000,
+          },
+        ];
+    const q = input.q?.toLowerCase();
+    return q ? all.filter((f) => f.name.toLowerCase().includes(q)) : all;
+  }
+
+  async copyFileToMedia(input: { accountId: string; fileId: string; maxBytes: number }) {
+    const files = [
+      ...(await this.listFiles({ accountId: input.accountId })),
+      ...(await this.listFiles({ accountId: input.accountId, folderId: "x" })),
+    ];
+    const f = files.find((x) => x.id === input.fileId && x.kind === "file");
+    if (!f)
+      throw new SocialProviderError("mock downloadFile failed (404)", {
+        status: 404,
+        ambiguous: false,
+      });
+    if ((f.size ?? 0) > input.maxBytes) {
+      throw new SocialProviderError("mock downloadFile failed (413)", {
+        status: 413,
+        ambiguous: false,
+      });
+    }
+    const contentType = f.mimeType ?? "application/octet-stream";
+    const { publicUrl } = await this.uploadMedia({
+      filename: f.name,
+      contentType,
+      bytes: new Uint8Array([1, 2, 3]),
+    });
+    return { publicUrl, contentType, name: f.name, size: f.size ?? 3 };
+  }
+
+  /** Shop (T84b): every Shopify site is a store with two products and one order. */
+  stock = new Map<string, number>();
+
+  async getStore(input: { accountId: string }) {
+    if (!input.accountId.includes("shopify")) return null;
+    return {
+      accountId: input.accountId,
+      platform: "shopify" as const,
+      name: "Harbour Bean",
+      domain: "harbourbean.myshopify.com",
+      url: "https://harbourbean.example",
+      currency: "PHP",
+      capabilities: ["products.read", "inventory.read", "inventory.write", "orders.read"],
+    };
+  }
+
+  async listProducts(input: { accountId: string }) {
+    void input.accountId;
+    const v = (id: string, title: string, amount: string, start: number | null) => ({
+      id,
+      title,
+      price: { amount, currency: "PHP" },
+      stock: start === null ? null : (this.stock.get(id) ?? start),
+    });
+    const products: ProductView[] = [
+      {
+        id: "p1",
+        title: "Ube cheesecake (whole)",
+        status: "active",
+        imageUrl: null,
+        url: null,
+        variants: [v("v1", "Default Title", "1200.00", 6)],
+      },
+      {
+        id: "p2",
+        title: "Gift card",
+        status: "active",
+        imageUrl: null,
+        url: null,
+        variants: [v("v2", "Default Title", "500.00", null)],
+      },
+    ];
+    return { products, nextCursor: null };
+  }
+
+  async listStockLocations(input: { accountId: string }) {
+    void input.accountId;
+    return [{ id: "loc1", name: "Café" }];
+  }
+
+  async setStock(input: { variantId: string; quantity: number }) {
+    this.stock.set(input.variantId, input.quantity);
+  }
+
+  async listOrders(input: { accountId: string }) {
+    void input.accountId;
+    return {
+      orders: [
+        {
+          id: "o1",
+          number: "#1001",
+          status: "awaiting_fulfillment",
+          paymentStatus: "paid",
+          total: { amount: "2400.00", currency: "PHP" },
+          createdAt: "2026-11-14T09:00:00Z",
+          items: "Ube cheesecake (whole) ×2",
+          customerName: "Ana Cruz",
+        },
+      ],
+      nextCursor: null,
+    };
+  }
+
+  /** Blogs (T84a): one blog per site; articles kept per account and blog. */
+  blogArticles = new Map<string, BlogArticleView[]>();
+  private blogKeys = new Map<string, BlogArticleView>();
+
+  async listBlogs(input: { accountId: string }) {
+    void input.accountId;
+    return [{ id: "1", title: "News", handle: "news" }];
+  }
+
+  async listBlogArticles(input: { accountId: string; blogId: string }) {
+    return {
+      articles: [...(this.blogArticles.get(`${input.accountId}:${input.blogId}`) ?? [])],
+      nextCursor: null,
+    };
+  }
+
+  async createBlogArticle(input: {
+    accountId: string;
+    blogId: string;
+    body: Record<string, unknown>;
+    idempotencyKey: string;
+  }) {
+    const seen = this.blogKeys.get(input.idempotencyKey);
+    if (seen) return seen;
+    const b = input.body;
+    const date = typeof b.publishDate === "string" ? b.publishDate : null;
+    const published = b.isPublished === true && !date;
+    const article: BlogArticleView = {
+      id: idFrom("mock_article", input.idempotencyKey),
+      title: String(b.title ?? ""),
+      url: published
+        ? `https://example.test/blog/${String(b.title ?? "post")
+            .toLowerCase()
+            .replace(/\W+/g, "-")}`
+        : null,
+      isPublished: published,
+      status: published ? "publish" : date ? "future" : "draft",
+      date: date ?? (published ? new Date().toISOString() : null),
+    };
+    const key = `${input.accountId}:${input.blogId}`;
+    this.blogArticles.set(key, [article, ...(this.blogArticles.get(key) ?? [])]);
+    this.blogKeys.set(input.idempotencyKey, article);
+    return article;
+  }
+
+  /** RCS (T83): requests wait in review; tests move them along by hand. */
+  rcsAgents: (RcsAgentView & { profileId: string })[] = [];
+
+  async listRcsAgents(input: { profileId: string }): Promise<RcsAgentView[]> {
+    return this.rcsAgents
+      .filter((a) => a.profileId === input.profileId)
+      .map((a) => {
+        const { profileId, ...rest } = a;
+        void profileId;
+        return structuredClone(rest);
+      });
+  }
+
+  async requestRcsAgent(input: { body: Record<string, unknown>; idempotencyKey: string }) {
+    const id = idFrom("mock_rcs", input.idempotencyKey);
+    if (!this.rcsAgents.some((a) => a.id === id)) {
+      const b = input.body;
+      const brand = (b.brand as Record<string, unknown> | undefined) ?? null;
+      const address = brand?.address as { country?: string } | undefined;
+      this.rcsAgents.push({
+        id,
+        profileId: String(b.profileId),
+        status: "requested",
+        country: address?.country ?? "US",
+        displayName: String(b.displayName ?? ""),
+        useCase: String(b.useCase ?? ""),
+        accountId: null,
+        reviewNote: null,
+        declineReason: null,
+        launchSent: false,
+        testDevices: [],
+        filed: { brand, profile: (b.profile as Record<string, unknown> | undefined) ?? null },
+      });
+    }
+    return { id, status: "requested" as const };
+  }
+
+  private rcsAgent(id: string, step: string) {
+    const a = this.rcsAgents.find((x) => x.id === id);
+    if (!a) {
+      throw new SocialProviderError(`mock ${step} failed (404)`, {
+        status: 404,
+        ambiguous: false,
+      });
+    }
+    return a;
+  }
+
+  async updateRcsAgent(input: { agentId: string; body: Record<string, unknown> }) {
+    const a = this.rcsAgent(input.agentId, "updateRcsAgent");
+    if (input.body.displayName) a.displayName = String(input.body.displayName);
+    if (input.body.brand) a.filed.brand = input.body.brand as Record<string, unknown>;
+    if (input.body.profile) a.filed.profile = input.body.profile as Record<string, unknown>;
+    a.status = "requested";
+    a.reviewNote = null;
+  }
+
+  async uploadRcsAsset(input: { file: Blob; kind: "logo" | "banner" }) {
+    return { url: `https://media.example.test/rcs/${input.kind}-${input.file.size}.jpg` };
+  }
+
+  async addRcsTestDevice(input: { agentId: string; phoneNumber: string }) {
+    const a = this.rcsAgent(input.agentId, "addRcsTestDevice");
+    a.testDevices.push({
+      id: idFrom("mock_rcsdev", input.agentId, input.phoneNumber),
+      phoneNumber: input.phoneNumber,
+      inviteStatus: "PENDING",
+    });
+  }
+
+  async removeRcsTestDevice(input: { agentId: string; testDeviceId: string }) {
+    const a = this.rcsAgent(input.agentId, "removeRcsTestDevice");
+    a.testDevices = a.testDevices.filter((d) => d.id !== input.testDeviceId);
+  }
+
+  async requestRcsLaunch(input: { agentId: string; body: Record<string, unknown> }) {
+    const a = this.rcsAgent(input.agentId, "requestRcsAgentLaunch");
+    a.launchSent = true;
+    if (a.status === "testing") a.status = "launch_review";
+  }
+
+  /** iMessage (T83c): instant numbers activate at once; others wait in "activating". */
+  imessageSenders: (ImessageSenderView & { profileId: string; intent: string })[] = [];
+
+  async listImessageSenders(input: { profileId: string }): Promise<ImessageSenderView[]> {
+    return this.imessageSenders
+      .filter((s) => s.profileId === input.profileId && s.status !== "canceled")
+      .map((s) => {
+        const { profileId, intent, ...rest } = s;
+        void profileId;
+        void intent;
+        return { ...rest };
+      });
+  }
+
+  async listImessageNumbers(input: { region: "US" | "GB" }) {
+    return input.region === "US"
+      ? [
+          { id: "mock_imsg_num_1", phone: "+14155550170", location: "CA" },
+          { id: "mock_imsg_num_2", phone: "+12125550171", location: "NY" },
+        ]
+      : [];
+  }
+
+  async orderImessageSender(input: {
+    profileId: string;
+    region: "US" | "GB";
+    availableNumberId?: string;
+    displayName: string;
+    purchaseIntentId: string;
+  }) {
+    const existing = this.imessageSenders.find((s) => s.intent === input.purchaseIntentId);
+    if (existing) return { kind: "ordered" as const, id: existing.id, status: existing.status };
+    const picked = (await this.listImessageNumbers({ region: input.region })).find(
+      (n) => n.id === input.availableNumberId,
+    );
+    const id = idFrom("mock_imsg", input.purchaseIntentId);
+    this.imessageSenders.push({
+      id,
+      profileId: input.profileId,
+      intent: input.purchaseIntentId,
+      status: picked ? "active" : "activating",
+      region: input.region,
+      handle: picked?.phone ?? null,
+      optInLink: picked ? `imessage://${picked.phone}?body=Hi` : null,
+      priceCents: 20_000,
+      displayName: input.displayName,
+      failureReason: null,
+      accountId: picked ? idFrom("mock_imsg_acct", id) : null,
+    });
+    return {
+      kind: "ordered" as const,
+      id,
+      status: picked ? ("active" as const) : ("activating" as const),
+    };
+  }
+
+  async updateImessageSender(input: { senderId: string; displayName: string }) {
+    const s = this.imessageSenders.find((x) => x.id === input.senderId);
+    if (!s) {
+      throw new SocialProviderError("mock updateImessageSender failed (404)", {
+        status: 404,
+        ambiguous: false,
+      });
+    }
+    s.displayName = input.displayName;
+  }
+
+  async cancelImessageSender(input: { senderId: string }) {
+    const s = this.imessageSenders.find((x) => x.id === input.senderId);
+    if (s) s.status = "canceled";
+  }
+
+  private voice = new Map<string, VoiceSettings>();
+
+  async setVoice(input: { numberId: string; settings: Partial<VoiceSettings> }) {
+    const current: VoiceSettings = this.voice.get(input.numberId) ?? {
+      enabled: true,
+      forwardTo: null,
+      voicemailGreeting: null,
+      businessHoursEnabled: false,
+      businessHoursTimezone: null,
+      businessHours: [],
+    };
+    const next = {
+      ...current,
+      ...input.settings,
+      forwardTo:
+        input.settings.forwardTo === undefined
+          ? current.forwardTo
+          : input.settings.forwardTo || null,
+    };
+    this.voice.set(input.numberId, next);
+    return next;
+  }
+
+  async getCallRecordingUrl(input: { callId: string }) {
+    void input.callId;
+    return null;
+  }
+
+  /** Phone numbers (T82a): US local and toll-free at $3; a pretend ID country (GB) is left out. */
+  private numbers = new Map<string, OwnedNumber[]>();
+
+  async listPhoneCountries(): Promise<PhoneCountry[]> {
+    const t = (numberType: PhoneNumberType, needsKyc = false) => ({
+      numberType,
+      monthlyCents: 300,
+      needsKyc,
+      callsAvailable: true,
+      smsAvailable: true,
+      inStock: true,
+      instant: true,
+    });
+    return [
+      { code: "US", types: [t("local"), t("toll_free")] },
+      { code: "GB", types: [t("local", true)] },
+    ];
+  }
+
+  async searchPhoneNumbers(input: { numberType: PhoneNumberType; areaCode?: string }) {
+    const area = input.numberType === "toll_free" ? "800" : (input.areaCode || "415").slice(0, 3);
+    return ["0142", "0177", "0190"].map((end) => ({
+      phoneNumber: `+1${area}555${end}`,
+      locality: input.numberType === "toll_free" ? null : "San Francisco",
+      features: ["voice", "sms"],
+    }));
+  }
+
+  async purchasePhoneNumber(input: {
+    profileId: string;
+    country: string;
+    numberType: PhoneNumberType;
+    phoneNumber: string;
+    purchaseIntentId: string;
+  }): Promise<PurchaseResult> {
+    const id = idFrom("mock_number", input.purchaseIntentId);
+    const list = (this.numbers.get(input.profileId) ?? []).filter((n) => n.id !== id);
+    this.numbers.set(input.profileId, [
+      ...list,
+      {
+        id,
+        phoneNumber: input.phoneNumber,
+        country: input.country,
+        numberType: input.numberType,
+        status: "active",
+        monthlyCents: 300,
+      },
+    ]);
+    return { kind: "bought", id, phoneNumber: input.phoneNumber, profileId: input.profileId };
+  }
+
+  async listOwnedNumbers(input: { profileId: string }) {
+    return this.numbers.get(input.profileId) ?? [];
+  }
+
+  async releasePhoneNumber(input: { id: string }) {
+    for (const [profile, list] of this.numbers) {
+      this.numbers.set(
+        profile,
+        list.filter((n) => n.id !== input.id),
+      );
+    }
+  }
+
+  /** Calendar (T81d): a supplier delivery at 9 and a staff meeting at 2, every day. */
+  private calendarAdds: CalendarEventSummary[] = [];
+
+  async listCalendarEvents(input: { accountId: string; from: string; to: string }) {
+    const day = input.from.slice(0, 10);
+    const fixed: CalendarEventSummary[] = [
+      {
+        id: `mock_cal_${day}_1`,
+        title: "Supplier delivery",
+        start: `${day}T09:00:00+08:00`,
+        end: `${day}T09:30:00+08:00`,
+        allDay: false,
+        busy: true,
+      },
+      {
+        id: `mock_cal_${day}_2`,
+        title: "Staff meeting",
+        start: `${day}T14:00:00+08:00`,
+        end: `${day}T15:00:00+08:00`,
+        allDay: false,
+        busy: true,
+      },
+    ];
+    void input.accountId;
+    return [...fixed, ...this.calendarAdds].filter((e) => e.start < input.to && e.end > input.from);
+  }
+
+  async createCalendarEvent(input: {
+    accountId: string;
+    title: string;
+    start: string;
+    end: string;
+  }) {
+    const id = idFrom("mock_cal", input.accountId, input.start, input.title);
+    this.calendarAdds.push({
+      id,
+      title: input.title,
+      start: input.start,
+      end: input.end,
+      allDay: false,
+      busy: true,
+    });
+    return { id };
+  }
+
+  async getMailConnectUrl(input: { platform: string; redirectUrl: string }) {
+    const url = new URL(input.redirectUrl);
+    url.searchParams.set("connected", input.platform);
+    return { authUrl: url.toString() };
+  }
+
+  async discoverEmail(input: { email: string }): Promise<EmailDiscovery> {
+    const domain = input.email.split("@")[1] ?? "";
+    if (domain === "gmail.com") {
+      return {
+        route: "google_oauth",
+        providerName: "Gmail",
+        passwordLabel: null,
+        helpUrl: null,
+        steps: [],
+        preflight: [],
+      };
+    }
+    if (domain === "proton.me") {
+      return {
+        route: "unsupported",
+        providerName: "Proton Mail",
+        passwordLabel: null,
+        helpUrl: null,
+        steps: [],
+        preflight: [],
+      };
+    }
+    return {
+      route: "imap",
+      providerName: "Zoho Mail",
+      passwordLabel: "App password",
+      helpUrl: "https://accounts.zoho.com/home#security/app_password",
+      steps: ["Open Zoho's security settings.", "Create an app password named Waggle."],
+      preflight: [{ text: "Turn on IMAP access in your Zoho Mail settings.", url: null }],
+    };
+  }
+
+  async connectEmail(input: { profileId: string; email: string; password: string }) {
+    if (input.password === "wrong") {
+      throw new SocialProviderError("mock connectEmail failed (422)", {
+        status: 422,
+        code: "imap_auth_failed",
+        ambiguous: false,
+        info: {
+          title: "Couldn't sign in to Zoho Mail",
+          body: "Check the password is typed exactly.",
+          helpUrl: null,
+          steps: [],
+        },
+      });
+    }
+    const id = idFrom("mock_imap", input.profileId, input.email);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [
+      ...list,
+      { id, platform: "imap", name: input.email, active: true },
+    ]);
+  }
+
+  async connectLine(input: { profileId: string; channelId: string }) {
+    const id = idFrom("mock_line", input.profileId, input.channelId);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [
+      ...list,
+      { id, platform: "line", name: "Your LINE account", active: true },
+    ]);
+    return { accountId: id, name: "Your LINE account", webhookReady: true };
+  }
+
+  async connectWhatsAppWithKeys(input: { profileId: string; phoneNumberId: string }) {
+    return {
+      accountId: idFrom("mock_whatsapp", input.profileId, input.phoneNumberId),
+      username: "+63 917 555 0100",
+    };
+  }
+
+  /**
+   * Ads (T79): each connection has one ad account (Meta in PHP; LinkedIn and Pinterest, T79b,
+   * in USD). Connections are kept per profile and network.
+   */
+  private adConnections = new Map<string, AdConnection>();
+  private adCampaigns = new Map<string, AdCampaignSummary & { connectionId: string }>();
+  private adRules = new Map<string, AdRuleSummary & { connectionId: string }>();
+
+  async connectMetaAds(input: { profileId: string; facebookAccountId: string }) {
+    const id = idFrom("mock_metaads", input.profileId);
+    this.adConnections.set(`${input.profileId}|metaads`, {
+      id,
+      platform: "metaads",
+      name: "Meta ads",
+      parentAccountId: input.facebookAccountId,
+      active: true,
+    });
+    return { connectionId: id };
+  }
+
+  async connectSameTokenAds(input: {
+    profileId: string;
+    platform: "linkedin" | "pinterest";
+    postingAccountId: string;
+  }) {
+    const platform = `${input.platform}ads`;
+    const id = idFrom(`mock_${platform}`, input.profileId);
+    this.adConnections.set(`${input.profileId}|${platform}`, {
+      id,
+      platform,
+      name: input.platform === "linkedin" ? "LinkedIn ads" : "Pinterest ads",
+      parentAccountId: input.postingAccountId,
+      active: true,
+    });
+    return { connectionId: id };
+  }
+
+  /** T72: a placeholder picture, served by the app itself, so previews work offline. */
+  async getMessageAttachmentUrl(_input: { index: number }) {
+    void _input;
+    return `${process.env.APP_URL ?? "http://localhost:3000"}/brands/instagram.png`;
+  }
+
+  /** T79c: any key of 10+ characters connects; "bad-key…" is refused like a wrong key. */
+  async connectOpenAiAds(input: { profileId: string; apiKey: string }) {
+    if (input.apiKey.startsWith("bad-key")) {
+      throw new SocialProviderError("Zernio connectOpenAIAdsCredentials: 401", {
+        ambiguous: false,
+        status: 401,
+      });
+    }
+    const id = idFrom("mock_openaiads", input.profileId);
+    this.adConnections.set(`${input.profileId}|openaiads`, {
+      id,
+      platform: "openaiads",
+      name: "Your ChatGPT ad account",
+      parentAccountId: null,
+      active: true,
+    });
+    return { connectionId: id, name: "Your ChatGPT ad account" };
+  }
+
+  async createAd(input: { body: Record<string, unknown> }) {
+    const accountId = String(input.body.accountId ?? "");
+    const id = idFrom(
+      "mock_campaign",
+      accountId,
+      String(input.body.name),
+      String(this.adCampaigns.size),
+    );
+    this.adCampaigns.set(id, {
+      id,
+      connectionId: accountId,
+      platform: "openai",
+      name: String(input.body.name ?? "Ad"),
+      status: "pending_review",
+      budget: {
+        amount: Number(input.body.budgetAmount ?? 1),
+        type: input.body.budgetType === "lifetime" ? "lifetime" : "daily",
+      },
+      currency: "USD",
+      spend: 0,
+      reach: 0,
+      clicks: 0,
+    });
+    return { id, status: "pending_review" as const };
+  }
+
+  async setAdCampaignBudget(input: { campaignId: string; amount: number; type: "daily" }) {
+    const c = this.adCampaigns.get(input.campaignId);
+    if (c) c.budget = { amount: input.amount, type: input.type };
+  }
+
+  async listAdConnections(input: { profileId: string }): Promise<AdConnection[]> {
+    return [...this.adConnections.entries()]
+      .filter(([key]) => key.startsWith(`${input.profileId}|`))
+      .map(([, c]) => c);
+  }
+
+  async listAdAccounts(input: { connectionId: string }): Promise<AdAccount[]> {
+    if (input.connectionId.startsWith("mock_openaiads")) {
+      return [
+        {
+          id: `acct_${input.connectionId.slice(-8)}`,
+          name: "Your ChatGPT ad account",
+          currency: "USD",
+          minDailyBudget: null,
+          billing: "unknown",
+          usable: true,
+        },
+      ];
+    }
+    const meta = input.connectionId.startsWith("mock_metaads");
+    return [
+      {
+        id: meta ? `act_${input.connectionId.slice(-8)}` : input.connectionId.slice(-9),
+        name: "Your ad account",
+        currency: meta ? "PHP" : "USD",
+        minDailyBudget: meta ? 50 : null,
+        billing: meta ? "ok" : "unknown",
+        usable: true,
+      },
+    ];
+  }
+
+  async boostPost(input: { body: Record<string, unknown>; idempotencyKey: string }) {
+    const id = idFrom("mock_campaign", input.idempotencyKey);
+    const budget = input.body.budget as { amount: number; type: "daily" | "lifetime" } | undefined;
+    // Meta boosts name the ads connection; LinkedIn and Pinterest name the posting account.
+    const accountId = String(input.body.accountId ?? "");
+    const conn = [...this.adConnections.values()].find(
+      (c) => c.id === accountId || c.parentAccountId === accountId,
+    );
+    const platform =
+      conn?.platform === "linkedinads"
+        ? "linkedin"
+        : conn?.platform === "pinterestads"
+          ? "pinterest"
+          : "facebook";
+    this.adCampaigns.set(id, {
+      id,
+      connectionId: conn?.id ?? accountId,
+      platform,
+      name: String(input.body.name ?? "Boost"),
+      status: "pending_review",
+      budget: budget ?? null,
+      currency: platform === "facebook" ? "PHP" : "USD",
+      spend: 0,
+      reach: 0,
+      clicks: 0,
+    });
+    return { id, status: "pending_review" as const };
+  }
+
+  async listAdCampaigns(input: { connectionId: string }): Promise<AdCampaignSummary[]> {
+    return [...this.adCampaigns.values()]
+      .filter((c) => c.connectionId === input.connectionId)
+      .map((c) => {
+        const { connectionId, ...rest } = c;
+        void connectionId;
+        return rest;
+      });
+  }
+
+  async setAdCampaignStatus(input: { campaignId: string; status: "active" | "paused" }) {
+    const c = this.adCampaigns.get(input.campaignId);
+    if (c) c.status = input.status;
+  }
+
+  async listAdRules(input: { connectionId: string }): Promise<AdRuleSummary[]> {
+    return [...this.adRules.values()]
+      .filter((r) => r.connectionId === input.connectionId)
+      .map((r) => {
+        const { connectionId, ...rest } = r;
+        void connectionId;
+        return rest;
+      });
+  }
+
+  async createAdRule(input: { body: Record<string, unknown> }) {
+    const id = idFrom("mock_rule", String(input.body.name), String(this.adRules.size));
+    this.adRules.set(id, {
+      id,
+      connectionId: String(input.body.accountId ?? ""),
+      name: String(input.body.name ?? "Rule"),
+      adAccountId: String(input.body.adAccountId ?? ""),
+      enabled: input.body.enabled === true,
+    });
+    return { id };
+  }
+
+  async setAdRuleEnabled(input: { id: string; enabled: boolean }) {
+    const r = this.adRules.get(input.id);
+    if (r) r.enabled = input.enabled;
+  }
+
+  async deleteAdRule(input: { id: string }) {
+    this.adRules.delete(input.id);
+  }
+
+  /** Lead forms and their leads (T78c); one demo lead per new form. */
+  private leadForms = new Map<string, LeadForm & { accountId: string }>();
+  private adLeads = new Map<string, AdLead & { accountId: string }>();
+
+  async listLeadForms(input: { accountId: string }): Promise<LeadForm[]> {
+    return [...this.leadForms.values()]
+      .filter((f) => f.accountId === input.accountId)
+      .map((f) => ({ id: f.id, name: f.name, status: f.status }));
+  }
+
+  async createLeadForm(input: { body: Record<string, unknown> }) {
+    const accountId = String(input.body.accountId ?? "");
+    const name = String(input.body.name ?? "Lead form");
+    const id = idFrom("mock_form", accountId, name, String(this.leadForms.size));
+    this.leadForms.set(id, { id, name, status: "active", accountId });
+    const leadId = idFrom("mock_lead", id);
+    this.adLeads.set(leadId, {
+      id: leadId,
+      accountId,
+      formName: name,
+      createdAt: new Date().toISOString(),
+      fields: {
+        full_name: "Maria Santos",
+        email: "maria@example.com",
+        phone_number: "+639175550142",
+      },
+      consents: [{ checkboxKey: "waggle_messages", isChecked: true }],
+      status: "new",
+      contactId: null,
+    });
+    return { id };
+  }
+
+  async listAdLeads(input: { accountIds: string[]; status?: AdLeadStatus }): Promise<AdLead[]> {
+    return [...this.adLeads.values()]
+      .filter(
+        (l) =>
+          input.accountIds.includes(l.accountId) && (!input.status || l.status === input.status),
+      )
+      .map((l) => {
+        const { accountId, ...rest } = l;
+        void accountId;
+        return rest;
+      });
+  }
+
+  async updateAdLeadStatus(input: { id: string; status: AdLeadStatus }) {
+    const l = this.adLeads.get(input.id);
+    if (l) l.status = input.status;
+  }
+
+  /** Broadcasts (T78b), kept in memory per profile. */
+  private broadcasts = new Map<string, Broadcast & { profileId: string; tag: string | null }>();
+
+  async listBroadcasts(input: { profileId: string }): Promise<Broadcast[]> {
+    return [...this.broadcasts.values()]
+      .filter((b) => b.profileId === input.profileId)
+      .reverse()
+      .map((b) => {
+        const { profileId, tag, ...rest } = b;
+        void profileId;
+        void tag;
+        return rest;
+      });
+  }
+
+  async createWhatsAppBroadcast(input: {
+    profileId: string;
+    name: string;
+    template: { name: string };
+    tag: string | null;
+  }) {
+    const id = idFrom("mock_bc", input.profileId, input.name, String(this.broadcasts.size));
+    const recipients = [...this.contacts.values()].filter(
+      (c) =>
+        c.profileId === input.profileId &&
+        c.subscribed &&
+        (!input.tag || c.tags.includes(input.tag)),
+    ).length;
+    this.broadcasts.set(id, {
+      id,
+      profileId: input.profileId,
+      tag: input.tag,
+      name: input.name,
+      platform: "whatsapp",
+      status: "draft",
+      preview: input.template.name,
+      scheduledAt: null,
+      completedAt: null,
+      recipients,
+      sent: 0,
+      delivered: 0,
+      read: 0,
+      failed: 0,
+    });
+    return { id, recipients };
+  }
+
+  async startBroadcast(input: { id: string; at: string | null }) {
+    const b = this.broadcasts.get(input.id);
+    if (!b) return;
+    if (input.at) Object.assign(b, { status: "scheduled", scheduledAt: input.at });
+    else
+      Object.assign(b, {
+        status: "completed",
+        completedAt: new Date().toISOString(),
+        sent: b.recipients,
+        delivered: b.recipients,
+      });
+  }
+
+  async cancelBroadcast(input: { id: string }) {
+    const b = this.broadcasts.get(input.id);
+    if (b) b.status = "cancelled";
+  }
+
+  /** Contacts (T78a), kept in memory per profile. */
+  private contacts = new Map<string, Contact & { profileId: string }>();
+  private demoSeeded = new Set<string>();
+
+  /**
+   * A demo business (`pnpm demo:seed`, profile ids starting `demo_profile_`) starts with the
+   * people from its Inbox, so the Contacts page has something to show locally.
+   */
+  private seedDemoContacts(profileId: string) {
+    if (!profileId.startsWith(DEMO_PROFILE_PREFIX) || this.demoSeeded.has(profileId)) return;
+    this.demoSeeded.add(profileId);
+    DEMO_CONTACTS.forEach((c, i) => {
+      const id = `${profileId}_contact_${i + 1}`;
+      this.contacts.set(id, {
+        ...c,
+        id,
+        profileId,
+        email: null,
+        lastMessageAt: new Date(Date.now() - (i + 1) * 5 * 3_600_000).toISOString(),
+      });
+    });
+  }
+
+  async listContacts(input: { profileId: string; search?: string; tag?: string; skip?: number }) {
+    this.seedDemoContacts(input.profileId);
+    const all = [...this.contacts.values()]
+      .filter((c) => c.profileId === input.profileId)
+      .filter((c) => !input.tag || c.tags.includes(input.tag))
+      .filter((c) => !input.search || c.name.toLowerCase().includes(input.search.toLowerCase()))
+      .reverse();
+    const page = all.slice(input.skip ?? 0, (input.skip ?? 0) + 50).map((c) => {
+      const { profileId, ...rest } = c;
+      void profileId;
+      return rest;
+    });
+    return { contacts: page, total: all.length };
+  }
+
+  async createContact(input: {
+    profileId: string;
+    name: string;
+    email?: string;
+    tags: string[];
+    subscribed: boolean;
+    channel?: { accountId: string; platform: string; identifier: string };
+  }) {
+    const id = idFrom("mock_contact", input.profileId, input.name, String(this.contacts.size));
+    this.contacts.set(id, {
+      id,
+      profileId: input.profileId,
+      name: input.name,
+      email: input.email ?? null,
+      tags: input.tags,
+      subscribed: input.subscribed,
+      platform: input.channel?.platform ?? null,
+      identifier: input.channel?.identifier ?? null,
+      lastMessageAt: null,
+    });
+    return { id };
+  }
+
+  async importContacts(input: {
+    profileId: string;
+    accountId?: string;
+    rows: { name: string; identifier?: string; email?: string; tags: string[] }[];
+  }) {
+    for (const r of input.rows) {
+      await this.createContact({
+        profileId: input.profileId,
+        name: r.name,
+        email: r.email,
+        tags: r.tags,
+        subscribed: false,
+        ...(input.accountId && r.identifier
+          ? {
+              channel: {
+                accountId: input.accountId,
+                platform: "whatsapp",
+                identifier: r.identifier,
+              },
+            }
+          : {}),
+      });
+    }
+    return { created: input.rows.length, skipped: 0, errors: 0 };
+  }
+
+  async updateContact(input: { id: string; tags?: string[]; subscribed?: boolean }) {
+    const c = this.contacts.get(input.id);
+    if (!c) return;
+    if (input.tags) c.tags = input.tags;
+    if (input.subscribed !== undefined) c.subscribed = input.subscribed;
+  }
+
+  /** Sequences (T77c), kept in memory per profile. */
+  private sequences = new Map<string, Sequence & { profileId: string }>();
+
+  async listSequences(input: { profileId: string }): Promise<Sequence[]> {
+    return [...this.sequences.values()]
+      .filter((s) => s.profileId === input.profileId)
+      .map((s) => {
+        const { profileId, ...rest } = s;
+        void profileId;
+        return rest;
+      });
+  }
+
+  async createSequence(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    steps: SequenceStep[];
+  }) {
+    const id = idFrom("mock_seq", input.profileId, input.name, String(this.sequences.size));
+    this.sequences.set(id, {
+      id,
+      profileId: input.profileId,
+      name: input.name,
+      platform: input.platform,
+      accountId: input.accountId,
+      status: "draft",
+      steps: input.steps.length,
+      preview: input.steps[0]?.message?.text ?? input.steps[0]?.template?.name ?? "",
+      enrolled: 0,
+      completed: 0,
+      exited: 0,
+    });
+    return { id };
+  }
+
+  async setSequenceActive(input: { id: string; active: boolean }) {
+    const s = this.sequences.get(input.id);
+    if (s) s.status = input.active ? "active" : "paused";
+  }
+
+  async deleteSequence(input: { id: string }) {
+    this.sequences.delete(input.id);
+  }
+
+  async enrollInSequence(input: { id: string; contactIds: string[] }) {
+    const s = this.sequences.get(input.id);
+    if (s) s.enrolled += input.contactIds.length;
+    return { enrolled: input.contactIds.length, failed: 0 };
+  }
+
+  /** The demo has no contacts yet (T78): three for any tag. */
+  async listContactIdsByTag(input: { tag: string }) {
+    return [1, 2, 3].map((n) => idFrom("mock_contact", input.tag, String(n)));
+  }
+
+  /** Chat flows (T77b), kept in memory per profile. */
+  private flows = new Map<string, ChatFlow & { profileId: string; graph: WorkflowGraph }>();
+
+  async listWorkflows(input: { profileId: string }): Promise<ChatFlow[]> {
+    return [...this.flows.values()]
+      .filter((f) => f.profileId === input.profileId)
+      .map((f) => ({
+        id: f.id,
+        name: f.name,
+        description: f.description,
+        platform: f.platform,
+        status: f.status,
+        started: f.started,
+        completed: f.completed,
+      }));
+  }
+
+  async createWorkflow(input: {
+    profileId: string;
+    accountId: string;
+    platform: string;
+    name: string;
+    description?: string;
+    graph: WorkflowGraph;
+  }) {
+    const id = idFrom("mock_wf", input.profileId, input.name, String(this.flows.size));
+    this.flows.set(id, {
+      id,
+      profileId: input.profileId,
+      name: input.name,
+      description: input.description ?? "",
+      platform: input.platform,
+      status: "draft",
+      started: 0,
+      completed: 0,
+      graph: input.graph,
+    });
+    return { id };
+  }
+
+  async setWorkflowActive(input: { id: string; active: boolean }) {
+    const f = this.flows.get(input.id);
+    if (f) f.status = input.active ? "active" : "paused";
+  }
+
+  async deleteWorkflow(input: { id: string }) {
+    this.flows.delete(input.id);
+  }
+
+  /** Comment-to-DM automations (T77a), kept in memory per profile. */
+  private automations = new Map<string, CommentAutomation & { profileId: string }>();
+
+  async listCommentAutomations(input: { profileId: string }) {
+    return [...this.automations.values()]
+      .filter((a) => a.profileId === input.profileId)
+      .map((a): CommentAutomation => {
+        const { profileId, ...rest } = a;
+        void profileId;
+        return rest;
+      });
+  }
+
+  async createCommentAutomation(input: {
+    profileId: string;
+    automation: CommentAutomationInput;
+    isActive: boolean;
+  }) {
+    const id = idFrom(
+      "mock_ca",
+      input.profileId,
+      input.automation.name,
+      String(this.automations.size),
+    );
+    this.automations.set(id, {
+      id,
+      profileId: input.profileId,
+      platform: "instagram",
+      postTitle: null,
+      dmMessage: input.automation.dmMessage ?? null,
+      button: input.automation.button ?? null,
+      commentReply: input.automation.commentReply ?? null,
+      name: input.automation.name,
+      accountId: input.automation.accountId,
+      keywords: input.automation.keywords,
+      matchMode: input.automation.matchMode,
+      once: input.automation.once,
+      isActive: input.isActive,
+      stats: { triggered: 0, dmsSent: 0, dmsFailed: 0, linkClicks: 0 },
+    });
+    return { id };
+  }
+
+  async updateCommentAutomation(input: {
+    id: string;
+    automation?: CommentAutomationInput;
+    isActive?: boolean;
+  }) {
+    const a = this.automations.get(input.id);
+    if (!a)
+      throw new SocialProviderError("Zernio updateCommentAutomation failed (404)", {
+        status: 404,
+        ambiguous: false,
+      });
+    if (input.automation) {
+      Object.assign(a, {
+        ...input.automation,
+        dmMessage: input.automation.dmMessage ?? null,
+        button: input.automation.button ?? null,
+        commentReply: input.automation.commentReply ?? null,
+      });
+    }
+    if (input.isActive !== undefined) a.isActive = input.isActive;
+  }
+
+  async deleteCommentAutomation(input: { id: string }) {
+    this.automations.delete(input.id);
+  }
+
+  /** No comments reach the mock, so nothing has been answered yet. */
+  async listCommentAutomationLogs(): Promise<{
+    entries: CommentAutomationLogEntry[];
+    misses: number;
+  }> {
+    return { entries: [], misses: 0 };
+  }
+
+  /** Posting times per profile (T75); the mock works out the next slots in UTC. */
+  private queues = new Map<
+    string,
+    { timezone: string; slots: { dayOfWeek: number; time: string }[] }
+  >();
+
+  async getQueue(input: { profileId: string }): Promise<PostingQueue | null> {
+    const q = this.queues.get(input.profileId);
+    return q ? { ...q, nextSlots: mockNextSlots(q.slots, new Date()) } : null;
+  }
+
+  async saveQueue(input: {
+    profileId: string;
+    timezone: string;
+    slots: { dayOfWeek: number; time: string }[];
+  }): Promise<PostingQueue> {
+    this.queues.set(input.profileId, { timezone: input.timezone, slots: input.slots });
+    return {
+      timezone: input.timezone,
+      slots: input.slots,
+      nextSlots: mockNextSlots(input.slots, new Date()),
+    };
   }
 
   /** Templates per WhatsApp account; two approved ones to start with (local demos). */
@@ -229,9 +1554,40 @@ export class MockSocialProvider implements SocialProvider {
     return { publicUrl: `${this.appUrl}/api/mock-media/${name}` };
   }
 
+  /** Steady demo numbers for Google Business Profile (T76). */
+  async getGoogleBusinessPerformance(input: {
+    accountId: string;
+    fromDate: string;
+    toDate: string;
+  }) {
+    const days = Math.max(
+      1,
+      Math.round((Date.parse(input.toDate) - Date.parse(input.fromDate)) / 86_400_000),
+    );
+    return {
+      BUSINESS_IMPRESSIONS_MOBILE_MAPS: 14 * days,
+      BUSINESS_IMPRESSIONS_MOBILE_SEARCH: 9 * days,
+      BUSINESS_IMPRESSIONS_DESKTOP_SEARCH: 4 * days,
+      CALL_CLICKS: Math.round(days / 2),
+      BUSINESS_DIRECTION_REQUESTS: days,
+      WEBSITE_CLICKS: Math.round(days * 0.7),
+    };
+  }
+
   async deletePost(input: { postId: string }) {
     const post = this.posts.get(input.postId);
     if (post) post.status = "deleted";
+  }
+
+  /** Records which platforms a post was removed from (T75c). */
+  readonly unpublished: { postId: string; platform: string; accountId?: string }[] = [];
+
+  async unpublishPost(input: { postId: string; platform: string; accountId?: string }) {
+    this.unpublished.push({
+      postId: input.postId,
+      platform: input.platform,
+      accountId: input.accountId,
+    });
   }
 
   async replyToComment(input: {
@@ -463,4 +1819,20 @@ export function resolveSocialProviderMode(
     throw new Error("SOCIAL_PROVIDER_MODE=mock is not allowed in production");
   }
   return mode;
+}
+
+/** The next 5 slot times after `now` (UTC), for the mock queue. */
+export function mockNextSlots(slots: { dayOfWeek: number; time: string }[], now: Date): string[] {
+  const out: string[] = [];
+  const sorted = [...slots].sort((a, b) => a.time.localeCompare(b.time));
+  for (let d = 0; d < 14 && out.length < 5; d++) {
+    const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + d));
+    for (const s of sorted) {
+      if (s.dayOfWeek !== day.getUTCDay() || out.length >= 5) continue;
+      const [h, m] = s.time.split(":").map(Number);
+      const at = new Date(day.getTime() + (h * 60 + m) * 60_000);
+      if (at > now) out.push(at.toISOString());
+    }
+  }
+  return out;
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { z } from "zod";
+import { planAllowsAutoReply } from "@/features/billing";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -19,6 +20,7 @@ import {
   rejectDraft,
   REPLY_MAX,
   undoApproval,
+  writeOwnerReply,
   writeTemplateReply,
   type DecisionResult,
 } from "./decisions";
@@ -44,6 +46,12 @@ export async function updateAutonomyMode(
   const { category, mode } = parsed.data;
   const tenant = await getTenantFor("brand.settings");
   if (!tenant) return { error: NOT_ALLOWED };
+  // Solo approves every reply (Pricing Bible). Off until billing ships.
+  if (mode === "auto" && !(await planAllowsAutoReply(getServiceClient(), tenant.id))) {
+    return {
+      error: "Replying on its own comes with Business. On Solo, you approve every reply.",
+    };
+  }
 
   // Through RLS: the owner may update `mode` on their own tenant's rows only.
   const supabase = await createServerSupabase();
@@ -69,7 +77,8 @@ export async function updateAutonomyMode(
       details: { category, from: before?.mode ?? null, to: mode },
     });
   }
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
+  revalidatePath("/teach");
   return { saved: true };
 }
 
@@ -119,6 +128,86 @@ export async function decideDraft(
   after(() => sendApprovedReplyAfterUndoWindow(db, itemId));
   // No revalidate here: the card shows the Sent row with Undo first, then refreshes itself.
   return { approved: { at: new Date().toISOString() } };
+}
+
+export interface SendAllState {
+  error?: string;
+  sent?: number;
+  /** Already handled elsewhere (sent, edited or answered) since the page loaded. */
+  skipped?: number;
+}
+
+const pairSchema = z
+  .array(z.tuple([z.uuid(), z.uuid()]))
+  .min(1)
+  .max(50);
+
+/**
+ * Today's "Send all" (T71): approves every reply the owner was shown, as is, after the owner
+ * confirmed in place (design.md §4 bulk actions). Each goes through the same approval as a
+ * single Send, so policy and the undo window still apply before it leaves.
+ */
+export async function sendAllReadyAction(
+  _prev: SendAllState,
+  formData: FormData,
+): Promise<SendAllState> {
+  const parsed = pairSchema.safeParse(formData.getAll("pair").map((v) => String(v).split(":")));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const db = getServiceClient();
+  let sent = 0;
+  let skipped = 0;
+  const approved: string[] = [];
+  for (const [itemId, draftId] of parsed.data) {
+    const result = await approveDraft(db, {
+      tenantId: tenant.id,
+      userId: tenant.userId,
+      itemId,
+      draftId,
+      editedBody: null,
+    });
+    if (result.ok) {
+      sent += 1;
+      approved.push(itemId);
+    } else skipped += 1;
+  }
+  // Each waits out the undo window and claims only its own item, so they run side by side.
+  after(() => Promise.all(approved.map((itemId) => sendApprovedReplyAfterUndoWindow(db, itemId))));
+  revalidatePath("/today");
+  revalidatePath("/inbox", "layout");
+  return { sent, skipped };
+}
+
+export interface OwnerReplyState {
+  error?: string;
+  sent?: { at: string };
+}
+
+/**
+ * T72: on a message Waggle handed to the owner, "Your reply" sends the owner's own words from the
+ * Inbox (same send step, policy and undo window as an approval; `writeOwnerReply`).
+ */
+export async function ownerReplyAction(
+  _prev: OwnerReplyState,
+  formData: FormData,
+): Promise<OwnerReplyState> {
+  const parsed = z
+    .object({ itemId: z.uuid(), body: z.string() })
+    .safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { error: "Something went wrong. Please reload." };
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const db = getServiceClient();
+  const result = await writeOwnerReply(db, {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    itemId: parsed.data.itemId,
+    body: parsed.data.body,
+  });
+  if (!result.ok) return { error: DECISION_ERRORS[result.error] };
+  after(() => sendApprovedReplyAfterUndoWindow(db, parsed.data.itemId));
+  return { sent: { at: new Date().toISOString() } };
 }
 
 /** Undo within the window: the reply goes back to waiting (design.md §4). */
@@ -292,7 +381,8 @@ export async function setAutoHideSpam(
     actor: tenant.userId,
     details: {},
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
+  revalidatePath("/teach");
   return { saved: true };
 }
 
@@ -321,7 +411,8 @@ export async function setRepliesPaused(
     action: paused ? "replies_paused" : "replies_resumed",
     actor: tenant.userId,
   });
-  revalidatePath("/settings");
+  revalidatePath("/settings", "layout");
+  revalidatePath("/teach");
   revalidatePath("/inbox");
   return {};
 }

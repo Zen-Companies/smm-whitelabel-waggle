@@ -212,7 +212,7 @@ async function main() {
     `Analytics for ${tenant.name}: ${rows.length} posts (${recent.length} made in Waggle), ` +
       `${(comments ?? []).length} comments linked, dashboards for ${platforms.join(" and ")}.`,
   );
-  console.log("Open http://localhost:3000/analytics");
+  console.log("Open http://localhost:3000/insights");
 }
 
 main().catch((e: unknown) => {

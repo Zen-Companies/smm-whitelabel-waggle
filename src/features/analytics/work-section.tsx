@@ -137,8 +137,8 @@ export function WorkSection({ work, period }: { work: WorkSummary; period: numbe
             <Rows rows={work.neededYou} />
           )}
           {notCovered > 0 && (
-            <Link href="/knowledge-base" className="text-sm font-medium">
-              Add the missing answers to Business info
+            <Link href="/teach#questions" className="text-sm font-medium">
+              Write the {notCovered === 1 ? "missing answer" : `${notCovered} missing answers`}
             </Link>
           )}
         </Card>
