@@ -73,8 +73,8 @@ it("buildOpenApi: one POST per tool, input as the body, no $schema noise", () =>
   expect(spec.openapi).toBe("3.1.0");
   expect(spec.servers).toEqual([{ url: "https://waggle.example/api/mcp" }]);
   expect(Object.keys(spec.paths)).toHaveLength(TOOLS.length);
-  const op = (spec.paths["/tools/create_post"] as { post: Record<string, unknown> }).post;
-  expect(op.operationId).toBe("create_post");
+  const op = (spec.paths["/tools/preview_post"] as { post: Record<string, unknown> }).post;
+  expect(op.operationId).toBe("preview_post");
   expect(JSON.stringify(op)).not.toContain("$schema");
   expect(JSON.stringify(op)).toContain("account_ids");
 });

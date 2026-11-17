@@ -22,6 +22,23 @@ export interface PostValidation {
   warnings: { platform: string; message: string }[];
 }
 
+/**
+ * Zernio's check of a media link (`POST /v1/tools/validate/media`): reachable, really an image,
+ * video or PDF (from its bytes), its size, and each platform's size limit. Private and localhost
+ * links are refused by Zernio (SSRF). A Google Drive share link is checked against the file.
+ */
+export interface MediaCheck {
+  valid: boolean;
+  /** When not valid: MEDIA_UNDECODABLE, MEDIA_URL_UNREACHABLE or MEDIA_URL_NOT_ALLOWED. */
+  code: string | null;
+  error: string | null;
+  type: "image" | "video" | "document" | null;
+  format: string | null;
+  size: number | null;
+  /** Per platform: whether the file is within its upload size limit. */
+  platformLimits: Record<string, { withinLimit: boolean; limitFormatted: string }>;
+}
+
 export interface CreatePostInput {
   content: string;
   /** Public HTTPS URLs (Zernio media presign flow, T14). */
@@ -1065,6 +1082,8 @@ export interface SocialProvider {
   validatePost(
     input: Omit<CreatePostInput, "publishAt" | "idempotencyKey"> & CallOptions,
   ): Promise<PostValidation>;
+  /** Checks one media link before it's used in a post (`POST /v1/tools/validate/media`). */
+  validateMedia(input: { url: string } & CallOptions): Promise<MediaCheck>;
   /**
    * Uploads one image for a post: `POST /v1/media/presign` then a PUT of the bytes to the
    * returned `uploadUrl`. Returns the public URL to pass in `CreatePostInput.mediaUrls`.

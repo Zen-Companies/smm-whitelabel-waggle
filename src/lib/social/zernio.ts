@@ -21,6 +21,7 @@ import {
   type ProviderCommentReply,
   type ProviderMessage,
   type ProviderPostStatus,
+  type MediaCheck,
   type PostValidation,
   type PostingQueue,
   type AdAccount,
@@ -103,6 +104,20 @@ const validationSchema = z.object({
     .optional(),
   warnings: z
     .array(z.object({ platform: z.string().optional(), warning: z.string().optional() }))
+    .optional(),
+});
+const mediaCheckSchema = z.object({
+  valid: z.boolean().optional(),
+  code: z.string().optional(),
+  error: z.string().optional(),
+  type: z.string().optional(),
+  format: z.string().optional(),
+  size: z.number().nullable().optional(),
+  platformLimits: z
+    .record(
+      z.string(),
+      z.object({ withinLimit: z.boolean().optional(), limitFormatted: z.string().optional() }),
+    )
     .optional(),
 });
 const creatorInfoSchema = z.object({
@@ -791,6 +806,31 @@ export class ZernioSocialProvider implements SocialProvider {
           platform: w.platform ?? "",
           message: w.warning ?? "",
         })),
+      };
+    });
+  }
+
+  async validateMedia(input: { url: string; signal?: AbortSignal }): Promise<MediaCheck> {
+    return call("validateMedia", async (withFetch) => {
+      const { data } = await this.zernio.validate.validateMedia(
+        withFetch({ signal: input.signal, body: { url: input.url } }),
+      );
+      const m = parse(mediaCheckSchema, data, "validateMedia");
+      const type =
+        m.type === "image" || m.type === "video" || m.type === "document" ? m.type : null;
+      return {
+        valid: m.valid === true,
+        code: m.code ?? null,
+        error: m.error ?? null,
+        type,
+        format: m.format ?? null,
+        size: m.size ?? null,
+        platformLimits: Object.fromEntries(
+          Object.entries(m.platformLimits ?? {}).map(([k, v]) => [
+            k,
+            { withinLimit: v.withinLimit !== false, limitFormatted: v.limitFormatted ?? "" },
+          ]),
+        ),
       };
     });
   }

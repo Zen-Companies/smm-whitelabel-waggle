@@ -207,23 +207,293 @@ describe("business info, posts", () => {
     expect(all.entries).toHaveLength(2);
   });
 
-  it("create_post only on this brand's accounts; cancel a scheduled one", async () => {
+  it("posting: preview first, then the owner's yes; only this brand's accounts", async () => {
     expect(
-      await call(claude, "create_post", { content: "Hi", account_ids: [florist.accountId] }),
+      await call(claude, "preview_post", { content: "Hi", account_ids: [florist.accountId] }),
+    ).toEqual({ error: "invalid_input" });
+    expect(
+      await call(claude, "preview_post", {
+        content: "Hi",
+        account_ids: [cafe.accountId],
+        publish_at: "today 11:30am",
+      }),
     ).toEqual({ error: "invalid_input" });
     const at = new Date(Date.now() + 3 * 60 * 60_000).toISOString();
-    const made = (await call(claude, "create_post", {
+    const preview = (await call(claude, "preview_post", {
       content: "Ube pandesal this Saturday",
       account_ids: [cafe.accountId],
+      media: [{ url: "https://cdn.example.com/pandesal.jpg" }],
       publish_at: at,
+    })) as {
+      confirmation: string;
+      preview: { media: { type: string }[]; publish: { mode: string } };
+    };
+    expect(preview.preview.media[0].type).toBe("image");
+    expect(preview.preview.publish.mode).toBe("at");
+    // Nothing is posted by a preview.
+    const before = (await call(claude, "list_posts", { show: "upcoming" })) as {
+      posts: unknown[];
+    };
+    const made = (await call(claude, "create_post", {
+      confirmation: preview.confirmation,
     })) as { post_id: string; outcome: string };
     expect(["scheduled", "waiting"]).toContain(made.outcome);
     const listed = (await call(claude, "list_posts", { show: "upcoming" })) as {
-      posts: { post_id: string }[];
+      posts: { post_id: string; content: string }[];
     };
-    expect(listed.posts.map((p) => p.post_id)).toContain(made.post_id);
+    expect(listed.posts).toHaveLength(before.posts.length + 1);
+    expect(listed.posts.find((p) => p.post_id === made.post_id)?.content).toBe(
+      "Ube pandesal this Saturday",
+    );
+    // A confirmation posts once.
+    expect(await call(claude, "create_post", { confirmation: preview.confirmation })).toEqual({
+      error: "already_decided",
+    });
     expect(await call(claude, "cancel_post", { post_id: made.post_id })).toEqual({
       cancelled: true,
     });
+  });
+
+  it("a confirmation only works for the assistant that asked, and not after 30 minutes", async () => {
+    const preview = (await call(claude, "preview_post", {
+      content: "Fresh ensaymada",
+      account_ids: [cafe.accountId],
+      publish_at: "queue",
+    })) as { confirmation: string };
+    const otherAssistant = { ...claude, clientId: "client_chatgpt", clientName: "ChatGPT" };
+    expect(
+      await call(otherAssistant, "create_post", { confirmation: preview.confirmation }),
+    ).toEqual({ error: "invalid_input" });
+    await db
+      .from("post_previews")
+      .update({ expires_at: new Date(Date.now() - 1000).toISOString() })
+      .eq("id", preview.confirmation);
+    expect(await call(claude, "create_post", { confirmation: preview.confirmation })).toEqual({
+      error: "invalid_input",
+    });
+  });
+
+  it("a media link that isn't a file is refused before anything is saved", async () => {
+    expect(
+      await call(claude, "preview_post", {
+        content: "Our new menu",
+        account_ids: [cafe.accountId],
+        media: [{ url: "https://dropbox.example/webpage/menu.jpg" }],
+      }),
+    ).toEqual({ error: "invalid_input" });
+    expect(
+      await call(claude, "preview_post", {
+        content: "Our new menu",
+        account_ids: [cafe.accountId],
+        media: [{ url: "http://cdn.example.com/menu.jpg" }],
+      }),
+    ).toEqual({ error: "invalid_input" });
+  });
+});
+
+describe("posting extras (17 Nov): options, photos added in Waggle, analytics platforms", () => {
+  it("per-platform options are stored with the preview and checked against the accounts", async () => {
+    expect(
+      await call(claude, "preview_post", {
+        content: "Weekend special",
+        account_ids: [cafe.accountId],
+        options: [{ platform: "instagram", post_type: "reel" }],
+      }),
+    ).toEqual({ error: "invalid_input" });
+    const p = (await call(claude, "preview_post", {
+      content: "Weekend special",
+      account_ids: [cafe.accountId],
+      options: [{ platform: "facebook", post_type: "reel", first_comment: "Menu in bio" }],
+      publish_at: "queue",
+    })) as { confirmation: string; preview: { options: Record<string, unknown> } };
+    expect(p.preview.options).toEqual({ facebook: { as: "reel", firstComment: "Menu in bio" } });
+    const { data } = await db
+      .from("post_previews")
+      .select("options")
+      .eq("id", p.confirmation)
+      .single();
+    expect(data!.options).toEqual({ facebook: { as: "reel", firstComment: "Menu in bio" } });
+  });
+
+  it("an upload link: empty until the owner adds files, then its files go in the preview", async () => {
+    const link = (await call(claude, "create_upload_link", {})) as {
+      upload_id: string;
+      upload_url: string;
+    };
+    expect(link.upload_url.endsWith(`/add-photos/${link.upload_id}`)).toBe(true);
+    expect(
+      await call(claude, "preview_post", {
+        content: "From the oven",
+        account_ids: [cafe.accountId],
+        upload_id: link.upload_id,
+      }),
+    ).toEqual({ error: "invalid_input" });
+    // What the page records after each browser upload.
+    await db
+      .from("media_uploads")
+      .update({
+        files: [
+          {
+            url: "https://media.zernio.com/temp/oven.jpg",
+            type: "image",
+            name: "oven.jpg",
+            size: 1000,
+          },
+        ],
+      })
+      .eq("id", link.upload_id);
+    const p = (await call(claude, "preview_post", {
+      content: "From the oven",
+      account_ids: [cafe.accountId],
+      upload_id: link.upload_id,
+    })) as { preview: { media: { url: string; type: string }[] } };
+    expect(p.preview.media).toEqual([
+      expect.objectContaining({ url: "https://media.zernio.com/temp/oven.jpg", type: "image" }),
+    ]);
+    // Another assistant can't use it.
+    expect(
+      await call({ ...claude, clientId: "client_grok" }, "preview_post", {
+        content: "From the oven",
+        account_ids: [cafe.accountId],
+        upload_id: link.upload_id,
+      }),
+    ).toEqual({ error: "invalid_input" });
+  });
+
+  it("analytics take any connected platform, and say which when it isn't one", async () => {
+    expect(await call(claude, "get_analytics", { platform: "facebook" })).toHaveProperty("section");
+    expect(await call(claude, "get_analytics", { platform: "tiktok" })).toEqual({
+      error: "invalid_input",
+    });
+    expect(await call(claude, "get_post_performance", { platform: "tiktok" })).toEqual({
+      error: "invalid_input",
+    });
+  });
+});
+
+describe("Teach Waggle answers and leads (17 Nov)", () => {
+  it("add an answer, refuse the same question twice, change it", async () => {
+    const added = (await call(claude, "add_answer", {
+      question: "Do you deliver?",
+      answer: "Yes, within 5 km, free over $20.",
+    })) as { entry_id: string };
+    expect(added.entry_id).toBeTruthy();
+    expect(
+      await call(claude, "add_answer", { question: "do you deliver?", answer: "Maybe" }),
+    ).toEqual({ error: "invalid_input" });
+    expect(
+      await call(claude, "update_answer", {
+        entry_id: added.entry_id,
+        question: "Do you deliver?",
+        answer: "Yes, within 8 km, free over $25.",
+      }),
+    ).toEqual({ entry_id: added.entry_id, title: "Do you deliver?" });
+    const { data } = await db
+      .from("kb_entries")
+      .select("content, embedding")
+      .eq("id", added.entry_id)
+      .single();
+    // Saved now; the jobs route embeds it later (no AI call from the assistant's tool).
+    expect(data).toEqual({ content: "Yes, within 8 km, free over $25.", embedding: null });
+    const { data: audit } = await db
+      .from("audit_log")
+      .select("action, details")
+      .eq("tenant_id", cafe.tenantId)
+      .in("action", ["kb_entry_created", "kb_entry_updated"]);
+    expect(audit!.length).toBeGreaterThanOrEqual(2);
+    expect(audit!.every((a) => !!(a.details as { via?: unknown }).via)).toBe(true);
+    expect(
+      await call(claude, "update_answer", {
+        entry_id: randomUUID(),
+        question: "Parking?",
+        answer: "Behind the shop.",
+      }),
+    ).toEqual({ error: "not_found" });
+  });
+
+  it("list leads by stage and move one, this brand's only", async () => {
+    const itemId = await item(cafe, "drafted", "lead", "Can I book a table for 8 on Friday?");
+    const { data: lead } = await db
+      .from("leads")
+      .insert({
+        tenant_id: cafe.tenantId,
+        item_id: itemId,
+        name: "Ana",
+        request: "Table for 8, Friday",
+      })
+      .select("id")
+      .single();
+    const listed = (await call(claude, "list_leads", {})) as {
+      leads: { lead_id: string; stage: string; customer_wants: string | null }[];
+    };
+    expect(listed.leads.find((l) => l.lead_id === lead!.id)).toMatchObject({
+      customer_wants: "Table for 8, Friday",
+    });
+    expect(await call(claude, "move_lead", { lead_id: lead!.id, stage: "booked" })).toEqual({
+      lead_id: lead!.id,
+      stage: "booked",
+    });
+    const booked = (await call(claude, "list_leads", { stage: "booked" })) as {
+      leads: { lead_id: string }[];
+    };
+    expect(booked.leads.map((l) => l.lead_id)).toContain(lead!.id);
+    expect(await call(claude, "move_lead", { lead_id: randomUUID(), stage: "done" })).toEqual({
+      error: "not_found",
+    });
+  });
+});
+
+describe("Add photos: only links Waggle handed out are saved (security review)", () => {
+  it("issued, once, capped", async () => {
+    const link = (await call(claude, "create_upload_link", {})) as { upload_id: string };
+    const file = (url: string) => ({ url, type: "image", name: "a.jpg", size: 1 });
+    const ours = "https://media.zernio.com/temp/ours.jpg";
+    // Not issued for this upload: refused (e.g. another tenant's media link).
+    expect(
+      (
+        await db.rpc("media_upload_add_file", {
+          p_id: link.upload_id,
+          p_file: file(ours),
+          p_max: 10,
+        })
+      ).data,
+    ).toBe(false);
+    expect(
+      (await db.rpc("media_upload_issue", { p_id: link.upload_id, p_url: ours, p_max: 2 })).data,
+    ).toBe(true);
+    expect(
+      (
+        await db.rpc("media_upload_add_file", {
+          p_id: link.upload_id,
+          p_file: file(ours),
+          p_max: 10,
+        })
+      ).data,
+    ).toBe(true);
+    // Twice: no.
+    expect(
+      (
+        await db.rpc("media_upload_add_file", {
+          p_id: link.upload_id,
+          p_file: file(ours),
+          p_max: 10,
+        })
+      ).data,
+    ).toBe(false);
+    // The cap on links handed out.
+    await db.rpc("media_upload_issue", {
+      p_id: link.upload_id,
+      p_url: "https://media.zernio.com/temp/b.jpg",
+      p_max: 2,
+    });
+    expect(
+      (
+        await db.rpc("media_upload_issue", {
+          p_id: link.upload_id,
+          p_url: "https://media.zernio.com/temp/c.jpg",
+          p_max: 2,
+        })
+      ).data,
+    ).toBe(false);
   });
 });

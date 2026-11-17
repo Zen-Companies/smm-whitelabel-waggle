@@ -7,9 +7,10 @@ import {
   loadPostDetail,
   loadPostMetrics,
   loadWork,
+  type AnalyticsPlatform,
 } from "@/features/analytics";
 import { searchKbEntries } from "@/features/knowledge-base";
-import { cancelScheduledPost, createPost, POST_TEXT_MAX } from "@/features/publishing";
+import { cancelScheduledPost } from "@/features/publishing";
 import { resolveBrand, ToolError, viaOf } from "../context";
 import {
   brandId,
@@ -23,14 +24,32 @@ import {
   PUBLIC_ACTION,
   READ,
 } from "./define";
-import { platformLabel } from "@/lib/social/platforms";
 
 // Business info, posts and analytics. Analytics read the copies the sync job keeps (no Zernio
-// call); creating or cancelling a post goes through publishing like the compose card.
+// call); cancelling a post goes through publishing like the app. Posting is posting.ts.
 
 const DAY_MS = 86_400_000;
 const period = z.union([z.literal(7), z.literal(30), z.literal(90)]).default(30);
-const platform = z.enum(["all", "instagram", "facebook"]).default("all");
+const platform = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .default("all")
+  .describe(
+    '"all", or one platform the brand has connected (as in list_brands), e.g. instagram, facebook, tiktok, youtube, linkedin.',
+  );
+
+/** The analytics platform asked for, checked against what the brand has connected. */
+function checkPlatform(asked: string, connected: string[]): AnalyticsPlatform {
+  if (asked === "all") return "all";
+  if (!connected.includes(asked)) {
+    throw new ToolError(
+      "invalid_input",
+      `platform must be "all" or one of this brand's connected platforms: ${connected.join(", ") || "none connected"}.`,
+    );
+  }
+  return asked as AnalyticsPlatform;
+}
 
 export const searchKnowledge = defineTool({
   name: "search_knowledge",
@@ -141,68 +160,6 @@ export const listPosts = defineTool({
   },
 });
 
-export const createPostTool = defineTool({
-  name: "create_post",
-  title: "Publish or schedule a post",
-  description:
-    "Publishes a text post now, or schedules it (at least 5 minutes ahead), on one or more of the brand's connected accounts (account_id from list_brands). Only post wording the user approved; never invent prices, offers or promises. Images aren't supported here yet: the owner can add them in Waggle.",
-  access: "act",
-  ability: "posts.write",
-  annotations: PUBLIC_ACTION,
-  wraps: "publishing.createPost",
-  input: z.object({
-    brand_id: brandId,
-    content: z.string().trim().min(1).max(POST_TEXT_MAX),
-    account_ids: z.array(z.uuid()).min(1).max(10),
-    publish_at: z
-      .union([z.literal("now"), z.iso.datetime({ offset: true })])
-      .default("now")
-      .describe('"now", or an ISO date-time with its timezone offset.'),
-  }),
-  output: z.object({
-    post_id: z.uuid(),
-    outcome: z.enum(["published", "scheduled", "waiting", "failed"]),
-    problem: z.string().nullable(),
-  }),
-  async run(ctx, input) {
-    const tenantId = await resolveBrand(ctx, input.brand_id);
-    const r = await createPost(
-      { db: ctx.db, social: ctx.social },
-      {
-        tenantId,
-        userId: ctx.principal.userId,
-        content: input.content,
-        accountIds: input.account_ids,
-        scheduledFor: input.publish_at === "now" ? null : new Date(input.publish_at),
-        via: viaOf(ctx.principal),
-        now: ctx.now?.(),
-      },
-    );
-    if (!r.ok) {
-      if (r.error === "not_accepted") {
-        throw new ToolError(
-          "invalid_input",
-          r.problems.map((p) => `${platformLabel(p.platform)}: ${p.message}`).join(" "),
-        );
-      }
-      const messages = {
-        accounts_not_owned: "Use account_id values of this brand from list_brands.",
-        account_disconnected:
-          "One of these accounts is disconnected; the owner reconnects it in Waggle.",
-        too_soon: "Schedule at least 5 minutes ahead, or use publish_at: now.",
-        save_failed: "The post couldn't be saved. Try again.",
-        consent_required:
-          "TikTok needs the owner's confirmation on every post; the owner posts to TikTok in Waggle.",
-      } as const;
-      throw new ToolError(
-        r.error === "save_failed" ? "unavailable" : "invalid_input",
-        messages[r.error],
-      );
-    }
-    return { post_id: r.postId, outcome: r.outcome, problem: r.error ?? null };
-  },
-});
-
 export const cancelPostTool = defineTool({
   name: "cancel_post",
   title: "Cancel a scheduled post",
@@ -233,7 +190,7 @@ export const getAnalytics = defineTool({
   name: "get_analytics",
   title: "Get analytics",
   description:
-    "A brand's numbers from Instagram and Facebook, copied hourly (followers daily). overview: reach, engagement, followers and daily series vs the previous period; audience: followers over time, best times, age/city breakdowns; waggle_work: messages Waggle answered, how fast, leads. Raw numbers only: summarise them yourself.",
+    "A brand's numbers from every connected platform (Instagram, Facebook, TikTok, YouTube, LinkedIn and the rest Waggle syncs), copied hourly (followers daily). overview: reach, engagement, followers and daily series vs the previous period; audience: followers over time, best times, age/city breakdowns; waggle_work: messages Waggle answered, how fast, leads. Raw numbers only: summarise them yourself.",
   access: "read",
   annotations: READ,
   wraps: "analytics.loadOverview, analytics.loadAudience, analytics.loadWork",
@@ -254,12 +211,14 @@ export const getAnalytics = defineTool({
     const tenantId = await resolveBrand(ctx, input.brand_id);
     const now = ctx.now?.() ?? new Date();
     const accounts = await loadAccounts(ctx.db, tenantId);
+    const connected = [...new Set(accounts.map((a) => a.platform))];
+    const chosen = checkPlatform(input.platform, connected);
     const data =
       input.section === "overview"
         ? await loadOverview(ctx.db, tenantId, {
             period: input.period,
-            platform: input.platform,
-            platforms: [...new Set(accounts.map((a) => a.platform))],
+            platform: chosen,
+            platforms: connected,
             now,
           })
         : input.section === "audience"
@@ -297,7 +256,7 @@ export const getPostPerformance = defineTool({
   name: "get_post_performance",
   title: "Get post performance",
   description:
-    "How individual posts did (lifetime totals), including posts made directly on Instagram/Facebook. Without post_metric_id: posts published in the period, sorted. With post_metric_id: one post plus its reach over the first days.",
+    "How individual posts did (lifetime totals), including posts made directly on the platforms. Without post_metric_id: posts published in the period, sorted. With post_metric_id: one post plus its reach over the first days.",
   access: "read",
   annotations: READ,
   wraps: "analytics.loadPostMetrics, analytics.loadPostDetail",
@@ -343,10 +302,11 @@ export const getPostPerformance = defineTool({
       };
     }
     const to = ctx.now?.() ?? new Date();
+    const connected = [...new Set((await loadAccounts(ctx.db, tenantId)).map((a) => a.platform))];
     const rows = await loadPostMetrics(ctx.db, tenantId, {
       from: new Date(to.getTime() - input.period * DAY_MS),
       to,
-      platform: input.platform,
+      platform: checkPlatform(input.platform, connected),
     });
     const sorted = [...rows].sort((a, b) =>
       input.sort === "published_at"
@@ -363,7 +323,6 @@ export const getPostPerformance = defineTool({
 export const CONTENT_TOOLS = [
   searchKnowledge,
   listPosts,
-  createPostTool,
   cancelPostTool,
   getAnalytics,
   getPostPerformance,

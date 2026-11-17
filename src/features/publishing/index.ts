@@ -11,3 +11,6 @@ export { POST_MAX_ATTEMPTS, postErrorMessage, publishPost, publishQueuedPosts } 
 export type { PublishResult } from "./publish";
 export { QueueView } from "./queue-view";
 export { PostsHeader } from "./posts-header";
+export { listBoardsFor } from "./pinterest";
+export { parsePostOptions } from "./post-options";
+export type { PostOptions } from "./post-options";

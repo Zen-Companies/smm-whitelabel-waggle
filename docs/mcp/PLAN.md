@@ -388,3 +388,83 @@ Q6 roles are `admin`, `developer`, `support`, `viewer` (Stripe-style), matrix in
   and `user_id_by_email(text)` (auth.users isn't in the Data API); `lib/supabase/users.ts`.
 - Tests: `docs.test.ts`, `admin-filters.test.ts`, `staff/pages.test.ts`,
   `tests/integration/staff-pages.test.ts`, `staff_pages.test.sql`.
+
+## Posting update (2026-11-17)
+
+Why: an owner's assistant (Claude) guessed field names (`text`, `status`, a `note` on
+resolve_item, account names for ids, "today 11:30am"), published wording the owner never saw, and
+planned posts without looking at analytics. Decided by Febron: preview then confirm; media as
+links now, an upload page for photos dropped into a chat next (design-first).
+
+- **Two-step posting.** `preview_post` checks a post (accounts of this brand and connected, no
+  TikTok, the time, each media link, Zernio's dry run) and stores exactly what would go out in
+  `post_previews` (migration `20261118100000`, server-only, refused to OAuth tokens, purged with
+  the brand by a trigger). Its id is a one-time confirmation code, 30 minutes, tied to the brand,
+  the user and the assistant. `create_post` now takes only `confirmation`: it claims the preview
+  atomically and publishes that stored post, so wording, media, accounts and time can't change
+  after the owner saw them, and a repeated call can't post twice.
+- **Photos and videos.** `media: [{ url, alt_text }]`, up to 10: a direct https link to the file
+  or a Google Drive link shared as "Anyone with the link" (Zernio copies it into its storage,
+  docs.zernio.com/guides/media-uploads). Each link is checked with Zernio's
+  `POST /v1/tools/validate/media` (`SocialProvider.validateMedia`): reachable, really a photo or
+  video, within each chosen platform's size; private and localhost links are refused by Zernio.
+  Nothing is downloaded by Waggle.
+- **Times.** `publish_at`: `now`, `queue` (the brand's next free slot) or an ISO date-time with a
+  timezone offset, 5 minutes to a year ahead; errors say exactly what to send.
+- **Server instructions** rewritten as a short playbook: ids from list_brands, exact field names,
+  preview → owner's yes → create_post, media links, read analytics (best times in `audience`) and
+  post performance before planning, no engagement bait, no invented facts or promised follow-ups,
+  the DM window.
+- Not built yet: the upload page for chat photos (canvas proposal), per-platform options
+  (first comment, post type) and TikTok from an assistant.
+
+## Feature catch-up (2026-11-17)
+
+Since Phase 4 the app grew (all platforms, Teach Waggle, leads); the tools caught up on:
+
+- **Analytics on every platform:** `platform` takes "all" or any platform the brand has
+  connected (checked; the error lists them), for get_analytics and get_post_performance.
+- **Posting options:** `preview_post.options` per platform: `post_type` (post, story, reel on
+  Instagram and Facebook), `first_comment` (Instagram, Facebook, YouTube, Threads, LinkedIn),
+  `title` (YouTube, Facebook reels), `pinterest_board_id`, a platform-only `caption`. Stored on
+  the preview (`post_previews.options`) and sent as the composer's `platform_options`.
+  `list_pinterest_boards` lists a Pinterest account's boards (without a choice, pins go to the
+  board picked in Waggle, else the first one).
+- **Teach Waggle:** `add_answer` and `update_answer` (`knowledge-base.saveAnswer`, ability
+  brand.settings, audited with the assistant). No AI call in the tool: the jobs route embeds new
+  and changed answers on its next run.
+- **Leads:** `list_leads` (by stage, customer fields marked untrusted) and `move_lead` (the board's
+  New → Talking → Booked → Done, ability replies.approve, audited).
+- **Photos from a chat** (design "AI assistants · Add photos from a chat", approved 17 Nov):
+  `create_upload_link` makes a `media_uploads` row (migration `20261118110000`: 30-minute link,
+  same person and assistant, refused to OAuth tokens, purged with the brand) and returns
+  `/add-photos/<id>`. On that page (own layout, phone first, sign in with `?next`) the browser
+  PUTs each file straight to Zernio's storage (presign, like the composer's videos) and the server
+  records only links our presign handed out; Done shows the bee's dance. `preview_post` takes
+  `upload_id` (its files first, usable for a day). States: expired, someone else's, not signed in.
+- 21 tools in all. Still not covered: broadcasts and sequences, automations, ads, WhatsApp
+  templates, channel-specific tools (phone, SMS, RCS, iMessage, email), blog/shop/files, queue times.
+
+## Security review (2026-11-17)
+
+An independent review of the branch found nothing critical. Fixed:
+
+- **What the preview step proves.** preview_post/create_post guarantees that what's published is
+  exactly what was previewed, once, by the same person and assistant. It does **not** prove the
+  owner said yes: the code goes back to the same assistant. The owner-in-the-loop gate is the
+  host's confirmation on create_post (annotated destructive and open-world), plus the
+  instructions. An in-Waggle approve link (like the Add photos page) would enforce it if needed.
+- **Business info poisoning:** add_answer/update_answer are now annotated destructive (hosts ask
+  the owner first), and the descriptions and server instructions say customer messages are never
+  the owner. Possible next step (not built): answers written by an assistant wait for the owner in
+  Teach Waggle before drafting uses them.
+- **Add photos page:** the server records each upload link it hands out (`media_uploads.issued`,
+  at most 20) and saves only those, atomically (`media_upload_add_file`: issued, not already
+  there, room left), so another tenant's media link can't be saved and two tabs can't overfill;
+  every action re-checks that the person may still post for the brand; removing a file is
+  audited; sign-in comes back to the page (`signInNext`, strict uuid pattern).
+- **Smaller:** a chosen Pinterest board must be one of the account's boards; create_post's
+  "already used/expired" lookup is bound to the same person and assistant; previews and upload
+  links write audit rows.
+- **Open:** whether Zernio's presign enforces the declared file size (the page caps it, the PUT
+  goes to Zernio's storage).

@@ -52,6 +52,15 @@ const call = async (name: string, args: Record<string, unknown>, limits?: Partia
     : (r.structuredContent as Record<string, unknown>);
 };
 const later = () => new Date(Date.now() + 2 * 60 * 60_000).toISOString();
+/** preview_post then create_post, as an assistant does after the owner's yes. */
+const post = async (content: string, limits?: Partial<McpLimits>) => {
+  const p = (await call(
+    "preview_post",
+    { brand_id: onBrand.tenantId, content, account_ids: [onBrand.accountId], publish_at: later() },
+    limits,
+  )) as { confirmation?: string };
+  return call("create_post", { brand_id: onBrand.tenantId, confirmation: p.confirmation }, limits);
+};
 const calls = async (tenantId: string) =>
   (
     await db
@@ -128,20 +137,10 @@ describe("activity log", () => {
 
 describe("send limits", () => {
   it("burst: the third post in 10 minutes is refused when the limit is 2", async () => {
-    const post = () =>
-      call(
-        "create_post",
-        {
-          brand_id: onBrand.tenantId,
-          content: "Fresh bread",
-          account_ids: [onBrand.accountId],
-          publish_at: later(),
-        },
-        { burstSends: 2 },
-      );
-    expect(await post()).toHaveProperty("post_id");
-    expect(await post()).toHaveProperty("post_id");
-    expect(await post()).toEqual({ error: "rate_limited" });
+    const send = () => post("Fresh bread", { burstSends: 2 });
+    expect(await send()).toHaveProperty("post_id");
+    expect(await send()).toHaveProperty("post_id");
+    expect(await send()).toEqual({ error: "rate_limited" });
     const { count } = await db
       .from("posts")
       .select("id", { count: "exact", head: true })
@@ -154,18 +153,7 @@ describe("send limits", () => {
   it("daily: the brand's own limit applies, and reads still work at the limit", async () => {
     await db.from("tenants").update({ mcp_daily_send_cap: 2 }).eq("id", onBrand.tenantId);
     // Two sends already counted today (the refused one doesn't count).
-    expect(
-      await call(
-        "create_post",
-        {
-          brand_id: onBrand.tenantId,
-          content: "More bread",
-          account_ids: [onBrand.accountId],
-          publish_at: later(),
-        },
-        { burstSends: 50 },
-      ),
-    ).toEqual({ error: "daily_limit" });
+    expect(await post("More bread", { burstSends: 50 })).toEqual({ error: "daily_limit" });
     expect(await call("list_posts", { brand_id: onBrand.tenantId })).toHaveProperty("posts");
   });
 });

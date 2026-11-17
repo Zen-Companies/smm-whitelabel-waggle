@@ -1080,6 +1080,43 @@ export type Database = {
         }
         Relationships: []
       }
+      media_uploads: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string
+          done_at: string | null
+          expires_at: string
+          files: Json
+          id: string
+          issued: Json
+          tenant_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by: string
+          done_at?: string | null
+          expires_at: string
+          files?: Json
+          id?: string
+          issued?: Json
+          tenant_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          done_at?: string | null
+          expires_at?: string
+          files?: Json
+          id?: string
+          issued?: Json
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -1531,6 +1568,61 @@ export type Database = {
           },
         ]
       }
+      post_previews: {
+        Row: {
+          account_ids: string[]
+          client_id: string
+          content: string
+          created_at: string
+          created_by: string
+          expires_at: string
+          id: string
+          media: Json
+          options: Json
+          post_id: string | null
+          publish_at: string | null
+          publish_mode: string
+          tenant_id: string
+          used_at: string | null
+          youtube_title: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          account_ids: string[]
+          client_id: string
+          content: string
+          created_at?: string
+          created_by: string
+          expires_at: string
+          id?: string
+          media?: Json
+          options?: Json
+          post_id?: string | null
+          publish_at?: string | null
+          publish_mode: string
+          tenant_id: string
+          used_at?: string | null
+          youtube_title?: string | null
+        }
+        Update: {
+          account_ids?: string[]
+          client_id?: string
+          content?: string
+          created_at?: string
+          created_by?: string
+          expires_at?: string
+          id?: string
+          media?: Json
+          options?: Json
+          post_id?: string | null
+          publish_at?: string | null
+          publish_mode?: string
+          tenant_id?: string
+          used_at?: string | null
+          youtube_title?: string | null
+        }
+        Relationships: []
+      }
       posts: {
         Row: {
           attempts: number
@@ -1909,6 +2001,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      media_upload_add_file: {
+        Args: { p_file: Json; p_id: string; p_max: number }
+        Returns: boolean
+      }
+      media_upload_issue: {
+        Args: { p_id: string; p_max: number; p_url: string }
+        Returns: boolean
+      }
       accept_invite: {
         Args: { p_token_hash: string; p_user: string }
         Returns: {

@@ -145,6 +145,7 @@ export function fakeZernio() {
     checkTelegramConnect: notImplemented,
     createPost: notImplemented,
     validatePost: notImplemented,
+    validateMedia: notImplemented,
     replyToComment: notImplemented,
     hideComment: notImplemented,
     unhideComment: notImplemented,
