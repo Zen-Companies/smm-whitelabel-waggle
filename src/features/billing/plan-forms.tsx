@@ -1,0 +1,181 @@
+"use client";
+
+import { useActionState, useState } from "react";
+import { cn } from "cn";
+import { PlanBees } from "@/components/app/bee-plan";
+import { Button } from "@/components/ui/button";
+import type { PlanActionState } from "./plan-actions";
+
+type Action = (prev: PlanActionState, formData: FormData) => Promise<PlanActionState>;
+
+/** One button that runs a plan action, with its result said in place (no toasts). */
+export function PlanButton({
+  action,
+  fields,
+  label,
+  pendingLabel = "One moment…",
+  honey = false,
+  quiet = false,
+  className,
+}: {
+  action: Action;
+  fields: Record<string, string>;
+  label: string;
+  pendingLabel?: string;
+  honey?: boolean;
+  quiet?: boolean;
+  className?: string;
+}) {
+  const [state, run, pending] = useActionState(action, {});
+  return (
+    <form action={run} className={cn("flex flex-col items-end gap-1", className)}>
+      {Object.entries(fields).map(([k, v]) => (
+        <input key={k} type="hidden" name={k} value={v} />
+      ))}
+      <Button
+        type="submit"
+        variant={quiet ? "quiet" : honey ? "primary" : "secondary"}
+        disabled={pending}
+        data-busy={pending || undefined}
+      >
+        {pending ? pendingLabel : label}
+      </Button>
+      {state.error && (
+        <span role="alert" className="text-danger text-right text-xs">
+          {state.error}
+        </span>
+      )}
+      {state.done && <span className="text-ink-2 text-right text-xs">{state.done}</span>}
+    </form>
+  );
+}
+
+export interface PlanCardData {
+  id: "solo" | "business" | "team";
+  name: string;
+  monthlyUsd: number;
+  yearlyUsd: number | null;
+  forSale: boolean;
+  bullets: string[];
+}
+
+/**
+ * Change plan: three cards with their bees, the current plan in honey, Team coming soon.
+ * Monthly or yearly is picked once above the cards.
+ */
+export function PlanCards({
+  orgId,
+  plans,
+  current,
+  currentInterval,
+  live,
+  mayChange,
+  foundingNote,
+  action,
+}: {
+  orgId: string;
+  plans: PlanCardData[];
+  current: string | null;
+  currentInterval: "month" | "year" | null;
+  live: boolean;
+  mayChange: boolean;
+  foundingNote: string | null;
+  action: Action;
+}) {
+  const [interval, setInterval] = useState<"month" | "year">(currentInterval ?? "month");
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div
+          role="radiogroup"
+          aria-label="Pay monthly or yearly"
+          className="bg-subtle inline-flex rounded-full p-1"
+        >
+          {(["month", "year"] as const).map((i) => (
+            <button
+              key={i}
+              type="button"
+              role="radio"
+              aria-checked={interval === i}
+              onClick={() => setInterval(i)}
+              className={cn(
+                "min-h-9 rounded-full px-4 text-sm font-medium",
+                interval === i ? "bg-ink text-white" : "text-ink-2",
+              )}
+            >
+              {i === "month" ? "Monthly" : "Yearly · 2 months free"}
+            </button>
+          ))}
+        </div>
+        {foundingNote && <span className="meta">{foundingNote}</span>}
+      </div>
+      <div className="grid gap-4 pt-3 md:grid-cols-3">
+        {plans.map((p) => {
+          const isCurrent = live && current === p.id && currentInterval === interval;
+          const price =
+            interval === "year" && p.yearlyUsd !== null
+              ? `$${p.yearlyUsd} a year`
+              : `$${p.monthlyUsd} a month`;
+          const noYearly = interval === "year" && p.yearlyUsd === null;
+          return (
+            <div
+              key={p.id}
+              className={cn(
+                "bg-surface relative flex flex-col gap-2.5 rounded-2xl border p-5",
+                isCurrent
+                  ? "border-honey border-2 shadow-[0_6px_24px_rgba(246,178,27,0.18)]"
+                  : "border-line",
+                !p.forSale && "opacity-80",
+              )}
+            >
+              {isCurrent && (
+                <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                  Your plan
+                </span>
+              )}
+              {!p.forSale && (
+                <span className="bg-subtle text-ink-2 absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                  Coming soon
+                </span>
+              )}
+              <PlanBees plan={p.id} />
+              <b className="font-display text-[22px] font-semibold">{p.name}</b>
+              <b className="text-lg font-semibold">
+                {noYearly ? `$${p.monthlyUsd} a month` : price}
+              </b>
+              <ul className="flex flex-col gap-2 text-sm">
+                {p.bullets.map((b) => (
+                  <li key={b} className="flex items-start gap-2">
+                    <span aria-hidden className="text-honey">
+                      ⬢
+                    </span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-auto pt-2">
+                {!p.forSale ? (
+                  <span className="meta">Not for sale yet.</span>
+                ) : isCurrent ? (
+                  <span className="meta">You&apos;re on this plan.</span>
+                ) : noYearly ? (
+                  <span className="meta">Monthly only for now.</span>
+                ) : mayChange ? (
+                  <PlanButton
+                    action={action}
+                    fields={{ orgId, plan: p.id, interval }}
+                    label={live ? `Move to ${p.name}` : "Start 7 days free"}
+                    honey={!live && p.id === "business"}
+                    className="items-start"
+                  />
+                ) : (
+                  <span className="meta">The Owner changes the plan.</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

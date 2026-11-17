@@ -5,7 +5,8 @@ import { AccountSection } from "@/features/account";
 import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
 import { AssistantsCard } from "@/features/mcp";
-import { listMyOrgs, OrgBillingSection, OrgGeneralSection, TeamSection } from "@/features/orgs";
+import { YourPlanSection } from "@/features/billing";
+import { can, listMyOrgs, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { BusinessSettings, getCurrentTenant } from "@/features/tenants";
 import { messagingOn, MessagingSection } from "@/features/messaging";
 import { phoneOn, PhoneSection } from "@/features/phone";
@@ -66,6 +67,16 @@ function NavLink({
   );
 }
 
+/** Stripe's return to Your plan: after checkout, or after buying more replies. */
+function planNotice(
+  params: Record<string, string | string[] | undefined>,
+): "done" | "cancelled" | "top_up" | undefined {
+  if (params.top_up === "done") return "top_up";
+  if (params.checkout === "done") return "done";
+  if (params.checkout === "cancelled") return "cancelled";
+  return undefined;
+}
+
 // Plain props type: the generated route types need `next typegen`.
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export type SettingsProps = {
@@ -121,7 +132,12 @@ async function Body({ params: route, searchParams }: SettingsProps) {
         )}
         {section === "general" && <OrgGeneralSection orgId={tenant.organizationId} />}
         {section === "team" && <TeamSection orgId={tenant.organizationId} />}
-        {section === "billing" && <OrgBillingSection orgId={tenant.organizationId} />}
+        {section === "billing" && org && (
+          <YourPlanSection
+            org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}
+            notice={planNotice(params)}
+          />
+        )}
         {section === "accounts" && <AccountsCard searchParams={searchParams} />}
         {section === "notifications" && <NotificationSettings />}
         {section === "business" && (

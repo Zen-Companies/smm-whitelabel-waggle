@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
 import { AccountSection } from "@/features/account";
-import { OrgBillingSection, OrgGeneralSection, TeamSection } from "@/features/orgs";
+import { YourPlanSection } from "@/features/billing";
+import { can, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { getOpenOrg } from "@/features/tenants";
 import { DEFAULT_ORG_SETTINGS_SECTION, isOrgSettingsSection, orgSettingsHref } from "@/lib/routes";
 import { cn } from "cn";
@@ -11,7 +12,7 @@ const SECTIONS = [
   { key: "account", label: "Account" },
   { key: "general", label: "General" },
   { key: "team", label: "Team" },
-  { key: "billing", label: "Billing" },
+  { key: "billing", label: "Your plan" },
 ] as const;
 type Section = (typeof SECTIONS)[number]["key"];
 
@@ -53,7 +54,11 @@ async function Body({ params }: OrgSettingsProps) {
         {section === "account" && <AccountSection />}
         {section === "general" && <OrgGeneralSection orgId={org.id} />}
         {section === "team" && <TeamSection orgId={org.id} />}
-        {section === "billing" && <OrgBillingSection orgId={org.id} />}
+        {section === "billing" && (
+          <YourPlanSection
+            org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}
+          />
+        )}
       </div>
     </div>
   );
