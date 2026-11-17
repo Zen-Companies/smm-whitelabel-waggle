@@ -3,6 +3,7 @@ export { combineCosts, loadCostView } from "./costs";
 export type { CostView as CostViewData, ItemCost, TenantCost } from "./costs";
 export {
   accountAllowance,
+  canAddBrand,
   canConnectAnother,
   EXTRAS,
   FOUNDING,
@@ -22,9 +23,13 @@ export {
   loadOrgPlan,
   loadReplyLimit,
   PLANS_FLAG,
+  loadBrandLimits,
   planAllowsAutoReply,
+  planAllowsTeam,
   planLimitsOn,
   replyLimitReached,
   roomForAnotherAccount,
+  roomForAnotherBrand,
 } from "./usage";
+export { PlansView } from "./plans-view";
 export type { OrgPlan } from "./usage";

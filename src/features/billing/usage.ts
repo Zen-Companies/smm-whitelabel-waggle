@@ -1,7 +1,15 @@
 import "server-only";
 import { monthStart } from "@/lib/llm/spend";
 import type { ServiceClient } from "@/lib/supabase/service";
-import { accountAllowance, canConnectAnother, PLANS, replyAllowance, type PlanId } from "./plans";
+import {
+  accountAllowance,
+  canAddBrand,
+  canConnectAnother,
+  isPlanId,
+  PLANS,
+  replyAllowance,
+  type PlanId,
+} from "./plans";
 import { replyLimit, type ReplyLimit } from "./reply-limit";
 
 // Plan limits in the app (Pricing Bible, "Still to build": per-plan reply limits). Off until
@@ -38,8 +46,8 @@ export async function loadOrgPlan(db: ServiceClient, orgId: string): Promise<Org
 }
 
 /**
- * AI replies this month across the given brands: drafts Waggle wrote (not the owner's own),
- * counted from the first of the month, UTC, like the AI spend cap.
+ * AI replies this month across the given brands: replies Waggle wrote that were sent (decided
+ * 17 Nov: only sent ones count; the owner's own never do), from the first of the month, UTC.
  */
 export async function countAiReplies(
   db: ServiceClient,
@@ -52,7 +60,7 @@ export async function countAiReplies(
     .select("id", { count: "exact", head: true })
     .in("tenant_id", tenantIds)
     .eq("owner_written", false)
-    .gte("created_at", monthStart(now).toISOString());
+    .gte("sent_at", monthStart(now).toISOString());
   if (error) throw new Error(`billing: counting replies failed: ${error.message}`);
   return count ?? 0;
 }
@@ -145,4 +153,47 @@ export async function roomForAnotherAccount(db: ServiceClient, tenantId: string)
 export async function planAllowsAutoReply(db: ServiceClient, tenantId: string): Promise<boolean> {
   const found = await planForBrand(db, tenantId);
   return !found || PLANS[found.plan.plan].features.autoReply;
+}
+
+async function planForOrg(db: ServiceClient, orgId: string): Promise<OrgPlan | null> {
+  if (!(await planLimitsOn(db))) return null;
+  return loadOrgPlan(db, orgId);
+}
+
+/** Brands each plan includes (Staff → Plans), null for no limit. */
+export async function loadBrandLimits(db: ServiceClient): Promise<Record<PlanId, number | null>> {
+  const { data, error } = await db.from("plan_settings").select("plan, brands_limit");
+  if (error) throw new Error(`billing: reading plan settings failed: ${error.message}`);
+  const out: Record<PlanId, number | null> = { solo: null, business: null, team: null };
+  for (const r of data ?? []) if (isPlanId(r.plan)) out[r.plan] = r.brands_limit;
+  return out;
+}
+
+/**
+ * For Add a brand: whether the organization's plan has room for one more brand, and its limit
+ * for the message. Room while plan limits are off, there's no plan, or no limit is set.
+ */
+export async function roomForAnotherBrand(
+  db: ServiceClient,
+  orgId: string,
+): Promise<{ ok: true } | { ok: false; limit: number; plan: string }> {
+  const plan = await planForOrg(db, orgId);
+  if (!plan) return { ok: true };
+  const limit = (await loadBrandLimits(db))[plan.plan];
+  const { count } = await db
+    .from("tenants")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .is("offboarded_at", null);
+  if (canAddBrand(count ?? 0, limit)) return { ok: true };
+  return { ok: false, limit: limit!, plan: PLANS[plan.plan].name };
+}
+
+/**
+ * For Invite: team members and roles come with Business and Team (decided 17 Nov). True while
+ * plan limits are off or there's no plan.
+ */
+export async function planAllowsTeam(db: ServiceClient, orgId: string): Promise<boolean> {
+  const plan = await planForOrg(db, orgId);
+  return !plan || PLANS[plan.plan].features.team;
 }

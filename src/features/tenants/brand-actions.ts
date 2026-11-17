@@ -7,6 +7,7 @@ import { getSocialProvider } from "@/lib/social";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { BRAND_NAME_MAX, sectionPath } from "./brand-pick";
+import { roomForAnotherBrand } from "@/features/billing";
 import { can, listMyOrgs } from "@/features/orgs";
 import { getOpenOrg, openBrand } from "./brands";
 import { ensureZernioProfile } from "./setup";
@@ -53,6 +54,14 @@ export async function addBrand(_prev: AddBrandState, formData: FormData): Promis
     };
   }
   const db = getServiceClient();
+  // The plan's brands (Staff → Plans). Off until billing ships.
+  const room = await roomForAnotherBrand(db, org.id);
+  if (!room.ok) {
+    return {
+      error: `${room.plan} includes ${room.limit === 1 ? "1 brand" : `${room.limit} brands`}, and ${org.name} has them all. Move to a bigger plan to add another.`,
+      name: raw,
+    };
+  }
   const { data, error } = await db.rpc("create_brand_in_org", {
     p_org: org.id,
     p_actor: user.id,

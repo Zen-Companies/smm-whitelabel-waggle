@@ -1348,6 +1348,28 @@ export type Database = {
         }
         Relationships: []
       }
+      plan_settings: {
+        Row: {
+          brands_limit: number | null
+          plan: string
+          updated_at: string
+          updated_by: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          brands_limit?: number | null
+          plan: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          brands_limit?: number | null
+          plan?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       platform_state: {
         Row: {
           key: string

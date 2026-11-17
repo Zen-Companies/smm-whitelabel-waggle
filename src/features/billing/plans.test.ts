@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   accountAllowance,
+  canAddBrand,
   canConnectAnother,
   EXTRAS,
   FOUNDING,
   monthlyPrice,
+  parseBrandsLimit,
   PLANS,
   PROMOTED_PLAN,
   replyAllowance,
@@ -37,9 +39,10 @@ describe("plans match the Pricing Bible (16 Nov 2026)", () => {
       autoReply: true,
       leadsFlagged: true,
       followUps: "soon",
-      team: false,
+      team: true,
     });
-    expect(PLANS.team.features.team).toBe("soon");
+    expect(PLANS.solo.features.team).toBe(false);
+    expect(PLANS.team.features.team).toBe(true);
   });
 
   it("trial, extras and the founding offer", () => {
@@ -109,5 +112,21 @@ describe("the AI reply limit", () => {
     expect(limitEmailDue(replyLimit(200, 200, now), { warn: true, reached: false })).toBe(
       "reached",
     );
+  });
+});
+
+describe("brands per plan (Staff → Plans)", () => {
+  it("reads the field", () => {
+    expect(parseBrandsLimit("")).toEqual({ limit: null });
+    expect(parseBrandsLimit(" 3 ")).toEqual({ limit: 3 });
+    expect(parseBrandsLimit("0")).toHaveProperty("error");
+    expect(parseBrandsLimit("2.5")).toHaveProperty("error");
+    expect(parseBrandsLimit("101")).toHaveProperty("error");
+  });
+
+  it("checks room for one more", () => {
+    expect(canAddBrand(5, null)).toBe(true);
+    expect(canAddBrand(0, 1)).toBe(true);
+    expect(canAddBrand(1, 1)).toBe(false);
   });
 });

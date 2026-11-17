@@ -26,8 +26,11 @@ export interface Plan {
     leadsFlagged: boolean;
     /** Follow-ups drafted for leads that go quiet: not built yet on any plan. */
     followUps: "soon" | false;
-    /** Team members and roles. */
-    team: "soon" | false;
+    /**
+     * Team members and roles (organizations, built 10 Nov). Business and Team (decided 17 Nov;
+     * the Bible's first draft had Team only).
+     */
+    team: boolean;
   };
 }
 
@@ -52,7 +55,7 @@ export const PLANS: Record<PlanId, Plan> = {
     replies: 750,
     aiCostCapUsd: 15,
     forSale: true,
-    features: { autoReply: true, leadsFlagged: true, followUps: "soon", team: false },
+    features: { autoReply: true, leadsFlagged: true, followUps: "soon", team: true },
   },
   team: {
     id: "team",
@@ -63,7 +66,7 @@ export const PLANS: Record<PlanId, Plan> = {
     replies: 1500,
     aiCostCapUsd: 30,
     forSale: false,
-    features: { autoReply: true, leadsFlagged: true, followUps: "soon", team: "soon" },
+    features: { autoReply: true, leadsFlagged: true, followUps: "soon", team: true },
   },
 };
 
@@ -130,4 +133,28 @@ export function replyAllowance(
     Math.max(0, topUps.thisMonth ?? 0) * EXTRAS.topUp.replies +
     Math.max(0, topUps.carriedReplies ?? 0)
   );
+}
+
+/**
+ * Brands a plan includes: set by staff on Staff → Plans (decided 17 Nov), null for no limit.
+ * The largest a limit may be.
+ */
+export const BRANDS_LIMIT_MAX = 100;
+
+/** Pure: Staff → Plans' brand limit field. Blank is no limit; otherwise a whole number 1..100. */
+export function parseBrandsLimit(raw: unknown): { limit: number | null } | { error: string } {
+  const text = String(raw ?? "").trim();
+  if (text === "") return { limit: null };
+  const n = Number(text);
+  if (!Number.isInteger(n) || n < 1 || n > BRANDS_LIMIT_MAX) {
+    return {
+      error: `Use a whole number from 1 to ${BRANDS_LIMIT_MAX}, or leave it blank for no limit.`,
+    };
+  }
+  return { limit: n };
+}
+
+/** Pure: whether one more brand fits. */
+export function canAddBrand(brands: number, limit: number | null): boolean {
+  return limit === null || brands < limit;
 }
