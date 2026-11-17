@@ -3,6 +3,7 @@
 import { useActionState, useState } from "react";
 import { cn } from "cn";
 import { PlanBees } from "@/components/app/bee-plan";
+import { BeeDance } from "@/components/app/bee-setup";
 import { Button } from "@/components/ui/button";
 import type { PlanActionState } from "./plan-actions";
 
@@ -177,5 +178,88 @@ export function PlanCards({
         })}
       </div>
     </div>
+  );
+}
+
+/**
+ * One-click top-up (design "Billing round 2", approved 18 Nov): "Buy 200 more" asks in place
+ * "Charge $15 to your Visa ending 4242?"; confirming charges the card on the plan right away.
+ * Without a saved card the action opens Stripe's page instead. The bee flies once when added.
+ */
+export function TopUpButton({
+  orgId,
+  card,
+  label,
+  usd,
+  replies,
+  honey = false,
+  action,
+}: {
+  orgId: string;
+  /** "Visa ending 4242", or null when it couldn't be read. */
+  card: string | null;
+  label: string;
+  usd: number;
+  replies: number;
+  honey?: boolean;
+  action: Action;
+}) {
+  const [nonce, setNonce] = useState<string | null>(null);
+  const [state, run, pending] = useActionState(action, {});
+  if (state.done) {
+    return (
+      <span role="status" className="flex items-center gap-2 text-sm">
+        <BeeDance scale={0.25} />
+        <span>
+          <b>{state.done}</b>
+        </span>
+      </span>
+    );
+  }
+  if (!nonce) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <Button
+          type="button"
+          variant={honey ? "primary" : "secondary"}
+          onClick={() => setNonce(crypto.randomUUID())}
+        >
+          {label}
+        </Button>
+        {state.error && (
+          <span role="alert" className="text-danger text-xs">
+            {state.error}
+          </span>
+        )}
+      </div>
+    );
+  }
+  return (
+    <form
+      action={run}
+      className="border-honey-border bg-honey-tint flex flex-wrap items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5"
+    >
+      <input type="hidden" name="orgId" value={orgId} />
+      <input type="hidden" name="nonce" value={nonce} />
+      <span className="text-sm">
+        <b>
+          Charge ${usd} to {card ? `your ${card}` : "the card on your plan"}?
+        </b>{" "}
+        {replies} more replies, added right away.
+      </span>
+      <span className="flex gap-2">
+        <Button type="button" variant="quiet" onClick={() => setNonce(null)} disabled={pending}>
+          Cancel
+        </Button>
+        <Button type="submit" variant="primary" disabled={pending} data-busy={pending || undefined}>
+          {pending ? "Charging…" : `Charge $${usd}`}
+        </Button>
+      </span>
+      {state.error && (
+        <span role="alert" className="text-danger basis-full text-xs">
+          {state.error}
+        </span>
+      )}
+    </form>
   );
 }

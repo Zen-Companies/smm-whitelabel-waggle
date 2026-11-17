@@ -23,7 +23,7 @@ export {
   loadOrgPlan,
   loadReplyLimit,
   PLANS_FLAG,
-  loadBrandLimits,
+  loadPlans,
   planAllowsAutoReply,
   planAllowsTeam,
   planLimitsOn,

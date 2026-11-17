@@ -6,7 +6,7 @@ import { writeAudit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { parseCapInput } from "./ai-cap";
-import { isPlanId, parseBrandsLimit } from "./plans";
+import { parsePlanSettings, type PlanId } from "./plans";
 import { hasPermission } from "@/features/staff";
 
 export type CapFormState = { saved?: boolean; error?: string };
@@ -48,29 +48,46 @@ export async function updateAiCap(_prev: CapFormState, formData: FormData): Prom
   return { saved: true };
 }
 
-export type BrandsLimitState = { saved?: boolean; error?: string };
+export type PlanSettingsState = { saved?: boolean; error?: string };
 
 /**
- * Staff → Plans: how many brands a plan includes (decided 17 Nov: configurable, not in code).
- * Admins only (`admin.caps.manage`), checked here too. Who and when: on the row.
+ * Staff → Plans (design "Billing round 2", approved 18 Nov): what each plan includes, all three
+ * plans saved together. Admins only (`admin.caps.manage`), checked here too. Who and when: on
+ * each row, and one audit row per changed plan.
  */
-export async function updateBrandsLimit(
-  _prev: BrandsLimitState,
+export async function updatePlanSettings(
+  _prev: PlanSettingsState,
   formData: FormData,
-): Promise<BrandsLimitState> {
+): Promise<PlanSettingsState> {
   const user = await getCurrentUser();
   if (!(await hasPermission("admin.caps.manage"))) return { error: "Not available." };
-  const plan = formData.get("plan");
-  if (!isPlanId(plan)) return { error: "That plan wasn't found." };
-  const parsed = parseBrandsLimit(formData.get("brands"));
-  if ("error" in parsed) return { error: parsed.error };
-  const { error } = await getServiceClient().from("plan_settings").upsert({
-    plan,
-    brands_limit: parsed.limit,
-    updated_at: new Date().toISOString(),
-    updated_by: user.id,
-  });
+  const ids: PlanId[] = ["solo", "business", "team"];
+  const parsed = [];
+  for (const id of ids) {
+    const r = parsePlanSettings(id, (field) => formData.get(`${id}.${field}`));
+    if ("error" in r) return { error: r.error };
+    parsed.push({ id, ...r.value });
+  }
+  const now = new Date().toISOString();
+  const { error } = await getServiceClient()
+    .from("plan_settings")
+    .upsert(
+      parsed.map((p) => ({
+        plan: p.id,
+        brands_limit: p.brands,
+        accounts: p.accounts,
+        replies: p.replies,
+        team: p.team,
+        auto_reply: p.autoReply,
+        leads_flagged: p.leadsFlagged,
+        follow_ups: p.followUps,
+        for_sale: p.forSale,
+        updated_at: now,
+        updated_by: user.id,
+      })),
+    );
   if (error) return { error: "Couldn't save. Please try again." };
   revalidatePath("/admin/plans");
+  revalidatePath("/settings/billing");
   return { saved: true };
 }

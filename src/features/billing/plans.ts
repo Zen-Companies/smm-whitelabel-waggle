@@ -1,6 +1,7 @@
-// The plans, from the Waggle Pricing Bible (docs/Waggle Pricing Bible 1.md, 16 Nov 2026; only
-// Jason changes a price). Pure: no Stripe, no database. Billing (T86) reads these numbers so the
-// app, the site and the ads never disagree.
+// The plans, from the Waggle Pricing Bible (docs/Waggle Pricing Bible 1.md, updated 18 Nov 2026;
+// only Jason changes a price or a plan). Pure: no Stripe, no database. These are the defaults:
+// staff can change what each plan includes on Staff → Plans (plan_settings), and the app reads
+// the merged result (applyPlanSettings). Prices live here and in Stripe.
 
 export type PlanId = "solo" | "business" | "team";
 
@@ -11,8 +12,10 @@ export interface Plan {
   monthlyUsd: number;
   /** US dollars a year (2 months free); null when there's no yearly price yet. */
   yearlyUsd: number | null;
-  /** Connected social accounts included. */
+  /** Connected social accounts included (more at EXTRAS.accountUsd each, no limit). */
   accounts: number;
+  /** Businesses (brands) the organization may have; null is unlimited. */
+  brands: number | null;
   /** AI replies a month ("about"). */
   replies: number;
   /** The most AI may cost us a month on this plan (the margin table's worst case). */
@@ -24,12 +27,9 @@ export interface Plan {
     autoReply: boolean;
     /** Leads and complaints flagged to the owner. */
     leadsFlagged: boolean;
-    /** Follow-ups drafted for leads that go quiet: not built yet on any plan. */
-    followUps: "soon" | false;
-    /**
-     * Team members and roles (organizations, built 10 Nov). Business and Team (decided 17 Nov;
-     * the Bible's first draft had Team only).
-     */
+    /** Follow-ups for leads that go quiet (the owner's own message, on Zernio Sequences). */
+    followUps: boolean;
+    /** Team members and roles: Business and Team (17 Nov). Solo is just the owner (18 Nov). */
     team: boolean;
   };
 }
@@ -41,6 +41,7 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyUsd: 49,
     yearlyUsd: 490,
     accounts: 3,
+    brands: 1,
     replies: 200,
     aiCostCapUsd: 4,
     forSale: true,
@@ -52,10 +53,11 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyUsd: 99,
     yearlyUsd: 990,
     accounts: 4,
+    brands: null,
     replies: 750,
     aiCostCapUsd: 15,
     forSale: true,
-    features: { autoReply: true, leadsFlagged: true, followUps: "soon", team: true },
+    features: { autoReply: true, leadsFlagged: true, followUps: true, team: true },
   },
   team: {
     id: "team",
@@ -63,10 +65,11 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyUsd: 199,
     yearlyUsd: null,
     accounts: 10,
+    brands: null,
     replies: 1500,
     aiCostCapUsd: 30,
     forSale: false,
-    features: { autoReply: true, leadsFlagged: true, followUps: "soon", team: true },
+    features: { autoReply: true, leadsFlagged: true, followUps: true, team: true },
   },
 };
 
@@ -114,8 +117,8 @@ export function monthlyPrice(
 }
 
 /** Pure: accounts a plan can connect, with extras bought. */
-export function accountAllowance(plan: PlanId, extraAccounts = 0): number {
-  return PLANS[plan].accounts + Math.max(0, Math.floor(extraAccounts));
+export function accountAllowance(plan: Plan, extraAccounts = 0): number {
+  return plan.accounts + Math.max(0, Math.floor(extraAccounts));
 }
 
 /** Pure: whether one more account fits. */
@@ -125,11 +128,11 @@ export function canConnectAnother(connected: number, allowance: number): boolean
 
 /** Pure: AI replies this month, with top-ups (this month's and last month's unused carry-over). */
 export function replyAllowance(
-  plan: PlanId,
+  plan: Plan,
   topUps: { thisMonth?: number; carriedReplies?: number } = {},
 ): number {
   return (
-    PLANS[plan].replies +
+    plan.replies +
     Math.max(0, topUps.thisMonth ?? 0) * EXTRAS.topUp.replies +
     Math.max(0, topUps.carriedReplies ?? 0)
   );
@@ -157,4 +160,108 @@ export function parseBrandsLimit(raw: unknown): { limit: number | null } | { err
 /** Pure: whether one more brand fits. */
 export function canAddBrand(brands: number, limit: number | null): boolean {
   return limit === null || brands < limit;
+}
+
+/** One plan_settings row: what staff changed on Staff → Plans (null = the default above). */
+export interface PlanSettingsRow {
+  plan: string;
+  brands_limit: number | null;
+  accounts: number | null;
+  replies: number | null;
+  team: boolean | null;
+  auto_reply: boolean | null;
+  leads_flagged: boolean | null;
+  follow_ups: boolean | null;
+  for_sale: boolean | null;
+}
+
+/**
+ * Pure: the plans as the app uses them: the defaults with what staff set on Staff → Plans.
+ * Brands keep plan_settings' meaning when a row exists (null is unlimited).
+ */
+export function applyPlanSettings(rows: PlanSettingsRow[]): Record<PlanId, Plan> {
+  const out = structuredClone(PLANS) as Record<PlanId, Plan>;
+  for (const r of rows) {
+    if (!isPlanId(r.plan)) continue;
+    const p = out[r.plan];
+    p.brands = r.brands_limit;
+    if (r.accounts !== null) p.accounts = r.accounts;
+    if (r.replies !== null) p.replies = r.replies;
+    if (r.for_sale !== null) p.forSale = r.for_sale;
+    if (r.team !== null) p.features.team = r.team;
+    if (r.auto_reply !== null) p.features.autoReply = r.auto_reply;
+    if (r.leads_flagged !== null) p.features.leadsFlagged = r.leads_flagged;
+    if (r.follow_ups !== null) p.features.followUps = r.follow_ups;
+  }
+  return out;
+}
+
+export interface PlanSettingsInput {
+  accounts: number;
+  replies: number;
+  brands: number | null;
+  team: boolean;
+  autoReply: boolean;
+  leadsFlagged: boolean;
+  followUps: boolean;
+  forSale: boolean;
+}
+
+/**
+ * Pure: one plan's column of the Staff → Plans form (`<plan>.<field>`), checked. Errors say which
+ * field and what's allowed.
+ */
+export function parsePlanSettings(
+  plan: PlanId,
+  get: (field: string) => FormDataEntryValue | null,
+): { value: PlanSettingsInput } | { error: string } {
+  const name = PLANS[plan].name;
+  const whole = (field: string, label: string, min: number, max: number) => {
+    const n = Number(String(get(field) ?? "").trim());
+    return Number.isInteger(n) && n >= min && n <= max
+      ? n
+      : `${name}: ${label} must be a whole number from ${min} to ${max}.`;
+  };
+  const accounts = whole("accounts", "accounts included", 0, 100);
+  if (typeof accounts === "string") return { error: accounts };
+  const replies = whole("replies", "AI replies a month", 0, 100000);
+  if (typeof replies === "string") return { error: replies };
+  const brands = parseBrandsLimit(get("brands"));
+  if ("error" in brands) return { error: `${name}: ${brands.error}` };
+  const on = (field: string) => get(field) === "on";
+  return {
+    value: {
+      accounts,
+      replies,
+      brands: brands.limit,
+      team: on("team"),
+      autoReply: on("autoReply"),
+      leadsFlagged: on("leadsFlagged"),
+      followUps: on("followUps"),
+      forSale: on("forSale"),
+    },
+  };
+}
+
+/** Pure: what a plan's card says it includes, from the plan as staff set it. */
+export function planBullets(plan: Plan): string[] {
+  const n = (v: number) => v.toLocaleString("en-US");
+  const who =
+    plan.brands === 1
+      ? plan.features.team
+        ? "1 business, with team members"
+        : "1 business, just you"
+      : plan.brands === null
+        ? plan.features.team
+          ? "Unlimited businesses and team members"
+          : "Unlimited businesses, just you"
+        : `${plan.brands} businesses${plan.features.team ? " and team members" : ", just you"}`;
+  return [
+    who,
+    `${n(plan.accounts)} accounts, then $${EXTRAS.accountUsd} each`,
+    `About ${n(plan.replies)} AI replies a month`,
+    plan.features.autoReply ? "Replies on its own, once you trust it" : "You approve every reply",
+    ...(plan.features.leadsFlagged ? ["Leads and complaints flagged"] : []),
+    ...(plan.features.followUps ? ["Follow-ups for leads that go quiet"] : []),
+  ];
 }

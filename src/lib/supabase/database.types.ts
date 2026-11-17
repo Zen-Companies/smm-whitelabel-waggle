@@ -1439,6 +1439,13 @@ export type Database = {
       }
       plan_settings: {
         Row: {
+          accounts: number | null
+          auto_reply: boolean | null
+          follow_ups: boolean | null
+          for_sale: boolean | null
+          leads_flagged: boolean | null
+          replies: number | null
+          team: boolean | null
           brands_limit: number | null
           plan: string
           updated_at: string
@@ -1446,12 +1453,26 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          accounts?: number | null
+          auto_reply?: boolean | null
+          follow_ups?: boolean | null
+          for_sale?: boolean | null
+          leads_flagged?: boolean | null
+          replies?: number | null
+          team?: boolean | null
           brands_limit?: number | null
           plan: string
           updated_at?: string
           updated_by?: string | null
         }
         Update: {
+          accounts?: number | null
+          auto_reply?: boolean | null
+          follow_ups?: boolean | null
+          for_sale?: boolean | null
+          leads_flagged?: boolean | null
+          replies?: number | null
+          team?: boolean | null
           brands_limit?: number | null
           plan?: string
           updated_at?: string

@@ -8,7 +8,9 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
 import { FOUNDING_COUPON, PRICE_KEYS, type Interval } from "./catalog";
-import { EXTRAS, FOUNDING, PLANS, TRIAL, isPlanId, type PlanId } from "./plans";
+import { EXTRAS, FOUNDING, PLANS, TRIAL, isPlanId, type Plan, type PlanId } from "./plans";
+import { loadPlans } from "./usage";
+import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
 import {
   billingFromSubscription,
@@ -86,10 +88,14 @@ async function syncNow(db: ServiceClient, orgId: string, sub: Stripe.Subscriptio
     .eq("organization_id", orgId);
 }
 
-function readChoice(formData: FormData): { plan: PlanId; interval: Interval } | null {
+function readChoice(
+  formData: FormData,
+  plans: Record<PlanId, Plan>,
+): { plan: PlanId; interval: Interval } | null {
   const plan = formData.get("plan");
   const interval = formData.get("interval") === "year" ? "year" : "month";
-  if (!isPlanId(plan) || !PLANS[plan].forSale) return null;
+  // "For sale" as staff set it on Staff → Plans.
+  if (!isPlanId(plan) || !plans[plan].forSale) return null;
   if (interval === "year" && PLANS[plan].yearlyUsd === null) return null;
   return { plan, interval };
 }
@@ -105,7 +111,7 @@ export async function choosePlan(
 ): Promise<PlanActionState> {
   const who = await ownerOf(formData.get("orgId"));
   if (!who) return { error: NOT_OWNER };
-  const choice = readChoice(formData);
+  const choice = readChoice(formData, await loadPlans(who.db));
   if (!choice) return { error: "That plan isn't available." };
   const stripe = getStripe();
   if (!stripe) return { error: NO_STRIPE };
@@ -229,7 +235,31 @@ export async function openBillingPortal(
   redirect(url);
 }
 
-/** 200 more AI replies, one time, through Checkout. */
+async function topUpCheckoutUrl(
+  stripe: Stripe,
+  db: ServiceClient,
+  orgId: string,
+  userId: string,
+  bill: BillingRecord,
+): Promise<string | null> {
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer: bill.stripe_customer_id,
+    line_items: [{ price: await priceId(stripe, PRICE_KEYS.topUp), quantity: 1 }],
+    metadata: { organization_id: orgId, kind: "top_up" },
+    adaptive_pricing: { enabled: false },
+    invoice_creation: {
+      enabled: true,
+      invoice_data: { metadata: { organization_id: orgId, kind: "top_up" } },
+    },
+    success_url: appUrl(`${PLAN_PATH}?top_up=done`),
+    cancel_url: appUrl(PLAN_PATH),
+  });
+  await auditOrg(db, orgId, "billing.top_up_started", userId);
+  return session.url;
+}
+
+/** 200 more AI replies, one time, through Stripe's checkout page (no saved card). */
 export async function buyTopUp(
   _prev: PlanActionState,
   formData: FormData,
@@ -242,26 +272,65 @@ export async function buyTopUp(
   if (!bill || !planIsLive(bill.status)) return { error: "Choose a plan first." };
   let url: string | null;
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer: bill.stripe_customer_id,
-      line_items: [{ price: await priceId(stripe, PRICE_KEYS.topUp), quantity: 1 }],
-      metadata: { organization_id: who.orgId, kind: "top_up" },
-      adaptive_pricing: { enabled: false },
-      invoice_creation: {
-        enabled: true,
-        invoice_data: { metadata: { organization_id: who.orgId, kind: "top_up" } },
-      },
-      success_url: appUrl(`${PLAN_PATH}?top_up=done`),
-      cancel_url: appUrl(PLAN_PATH),
-    });
-    url = session.url;
-    await auditOrg(who.db, who.orgId, "billing.top_up_started", who.user.id);
+    url = await topUpCheckoutUrl(stripe, who.db, who.orgId, who.user.id, bill);
   } catch (e) {
     console.error("billing: top-up failed", {
       orgId: who.orgId,
       error: e instanceof Error ? e.message : "unknown",
     });
+    return { error: STRIPE_DOWN };
+  }
+  if (!url) return { error: STRIPE_DOWN };
+  redirect(url);
+}
+
+/**
+ * One-click top-up (Pricing Bible, 18 Nov; design "Billing round 2"): after the owner confirms
+ * in place, 200 more replies charged to the card on the plan right away, also during the trial.
+ * No saved card, or the bank wants the owner to confirm: Stripe's checkout page instead.
+ * `nonce` (one per confirm) makes a double tap charge once.
+ */
+export async function buyTopUpNow(
+  _prev: PlanActionState,
+  formData: FormData,
+): Promise<PlanActionState> {
+  const who = await ownerOf(formData.get("orgId"));
+  if (!who) return { error: NOT_OWNER };
+  const nonce = z.uuid().safeParse(formData.get("nonce"));
+  if (!nonce.success) return { error: "Reload the page and try again." };
+  const stripe = getStripe();
+  if (!stripe) return { error: NO_STRIPE };
+  const bill = await loadBilling(who.db, who.orgId);
+  if (!bill || !planIsLive(bill.status)) return { error: "Choose a plan first." };
+  let r: TopUpCharge;
+  try {
+    r = await chargeTopUp(who.db, stripe, bill, {
+      automatic: false,
+      idempotencyKey: `top-up-now:${who.orgId}:${nonce.data}`,
+      actor: who.user.id,
+    });
+  } catch (e) {
+    console.error("billing: one-click top-up failed", {
+      orgId: who.orgId,
+      error: e instanceof Error ? e.message : "unknown",
+    });
+    return { error: STRIPE_DOWN };
+  }
+  if (r.ok) {
+    revalidatePath(PLAN_PATH);
+    revalidatePath("/inbox");
+    revalidatePath("/today");
+    return {
+      done: `${EXTRAS.topUp.replies} more replies added. The receipt is on its way to your email.`,
+    };
+  }
+  if (r.reason === "declined")
+    return { error: "Your bank declined it. Update your card, then try again." };
+  if (r.reason === "unavailable") return { error: STRIPE_DOWN };
+  let url: string | null;
+  try {
+    url = await topUpCheckoutUrl(stripe, who.db, who.orgId, who.user.id, bill);
+  } catch {
     return { error: STRIPE_DOWN };
   }
   if (!url) return { error: STRIPE_DOWN };

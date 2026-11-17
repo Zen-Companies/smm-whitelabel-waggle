@@ -4,7 +4,7 @@ import { writeAudit } from "@/lib/audit";
 import { monthStart } from "@/lib/llm/spend";
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
-import { EXTRAS, PLANS, type PlanId } from "./plans";
+import { EXTRAS } from "./plans";
 import { billingFromSubscription, carriedReplies, planIsLive } from "./subscription";
 
 // The organization's bill as Waggle stores it (org_billing, reply_top_ups), and the Stripe events
@@ -76,7 +76,8 @@ export interface TopUps {
 export async function loadTopUps(
   db: ServiceClient,
   orgId: string,
-  plan: PlanId,
+  /** The plan's AI replies a month (used first, before top-ups). */
+  planReplies: number,
   now: Date,
 ): Promise<TopUps> {
   const start = monthStart(now);
@@ -94,7 +95,7 @@ export async function loadTopUps(
     lastReplies === 0
       ? 0
       : carriedReplies({
-          planReplies: PLANS[plan].replies,
+          planReplies,
           topUpReplies: lastReplies,
           used: await countOrgReplies(db, orgId, lastStart, start),
         });
@@ -186,12 +187,15 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
     }
     case "invoice.paid": {
       const inv = event.data.object;
-      if (inv.metadata?.kind !== "auto_top_up") return "ignored";
+      // Top-ups charged to the saved card (automatic, or one click); a checkout's own invoice
+      // ("top_up") is counted by its session instead.
+      const kind = inv.metadata?.kind;
+      if (kind !== "auto_top_up" && kind !== "top_up_now") return "ignored";
       const orgId =
-        inv.metadata.organization_id ??
+        inv.metadata?.organization_id ??
         (await orgForCustomer(db, undefined, customerId(inv.customer) ?? ""));
       if (!orgId || !inv.id) return "ignored: no organization";
-      return addTopUp(db, orgId, inv.id, true);
+      return addTopUp(db, orgId, inv.id, kind === "auto_top_up");
     }
     default:
       return "ignored";

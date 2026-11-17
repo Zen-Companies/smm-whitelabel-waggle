@@ -1,20 +1,29 @@
-import { Suspense } from "react";
 import { CombMeter, PlanBees, RestingBee, TrialCells } from "@/components/app/bee-plan";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { loadBilling, loadTopUps, type BillingRecord } from "./billing-store";
 import {
-  buyTopUp,
+  buyTopUpNow,
   changeExtraAccounts,
   choosePlan,
   openBillingPortal,
   setAutoTopUp,
 } from "./plan-actions";
-import { PlanButton, PlanCards, type PlanCardData } from "./plan-forms";
-import { accountAllowance, EXTRAS, FOUNDING, isPlanId, PLANS, TRIAL, type PlanId } from "./plans";
+import { PlanButton, PlanCards, TopUpButton, type PlanCardData } from "./plan-forms";
+import { cardLabel } from "./auto-top-up";
+import {
+  accountAllowance,
+  EXTRAS,
+  FOUNDING,
+  isPlanId,
+  planBullets,
+  PLANS,
+  TRIAL,
+  type PlanId,
+} from "./plans";
 import { NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 import { getStripe } from "./stripe-client";
 import { planIsLive } from "./subscription";
-import { loadReplyLimit } from "./usage";
+import { loadPlans, loadReplyLimit } from "./usage";
 
 // Settings → Organization → Your plan (T86; approved 17 Nov, canvas "Settings · Your plan, with
 // the bee"). One page for the plan, what's used and every extra, self-serve. Owners see it all;
@@ -22,18 +31,6 @@ import { loadReplyLimit } from "./usage";
 
 const day = (d: Date | string) =>
   new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
-
-const BULLETS: Record<PlanId, string[]> = {
-  solo: ["3 accounts", "About 200 AI replies a month", "You approve every reply", "Just you"],
-  business: [
-    "4 accounts",
-    "About 750 AI replies a month",
-    "Replies on its own, once you trust it",
-    "Leads and complaints flagged",
-    "Team members and roles",
-  ],
-  team: ["10 accounts", "About 1,500 AI replies a month", "Everything in Business"],
-};
 
 export interface YourPlanOrg {
   id: string;
@@ -131,28 +128,15 @@ function Row({
   );
 }
 
-async function CardOnFile({ bill }: { bill: BillingRecord }) {
+/** The saved card's label, or null (Stripe not set up, no card, or Stripe didn't answer). */
+async function loadCardLabel(bill: BillingRecord): Promise<string | null> {
   const stripe = getStripe();
-  if (!stripe || !bill.stripe_subscription_id)
-    return <span className="text-ink-3">Not set up yet</span>;
-  let label: string | null = null;
-  let failed = false;
+  if (!stripe) return null;
   try {
-    const sub = await stripe.subscriptions.retrieve(bill.stripe_subscription_id, {
-      expand: ["default_payment_method"],
-    });
-    const pm = sub.default_payment_method;
-    if (pm && typeof pm !== "string" && pm.card) {
-      const brand = pm.card.brand.charAt(0).toUpperCase() + pm.card.brand.slice(1);
-      label = `${brand} ending ${pm.card.last4}`;
-    }
+    return await cardLabel(stripe, bill);
   } catch {
-    failed = true;
+    return null;
   }
-  if (label) return <span>{label}</span>;
-  return (
-    <span className="text-ink-3">{failed ? "Couldn't load right now" : "On file with Stripe"}</span>
-  );
 }
 
 export async function YourPlanSection({
@@ -165,23 +149,24 @@ export async function YourPlanSection({
 }) {
   const db = getServiceClient();
   const now = new Date();
-  const [bill, counts, owners] = await Promise.all([
+  const [bill, counts, owners, plans] = await Promise.all([
     loadBilling(db, org.id),
     loadCounts(db, org.id),
     ownerNames(db, org.id),
+    loadPlans(db),
   ]);
   const { accounts } = counts;
   const live = !!bill && planIsLive(bill.status) && isPlanId(bill.plan);
   const planId: PlanId | null = live && isPlanId(bill!.plan) ? bill!.plan : null;
   const fields = { orgId: org.id };
 
-  const cards: PlanCardData[] = (Object.keys(PLANS) as PlanId[]).map((id) => ({
+  const cards: PlanCardData[] = (Object.keys(plans) as PlanId[]).map((id) => ({
     id,
-    name: PLANS[id].name,
-    monthlyUsd: PLANS[id].monthlyUsd,
-    yearlyUsd: PLANS[id].yearlyUsd,
-    forSale: PLANS[id].forSale,
-    bullets: BULLETS[id],
+    name: plans[id].name,
+    monthlyUsd: plans[id].monthlyUsd,
+    yearlyUsd: plans[id].yearlyUsd,
+    forSale: plans[id].forSale,
+    bullets: planBullets(plans[id]),
   }));
   const firstTime = !bill?.trial_ends_at && !bill?.stripe_subscription_id;
   const foundingNote = firstTime
@@ -275,12 +260,15 @@ export async function YourPlanSection({
     );
   }
 
-  const plan = PLANS[planId];
+  const plan = plans[planId];
   const status = await loadReplyLimit(db, org.id, now);
   const limit = status?.limit ?? replyLimit(0, plan.replies, now);
   const note = replyLimitNote(limit, planId);
-  const topUps = await loadTopUps(db, org.id, planId, now);
-  const allowance = accountAllowance(planId, bill.extra_accounts);
+  const [topUps, card] = await Promise.all([
+    loadTopUps(db, org.id, plan.replies, now),
+    org.isOwner ? loadCardLabel(bill) : Promise.resolve(null),
+  ]);
+  const allowance = accountAllowance(plan, bill.extra_accounts);
   const price = priceLine(bill);
   // The first charge after the trial: the plan plus any extra accounts.
   const firstCharge =
@@ -402,12 +390,14 @@ export async function YourPlanSection({
             </span>
             {limit.level === "reached" && org.isOwner && (
               <div className="flex flex-wrap gap-2">
-                <PlanButton
-                  action={buyTopUp}
-                  fields={fields}
+                <TopUpButton
+                  action={buyTopUpNow}
+                  orgId={org.id}
+                  card={card}
                   label={`+${EXTRAS.topUp.replies} replies for $${EXTRAS.topUp.usd}`}
+                  usd={EXTRAS.topUp.usd}
+                  replies={EXTRAS.topUp.replies}
                   honey
-                  className="items-start"
                 />
                 {planId === "solo" && (
                   <PlanButton
@@ -471,10 +461,13 @@ export async function YourPlanSection({
             }
           >
             {org.isOwner && limit.level !== "reached" && (
-              <PlanButton
-                action={buyTopUp}
-                fields={fields}
+              <TopUpButton
+                action={buyTopUpNow}
+                orgId={org.id}
+                card={card}
                 label={`Buy ${EXTRAS.topUp.replies} more`}
+                usd={EXTRAS.topUp.usd}
+                replies={EXTRAS.topUp.replies}
               />
             )}
           </Row>
@@ -526,9 +519,9 @@ export async function YourPlanSection({
               <Row
                 label="Payment method"
                 value={
-                  <Suspense fallback={<span className="text-ink-3">…</span>}>
-                    <CardOnFile bill={bill} />
-                  </Suspense>
+                  <span className={card ? undefined : "text-ink-3"}>
+                    {card ?? "On file with Stripe"}
+                  </span>
                 }
               >
                 <PlanButton action={openBillingPortal} fields={fields} label="Change" />
