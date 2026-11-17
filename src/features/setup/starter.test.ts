@@ -7,6 +7,7 @@ import {
   kindFromProfile,
   parseStep,
   profileText,
+  stepDetail,
 } from "./starter";
 
 describe("first-time setup (T73b)", () => {
@@ -43,7 +44,7 @@ describe("first-time setup (T73b)", () => {
       "Waggle is watching Instagram and Facebook. The next time someone asks one of your 3 questions, a reply will be waiting for your OK.",
     );
     expect(doneLine({ accounts: [], answers: 1, replyOnItsOwn: true })).toBe(
-      "Connect an account in Settings so Waggle can start. The next time someone asks your question, Waggle answers on its own.",
+      "Waggle starts answering once you connect an account.",
     );
   });
 
@@ -76,5 +77,25 @@ describe("first-time setup (T73b)", () => {
     ]);
     const many = Array.from({ length: 12 }, (_, i) => `Q${i}`);
     expect(answerPairs(many, many)).toHaveLength(8);
+  });
+
+  it("the end page says what Waggle knows, step by step", () => {
+    const facts = {
+      kind: "Dog grooming",
+      description: "We groom dogs and cats in Cebu, by appointment, with pickup and drop-off.",
+      accounts: ["Instagram"],
+      answers: 3,
+      triesStatus: "1 of 3",
+      replyOnItsOwn: true,
+    };
+    expect(stepDetail("business", true, facts)).toBe(
+      "Dog grooming · “We groom dogs and cats in Cebu, by appointment, with…”",
+    );
+    expect(stepDetail("connect", true, facts)).toBe("Instagram");
+    expect(stepDetail("connect", false, facts)).toMatch(/^Not yet/);
+    expect(stepDetail("answers", true, facts)).toBe("3 answers");
+    expect(stepDetail("practice", false, facts)).toBe("1 of 3 tried");
+    expect(stepDetail("replies", true, facts)).toBe("On its own, for questions your answers cover");
+    expect(stepDetail("replies", false, facts)).toBe("Not chosen yet");
   });
 });

@@ -36,7 +36,7 @@ export async function OwnerLab() {
 }
 
 /** Teach Waggle's "Try it" (T73): the practice box on its own; nothing gets posted. */
-export async function TryIt() {
+export async function TryIt({ goal }: { goal?: { done: number; of: number } } = {}) {
   const tenant = await getCurrentTenant();
   const page = await loadPracticePage(getServiceClient(), tenant.id);
   return (
@@ -50,6 +50,7 @@ export async function TryIt() {
         examples={page.examples}
         examplesFromTopics={page.examplesFromTopics}
         recentTries={page.recentTries}
+        goal={goal}
       />
     </RoleGate>
   );

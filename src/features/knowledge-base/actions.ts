@@ -187,6 +187,57 @@ export async function addStarterAnswers(
   return { saved };
 }
 
+/**
+ * "Add an answer" under a practice try (approved 17 Nov): one answer, made searchable before this
+ * returns so the same message can be tried again right away (a new answer is otherwise embedded
+ * after the response). A question already in Business info is refused in place.
+ */
+export async function addAnswerNow(pair: {
+  question: string;
+  answer: string;
+}): Promise<{ id: string; title: string } | { error: string }> {
+  const parsed = answerSchema.safeParse(pair);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const supabase = await createServerSupabase();
+  const title = parsed.data.question.slice(0, KB_TITLE_MAX);
+  const { data: same } = await supabase
+    .from("kb_entries")
+    .select("id")
+    .eq("tenant_id", tenant.id)
+    .ilike(
+      "title",
+      title.replace(/[\\%_]/g, (c) => `\\${c}`),
+    )
+    .limit(1);
+  if (same?.length) {
+    return { error: "There's already an answer with this question. Change the question a little." };
+  }
+  const { data, error } = await supabase
+    .from("kb_entries")
+    .insert({ tenant_id: tenant.id, title, content: parsed.data.answer })
+    .select("id")
+    .single();
+  if (error) return { error: "Couldn't save. Please try again." };
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: "kb_entry_created",
+    actor: tenant.userId,
+    details: { kbEntryId: data.id, from: "practice" },
+  });
+  const llm = getLlmClientOrNull();
+  try {
+    if (llm) await embedEntry({ db: getServiceClient(), llm }, data.id);
+  } catch (e) {
+    // The sweep embeds it later; the try again just won't find it yet.
+    Sentry.captureException(e, { extra: { kbEntryId: data.id } });
+  }
+  revalidatePath("/teach");
+  revalidatePath("/teach/business-info");
+  return { id: data.id, title };
+}
+
 export async function updateKbEntry(_prev: KbFormState, formData: FormData): Promise<KbFormState> {
   const parsed = entrySchema.merge(idSchema).safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };

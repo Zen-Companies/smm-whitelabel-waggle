@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PreviewResult } from "./engine";
-import { practiceCard, thenText, triesLeftText } from "./practice-copy";
+import {
+  practiceCard,
+  questionFromMessage,
+  thenText,
+  triesLeftText,
+  tryStatus,
+} from "./practice-copy";
 
 const result = (over: Partial<PreviewResult>): PreviewResult => ({
   classification: { category: "faq", confidence: 0.93, provider: "jev", model: "jevos-v5" },
@@ -140,5 +146,41 @@ describe("thenText", () => {
     expect(thenText("escalated", null)).toBe("Then: it came to you");
     expect(thenText("ignored", null)).toBe("Then: hidden as spam");
     expect(thenText("new", null)).toBe("Then: still being sorted");
+  });
+});
+
+describe("a try's status and Add an answer (approved 17 Nov)", () => {
+  const card = (over: Partial<Parameters<typeof tryStatus>[0]>) => ({
+    looksLike: null,
+    category: null,
+    reply: null,
+    basedOn: null,
+    leadDetails: null,
+    next: "Complaints always come to you. I never reply to these on my own.",
+    offerAddAnswer: false,
+    tone: "owner" as const,
+    ...over,
+  });
+
+  it("says what happened in plain words", () => {
+    expect(tryStatus(card({ offerAddAnswer: true }))).toEqual({
+      text: "Not in your answers yet",
+      tone: "none",
+    });
+    expect(tryStatus(card({ reply: "Yes", basedOn: "Opening hours" }))).toEqual({
+      text: "Answered from “Opening hours”",
+      tone: "answered",
+    });
+    expect(tryStatus(card({})).text).toBe("Complaints always come to you");
+    expect(tryStatus(card({ next: "I'd pass this to you: whatever." })).text).toBe(
+      "I'd pass this to you",
+    );
+  });
+
+  it("suggests the question from the message, short", () => {
+    expect(questionFromMessage("  Can I   print\n today? ")).toBe("Can I print today?");
+    const long = questionFromMessage("word ".repeat(60));
+    expect(long.length).toBeLessThanOrEqual(120);
+    expect(long.endsWith("…")).toBe(true);
   });
 });

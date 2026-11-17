@@ -2,8 +2,9 @@ import { Check } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { BeeBySend, BeeDance, BeeOnItsOwn, TryCombs } from "@/components/app/bee-setup";
+import { BeeBySend, BeeDance, BeeOnItsOwn } from "@/components/app/bee-setup";
 import { PlatformMark } from "@/components/app/platform-mark";
+import { StateMark } from "@/components/app/state-mark";
 import { connectAccount } from "@/features/accounts";
 import { HelpButton } from "@/features/feedback";
 import { TryIt } from "@/features/lab";
@@ -27,6 +28,8 @@ import {
   customKindFromProfile,
   doneLine,
   kindFromProfile,
+  NEXT_ACTION,
+  stepDetail,
   SETUP_LAST,
   type SetupStepNumber,
 } from "./starter";
@@ -132,16 +135,21 @@ export async function SetupView({
 
   return (
     <main className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 py-8 md:py-12">
-      {step <= SETUP_LAST && <Stepper step={step} steps={steps} />}
+      {/* The end keeps the same frame (approved 17 Nov): stepper and step line stay. */}
+      <Stepper step={step} steps={steps} />
 
       {/* Five steps fill the row, so help and the way out sit on the step line. Nothing here
           leaves setup by accident (approved 17 Nov): help opens in place, Finish later is the
           one way out, and Today's Get Waggle ready line keeps the place. */}
       <div className="text-ink-3 -mb-5 flex items-center justify-between gap-3 text-sm">
-        <span>{step <= SETUP_LAST ? `Step ${step} of ${SETUP_LAST}` : ""}</span>
+        <span>
+          {step <= SETUP_LAST
+            ? `Step ${step} of ${SETUP_LAST}`
+            : `${steps.length - left.length} of ${SETUP_LAST} done`}
+        </span>
         <span className="flex items-center gap-3">
           <HelpButton className="text-ink-3 hover:text-ink text-sm">Need help?</HelpButton>
-          {step <= SETUP_LAST && (
+          {(step <= SETUP_LAST || left.length > 0) && (
             <>
               <span aria-hidden>·</span>
               <Link href="/today" className="text-ink-3 hover:text-ink text-sm">
@@ -331,18 +339,8 @@ export async function SetupView({
             </p>
           </div>
           <Suspense fallback={<div className="skeleton h-72 rounded-xl" />}>
-            <TryIt />
+            <TryIt goal={{ done: triesDone, of: PRACTICE_GOAL }} />
           </Suspense>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-ink-3 text-sm">Tries</span>
-            <TryCombs done={Math.min(triesDone, PRACTICE_GOAL)} of={PRACTICE_GOAL} />
-            <span className="text-ink-2 text-sm">
-              {tries?.done
-                ? "Done. Waggle is ready to try it for real."
-                : `${triesDone} of ${PRACTICE_GOAL}`}
-            </span>
-            {tries?.done && <BeeDance scale={0.4} />}
-          </div>
           <div className="flex items-center justify-between gap-3">
             <Link href="/setup?step=3" className="text-ink-2 hover:text-ink text-sm font-medium">
               Back
@@ -418,35 +416,78 @@ export async function SetupView({
       {step === 6 && (
         <section className="flex flex-col gap-5">
           {left.length === 0 && <BeeDance className="mx-auto" />}
-          <h1 className="page-title">{left.length ? "Almost there" : "You’re set up"}</h1>
-          <p className="text-ink-2 text-[15px]">
-            {doneLine({
-              accounts: [...connected].map(platformLabel),
-              answers: answers ?? 0,
-              replyOnItsOwn: faq?.mode === "auto",
-            })}
-          </p>
+          <div className={left.length === 0 ? "text-center" : undefined}>
+            <h1 className="page-title">
+              {left.length === 0
+                ? "Waggle is ready"
+                : left.length === 1
+                  ? "Almost there: one step left"
+                  : `Almost there: ${left.length} steps left`}
+            </h1>
+            <p className="text-ink-2 mt-1 text-[15px]">
+              {left.length === 0
+                ? doneLine({
+                    accounts: [...connected].map(platformLabel),
+                    answers: answers ?? 0,
+                    replyOnItsOwn: faq?.mode === "auto",
+                  })
+                : left[0].key === "connect" && left.length === 1
+                  ? "Connect where customers message you, and Waggle starts answering."
+                  : "Finish these and Waggle starts answering. Each one takes a minute."}
+            </p>
+          </div>
           {left.length > 0 && (
-            <ul className="card divide-line flex flex-col divide-y">
-              {left.map((s) => (
+            <ul className="card divide-line flex flex-col divide-y" aria-label="What Waggle knows">
+              {steps.map((s) => (
                 <li key={s.key} className="flex items-center gap-3 px-5 py-3.5">
-                  <span className="min-w-0 flex-1 font-semibold">{s.label}</span>
-                  <span className="text-ink-3 text-sm">{s.status}</span>
-                  <Link href={`/setup?step=${s.n}`} className="action-link with-arrow text-sm">
-                    Do it now
-                  </Link>
+                  <StateMark state={s.done ? "working" : "off"} size={15} />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <b className="font-semibold">{s.label}</b>
+                    <span className="text-ink-3 text-sm">
+                      {stepDetail(s.key, s.done, {
+                        kind: custom || kind?.label || "",
+                        description,
+                        accounts: [...connected].map(platformLabel),
+                        answers: answers ?? 0,
+                        triesStatus: s.status,
+                        replyOnItsOwn: faq?.mode === "auto",
+                      })}
+                    </span>
+                  </span>
+                  {!s.done && (
+                    <Link
+                      href={`/setup?step=${s.n}`}
+                      className={buttonVariants({ variant: "secondary" })}
+                    >
+                      Do it now
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
           )}
-          <div className="flex flex-wrap gap-2">
-            <Link href="/today" className={buttonVariants({ variant: "primary" })}>
-              Go to Today
-            </Link>
-            <Link href="/teach" className={buttonVariants({ variant: "secondary" })}>
-              Open Teach Waggle
-            </Link>
-          </div>
+          {left.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Link href="/today" className="text-ink-2 hover:text-ink text-sm font-medium">
+                Go to Today instead
+              </Link>
+              <Link
+                href={`/setup?step=${left[0].n}`}
+                className={buttonVariants({ variant: "primary" })}
+              >
+                {NEXT_ACTION[left[0].key]}
+              </Link>
+            </div>
+          ) : (
+            <div className="flex flex-wrap justify-center gap-2">
+              <Link href="/today" className={buttonVariants({ variant: "primary" })}>
+                Go to Today
+              </Link>
+              <Link href="/teach" className={buttonVariants({ variant: "secondary" })}>
+                Teach Waggle more
+              </Link>
+            </div>
+          )}
         </section>
       )}
     </main>

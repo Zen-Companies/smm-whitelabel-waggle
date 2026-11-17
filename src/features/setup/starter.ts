@@ -152,9 +152,10 @@ export function doneLine(input: {
   answers: number;
   replyOnItsOwn: boolean;
 }): string {
-  const watching = input.accounts.length
-    ? `Waggle is watching ${listWords(input.accounts)}.`
-    : "Connect an account in Settings so Waggle can start.";
+  // Nothing connected: only that (approved 17 Nov: never "connect first" and "answers on its own"
+  // in one breath).
+  if (!input.accounts.length) return "Waggle starts answering once you connect an account.";
+  const watching = `Waggle is watching ${listWords(input.accounts)}.`;
   const ofYour =
     input.answers === 0
       ? "one of your answers"
@@ -165,4 +166,60 @@ export function doneLine(input: {
     ? `The next time someone asks ${ofYour}, Waggle answers on its own.`
     : `The next time someone asks ${ofYour}, a reply will be waiting for your OK.`;
   return `${watching} ${then}`;
+}
+
+type StepKey = "business" | "connect" | "answers" | "practice" | "replies";
+
+/** The end page's main button when a step is left: the one thing to do next. */
+export const NEXT_ACTION: Record<StepKey, string> = {
+  business: "Tell us about your business",
+  connect: "Connect an account",
+  answers: "Write your top answers",
+  practice: "Try 3 messages",
+  replies: "Choose how replies go out",
+};
+
+/**
+ * Pure: one line per step on the end page, "what Waggle knows" (approved 17 Nov): what was set
+ * when done, what's missing when not.
+ */
+export function stepDetail(
+  key: StepKey,
+  done: boolean,
+  facts: {
+    kind: string;
+    description: string;
+    accounts: string[];
+    answers: number;
+    triesStatus: string;
+    replyOnItsOwn: boolean;
+  },
+): string {
+  switch (key) {
+    case "business": {
+      if (!done) return "Not yet. Two lines help Waggle tell a question from a buyer.";
+      const words = facts.description.replace(/\s+/g, " ").trim();
+      const quote = words.length > 60 ? `${words.slice(0, 59).replace(/\s+\S*$/, "")}…` : words;
+      return [facts.kind, quote && `“${quote}”`].filter(Boolean).join(" · ");
+    }
+    case "connect":
+      return done
+        ? listWords(facts.accounts)
+        : "Not yet. Waggle starts once one account is connected.";
+    case "answers":
+      return facts.answers === 1
+        ? "1 answer"
+        : facts.answers
+          ? `${facts.answers} answers`
+          : "Not yet";
+    case "practice":
+      return done
+        ? "3 tried"
+        : facts.triesStatus === "Not yet"
+          ? "Not yet"
+          : `${facts.triesStatus} tried`;
+    case "replies":
+      if (!done) return "Not chosen yet";
+      return facts.replyOnItsOwn ? "On its own, for questions your answers cover" : "Ask me first";
+  }
 }

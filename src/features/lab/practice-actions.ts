@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { addAnswerNow } from "@/features/knowledge-base";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { CATEGORIES } from "@/lib/classifier/types";
@@ -22,18 +23,24 @@ import { currentVariant } from "./variants";
 
 export type PracticeTry = RecentTry;
 
-export type PracticeState = { tried?: PracticeTry; triesLeft?: number; error?: string };
+export type PracticeState = {
+  tried?: PracticeTry;
+  triesLeft?: number;
+  error?: string;
+  /** "Save and try again": the Business info topic just added. */
+  saved?: string;
+};
 
 const trySchema = z.object({
   kind: z.enum(["comment", "dm"]),
   text: z.string().trim().min(1, "Type a message to try.").max(LAB_TEXT_MAX),
 });
 
-export async function tryMessage(_prev: PracticeState, formData: FormData): Promise<PracticeState> {
-  const parsed = trySchema.safeParse({ kind: formData.get("kind"), text: formData.get("text") });
-  if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const tenant = await getTenantFor("brand.settings");
-  if (!tenant) return { error: NOT_ALLOWED };
+/** One practice try for the business: checks the daily limit, runs it, keeps it in recent tries. */
+async function runTry(
+  tenant: { id: string; userId: string },
+  input: { kind: "comment" | "dm"; text: string },
+): Promise<PracticeState> {
   const db = getServiceClient();
   const left = await practiceTriesLeft(db, tenant.id);
   if (left <= 0) return { error: "No tries left today. More tomorrow.", triesLeft: 0 };
@@ -41,8 +48,8 @@ export async function tryMessage(_prev: PracticeState, formData: FormData): Prom
   const snapshot = await loadTenantSnapshot(db, tenant.id);
   const run = await runVariant(db, {
     tenant: snapshot,
-    text: parsed.data.text,
-    kind: parsed.data.kind,
+    text: input.text,
+    kind: input.kind,
     variant: currentVariant(),
     source: "practice",
     stopAfter: "policy",
@@ -52,8 +59,8 @@ export async function tryMessage(_prev: PracticeState, formData: FormData): Prom
     .insert({
       tenant_id: tenant.id,
       created_by: tenant.userId,
-      kind: parsed.data.kind,
-      text: parsed.data.text,
+      kind: input.kind,
+      text: input.text,
       origin: "owner",
       results: { practice: run } as unknown as Json,
     })
@@ -65,11 +72,41 @@ export async function tryMessage(_prev: PracticeState, formData: FormData): Prom
     tried: {
       id: saved?.id ?? crypto.randomUUID(),
       at: saved?.created_at ?? new Date().toISOString(),
-      ...parsed.data,
+      ...input,
       card: practiceCard(run.result),
     },
     triesLeft: left - 1,
   };
+}
+
+export async function tryMessage(_prev: PracticeState, formData: FormData): Promise<PracticeState> {
+  const parsed = trySchema.safeParse({ kind: formData.get("kind"), text: formData.get("text") });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  return runTry(tenant, parsed.data);
+}
+
+/**
+ * "Add an answer" under a try (approved 17 Nov, "Setup round 2"): saves the answer to Business
+ * info, then tries the same message again so the owner sees the reply change. The re-run counts
+ * as a try; with none left today, the answer is still saved.
+ */
+export async function teachAndRetry(
+  _prev: PracticeState,
+  formData: FormData,
+): Promise<PracticeState> {
+  const parsed = trySchema.safeParse({ kind: formData.get("kind"), text: formData.get("text") });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const added = await addAnswerNow({
+    question: String(formData.get("question") ?? ""),
+    answer: String(formData.get("answer") ?? ""),
+  });
+  if ("error" in added) return { error: added.error };
+  const again = await runTry(tenant, parsed.data);
+  return { ...again, saved: added.title };
 }
 
 export type RecentMessagesState = {
