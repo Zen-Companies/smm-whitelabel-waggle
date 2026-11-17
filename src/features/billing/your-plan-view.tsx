@@ -42,20 +42,23 @@ export interface YourPlanOrg {
   isOwner: boolean;
 }
 
-async function loadAccounts(db: ServiceClient, orgId: string): Promise<number> {
+async function loadCounts(
+  db: ServiceClient,
+  orgId: string,
+): Promise<{ brands: number; accounts: number }> {
   const { data: brands } = await db
     .from("tenants")
     .select("id")
     .eq("organization_id", orgId)
     .is("offboarded_at", null);
   const ids = (brands ?? []).map((b) => b.id);
-  if (ids.length === 0) return 0;
+  if (ids.length === 0) return { brands: 0, accounts: 0 };
   const { count } = await db
     .from("social_accounts")
     .select("id", { count: "exact", head: true })
     .in("tenant_id", ids)
     .eq("status", "active");
-  return count ?? 0;
+  return { brands: ids.length, accounts: count ?? 0 };
 }
 
 async function ownerNames(db: ServiceClient, orgId: string): Promise<string> {
@@ -162,11 +165,12 @@ export async function YourPlanSection({
 }) {
   const db = getServiceClient();
   const now = new Date();
-  const [bill, accounts, owners] = await Promise.all([
+  const [bill, counts, owners] = await Promise.all([
     loadBilling(db, org.id),
-    loadAccounts(db, org.id),
+    loadCounts(db, org.id),
     ownerNames(db, org.id),
   ]);
+  const { accounts } = counts;
   const live = !!bill && planIsLive(bill.status) && isPlanId(bill.plan);
   const planId: PlanId | null = live && isPlanId(bill!.plan) ? bill!.plan : null;
   const fields = { orgId: org.id };
@@ -193,6 +197,33 @@ export async function YourPlanSection({
       </p>
     </div>
   );
+
+  // Stripe not connected on this server yet (no STRIPE_SECRET_KEY) and no plan: what's counted,
+  // and plans coming soon, never buttons that can't work. The full page appears once the keys are set.
+  if (!getStripe() && !planId) {
+    return (
+      <div className="flex max-w-[720px] flex-col gap-5">
+        {intro}
+        <section className="card flex flex-col p-5">
+          <div className="border-line flex justify-between gap-4 border-b py-2.5">
+            <span className="text-ink-2">Brands</span>
+            <b className="font-semibold">{counts.brands}</b>
+          </div>
+          <div className="border-line flex justify-between gap-4 border-b py-2.5">
+            <span className="text-ink-2">Connected accounts</span>
+            <b className="font-semibold">{accounts}</b>
+          </div>
+          <div className="flex justify-between gap-4 py-2.5">
+            <span className="text-ink-2">Plans and prices</span>
+            <span className="text-ink-3">Coming soon</span>
+          </div>
+        </section>
+        {!org.isOwner && (
+          <p className="meta">You see what&apos;s counted, not the card or invoices.</p>
+        )}
+      </div>
+    );
+  }
 
   // No plan yet (or it ended): choose one.
   if (!planId || !bill) {
