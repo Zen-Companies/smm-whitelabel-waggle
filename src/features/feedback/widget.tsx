@@ -37,6 +37,9 @@ const NUDGE_DELAY_MS = 20_000;
  * page, a page-aware panel made for many notes (one box, optional type with one open question,
  * stays open after Send), a one-tap page rating, and a nudge after a first.
  */
+/** Opens the Help & feedback panel from anywhere on the page (setup's "Need help?"). */
+export const OPEN_FEEDBACK_EVENT = "waggle:open-feedback";
+
 export function FeedbackWidget({
   orgId,
   tenantId,
@@ -65,6 +68,13 @@ export function FeedbackWidget({
   const [flyKey, setFlyKey] = useState(0);
   const form = useRef<HTMLFormElement>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  // "Need help?" in setup opens this panel in place (approved 17 Nov), via openFeedback().
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_FEEDBACK_EVENT, show);
+    return () => window.removeEventListener(OPEN_FEEDBACK_EVENT, show);
+  }, []);
 
   // Sent: the box empties and stays open for the next note.
   useEffect(() => {

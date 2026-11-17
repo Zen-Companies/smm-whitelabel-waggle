@@ -8,7 +8,9 @@ type Props = { searchParams: Promise<Record<string, string | string[] | undefine
 async function Setup({ searchParams }: Props) {
   const params = await searchParams;
   const connecting = typeof params.connecting === "string" ? params.connecting : undefined;
-  return <SetupView step={parseStep(params.step)} connecting={connecting} />;
+  return (
+    <SetupView step={parseStep(params.step)} connecting={connecting} more={params.more === "1"} />
+  );
 }
 
 export default function SetupPage({ searchParams }: Props) {

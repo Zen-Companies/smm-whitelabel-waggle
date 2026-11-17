@@ -2,18 +2,29 @@ import { Check } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { BeeBySend, BeeDance, BeeOnItsOwn, TryCombs } from "@/components/app/bee-setup";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { connectAccount } from "@/features/accounts";
+import { HelpButton } from "@/features/feedback";
 import { TryIt } from "@/features/lab";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
-import { platformLabel } from "@/lib/social/platforms";
+import {
+  hasSetupCard,
+  isConnectable,
+  PLATFORM_IDS,
+  PLATFORMS,
+  platformLabel,
+} from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { saveAnswersStep, saveBusinessStep, saveRepliesStep } from "./actions";
 import { nextReadyStep, PRACTICE_GOAL } from "./checklist";
+import { KindPicker } from "./kind-picker";
+import { QuestionsEditor } from "./questions-editor";
 import { loadReadySteps } from "./ready-data";
 import {
   BUSINESS_KINDS,
+  customKindFromProfile,
   doneLine,
   kindFromProfile,
   SETUP_LAST,
@@ -21,11 +32,27 @@ import {
 } from "./starter";
 import { StepForm } from "./step-form";
 import { Stepper } from "./stepper";
+import { suggestedQuestions } from "./suggest";
 
 const FIRST_ACCOUNTS = [
   { platform: "instagram", does: "Comments and DMs" },
   { platform: "facebook", does: "Comments, DMs and reviews" },
 ] as const;
+
+/**
+ * "More" in step 2, opened in place (approved 17 Nov): every platform that connects through a
+ * sign-in and comes back to this step. Ones that need a form in Settings (Bluesky, Telegram,
+ * WhatsApp) wait until after setup.
+ */
+const MORE_ACCOUNTS = PLATFORM_IDS.filter(
+  (id) =>
+    id !== "instagram" &&
+    id !== "facebook" &&
+    isConnectable(id) &&
+    !hasSetupCard(id) &&
+    PLATFORMS[id].connect === "oauth",
+);
+const LATER_ACCOUNTS = PLATFORM_IDS.filter((id) => hasSetupCard(id));
 
 function SkipLink({ to }: { to: SetupStepNumber }) {
   return (
@@ -43,15 +70,21 @@ function SkipLink({ to }: { to: SetupStepNumber }) {
 export async function SetupView({
   step: requested,
   connecting,
+  more = false,
 }: {
   step: SetupStepNumber | null;
   connecting?: string;
+  /** Step 2 with every place to connect open. */
+  more?: boolean;
 }) {
   const tenant = await getCurrentTenant();
   const steps = await loadReadySteps(tenant.id);
   const step: SetupStepNumber = requested ?? nextReadyStep(steps)?.n ?? 6;
   const left = steps.filter((s) => !s.done);
   const tries = steps.find((s) => s.key === "practice");
+  const triesDone = tries?.done
+    ? PRACTICE_GOAL
+    : Number(/^\d+/.exec(tries?.status ?? "")?.[0] ?? 0);
   const supabase = await createServerSupabase();
   const [{ data: t }, { data: accounts }, { count: answers }, { data: faq }] = await Promise.all([
     supabase.from("tenants").select("business_profile").eq("id", tenant.id).single(),
@@ -74,6 +107,15 @@ export async function SetupView({
   const profile = t?.business_profile ?? "";
   const kind = kindFromProfile(profile);
   const description = kind ? profile.split("\n").slice(1).join("\n") : profile;
+  const custom = customKindFromProfile(profile);
+  // Step 3's suggestions: the kind's three, or for Something else, ones for what they typed.
+  const ai =
+    step === 3 && kind?.key === "other" && custom
+      ? await suggestedQuestions(tenant.id, custom)
+      : null;
+  const questionKind = kind ?? BUSINESS_KINDS[BUSINESS_KINDS.length - 1];
+  const suggested = ai ? ai.slice(0, 3) : [...questionKind.questions];
+  const moreQuestions = ai ? ai.slice(3) : [...questionKind.more];
   const connected = new Set((accounts ?? []).map((a) => a.platform));
   const allowed = can(tenant.role, "brand.settings");
 
@@ -92,12 +134,22 @@ export async function SetupView({
     <main className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 py-8 md:py-12">
       {step <= SETUP_LAST && <Stepper step={step} steps={steps} />}
 
-      {/* Five steps fill the row, so "Need help?" sits on the step line. */}
+      {/* Five steps fill the row, so help and the way out sit on the step line. Nothing here
+          leaves setup by accident (approved 17 Nov): help opens in place, Finish later is the
+          one way out, and Today's Get Waggle ready line keeps the place. */}
       <div className="text-ink-3 -mb-5 flex items-center justify-between gap-3 text-sm">
         <span>{step <= SETUP_LAST ? `Step ${step} of ${SETUP_LAST}` : ""}</span>
-        <Link href="/settings/account" className="text-ink-3 text-sm">
-          Need help?
-        </Link>
+        <span className="flex items-center gap-3">
+          <HelpButton className="text-ink-3 hover:text-ink text-sm">Need help?</HelpButton>
+          {step <= SETUP_LAST && (
+            <>
+              <span aria-hidden>·</span>
+              <Link href="/today" className="text-ink-3 hover:text-ink text-sm">
+                Finish later
+              </Link>
+            </>
+          )}
+        </span>
       </div>
 
       {step === 1 && (
@@ -114,27 +166,7 @@ export async function SetupView({
             backHref={null}
             skipHref="/setup?step=2"
           >
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 text-sm font-medium">What kind of business?</legend>
-              <div className="flex flex-wrap gap-2">
-                {BUSINESS_KINDS.map((k) => (
-                  <label
-                    key={k.key}
-                    className="border-line-strong has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-surface flex cursor-pointer items-center rounded-full border px-3.5 py-2 text-sm has-[:focus-visible]:ring-2"
-                  >
-                    <input
-                      type="radio"
-                      name="kind"
-                      value={k.key}
-                      defaultChecked={kind?.key === k.key}
-                      required
-                      className="sr-only"
-                    />
-                    {k.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <KindPicker current={kind?.key ?? null} custom={custom} />
             <label className="flex flex-col gap-1.5 text-sm font-medium">
               What you do, in your words
               <textarea
@@ -191,9 +223,55 @@ export async function SetupView({
               </li>
             ))}
           </ul>
-          <Link href="/settings/accounts" className="action-link with-arrow self-start">
-            More: TikTok, WhatsApp, YouTube, LinkedIn and others
-          </Link>
+          {more ? (
+            <>
+              <ul className="card divide-line flex flex-col divide-y">
+                {MORE_ACCOUNTS.map((id) => (
+                  <li key={id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                    <PlatformMark platform={id} size={32} />
+                    <span className="flex min-w-0 flex-1 flex-col">
+                      <b className="font-semibold">{PLATFORMS[id].label}</b>
+                      <span className="text-ink-3 text-sm">{PLATFORMS[id].line}</span>
+                    </span>
+                    {connected.has(id) ? (
+                      <span className="text-success flex items-center gap-1.5 text-sm font-semibold">
+                        <Check className="size-4" strokeWidth={2.2} aria-hidden /> Connected
+                      </span>
+                    ) : (
+                      <form action={connectAccount}>
+                        <input type="hidden" name="platform" value={id} />
+                        <input type="hidden" name="back" value="setup" />
+                        <Button
+                          type="submit"
+                          variant="secondary"
+                          aria-label={`Connect ${PLATFORMS[id].label}`}
+                        >
+                          Connect
+                        </Button>
+                      </form>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {LATER_ACCOUNTS.length > 0 && (
+                <p className="text-ink-3 text-sm">
+                  {LATER_ACCOUNTS.map((id) => PLATFORMS[id].label).join(", ")} need a few more
+                  details, so they&apos;re in Settings → Connected accounts once setup is done.
+                </p>
+              )}
+              <Link href="/setup?step=2" scroll={false} className="action-link self-start">
+                Show fewer
+              </Link>
+            </>
+          ) : (
+            <Link
+              href="/setup?step=2&more=1"
+              scroll={false}
+              className="action-link with-arrow self-start"
+            >
+              More: TikTok, YouTube, LinkedIn and others
+            </Link>
+          )}
           <div className="flex items-center justify-between gap-3">
             <Link href="/setup?step=1" className="text-ink-2 hover:text-ink text-sm font-medium">
               Back
@@ -216,7 +294,7 @@ export async function SetupView({
           <div>
             <h1 className="page-title">Answer the 3 questions you get most</h1>
             <p className="text-ink-2 mt-1">
-              Waggle only says what you write. You can add more any time in Teach Waggle.
+              Waggle only says what you write. Change any question to one your customers really ask.
             </p>
           </div>
           <StepForm
@@ -225,18 +303,17 @@ export async function SetupView({
             backHref="/setup?step=2"
             skipHref="/setup?step=4"
           >
-            {(kind ?? BUSINESS_KINDS[BUSINESS_KINDS.length - 1]).questions.map((q, i) => (
-              <label key={q} className="flex flex-col gap-1.5 text-sm font-medium">
-                &ldquo;{q}&rdquo;
-                <input type="hidden" name={`q${i}`} value={q} />
-                <textarea
-                  name={`a${i}`}
-                  rows={2}
-                  placeholder="Your answer, the way you'd say it"
-                  className="field font-normal"
-                />
-              </label>
-            ))}
+            <QuestionsEditor
+              suggested={suggested}
+              more={moreQuestions}
+              suggestedFor={
+                ai
+                  ? custom.toLowerCase()
+                  : kind && kind.key !== "other"
+                    ? kind.label.toLowerCase()
+                    : ""
+              }
+            />
             <p className="text-ink-3 text-sm">
               Prices, complaints and anything you didn&apos;t write always come to you.
             </p>
@@ -249,13 +326,23 @@ export async function SetupView({
           <div>
             <h1 className="page-title">Try {PRACTICE_GOAL} messages</h1>
             <p className="text-ink-2 mt-1">
-              Type what a customer might say and see what Waggle would do. Nothing gets posted.
-              {tries && !tries.done && tries.status !== "Not yet" && ` ${tries.status} tried.`}
+              Type what a customer might say and watch Waggle answer from what you wrote. Nothing
+              gets posted.
             </p>
           </div>
           <Suspense fallback={<div className="skeleton h-72 rounded-xl" />}>
             <TryIt />
           </Suspense>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-ink-3 text-sm">Tries</span>
+            <TryCombs done={Math.min(triesDone, PRACTICE_GOAL)} of={PRACTICE_GOAL} />
+            <span className="text-ink-2 text-sm">
+              {tries?.done
+                ? "Done. Waggle is ready to try it for real."
+                : `${triesDone} of ${PRACTICE_GOAL}`}
+            </span>
+            {tries?.done && <BeeDance scale={0.4} />}
+          </div>
           <div className="flex items-center justify-between gap-3">
             <Link href="/setup?step=3" className="text-ink-2 hover:text-ink text-sm font-medium">
               Back
@@ -287,35 +374,42 @@ export async function SetupView({
           >
             <fieldset className="flex flex-col gap-3">
               <legend className="sr-only">How replies go out</legend>
-              {[
-                {
-                  mode: "approve",
-                  title: "Ask me first",
-                  desc: "Waggle writes the reply and waits for your OK. One tap to send.",
-                },
-                {
-                  mode: "auto",
-                  title: "Reply on its own",
-                  desc: "When your answers cover the question, Waggle replies right away. Everything else still comes to you.",
-                },
-              ].map((m) => (
-                <label
-                  key={m.mode}
-                  className="card has-[:checked]:border-honey has-[:checked]:ring-honey flex cursor-pointer gap-3 p-4 has-[:checked]:ring-1"
-                >
-                  <input
-                    type="radio"
-                    name="mode"
-                    value={m.mode}
-                    defaultChecked={(faq?.mode === "auto" ? "auto" : "approve") === m.mode}
-                    className="mt-1"
-                  />
-                  <span className="flex flex-col">
-                    <b className="font-semibold">{m.title}</b>
-                    <span className="text-ink-2 text-sm">{m.desc}</span>
-                  </span>
-                </label>
-              ))}
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[
+                  {
+                    mode: "approve",
+                    title: "Ask me first",
+                    desc: "Waggle writes the reply and waits by the Send button for your OK. One tap to send.",
+                    bee: <BeeBySend />,
+                  },
+                  {
+                    mode: "auto",
+                    title: "Reply on its own",
+                    desc: "When your answers cover the question, Waggle replies right away. Everything else still comes to you.",
+                    bee: <BeeOnItsOwn />,
+                  },
+                ].map((m) => (
+                  <label
+                    key={m.mode}
+                    className="card has-[:checked]:border-honey has-[:checked]:ring-honey flex cursor-pointer flex-col gap-2 p-4 has-[:checked]:ring-1"
+                  >
+                    {m.bee}
+                    <span className="flex items-start gap-3">
+                      <input
+                        type="radio"
+                        name="mode"
+                        value={m.mode}
+                        defaultChecked={(faq?.mode === "auto" ? "auto" : "approve") === m.mode}
+                        className="mt-1"
+                      />
+                      <span className="flex flex-col">
+                        <b className="font-semibold">{m.title}</b>
+                        <span className="text-ink-2 text-sm">{m.desc}</span>
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </fieldset>
           </StepForm>
         </section>
@@ -323,6 +417,7 @@ export async function SetupView({
 
       {step === 6 && (
         <section className="flex flex-col gap-5">
+          {left.length === 0 && <BeeDance className="mx-auto" />}
           <h1 className="page-title">{left.length ? "Almost there" : "You’re set up"}</h1>
           <p className="text-ink-2 text-[15px]">
             {doneLine({

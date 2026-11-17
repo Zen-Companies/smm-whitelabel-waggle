@@ -8,30 +8,33 @@ import { writeAudit } from "@/lib/audit";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
 import { getServiceClient } from "@/lib/supabase/service";
 import { REPLIES_CHOSEN_ACTION } from "./checklist";
-import { kindOf, profileText } from "./starter";
+import { answerPairs, kindOf, profileText } from "./starter";
 
 export type SetupState = { error?: string };
 
-/** Step 1: the kind of business and a line or two about it (the description Waggle sorts with). */
+/**
+ * Step 1: the kind of business and a line or two about it (the description Waggle sorts with).
+ * Something else carries "what kind, in a few words" (approved 17 Nov).
+ */
 export async function saveBusinessStep(_prev: SetupState, formData: FormData): Promise<SetupState> {
   const kind = String(formData.get("kind") ?? "");
   if (!kindOf(kind)) return { error: "Pick the kind of business." };
   const description = String(formData.get("description") ?? "").trim();
   if (!description) return { error: "Write a line or two about what you do." };
   const fd = new FormData();
-  fd.set("profile", profileText(kind, description, BUSINESS_PROFILE_MAX));
+  const custom = kind === "other" ? String(formData.get("kindOther") ?? "") : "";
+  fd.set("profile", profileText(kind, description, BUSINESS_PROFILE_MAX, custom));
   const r = await updateBusinessProfile({}, fd);
   if (r.error) return { error: r.error };
   redirect("/setup?step=2");
 }
 
-/** Step 3: answers to the three questions the business gets most. Blank ones are skipped. */
+/**
+ * Step 3: answers to the questions the business gets most. The questions are the owner's own
+ * (editable, approved 17 Nov), so both come from the form. Blank ones are skipped.
+ */
 export async function saveAnswersStep(_prev: SetupState, formData: FormData): Promise<SetupState> {
-  const pairs = [0, 1, 2].flatMap((i) => {
-    const question = String(formData.get(`q${i}`) ?? "").trim();
-    const answer = String(formData.get(`a${i}`) ?? "").trim();
-    return question && answer ? [{ question, answer }] : [];
-  });
+  const pairs = answerPairs(formData.getAll("q"), formData.getAll("a"));
   if (pairs.length) {
     const r = await addStarterAnswers(pairs);
     if ("error" in r) return { error: r.error };

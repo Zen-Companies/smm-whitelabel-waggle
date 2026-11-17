@@ -611,6 +611,45 @@
   transform-origin: 50% 10%;
   animation: bee-wiggle 600ms ease-in-out 1;
 }
+/* Get Waggle ready (approved 17 Nov): the dance flown once, then the bee rests where it began. */
+.bee-fly-once {
+  position: absolute;
+  top: 0;
+  left: 0;
+  offset-rotate: auto;
+  animation: bee-along 2.6s ease-in-out 1 both;
+}
+.bee-trace-slow {
+  stroke-dasharray: 100;
+  animation: bee-trace 2.6s ease-in-out both;
+}
+/* Step 4: the message carried across while Waggle writes. */
+@keyframes bee-carry {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+.bee-carry {
+  position: absolute;
+  top: 0;
+  left: 0;
+  offset-rotate: auto;
+  animation: bee-carry 1.8s ease-in-out infinite;
+}
+/* Step 5: each choice's bee moves only while that choice is picked. */
+label:not(:has(:checked)) .choice-bee *,
+label:not(:has(:checked)) .choice-bee {
+  animation-play-state: paused;
+}
 /* The landing page's flight path (features/landing/flight-path.tsx): the hero keeps its own loop
    until the first scroll, then the one bee follows the scroll along the page-long trail. The
    hand-off is a 150ms fade (rule 8). */

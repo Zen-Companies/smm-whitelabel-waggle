@@ -4,6 +4,7 @@ import { Check, Clock3 } from "lucide-react";
 import Link from "next/link";
 import { useActionState, useState } from "react";
 import { shortTime } from "@/components/app/time";
+import { BeeCarrying } from "@/components/app/bee-setup";
 import { Button } from "@/components/ui/button";
 import { cn } from "cn";
 import {
@@ -383,6 +384,12 @@ export function PracticeBox({
         )}
       </section>
 
+      {view === "type" && pending && (
+        <div className="flex items-center gap-3" role="status">
+          <BeeCarrying className="max-w-full" />
+          <span className="text-ink-2 text-sm">Waggle is writing…</span>
+        </div>
+      )}
       {view === "type" && state.tried && !pending && <ResultCard tried={state.tried} />}
       {view === "type" && (
         <RecentTries

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
@@ -58,6 +59,8 @@ export async function tryMessage(_prev: PracticeState, formData: FormData): Prom
     })
     .select("id, created_at")
     .single();
+  // Setup's step 4 counts the tries (its honeycombs and Next).
+  revalidatePath("/setup");
   return {
     tried: {
       id: saved?.id ?? crypto.randomUUID(),
