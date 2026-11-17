@@ -40,7 +40,7 @@ export function AuthForm({
       <Brand />
       <div className="mt-6 mb-6 flex flex-col gap-2">
         <h1 className="display-title">
-          {isSignup ? "Answer every message in under a minute, in your words" : "Welcome back"}
+          {isSignup ? "Answer every message in about a minute, in your words" : "Welcome back"}
         </h1>
         <p className="text-ink-2">
           {isSignup
