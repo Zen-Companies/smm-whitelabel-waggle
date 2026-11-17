@@ -77,6 +77,15 @@ tests/fixtures    recorded webhook payloads
 - Small, pure functions for logic (status, policy, mapping) with unit tests next to them.
 - Names: files kebab-case, components PascalCase, DB snake_case.
 
+## Explaining things to Febron
+
+Work moves fast, so every answer or explanation starts with a short reminder of the context:
+
+- **Where we are:** one or two lines on what we were doing and why this came up (the page, the doc, the request).
+- **Anything already built:** say where to see it in the app (the page or menu), when it was built, and whether it's live in production, on `staging`, or local only (committed but not pushed, or not committed).
+- **Anything not built yet:** say so plainly ("not built", "planned in task T86"), so it's never confused with what exists.
+- Never use a task number, file name or code name on its own: always pair it with what it is in plain words.
+
 ## Workflow
 
 1. Pick the next unchecked task in `docs/tasks.md`.
