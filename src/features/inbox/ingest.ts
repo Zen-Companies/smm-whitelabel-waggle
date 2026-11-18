@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import {
   isAutomatedEmail,
   isEmailPlatform,
+  looksLikeWaggleEmail,
   ownEmailDomains,
   readableEmailText,
   senderAddress,
@@ -540,7 +541,15 @@ async function mapMessage(
   const email = isEmailPlatform(account.platform);
   if (
     email &&
-    isAutomatedEmail(senderAddress(e.message.sender), ownEmailDomains(process.env.ALERT_FROM_EMAIL))
+    (isAutomatedEmail(
+      senderAddress(e.message.sender),
+      ownEmailDomains(process.env.ALERT_FROM_EMAIL),
+    ) ||
+      looksLikeWaggleEmail(
+        e.message.sender.name ?? e.conversation?.participantName,
+        e.message.text,
+        process.env.ALERT_FROM_EMAIL,
+      ))
   ) {
     return skipped("automated_email");
   }

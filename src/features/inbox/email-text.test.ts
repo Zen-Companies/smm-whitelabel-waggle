@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isAutomatedEmail,
   isEmailPlatform,
+  looksLikeWaggleEmail,
   ownEmailDomains,
   readableEmailText,
   senderAddress,
@@ -69,5 +70,16 @@ describe("automatic emails", () => {
     expect(isEmailPlatform("google")).toBe(true);
     expect(isEmailPlatform("imap")).toBe(true);
     expect(isEmailPlatform("instagram")).toBe(false);
+  });
+});
+
+describe("looksLikeWaggleEmail", () => {
+  it("our sender name plus a gowaggle.ai link; not a customer who mentions us", () => {
+    const from = "Receptionist <alerts@mail.gowaggle.ai>";
+    const body = "New Waggle sign-up [https://email.mail.gowaggle.ai/c/abc]";
+    expect(looksLikeWaggleEmail("Waggle", body, from)).toBe(true);
+    expect(looksLikeWaggleEmail("Receptionist", body, from)).toBe(true);
+    expect(looksLikeWaggleEmail("Ana", "I saw gowaggle.ai", from)).toBe(false);
+    expect(looksLikeWaggleEmail("Waggle", "no links here", from)).toBe(false);
   });
 });
