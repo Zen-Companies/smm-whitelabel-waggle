@@ -14,6 +14,12 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_SENTRY_DSN: process.env.SENTRY_DSN ?? "",
   },
+  // Staging (hive-….gowaggle.ai) and previews are never listed by search engines; only the
+  // production build (VERCEL_ENV=production) may be.
+  async headers() {
+    if (process.env.VERCEL_ENV === "production") return [];
+    return [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }];
+  },
   turbopack: {
     rules: {
       "*.css": {
