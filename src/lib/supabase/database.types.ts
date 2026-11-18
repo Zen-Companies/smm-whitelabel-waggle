@@ -81,6 +81,39 @@ export type Database = {
           },
         ]
       }
+      alert_digest_entries: {
+        Row: {
+          alert_id: string
+          claimed_at: string | null
+          content: Json
+          created_at: string
+          id: string
+          sent_at: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          alert_id: string
+          claimed_at?: string | null
+          content: Json
+          created_at?: string
+          id?: string
+          sent_at?: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          alert_id?: string
+          claimed_at?: string | null
+          content?: Json
+          created_at?: string
+          id?: string
+          sent_at?: string | null
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       alerts: {
         Row: {
           attempts: number
@@ -514,6 +547,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      email_settings: {
+        Row: {
+          default_frequency: string
+          id: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          default_frequency?: string
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          default_frequency?: string
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      email_settings_changes: {
+        Row: {
+          after: string
+          before: string | null
+          changed_by: string | null
+          created_at: string
+          id: string
+        }
+        Insert: {
+          after: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          after?: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
       }
       feature_flags: {
         Row: {
@@ -1157,6 +1235,24 @@ export type Database = {
           id?: string
           issued?: Json
           tenant_id?: string
+        }
+        Relationships: []
+      }
+      notification_prefs: {
+        Row: {
+          email_frequency: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          email_frequency: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          email_frequency?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

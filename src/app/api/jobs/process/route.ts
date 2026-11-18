@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { backfillComments, checkAccountsHealth, requestBackfillForAll } from "@/features/accounts";
 import {
+  deliverDueDigests,
   deliverPendingAlerts,
   enqueueDraftNudges,
   getMailer,
@@ -128,8 +129,16 @@ export async function POST(request: Request): Promise<Response> {
       appUrl: process.env.APP_URL ?? "",
       shouldContinue: () => deadline.remainingMs() > 10_000,
     });
+    // 18 Nov: the hourly / 2-hourly summaries that are due.
+    const digests = await deliverDueDigests({
+      db,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 8_000,
+    });
 
     return Response.json({
+      digests,
       ...items,
       kbEmbedded: kb.embedded,
       followUpsSent: followUps.sent,

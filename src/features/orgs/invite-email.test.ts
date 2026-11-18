@@ -31,7 +31,7 @@ describe("inviteEmail", () => {
   it("escapes names in the HTML", () => {
     const e = inviteEmail({ ...base, orgName: "<b>Bad</b> & Co" });
     expect(e.html).not.toContain("<b>Bad</b>");
-    expect(e.html).toContain("&#60;b&#62;Bad&#60;/b&#62; &#38; Co");
+    expect(e.html).toContain("&lt;b&gt;Bad&lt;/b&gt; &amp; Co");
   });
 });
 
