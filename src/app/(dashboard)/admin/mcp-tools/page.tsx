@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { McpToolsView } from "@/features/mcp";
 
@@ -13,7 +14,7 @@ export default function Page(props: PageProps<"/admin/mcp-tools">) {
           registry so it always matches what&apos;s live.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-96" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <McpToolsView searchParams={props.searchParams} />
       </Suspense>
     </main>

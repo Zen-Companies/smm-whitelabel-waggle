@@ -1,5 +1,5 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
-import { Bee } from "@/components/app/bee";
 import { TodayView } from "@/features/today";
 import { PlanNote } from "../plan-note";
 
@@ -13,15 +13,7 @@ export default function TodayPage() {
           <PlanNote where="today" />
         </div>
       </Suspense>
-      <Suspense
-        fallback={
-          <div className="mx-auto w-full max-w-[1320px] px-4 py-9 md:px-6">
-            <div className="flex min-h-[420px] items-center justify-center">
-              <Bee scene="loading" />
-            </div>
-          </div>
-        }
-      >
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.today} />}>
         <TodayView />
       </Suspense>
     </>

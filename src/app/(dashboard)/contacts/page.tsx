@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { ContactsView } from "@/features/contacts";
 
@@ -17,7 +18,7 @@ async function View({ searchParams }: Props) {
 export default function ContactsPage(props: Props) {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-4 py-6 md:px-8">
-      <Suspense fallback={<div className="skeleton h-[480px] rounded-xl" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.contacts} />}>
         <View {...props} />
       </Suspense>
     </main>

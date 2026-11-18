@@ -1,5 +1,6 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
-import { InboxSkeleton, InboxView } from "@/features/approvals";
+import { InboxView } from "@/features/approvals";
 import { PlanNote } from "../plan-note";
 
 export const metadata = { title: "Inbox" };
@@ -17,7 +18,7 @@ export default function InboxPage({ searchParams }: Props) {
       <Suspense fallback={null}>
         <PlanNote where="inbox" />
       </Suspense>
-      <Suspense fallback={<InboxSkeleton />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.inbox} />}>
         <InboxView tab="for_you" searchParams={searchParams} />
       </Suspense>
     </main>

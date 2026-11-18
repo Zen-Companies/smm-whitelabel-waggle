@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { McpActivityView } from "@/features/mcp";
 
@@ -10,7 +11,7 @@ export default function Page(props: PageProps<"/admin/mcp-activity">) {
         <h1 className="page-title">MCP activity</h1>
         <p className="text-ink-2">Every call AI assistants made to Waggle, newest first.</p>
       </div>
-      <Suspense fallback={<div className="skeleton h-96" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <McpActivityView searchParams={props.searchParams} />
       </Suspense>
     </main>
