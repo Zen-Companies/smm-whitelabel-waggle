@@ -83,3 +83,23 @@ export function ownEmailDomains(alertFrom: string | undefined): string[] {
   if (m) domains.push(m[1].toLowerCase());
   return domains;
 }
+
+/**
+ * Waggle's own email by its look, for when the sender's address isn't in the payload: sent by
+ * our alert sender's name (or "Waggle") and linking to gowaggle.ai. Breaks the loop where an alert
+ * lands in a connected Gmail, becomes an item, and raises the next alert (18 Nov).
+ */
+export function looksLikeWaggleEmail(
+  senderName: string | null | undefined,
+  text: string | null | undefined,
+  alertFrom: string | undefined,
+): boolean {
+  const names = ["waggle"];
+  const display = alertFrom
+    ?.match(/^\s*"?([^"<]+?)"?\s*</)?.[1]
+    ?.trim()
+    .toLowerCase();
+  if (display) names.push(display);
+  const name = (senderName ?? "").trim().toLowerCase();
+  return names.includes(name) && /gowaggle\.ai/i.test(text ?? "");
+}
