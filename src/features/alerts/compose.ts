@@ -2,6 +2,7 @@
 // message (it stays in the app); lead emails carry the lead's details, which are the point.
 
 import { platformLabel } from "@/lib/social/platforms";
+import { brandedEmail, brandedText, detailRows, paragraph } from "@/lib/email/frame";
 
 export type AlertContent =
   | {
@@ -47,8 +48,11 @@ export interface ComposedEmail {
 }
 
 const platformName = platformLabel;
+const EMAIL = new Set(["google", "microsoft", "imap"]);
 const where = (platform: string, kind: "comment" | "dm" | "review" | "call") =>
-  kind === "call" ? "phone call" : `${platformName(platform)} ${kind === "dm" ? "DM" : kind}`;
+  kind === "call"
+    ? "phone call"
+    : `${platformName(platform)} ${kind === "dm" ? (EMAIL.has(platform) ? "email" : "DM") : kind}`;
 
 /** Why an item came to the owner, from the policy / send step / runner reason codes. */
 export function escalationReason(reason: string | null, status: string): string {
@@ -76,18 +80,41 @@ export function escalationReason(reason: string | null, status: string): string 
   return status === "failed" ? "Something went wrong handling it." : "Waggle handed it to you.";
 }
 
-const escapeHtml = (s: string) =>
-  s.replace(
-    /[&<>"']/g,
-    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-  );
+type Eyebrow = { text: string; tone: "needs" | "honey" | "quiet" };
 
-function render(subject: string, lines: string[], link: { href: string; label: string }) {
-  const text = [...lines, "", `${link.label}: ${link.href}`].join("\n");
-  const html =
-    lines.map((l) => `<p>${escapeHtml(l)}</p>`).join("") +
-    `<p><a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a></p>`;
-  return { subject, text, html };
+/**
+ * The branded email (design "Waggle emails", approved 18 Nov): the first line is the headline,
+ * the rest the card's text; "Label: value" lines become detail rows.
+ */
+function renderWith(ctx: { businessName: string; appUrl: string }) {
+  return (
+    subject: string,
+    lines: string[],
+    link: { href: string; label: string },
+    eyebrow: Eyebrow | null = null,
+  ): ComposedEmail => {
+    const [title = subject, ...rest] = lines;
+    const detail = (l: string) => /^[A-Z][^:]{0,40}: /.test(l);
+    const rows = rest.filter(detail).map((l) => {
+      const i = l.indexOf(": ");
+      return [l.slice(0, i), l.slice(i + 2)] as [string, string];
+    });
+    const prose = rest.filter((l) => !detail(l));
+    const because = `on the team of ${ctx.businessName}`;
+    const settingsUrl = `${ctx.appUrl}/settings/notifications`;
+    const html = brandedEmail({
+      eyebrow,
+      title,
+      bodyHtml: detailRows(rows) + prose.map((l) => paragraph(l)).join(""),
+      button: link,
+      businessName: ctx.businessName,
+      because,
+      settingsUrl,
+      preheader: prose[0] ?? null,
+    });
+    const text = brandedText({ title, lines: rest, button: link, because, settingsUrl });
+    return { subject, text, html };
+  };
 }
 
 export const itemUrl = (appUrl: string, itemId: string) => `${appUrl}/inbox/items/${itemId}`;
@@ -97,6 +124,7 @@ export function composeAlert(
   ctx: { businessName: string; appUrl: string },
 ): ComposedEmail {
   const { businessName, appUrl } = ctx;
+  const render = renderWith(ctx);
   switch (content.kind) {
     case "escalation": {
       const who = content.authorName ?? "A customer";
@@ -108,6 +136,7 @@ export function composeAlert(
           escalationReason(content.reason, content.status),
         ],
         { href: itemUrl(appUrl, content.itemId), label: "Open the message" },
+        { text: content.status === "failed" ? "Couldn't be answered" : "Needs you", tone: "needs" },
       );
     }
     case "lead": {
@@ -121,6 +150,7 @@ export function composeAlert(
           `Request: ${content.request ?? "not given"}`,
         ],
         { href: itemUrl(appUrl, content.itemId), label: "Open the conversation" },
+        { text: "New lead", tone: "honey" },
       );
     }
     case "ad_lead": {
@@ -139,6 +169,7 @@ export function composeAlert(
             : "They didn't tick the messages box: reply to them directly, not with broadcasts.",
         ],
         { href: `${appUrl}/contacts/ad-leads`, label: "Open your leads" },
+        { text: "New lead from your ad", tone: "honey" },
       );
     }
     case "disconnect": {
@@ -150,6 +181,7 @@ export function composeAlert(
           "Messages that arrive meanwhile wait until you reconnect.",
         ],
         { href: `${appUrl}/settings/accounts`, label: "Reconnect" },
+        { text: "Stopped connecting", tone: "needs" },
       );
     }
     case "rcs_status": {
@@ -161,6 +193,7 @@ export function composeAlert(
             `${businessName}: your branded texts request needs a fix`,
             ["Before it goes to the carriers, a detail needs changing.", ...note],
             { href, label: "Fix the request" },
+            { text: "Branded texts", tone: "quiet" },
           );
         case "testing":
           return content.reason
@@ -168,6 +201,7 @@ export function composeAlert(
                 `${businessName}: your launch details came back`,
                 ["The carriers' review needs another look at the launch details.", ...note],
                 { href, label: "Send them again" },
+                { text: "Branded texts", tone: "quiet" },
               )
             : render(
                 `${businessName}: branded texts are ready to test`,
@@ -175,6 +209,7 @@ export function composeAlert(
                   "Carriers approved your business. Invite your phone, try a few messages, then send the launch details.",
                 ],
                 { href, label: "Start testing" },
+                { text: "Branded texts", tone: "quiet" },
               );
         case "live":
           return render(
@@ -183,12 +218,14 @@ export function composeAlert(
               "Your texts now show your name, logo and a verified tick. Replies arrive in the inbox.",
             ],
             { href: `${appUrl}/inbox`, label: "Open the inbox" },
+            { text: "Branded texts", tone: "quiet" },
           );
         case "rejected":
           return render(
             `${businessName}: carriers didn't approve your branded texts`,
             [...note, "You can send a new request from Settings."],
             { href, label: "Open Messaging" },
+            { text: "Branded texts", tone: "quiet" },
           );
       }
       break;
@@ -202,6 +239,7 @@ export function composeAlert(
           "Customers get their answer once you approve.",
         ],
         { href: `${appUrl}/inbox`, label: "Review replies" },
+        { text: "Waiting for you", tone: "honey" },
       );
     }
   }

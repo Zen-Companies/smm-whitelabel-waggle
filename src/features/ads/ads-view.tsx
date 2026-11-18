@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { can } from "@/features/orgs";
 import { PostsHeader } from "@/features/publishing";
@@ -19,12 +20,11 @@ import {
 import {
   AD_NETWORK_IDS,
   AD_NETWORKS,
-  ADS_COMING_SOON,
+  ADS_ELSEWHERE,
   isAdNetwork,
   networkOfPlatform,
   type AdNetwork,
 } from "./networks";
-import { StateLabel } from "@/components/app/state-mark";
 
 const ERRORS: Record<string, string> = {
   no_facebook: "Connect your Facebook Page in Settings → Accounts first.",
@@ -76,6 +76,20 @@ export async function AdsView({
   let openai: AdConnection | null = null;
   let openaiAccount: AdAccount | null = null;
   let unavailable = false;
+  // Networks connected in Settings → Accounts (18 Nov).
+  let elsewhere = new Set<string>();
+  if (tenant.zernioProfileId) {
+    try {
+      const others = await getSocialProvider().listIntegrations({
+        profileId: tenant.zernioProfileId,
+        platforms: ADS_ELSEWHERE.map((n) => n.connection),
+        signal: AbortSignal.timeout(15_000),
+      });
+      elsewhere = new Set(others.filter((o) => o.active).map((o) => o.platform));
+    } catch (error) {
+      Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "adsElsewhere" } });
+    }
+  }
   if (tenant.zernioProfileId) {
     try {
       [conns, openai] = await Promise.all([
@@ -267,10 +281,21 @@ export async function AdsView({
               Small ads inside ChatGPT answers. You write them here; there&apos;s no post to boost.
             </span>
           </li>
-          {ADS_COMING_SOON.map((label) => (
-            <li key={label} className="flex flex-wrap items-center gap-2 py-3">
-              <b className="flex-1 font-semibold">{label}</b>
-              <StateLabel state="soon">Coming soon</StateLabel>
+          {ADS_ELSEWHERE.map((n) => (
+            <li key={n.connection} className="flex flex-col gap-1 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <b className="flex-1 font-semibold">{n.label}</b>
+                {elsewhere.has(n.connection) ? (
+                  <span className="text-success font-semibold">Connected</span>
+                ) : canEdit ? (
+                  <Link href="/settings/accounts#more-heading" className="action-link with-arrow">
+                    Connect in Settings
+                  </Link>
+                ) : null}
+              </div>
+              <span className="meta">
+                Waggle shows its results. Boosting posts there from here comes later.
+              </span>
             </li>
           ))}
         </ul>

@@ -11,6 +11,22 @@ export interface ConnectBanner {
 
 const MAX_MESSAGE = 300;
 
+/** More connections that aren't social platforms (18 Nov). */
+const CONNECTION_LABELS: Record<string, string> = {
+  googleanalytics: "Google Analytics",
+  slack: "Slack",
+  wix: "Wix",
+  hubspot: "HubSpot",
+  salesforce: "Salesforce",
+  stripe: "Stripe",
+  wechat: "WeChat",
+  googleads: "Google Ads",
+  tiktokads: "TikTok Ads",
+  redditads: "Reddit Ads",
+  microsoftads: "Microsoft Ads",
+  xads: "X Ads",
+};
+
 type Params = Record<string, string | string[] | undefined>;
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -18,8 +34,22 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 export function connectBanner(params: Params): ConnectBanner | null {
   const platformKey =
     first(params.platform) ?? first(params.connecting) ?? first(params.connected) ?? "";
-  const platform = isPlatformId(platformKey) ? platformLabel(platformKey) : "the account";
+  const platform = isPlatformId(platformKey)
+    ? platformLabel(platformKey)
+    : (CONNECTION_LABELS[platformKey] ?? "the account");
 
+  // X Ads hangs off the brand's X account.
+  if (first(params.connect_error) === "needs_x") {
+    return { tone: "error", text: "Connect X first, then X Ads." };
+  }
+
+  // X needs pay-per-use set up on our side first (Zernio's 402): ours to fix, not the owner's.
+  if (first(params.connect_error) === "plan_limit" && platformKey === "twitter") {
+    return {
+      tone: "error",
+      text: "X can't be connected yet: we're finishing its pay-per-use setup on our side. We've been alerted; please try again later.",
+    };
+  }
   // Our Zernio plan has no room for another profile (402): ours to fix, not the owner's.
   if (first(params.connect_error) === "plan_limit") {
     return {
@@ -33,6 +63,10 @@ export function connectBanner(params: Params): ConnectBanner | null {
       tone: "error",
       text: `Your plan's connected accounts are all in use, so ${platform} can't be added yet. Add an extra account for $10 a month, or move to a bigger plan.`,
     };
+  }
+  // The "Before you connect" link is used once and lasts 10 minutes (18 Nov).
+  if (first(params.connect_error) === "expired") {
+    return { tone: "error", text: "That link expired. Click Connect again to start over." };
   }
   // T55: only Owners and Admins connect accounts.
   if (first(params.connect_error) === "not_allowed") {

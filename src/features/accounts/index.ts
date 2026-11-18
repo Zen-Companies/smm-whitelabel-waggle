@@ -18,3 +18,5 @@ export {
   HEALTH_CHECK_INTERVAL_MS,
   requestBackfillForAll,
 } from "./health";
+export { CONNECT_COOKIE } from "./connect-go";
+export { safeContinueUrl } from "./connect-note";

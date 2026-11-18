@@ -65,6 +65,7 @@ import {
   type SocialPlatform,
   type SocialProvider,
   type TargetExtras,
+  type IntegrationKind,
 } from "./types";
 import { connectBranding } from "./whitelabel";
 
@@ -643,6 +644,137 @@ export class ZernioSocialProvider implements SocialProvider {
       );
       return { authUrl: parse(connectSchema, data, "getConnectUrl").authUrl };
     });
+  }
+
+  async getUsageCost(input: { profileId: string; from: string; to: string; signal?: AbortSignal }) {
+    return call("getUsageCost", async (withFetch) => {
+      const { data } = await this.zernio.usage.getUsage(
+        withFetch({
+          signal: input.signal,
+          query: {
+            range: "custom",
+            from: input.from,
+            to: input.to,
+            granularity: "total",
+            profileId: input.profileId,
+          },
+        }),
+      );
+      const r = parse(
+        z.object({
+          supported: z.boolean().nullish(),
+          totals: z.record(z.string(), z.number()).nullish(),
+        }),
+        data,
+        "getUsageCost",
+      );
+      return r.totals ?? {};
+    });
+  }
+
+  /** See SocialProvider.getIntegrationConnectUrl. */
+  async getIntegrationConnectUrl(input: {
+    kind: IntegrationKind;
+    profileId: string;
+    redirectUrl: string;
+    postingAccountId?: string;
+    signal?: AbortSignal;
+  }) {
+    const schema = z.object({
+      authUrl: z.string().nullish(),
+      alreadyConnected: z.boolean().nullish(),
+    });
+    // docs.zernio.com/connect/connect-ads: Google, Reddit and Microsoft Ads are standalone (the
+    // ads name in the path); TikTok and X Ads go by the posting platform, X with its account.
+    const adsPath: Partial<Record<IntegrationKind, string>> = {
+      googleads: "googleads",
+      redditads: "redditads",
+      microsoftads: "microsoftads",
+      tiktokads: "tiktok",
+      xads: "twitter",
+    };
+    const path = adsPath[input.kind];
+    if (path) {
+      return call("getIntegrationConnectUrl", async (withFetch) => {
+        const { data } = await this.zernio.connect.connectAds(
+          withFetch({
+            signal: input.signal,
+            path: { platform: path as never },
+            query: {
+              profileId: input.profileId,
+              redirect_url: input.redirectUrl,
+              ...(input.postingAccountId ? { accountId: input.postingAccountId } : {}),
+            },
+          }),
+        );
+        const r = parse(schema, data, "getIntegrationConnectUrl");
+        return r.authUrl ? { authUrl: r.authUrl } : { alreadyConnected: true as const };
+      });
+    }
+    return call("getIntegrationConnectUrl", async (withFetch) => {
+      const { data } = await this.zernio.connect.getConnectUrl(
+        withFetch({
+          signal: input.signal,
+          path: { platform: input.kind as never },
+          query: {
+            profileId: input.profileId,
+            redirect_url: input.redirectUrl,
+            ...connectBranding(process.env.APP_URL ?? ""),
+          },
+        }),
+      );
+      const r = parse(schema, data, "getIntegrationConnectUrl");
+      return r.authUrl ? { authUrl: r.authUrl } : { alreadyConnected: true as const };
+    });
+  }
+
+  async getWechatIpWhitelist(input: { signal?: AbortSignal } = {}) {
+    const r = await this.raw(
+      "getWechatIpWhitelist",
+      "/v1/connect/wechat/ip-whitelist",
+      z.object({ ips: z.array(z.string()) }),
+      { method: "GET", signal: input.signal },
+    );
+    return r.ips;
+  }
+
+  async connectWechat(input: {
+    profileId: string;
+    appId: string;
+    appSecret: string;
+    signal?: AbortSignal;
+  }) {
+    const userId = await this.userId(input.signal);
+    const r = await this.raw(
+      "connectWechat",
+      "/v1/connect/wechat/credentials",
+      z.object({
+        account: z.object({
+          accountId: z.string().min(1),
+          username: z.string().nullish(),
+          displayName: z.string().nullish(),
+        }),
+        server: z.object({
+          url: z.string().min(1),
+          token: z.string().min(1),
+          encodingAESKey: z.string().min(1),
+        }),
+      }),
+      {
+        method: "POST",
+        body: {
+          appId: input.appId,
+          appSecret: input.appSecret,
+          state: `${userId}-${input.profileId}`,
+        },
+        signal: input.signal,
+      },
+    );
+    return {
+      accountId: r.account.accountId,
+      name: r.account.displayName ?? r.account.username ?? "WeChat",
+      server: r.server,
+    };
   }
 
   /** Zernio's own user id for the credentials connect state; it never changes, so it's kept. */

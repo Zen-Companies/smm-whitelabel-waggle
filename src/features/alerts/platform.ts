@@ -9,6 +9,7 @@ import type { SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { logMailer, type Mailer } from "@/lib/email/mailer";
+import { brandedEmail, paragraph } from "@/lib/email/frame";
 
 // T19, job route side: while Zernio is paused, tell the operator once (never the owners), and
 // probe Zernio at most every 5 minutes; the first successful call ends the pause and sending
@@ -54,10 +55,15 @@ export async function handlePlatformPause(deps: {
         to: deps.operatorEmail ? [deps.operatorEmail] : [],
         subject: "Operator: Zernio paused, sending is on hold",
         text,
-        html: text
-          .split("\n")
-          .map((l) => `<p>${l}</p>`)
-          .join(""),
+        html: brandedEmail({
+          eyebrow: { text: "Staff", tone: "needs" },
+          title: "Zernio paused: sending is on hold",
+          bodyHtml: text
+            .split("\n")
+            .map((l) => paragraph(l))
+            .join(""),
+          because: "Waggle's operator",
+        }),
         // One email per pause, even if this sweep runs again before the row is updated.
         idempotencyKey: `zernio-paused-${pause.pausedAt}`,
       });

@@ -1,3 +1,5 @@
+import { getServiceClient } from "@/lib/supabase/service";
+import { loadPlatformStatuses, statusOf } from "@/features/platforms";
 import { Check } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -80,6 +82,8 @@ export async function SetupView({
   /** Step 2 with every place to connect open. */
   more?: boolean;
 }) {
+  // Staff → Platforms (18 Nov): only Available platforms are offered here.
+  const statuses = await loadPlatformStatuses(getServiceClient());
   const tenant = await getCurrentTenant();
   const steps = await loadReadySteps(tenant.id);
   const step: SetupStepNumber = requested ?? nextReadyStep(steps)?.n ?? 6;
@@ -234,7 +238,7 @@ export async function SetupView({
           {more ? (
             <>
               <ul className="card divide-line flex flex-col divide-y">
-                {MORE_ACCOUNTS.map((id) => (
+                {MORE_ACCOUNTS.filter((id) => statusOf(statuses, id) === "available").map((id) => (
                   <li key={id} className="flex flex-wrap items-center gap-3 px-5 py-4">
                     <PlatformMark platform={id} size={32} />
                     <span className="flex min-w-0 flex-1 flex-col">

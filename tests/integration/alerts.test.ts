@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { deliverPendingAlerts } from "@/features/alerts/deliver";
+import { deliverDueDigests, deliverPendingAlerts } from "@/features/alerts/deliver";
 import { logMailer, type Email, type Mailer } from "@/lib/email/mailer";
 import { enqueueDraftNudges } from "@/features/alerts/nudges";
 import { escalateClosingDmWindows } from "@/features/approvals/sweeps";
@@ -99,6 +99,8 @@ beforeAll(async () => {
     .select("id")
     .single();
   accountId = account!.id;
+  // These tests are about one email per alert; summaries have their own test below.
+  await db.from("notification_prefs").insert({ user_id: userId, email_frequency: "now" });
 });
 
 afterAll(async () => {
@@ -107,6 +109,41 @@ afterAll(async () => {
 });
 
 describe("alerts", () => {
+  it("every hour: the alert waits, then one summary groups it by person (18 Nov)", async () => {
+    await db.from("notification_prefs").update({ email_frequency: "hourly" }).eq("user_id", userId);
+    try {
+      const id = await item();
+      await transitionItem(db, {
+        itemId: id,
+        from: "classified",
+        event: "escalate",
+        details: { policyReason: "complaint" },
+      });
+      const before = sent.length;
+      await deliver();
+      expect(sent.length).toBe(before);
+      const [alert] = (await alertsFor("escalation")).filter((a) => a.item_id === id);
+      expect(alert.status).toBe("batched");
+
+      // Not yet due: nothing goes out.
+      const run = (at: Date) =>
+        deliverDueDigests({ db, mailer, appUrl: APP, tenantId, now: () => at });
+      expect((await run(new Date())).sent).toBe(0);
+      // An hour later: one summary, grouped by person, no message text.
+      expect((await run(new Date(Date.now() + 61 * 60_000))).sent).toBe(1);
+      const digest = sent[sent.length - 1];
+      expect(digest.to).toEqual([ownerEmail]);
+      expect(digest.subject).toBe("Alerts Cafe: 1 person needs you");
+      expect(digest.text).toContain("jen (Instagram comment)");
+      expect(digest.text).toContain(`${APP}/inbox/items/${id}`);
+      expect(digest.text).not.toContain("halal");
+      // Sent once.
+      expect((await run(new Date(Date.now() + 3 * 3600_000))).sent).toBe(0);
+    } finally {
+      await db.from("notification_prefs").update({ email_frequency: "now" }).eq("user_id", userId);
+    }
+  });
+
   it("an escalated item sends one email to the owner with why and a link", async () => {
     const id = await item();
     await transitionItem(db, {

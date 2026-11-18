@@ -105,7 +105,7 @@ Nothing is told apart by bold, size or underline alone. Five rules, shared piece
 
 ## 6. Bee and motion
 
-The bee (black outline, honey body, white wing) stays for loading (a page waiting over a second), "all caught up" empty states and the 404. Setup (Get Waggle ready, approved 17 Nov) is the one other place: the honeycomb in step 3, the bee carrying a try in step 4, each reply choice's bee in step 5, and the dance once at "You're set up". Small, beside the form, never over what you type. Sign-in and sign-up keep the redesign's drifting cards and muted autoplay selfie videos (with a still poster). `prefers-reduced-motion`: everything stops, videos show their poster.
+The bee (black outline, honey body, white wing) stays for loading (a page waiting over a second), "all caught up" empty states and the 404. Setup (Get Waggle ready, approved 17 Nov) is the one other place: the honeycomb in step 3, the bee carrying a try in step 4, each reply choice's bee in step 5, and the dance once at "You're set up". Small, beside the form, never over what you type. "Before you connect" (approved 18 Nov) is the other: the bee carries the connection from Waggle's honeycomb to the platform while the note is open. Zernio is named there in words only, never its logo. Sign-in and sign-up keep the redesign's drifting cards and muted autoplay selfie videos (with a still poster). `prefers-reduced-motion`: everything stops, videos show their poster.
 
 ## 7. Voice
 

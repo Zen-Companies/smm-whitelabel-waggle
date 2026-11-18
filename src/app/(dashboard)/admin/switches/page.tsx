@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { SwitchesView } from "@/features/mcp";
 import { BrandSwitches } from "@/features/staff";
+import { EmailDefaultSwitch } from "@/features/alerts";
 
 export const metadata = { title: "Feature switches" };
 
@@ -21,6 +22,9 @@ export default function Page(props: PageProps<"/admin/switches">) {
       </Suspense>
       <Suspense fallback={<div className="skeleton h-40" />}>
         <BrandSwitches switchKey="messaging" />
+      </Suspense>
+      <Suspense fallback={<div className="skeleton h-40" />}>
+        <EmailDefaultSwitch />
       </Suspense>
     </main>
   );
