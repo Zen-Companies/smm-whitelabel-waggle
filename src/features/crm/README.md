@@ -42,11 +42,11 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 
 ## Sign-up, feedback and first-touch UTM (18 Nov)
 
-| Event       | What HighLevel gets                                                                                                | Queued from                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| signed_up   | The contact (name, email, first-touch UTMs) + the tag `waggle-signup`. No note, no fields, no trigger.             | `features/orgs/server.ts` (a login's personal organization, logins under 2 days old) |
-| feedback    | A note on the contact ("Waggle feedback · type": message, follow-up, OK to contact, page, business, role). No tag. | `features/feedback/actions.ts`                                                       |
-| page_rating | A note ("Page rating · page: good / not good" + the reason). No tag.                                               | `features/feedback/actions.ts`                                                       |
+| Event       | What HighLevel gets                                                                                                                                                                                           | Queued from                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| signed_up   | Like every event: the fields (`waggle_event = signed_up`, plan blank, founding false) + first-touch UTMs, then `waggle-app-event` and `waggle-signup`. The trial starts later, at checkout (`trial_started`). | `features/orgs/server.ts` (a login's personal organization, logins under 2 days old) |
+| feedback    | A note on the contact ("Waggle feedback · type": message, follow-up, OK to contact, page, business, role). No tag.                                                                                            | `features/feedback/actions.ts`                                                       |
+| page_rating | A note ("Page rating · page: good / not good" + the reason). No tag.                                                                                                                                          | `features/feedback/actions.ts`                                                       |
 
 - **UTMs:** the proxy keeps the first link's `utm_source / utm_medium / utm_campaign / utm_content / ref` in the
   `waggle_utm` cookie (90 days, first one wins). At sign-up they go to the contact's `utm_*` / `ref_code` fields,

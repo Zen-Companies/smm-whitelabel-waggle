@@ -6,7 +6,7 @@ export {
   CRM_INACTIVE_AFTER_DAYS,
   CRM_MIN_GAP_MS,
   CRM_NOTE_ONLY,
-  CRM_TAG_ONLY,
+  CRM_EXTRA_TAGS,
   CRM_TRIGGER_TAG,
   isCrmEvent,
 } from "./catalog";
