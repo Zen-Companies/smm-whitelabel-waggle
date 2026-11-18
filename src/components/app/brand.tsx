@@ -1,27 +1,25 @@
 import { cn } from "cn";
 
 /**
- * The Waggle mark (docs/design.md §2): the waggle itself, a honey wave that starts high, dips
- * twice and rises into the bee, an ink dot at its head. Reads as a W. Drawn inline so it takes
- * the tokens; the files in public/brand/ are the same shape for use outside the app.
+ * The Waggle mark, as on gowaggle.ai (18 Nov): the waggle dance, a honey figure-8. Drawn inline
+ * so it takes the tokens; public/brand/ and the app icons are the same shape.
  */
 export function Mark({ size = 22, className }: { size?: number; className?: string }) {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 48 48"
+      viewBox="-140 -110 280 190"
       aria-hidden
       className={cn("shrink-0", className)}
     >
       <path
-        d="M5 16 C9 16 11 35 15 35 S21 16 25 16 S31 35 35 35 S39 17 41 16"
+        d="M0,0 C30,-45 112,-58 112,0 C112,58 30,45 0,0 C-30,-45 -112,-58 -112,0 C-112,58 -30,45 0,0Z"
         fill="none"
         stroke="var(--honey)"
-        strokeWidth="5"
-        strokeLinecap="round"
+        strokeWidth="26"
+        strokeLinejoin="round"
       />
-      <circle cx="42.5" cy="13.5" r="5" fill="var(--ink)" />
     </svg>
   );
 }

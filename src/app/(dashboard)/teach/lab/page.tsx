@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { OwnerLab } from "@/features/lab";
 import { TeachHeader } from "@/components/app/teach-header";
@@ -23,7 +24,7 @@ export default function LabPage() {
           Practice only: nothing is posted
         </span>
       </header>
-      <Suspense fallback={<div className="skeleton h-96" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.teach} />}>
         <OwnerLab />
       </Suspense>
     </main>

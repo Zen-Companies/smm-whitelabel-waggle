@@ -5,6 +5,8 @@ export {
   CRM_FIELDS,
   CRM_INACTIVE_AFTER_DAYS,
   CRM_MIN_GAP_MS,
+  CRM_NOTE_ONLY,
+  CRM_TAG_ONLY,
   CRM_TRIGGER_TAG,
   isCrmEvent,
 } from "./catalog";
@@ -19,3 +21,5 @@ export {
   queueQuietly,
 } from "./queue";
 export type { QueuedCrmEvent } from "./queue";
+export { firstTouchUtm, parseUtmCookie, UTM_COOKIE, UTM_FIELDS, utmFromParams } from "./utm";
+export type { Utm } from "./utm";

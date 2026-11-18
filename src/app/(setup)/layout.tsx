@@ -26,9 +26,6 @@ export default function SetupLayout({ children }: LayoutProps<"/">) {
           <Link href="/welcome" className="flex min-h-14 items-center" aria-label="Waggle">
             <Brand />
           </Link>
-          <span className="bg-honey-tint text-honey-text rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide">
-            BETA
-          </span>
           <Suspense fallback={<div className="skeleton h-10 w-48 rounded-md" />}>
             <Switcher />
           </Suspense>

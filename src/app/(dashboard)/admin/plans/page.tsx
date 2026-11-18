@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { PlansView } from "@/features/billing";
 
@@ -13,7 +14,7 @@ export default function Page() {
           change. Limits apply once billing is on.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-64" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <PlansView />
       </Suspense>
     </main>

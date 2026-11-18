@@ -1,5 +1,6 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
-import { InboxSkeleton, InboxView } from "@/features/approvals";
+import { InboxView } from "@/features/approvals";
 
 export const metadata = { title: "Inbox" };
 
@@ -13,7 +14,7 @@ export default function InboxAnsweredPage({ searchParams }: Props) {
       data-fit-screen
       className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8 lg:min-h-0 lg:flex-1"
     >
-      <Suspense fallback={<InboxSkeleton />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.inbox} />}>
         <InboxView tab="answered" searchParams={searchParams} />
       </Suspense>
     </main>
