@@ -46,3 +46,7 @@ export { TrialConversionTag } from "./trial-tag";
 export { PLAN_HREF, PlanChip, PlanMenuRow, PlanMoreRow } from "./plan-chip";
 export type { PlanViewer } from "./plan-chip";
 export { FOUNDING_COUPON } from "./catalog";
+export { PlanStep } from "./plan-step";
+export { planGateFor, requirePlan } from "./plan-gate-server";
+export type { PlanGateState } from "./plan-gate-server";
+export { CHECKOUT_OK_COOKIE, PLAN_GATE_PATH } from "./plan-gate";

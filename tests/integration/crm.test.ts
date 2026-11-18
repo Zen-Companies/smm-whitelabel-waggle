@@ -150,7 +150,7 @@ describe("crm queue", () => {
     expect(data?.next_attempt_at).not.toBeNull();
   });
 
-  it("sign-up: the contact gets its first campaign and the waggle-signup tag, no note", async () => {
+  it("sign-up: a full event (signed_up) with its first campaign, the trigger and waggle-signup", async () => {
     await db.from("crm_events").update({ status: "sent" }).eq("user_id", userId);
     await queueCrmEvent(db, {
       event: "signed_up",
@@ -163,10 +163,15 @@ describe("crm queue", () => {
     calls.length = 0;
     existingFields = {};
     expect((await deliverCrmEvents({ db, client: fake, now: () => at })).sent).toBe(1);
-    expect(calls).toEqual([
-      { upsert: { email, name: null, fields: { utm_source: "meta", utm_campaign: "launch" } } },
-      { tags: ["waggle-signup"] },
-    ]);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.upsert?.fields).toMatchObject({
+      waggle_event: "signed_up",
+      waggle_founding: "false",
+      utm_source: "meta",
+      utm_campaign: "launch",
+    });
+    expect(calls[0]?.upsert?.fields.waggle_plan ?? "").toBe("");
+    expect(calls[1]).toEqual({ tags: ["waggle-app-event", "waggle-signup"] });
   });
 
   it("a contact that already has a campaign keeps it", async () => {
@@ -181,7 +186,7 @@ describe("crm queue", () => {
     calls.length = 0;
     existingFields = { utm_source: "meta" };
     await deliverCrmEvents({ db, client: fake, now: () => at });
-    expect(calls.at(0)?.upsert?.fields).toEqual({});
+    expect(calls.at(0)?.upsert?.fields).not.toHaveProperty("utm_source");
   });
 
   it("feedback: a note on the contact, no fields, no tag", async () => {

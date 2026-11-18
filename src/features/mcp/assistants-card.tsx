@@ -9,7 +9,7 @@ const day = (iso: string) =>
   new Date(iso).toLocaleDateString("en", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /**
- * Settings → AI assistants (design v3): Waggle's address for Claude, ChatGPT and Grok, and the
+ * Settings → AI assistants (design v3): Waggle's address for Claude, ChatGPT and Cursor, and the
  * assistants this login connected. Connections belong to the login, so one can cover several brands.
  */
 export async function AssistantsCard() {
@@ -35,7 +35,7 @@ export async function AssistantsCard() {
           AI assistants
         </h2>
         <p className="meta">
-          Use Waggle from Claude, ChatGPT or Grok: ask what&apos;s in your inbox, approve replies,
+          Use Waggle from Claude, ChatGPT or Cursor: ask what&apos;s in your inbox, approve replies,
           plan posts. Connections belong to your login, so one can cover several brands.
         </p>
       </div>

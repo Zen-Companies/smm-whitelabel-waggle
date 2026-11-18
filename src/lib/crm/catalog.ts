@@ -3,7 +3,8 @@
 
 /** Every event Waggle sends, and what starts it in the app. */
 export const CRM_EVENTS = {
-  signed_up: "A new login: the contact (with first-touch UTMs) gets the waggle-signup tag",
+  signed_up:
+    "A new login (no plan yet): fields + first-touch UTMs, waggle-app-event and waggle-signup",
   feedback: "Send feedback (a note on the contact only: no fields, no tag)",
   page_rating: "A page rating, or its reason (a note on the contact only)",
   trial_started: "Stripe: a subscription starts with a trial",
@@ -30,8 +31,8 @@ export const isCrmEvent = (v: unknown): v is CrmEvent =>
 /** Events that only add a note to the contact: no fields, no trigger tag, no workflow. */
 export const CRM_NOTE_ONLY: ReadonlySet<CrmEvent> = new Set<CrmEvent>(["feedback", "page_rating"]);
 
-/** Events that only add their own tag (no fields, no trigger tag). */
-export const CRM_TAG_ONLY: Partial<Record<CrmEvent, string>> = { signed_up: "waggle-signup" };
+/** Extra tags an event adds next to the trigger tag (18 Nov: Walter's workflow starts on the trigger). */
+export const CRM_EXTRA_TAGS: Partial<Record<CrmEvent, string>> = { signed_up: "waggle-signup" };
 
 /** HighLevel's workflow starts on this tag, reads `waggle_event`, tags the contact, clears it. */
 export const CRM_TRIGGER_TAG = "waggle-app-event";

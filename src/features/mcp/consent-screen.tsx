@@ -86,7 +86,7 @@ export async function ConsentScreen({ authorizationId }: { authorizationId: stri
       <Message title="This app can't connect to Waggle">
         <p>
           It asked to send you back to <b className="text-ink font-semibold">{host}</b>, which
-          isn&apos;t Claude, ChatGPT or Grok. Nothing was shared.
+          isn&apos;t Claude, ChatGPT or Cursor. Nothing was shared.
         </p>
         <form action={denyConnection}>
           <input type="hidden" name="authorizationId" value={details.authorization_id} />
