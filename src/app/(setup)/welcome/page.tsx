@@ -2,6 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { buttonVariants } from "@/components/ui/button";
+import {
+  ConversionTag,
+  conversionEventId,
+  isNewRegistration,
+  matchKeys,
+} from "@/features/ad-tracking";
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
 import { StepsAhead } from "@/features/setup";
 import { AddBrandForm, getOpenOrg } from "@/features/tenants";
@@ -119,8 +125,21 @@ async function Content({ beta }: { beta: boolean }) {
   // On your own (the organization made at sign-up): step 0 of Get Waggle ready, approved 17 Nov
   // ("Before setup: name your business"). Next makes the brand and opens setup step 1.
   if (org.personal && mayAdd) {
+    // A new owner's own signup, for the ads (17 Nov). Not someone who came to join a team.
+    const keys =
+      invites.length === 0 && isNewRegistration(user.created_at, new Date())
+        ? matchKeys(user.id, user.email)
+        : null;
     return (
       <>
+        {keys && (
+          <ConversionTag
+            event="CompleteRegistration"
+            eventId={conversionEventId("CompleteRegistration", user.id)}
+            em={keys.em}
+            externalId={keys.externalId}
+          />
+        )}
         {betaBanner}
         <InviteList invites={invites} email={user.email} />
         {invites.length === 0 && (
