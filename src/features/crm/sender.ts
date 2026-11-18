@@ -9,7 +9,7 @@ import { GhlError, type GhlClient } from "@/lib/ghl/client";
 import {
   CRM_MIN_GAP_MS,
   CRM_NOTE_ONLY,
-  CRM_TAG_ONLY,
+  CRM_EXTRA_TAGS,
   CRM_TRIGGER_TAG,
   firstTouchUtm,
   parseUtmCookie,
@@ -128,19 +128,7 @@ export async function deliverCrmEvents(deps: {
       const note = noteOf(row.details);
       let contactId: string;
       let founding = false;
-      const ownTag = CRM_TAG_ONLY[row.event];
-      if (ownTag) {
-        // Sign-up: the contact with its first campaign (never over one it already has) + its tag.
-        const raw = (row.details as { utm?: unknown } | null)?.utm;
-        const visit: Utm | null = parseUtmCookie(typeof raw === "string" ? raw : null);
-        const existing = visit ? await client.contactFields(contact.email) : {};
-        ({ contactId } = await client.upsertContact({
-          email: contact.email,
-          name: contact.name,
-          fields: firstTouchUtm(visit, existing) as Record<string, string>,
-        }));
-        await client.addTags(contactId, [ownTag]);
-      } else if (CRM_NOTE_ONLY.has(row.event)) {
+      if (CRM_NOTE_ONLY.has(row.event)) {
         // A note only (feedback, page ratings): the contact by email, no fields, no tag.
         ({ contactId } = await client.upsertContact({
           email: contact.email,
@@ -150,13 +138,18 @@ export async function deliverCrmEvents(deps: {
       } else {
         const snapshot = await loadSnapshot(db, { ...row, event: row.event }, now);
         founding = snapshot.founding;
+        // Sign-up also carries the first campaign, never over one the contact already has.
+        const raw = (row.details as { utm?: unknown } | null)?.utm;
+        const visit: Utm | null = parseUtmCookie(typeof raw === "string" ? raw : null);
+        const utm = visit ? firstTouchUtm(visit, await client.contactFields(contact.email)) : {};
         ({ contactId } = await client.upsertContact({
           email: contact.email,
           name: contact.name,
           companyName: snapshot.business || null,
-          fields: crmFields(snapshot),
+          fields: { ...crmFields(snapshot), ...(utm as Record<string, string>) },
         }));
-        await client.addTags(contactId, [CRM_TRIGGER_TAG]);
+        const extra = CRM_EXTRA_TAGS[row.event];
+        await client.addTags(contactId, extra ? [CRM_TRIGGER_TAG, extra] : [CRM_TRIGGER_TAG]);
       }
       if (note) await client.addNote(contactId, note);
       await db
