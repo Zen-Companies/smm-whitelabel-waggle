@@ -137,7 +137,13 @@ describe("switches", () => {
       connected: 0,
     });
     const real = (await loadSwitches(db, "Real Customer", new Date())).rows[0];
-    expect(real).toMatchObject({ on: false, isTest: false });
+    // On by default (18 Nov): no row means on; a brand switched off in its row shows off.
+    expect(real).toMatchObject({ on: true, isTest: false });
+    await db.from("feature_flags").insert({ key: "mcp", tenant_id: real!.id, enabled: false });
+    expect((await loadSwitches(db, "Real Customer", new Date())).rows[0]).toMatchObject({
+      on: false,
+    });
+    await db.from("feature_flags").delete().eq("key", "mcp").eq("tenant_id", real!.id);
   });
 });
 

@@ -11,7 +11,8 @@ export default function Page(props: PageProps<"/admin/switches">) {
       <div className="flex flex-col gap-1">
         <h1 className="page-title">Feature switches</h1>
         <p className="text-ink-2">
-          Turn AI assistants on for everyone or brand by brand, while billing tiers are decided.
+          AI assistants are on for every brand. Switch one brand off in its row, or all at once
+          here.
         </p>
       </div>
       <Suspense fallback={<div className="skeleton h-96" />}>

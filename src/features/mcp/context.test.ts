@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { resolveBrand, type ToolContext } from "./context";
 
 // A stand-in for the two lookups: tenant_members rows [tenant_id, user_id], and the brands with
-// AI assistants switched on (feature_flags).
+// AI assistants switched on (any brand not switched off in feature_flags).
 function fakeDb(members: [string, string][], on: string[], role = "owner") {
   return {
     from: (table: string) => {
@@ -13,16 +13,20 @@ function fakeDb(members: [string, string][], on: string[], role = "owner") {
           f[col] = val;
           return q;
         },
-        in: (_col: string, ids: string[]) => ({
-          // `.is("tenants.offboarded_at", null)`: none of these brands is offboarded.
-          is: async () => ({
-            data:
-              table === "feature_flags"
-                ? ids.filter((id) => on.includes(id)).map((tenant_id) => ({ tenant_id }))
-                : [],
-            error: null,
-          }),
-        }),
+        in: (_col: string, ids: string[]) => {
+          // tenants: none offboarded. feature_flags (enabled = false): the brands not in `on`.
+          const result =
+            table === "tenants"
+              ? { data: ids.map((id) => ({ id })), error: null }
+              : {
+                  data: ids.filter((id) => !on.includes(id)).map((tenant_id) => ({ tenant_id })),
+                  error: null,
+                };
+          return {
+            is: async () => result,
+            then: (ok: (r: typeof result) => unknown) => Promise.resolve(result).then(ok),
+          };
+        },
         maybeSingle: async () => ({
           data: members.some(([t, u]) => t === f.tenant_id && u === f.user_id)
             ? { tenant_id: f.tenant_id, role }
