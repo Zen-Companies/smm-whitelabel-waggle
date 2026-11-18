@@ -9,6 +9,7 @@ import { openOnPlatformHref } from "./open-on-platform";
 import { inboxRules } from "@/lib/social/platforms";
 import type { InboxEntry } from "./inbox-data";
 import { mediaLabel, previewIndex } from "./attachments";
+import { isEmailPlatform, readableEmailText } from "@/features/inbox";
 
 // Inbox polish (approved 16 Nov): the conversation fills its card. A header with the channel's
 // logo and Open in <app> stays put; under it the thread (on a warmer shade) and the footer (the
@@ -35,7 +36,13 @@ export function ConversationPane({
         <span className="truncate font-semibold">{name}</span>
         <span className="text-ink-3">
           {platformName(entry.platform)}{" "}
-          {entry.kind === "dm" ? "DM" : entry.kind === "review" ? "review" : "comment"}
+          {entry.kind === "dm"
+            ? isEmailPlatform(entry.platform)
+              ? "email"
+              : "DM"
+            : entry.kind === "review"
+              ? "review"
+              : "comment"}
         </span>
         <CategoryLabel category={entry.category} />
         {open && (
@@ -108,11 +115,13 @@ export function ConversationPane({
                     <p
                       className={
                         mine
-                          ? "bg-ink rounded-xl rounded-br-[4px] px-3.5 py-2 whitespace-pre-wrap text-white"
-                          : "bg-subtle rounded-xl rounded-bl-[4px] px-3.5 py-2 whitespace-pre-wrap"
+                          ? "bg-ink rounded-xl rounded-br-[4px] px-3.5 py-2 [overflow-wrap:anywhere] whitespace-pre-wrap text-white"
+                          : "bg-subtle rounded-xl rounded-bl-[4px] px-3.5 py-2 [overflow-wrap:anywhere] whitespace-pre-wrap"
                       }
                     >
-                      {m.text || (
+                      {(m.text && !mine && isEmailPlatform(entry.platform)
+                        ? readableEmailText(m.text)
+                        : m.text) || (
                         <span className="text-ink-2 italic">
                           {media ?? "Sent something without words"}
                         </span>

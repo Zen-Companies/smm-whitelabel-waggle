@@ -1,14 +1,30 @@
 import type { SiteKeys } from "@/lib/social/types";
 
 // Settings → Accounts → More connections (T80, designs "Settings · Accounts" and "Connect with
-// your own keys"). Only what can be whitelabeled connects: the owner pastes their own keys into
-// Waggle and nothing is installed. Anything whose sign-in or app screen names our technical
-// partner says "Coming soon" until that changes (user decision, 13 Nov).
+// your own keys"). Sites connect with the owner's own keys typed into Waggle. Since 18 Nov
+// (design "Every Zernio platform"), everything Zernio offers connects too: the partner's own
+// sign-in opens after Waggle's "Before you connect" note, which says Zernio is behind it, and
+// WeChat connects with its keys. Staff → Platforms decides what each owner sees.
 
 export const OWN_KEY_PLATFORMS = ["shopify", "wordpress", "webflow"] as const;
 export type OwnKeyPlatform = (typeof OWN_KEY_PLATFORMS)[number];
 /** Every platform a More connections item can hold (read from the brand's Zernio profile). */
-export const CONNECTED_PLATFORMS = [...OWN_KEY_PLATFORMS, "imap"] as const;
+export const CONNECTED_PLATFORMS = [
+  ...OWN_KEY_PLATFORMS,
+  "imap",
+  "wechat",
+  "slack",
+  "wix",
+  "hubspot",
+  "salesforce",
+  "stripe",
+  "googleanalytics",
+  "googleads",
+  "tiktokads",
+  "redditads",
+  "microsoftads",
+  "xads",
+] as const;
 
 export const isOwnKeyPlatform = (p: string): p is OwnKeyPlatform =>
   (OWN_KEY_PLATFORMS as readonly string[]).includes(p);
@@ -18,7 +34,7 @@ export type ConnectionItem = {
   id: string;
   label: string;
   line: string;
-  how: "keys" | "email" | "mail" | "link" | "soon";
+  how: "keys" | "email" | "mail" | "link" | "soon" | "integration" | "wechat";
   /** The Zernio platform its connections carry, when it differs from `id`. */
   platform?: string;
   href?: string;
@@ -31,7 +47,7 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
       { id: "sms", label: "SMS", line: "Texts on your Waggle number", how: "soon" },
       { id: "rcs", label: "RCS", line: "Branded texts with buttons", how: "soon" },
       { id: "imessage", label: "iMessage", line: "Blue-bubble texts (US, UK)", how: "soon" },
-      { id: "wechat", label: "WeChat", line: "Verified Service Account", how: "soon" },
+      { id: "wechat", label: "WeChat", line: "Verified Service Account", how: "wechat" },
       { id: "slack", label: "Slack", line: "Your team's Slack, in the inbox", how: "soon" },
     ],
   },
@@ -70,14 +86,28 @@ export const MORE_CONNECTIONS: { title: string; items: ConnectionItem[] }[] = [
       },
       { id: "googleads", label: "Google Ads", line: "Search and Maps ads", how: "soon" },
       { id: "tiktokads", label: "TikTok Ads", line: "TikTok ads", how: "soon" },
+      { id: "redditads", label: "Reddit Ads", line: "Reddit ads", how: "soon" },
+      { id: "microsoftads", label: "Microsoft Ads", line: "Bing search ads", how: "soon" },
+      { id: "xads", label: "X Ads", line: "Ads on X (connect X first)", how: "soon" },
     ],
   },
   {
     title: "Business tools",
     items: [
-      { id: "hubspot", label: "HubSpot", line: "CRM", how: "soon" },
+      {
+        id: "hubspot",
+        label: "HubSpot",
+        line: "CRM: your inbox contacts and messages",
+        how: "soon",
+      },
+      {
+        id: "salesforce",
+        label: "Salesforce",
+        line: "CRM: your inbox contacts and conversations",
+        how: "soon",
+      },
       { id: "googleanalytics", label: "Google Analytics", line: "Website visits", how: "soon" },
-      { id: "stripe", label: "Stripe", line: "Sales from ads", how: "soon" },
+      { id: "stripe", label: "Stripe", line: "Payments count as sales from your ads", how: "soon" },
     ],
   },
 ];
@@ -189,6 +219,21 @@ export function parseLineKeys(
     };
   }
   return { ok: true, value: { channelId, channelSecret } };
+}
+
+/** A WeChat Service Account's AppID (wx + 16) and AppSecret (32), per Zernio's WeChat connect docs. */
+export function parseWechatKeys(
+  f: FormData,
+): { ok: true; value: { appId: string; appSecret: string } } | Bad {
+  const appId = val(f, "appId");
+  if (!/^wx[0-9a-z]{16}$/i.test(appId)) {
+    return { ok: false, field: "appId", error: "The AppID starts with wx and has 18 characters." };
+  }
+  const appSecret = val(f, "appSecret");
+  if (!/^[0-9a-z]{32}$/i.test(appSecret)) {
+    return { ok: false, field: "appSecret", error: "The AppSecret is 32 letters and digits." };
+  }
+  return { ok: true, value: { appId, appSecret } };
 }
 
 /** An email address, checked before discovery. */

@@ -5,6 +5,7 @@ import type { Permission, StaffRole } from "./permissions";
 export const STAFF_PAGES = [
   { href: "/admin/costs", label: "Costs", permission: "admin.costs.view" },
   { href: "/admin/plans", label: "Plans", permission: "admin.caps.manage" },
+  { href: "/admin/platforms", label: "Platforms", permission: "admin.caps.manage" },
   { href: "/admin/lab", label: "Lab", permission: "admin.lab.use" },
   { href: "/admin/mcp-tools", label: "MCP tools", permission: "mcp.docs.view" },
   { href: "/admin/mcp-activity", label: "MCP activity", permission: "mcp.audit.view" },

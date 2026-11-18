@@ -4,6 +4,15 @@ import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { leadConsented } from "@/lib/social/lead-consent";
 import { composeAlert, type AlertContent } from "./compose";
+import {
+  composeDigest,
+  digestDue,
+  digestLine,
+  IMMEDIATE_KINDS,
+  isFrequency,
+  type DigestLine,
+  type Frequency,
+} from "./digest";
 import type { Mailer } from "@/lib/email/mailer";
 
 // Sends queued alerts (the `alerts` outbox, filled by DB triggers and the nudge sweep). Runs in
@@ -27,6 +36,8 @@ export interface DeliverSummary {
   logged: number;
   retried: number;
   failed: number;
+  /** Alerts that went only into people's summaries. */
+  batched: number;
 }
 
 type AlertRow = {
@@ -180,11 +191,11 @@ async function contentOf(db: ServiceClient, alert: AlertRow): Promise<AlertConte
  * admins (they reconnect); messages to owners, admins and members (they approve). Viewers get
  * none. Addresses come from auth.users via the admin API.
  */
-async function recipientEmails(
+async function recipients(
   db: ServiceClient,
   tenantId: string,
   kind: string,
-): Promise<string[]> {
+): Promise<{ userId: string; email: string }[]> {
   // Connections and paid channels (RCS) are set up by owners and admins.
   const roles =
     kind === "disconnect" || kind === "rcs_status"
@@ -196,18 +207,40 @@ async function recipientEmails(
     .eq("tenant_id", tenantId)
     .in("role", roles);
   if (error) throw new Error(`owner lookup failed: ${error.message}`);
-  const emails: string[] = [];
+  const out: { userId: string; email: string }[] = [];
   for (const m of members ?? []) {
     const { data } = await db.auth.admin.getUserById(m.user_id);
-    if (data.user?.email) emails.push(data.user.email);
+    if (data.user?.email) out.push({ userId: m.user_id, email: data.user.email });
   }
-  return emails;
+  return out;
+}
+
+/** Each person's choice, else the site default (design "Waggle emails", 18 Nov). */
+export async function emailFrequencies(
+  db: ServiceClient,
+  userIds: string[],
+): Promise<Map<string, Frequency>> {
+  const [{ data: site }, { data: prefs }] = await Promise.all([
+    db.from("email_settings").select("default_frequency").eq("id", true).maybeSingle(),
+    userIds.length
+      ? db.from("notification_prefs").select("user_id, email_frequency").in("user_id", userIds)
+      : Promise.resolve({ data: [] as { user_id: string; email_frequency: string }[] }),
+  ]);
+  const fallback: Frequency = isFrequency(site?.default_frequency)
+    ? site.default_frequency
+    : "hourly";
+  const out = new Map<string, Frequency>();
+  for (const id of userIds) out.set(id, fallback);
+  for (const p of prefs ?? []) {
+    if (isFrequency(p.email_frequency)) out.set(p.user_id, p.email_frequency);
+  }
+  return out;
 }
 
 export async function deliverPendingAlerts(deps: DeliverDeps): Promise<DeliverSummary> {
   const { db, mailer } = deps;
   const now = deps.now?.() ?? new Date();
-  const summary: DeliverSummary = { sent: 0, logged: 0, retried: 0, failed: 0 };
+  const summary: DeliverSummary = { sent: 0, logged: 0, retried: 0, failed: 0, batched: 0 };
 
   let query = db
     .from("alerts")
@@ -232,26 +265,56 @@ export async function deliverPendingAlerts(deps: DeliverDeps): Promise<DeliverSu
     const attempts = alert.attempts + 1;
 
     try {
-      const [content, to, { data: tenant }] = await Promise.all([
+      const [content, people, { data: tenant }] = await Promise.all([
         contentOf(db, alert),
-        recipientEmails(db, alert.tenant_id, alert.kind),
+        recipients(db, alert.tenant_id, alert.kind),
         db.from("tenants").select("name, offboarded_at").eq("id", alert.tenant_id).single(),
       ]);
       // T21: nobody is told about a brand our team offboarded.
       if (tenant?.offboarded_at) throw new PermanentAlertError("brand_offboarded");
-      if (to.length === 0) throw new PermanentAlertError("no_owner_email");
-      const email = composeAlert(content, {
-        businessName: tenant?.name ?? "Your business",
-        appUrl: deps.appUrl,
-      });
-      const result = await mailer.send({ ...email, to, idempotencyKey: alert.id });
+      if (people.length === 0) throw new PermanentAlertError("no_owner_email");
+
+      // 18 Nov: people on "every hour" / "every 2 hours" get it in their summary instead.
+      const line = IMMEDIATE_KINDS.has(alert.kind) ? null : digestLine(content, deps.appUrl);
+      const freq = line
+        ? await emailFrequencies(
+            db,
+            people.map((p) => p.userId),
+          )
+        : new Map<string, Frequency>();
+      const later = line ? people.filter((p) => (freq.get(p.userId) ?? "now") !== "now") : [];
+      const to = people.filter((p) => !later.includes(p)).map((p) => p.email);
+      if (later.length) {
+        const { error: queueError } = await db.from("alert_digest_entries").upsert(
+          later.map((p) => ({
+            user_id: p.userId,
+            tenant_id: alert.tenant_id,
+            alert_id: alert.id,
+            content: line as unknown as Json,
+          })),
+          { onConflict: "user_id,alert_id", ignoreDuplicates: true },
+        );
+        if (queueError) throw new Error(`digest queue failed: ${queueError.message}`);
+      }
+
+      let mode: "sent" | "logged" | "batched" = "batched";
+      let providerId: string | null = null;
+      if (to.length) {
+        const email = composeAlert(content, {
+          businessName: tenant?.name ?? "Your business",
+          appUrl: deps.appUrl,
+        });
+        const result = await mailer.send({ ...email, to, idempotencyKey: alert.id });
+        mode = result.mode;
+        providerId = result.providerId;
+      }
 
       await db
         .from("alerts")
         .update({
-          status: result.mode,
+          status: mode,
           sent_at: now.toISOString(),
-          provider_id: result.providerId,
+          provider_id: providerId,
           last_error: null,
         })
         .eq("id", alert.id);
@@ -260,9 +323,9 @@ export async function deliverPendingAlerts(deps: DeliverDeps): Promise<DeliverSu
         itemId: alert.item_id,
         action: "alert_sent",
         actor: "system",
-        details: { alertId: alert.id, kind: alert.kind, mode: result.mode },
+        details: { alertId: alert.id, kind: alert.kind, mode, batchedFor: later.length },
       });
-      summary[result.mode] += 1;
+      summary[mode] += 1;
     } catch (err) {
       const permanent = err instanceof PermanentAlertError;
       const message = (err instanceof Error ? `${err.name}: ${err.message}` : String(err)).slice(
@@ -296,4 +359,105 @@ export async function deliverPendingAlerts(deps: DeliverDeps): Promise<DeliverSu
     }
   }
   return summary;
+}
+
+export interface DigestSummary {
+  sent: number;
+  logged: number;
+  failed: number;
+}
+
+/** A claim older than this is taken again (a run that died mid-send). */
+const STALE_CLAIM_MS = 30 * 60_000;
+
+/**
+ * Sends the summaries that are due (design "Waggle emails", 18 Nov): one email per person and
+ * business, once their oldest waiting entry has waited their interval. Claimed first so two runs
+ * never send the same summary; the idempotency key also guards the send.
+ */
+export async function deliverDueDigests(deps: DeliverDeps): Promise<DigestSummary> {
+  const { db, mailer } = deps;
+  const now = deps.now?.() ?? new Date();
+  const out: DigestSummary = { sent: 0, logged: 0, failed: 0 };
+  const stale = new Date(now.getTime() - STALE_CLAIM_MS).toISOString();
+  let query = db
+    .from("alert_digest_entries")
+    .select("id, created_at, user_id, tenant_id, content")
+    .is("sent_at", null)
+    .or(`claimed_at.is.null,claimed_at.lt.${stale}`);
+  if (deps.tenantId) query = query.eq("tenant_id", deps.tenantId);
+  const { data: waiting, error } = await query.order("created_at").limit(1000);
+  if (error) throw new Error(`digest lookup failed: ${error.message}`);
+  if (!waiting?.length) return out;
+
+  const groups = new Map<string, typeof waiting>();
+  for (const e of waiting) {
+    const key = `${e.user_id}|${e.tenant_id}`;
+    groups.set(key, [...(groups.get(key) ?? []), e]);
+  }
+  const freq = await emailFrequencies(db, [...new Set(waiting.map((e) => e.user_id))]);
+
+  for (const entries of groups.values()) {
+    if (deps.shouldContinue && !deps.shouldContinue()) break;
+    const { user_id: userId, tenant_id: tenantId } = entries[0];
+    // Someone who switched to "right away" gets what's waiting now.
+    if (!digestDue(new Date(entries[0].created_at), freq.get(userId) ?? "hourly", now)) continue;
+    const ids = entries.map((e) => e.id);
+    const { data: claimed } = await db
+      .from("alert_digest_entries")
+      .update({ claimed_at: now.toISOString() })
+      .in("id", ids)
+      .is("sent_at", null)
+      .or(`claimed_at.is.null,claimed_at.lt.${stale}`)
+      .select("id");
+    const mine = new Set((claimed ?? []).map((c) => c.id));
+    const lines = entries
+      .filter((e) => mine.has(e.id))
+      .map((e) => e.content as unknown as DigestLine);
+    if (!lines.length) continue;
+    try {
+      const [{ data: user }, { data: tenant }] = await Promise.all([
+        db.auth.admin.getUserById(userId),
+        db.from("tenants").select("name, offboarded_at").eq("id", tenantId).single(),
+      ]);
+      const email = user.user?.email;
+      const done = { sent_at: now.toISOString() };
+      if (!email || tenant?.offboarded_at) {
+        await db
+          .from("alert_digest_entries")
+          .update(done)
+          .in("id", [...mine]);
+        continue;
+      }
+      const composed = composeDigest(lines, {
+        businessName: tenant?.name ?? "Your business",
+        appUrl: deps.appUrl,
+      });
+      const result = await mailer.send({
+        ...composed,
+        to: [email],
+        idempotencyKey: `digest-${[...mine].sort()[0]}-${mine.size}`,
+      });
+      await db
+        .from("alert_digest_entries")
+        .update(done)
+        .in("id", [...mine]);
+      await writeAudit(db, {
+        tenantId,
+        action: "alert_digest_sent",
+        actor: "system",
+        details: { userId, entries: mine.size, mode: result.mode },
+      });
+      out[result.mode] += 1;
+    } catch (err) {
+      // Released for the next run.
+      await db
+        .from("alert_digest_entries")
+        .update({ claimed_at: null })
+        .in("id", [...mine]);
+      Sentry.captureException(err, { extra: { userId, tenantId, step: "digest" } });
+      out.failed += 1;
+    }
+  }
+  return out;
 }

@@ -4,7 +4,10 @@ import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
 import { can } from "@/features/orgs";
 import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
-import { platformLabel as name } from "@/lib/social/platforms";
+import { isPlatformId, platformLabel as name } from "@/lib/social/platforms";
+import { loadPlatformStatuses } from "@/features/platforms";
+import { getServiceClient } from "@/lib/supabase/service";
+import { ConnectNoteBox } from "./connect-note-box";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { accountLines } from "./account-lines";
 import { connectAccount } from "./actions";
@@ -35,6 +38,17 @@ export async function AccountsCard({
   const mayConnect = can(tenant.role, "accounts.manage");
 
   const connected = [...new Set((accounts ?? []).map((a) => a.platform))];
+  const statuses = await loadPlatformStatuses(getServiceClient());
+  // "Before you connect" (18 Nov): ?before=<id> after a connect whose sign-in names Zernio.
+  const before = typeof params.before === "string" ? params.before : null;
+  const socialNote =
+    mayConnect && before && isPlatformId(before) ? (
+      <ConnectNoteBox
+        id={before}
+        label={name(before)}
+        mark={<PlatformMark platform={before} size={40} />}
+      />
+    ) : null;
   // A setup step opened from its tile (?setup=bluesky), shown above the tiles.
   const setup = !mayConnect ? null : params.setup === "bluesky" ? (
     <BlueskySetup />
@@ -50,8 +64,9 @@ export async function AccountsCard({
   ) : (
     <>
       {setup}
-      <ConnectTiles exclude={connected} />
-      <MoreConnections />
+      {socialNote}
+      <ConnectTiles exclude={connected} statuses={statuses} />
+      <MoreConnections before={before} />
     </>
   );
 

@@ -1,3 +1,4 @@
+import { brandedEmail, honeyButton, paragraph } from "@/lib/email/frame";
 import { ROLE_LABEL, type OrgRole } from "./abilities";
 
 // The invite email (design v3 "Organizations", OrgInviteJoin). Pure, so it is unit tested.
@@ -21,10 +22,6 @@ const WHAT_THEY_DO: Record<Exclude<OrgRole, "owner">, string> = {
   member: "You'll be able to approve the replies Waggle drafts and schedule posts.",
   viewer: "You'll be able to see its inbox, leads and analytics.",
 };
-
-function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-}
 
 export function brandsPhrase(allBrands: boolean, brandNames: string[]): string {
   if (allBrands || brandNames.length === 0) return "all its brands";
@@ -60,15 +57,18 @@ export function inviteEmail(input: InviteEmailInput): {
     fine,
   ].join("\n");
 
-  const html = `<!doctype html><html><body style="margin:0;background:#f5f5f4;font-family:Inter,Arial,sans-serif;color:#18181b">
-<div style="max-width:560px;margin:0 auto;padding:32px 16px">
-<div style="background:#ffffff;border:1px solid #e7e5e4;border-radius:12px;padding:28px 32px">
-<p style="margin:0 0 16px;font-weight:700;font-size:19px;letter-spacing:-0.03em">waggle<span style="color:#f5b014">.</span></p>
-<h1 style="margin:0 0 12px;font-size:22px;font-weight:600">Join ${esc(input.orgName)}</h1>
-<p style="margin:0 0 20px;line-height:1.5;color:#3f3f46">${esc(lead)} ${esc(WHAT_THEY_DO[input.role])}</p>
-<p style="margin:0 0 20px"><a href="${esc(input.link)}" style="display:inline-block;background:#f5b014;color:#18181b;font-weight:600;text-decoration:none;padding:12px 18px;border-radius:8px">${esc(button)}</a></p>
-<p style="margin:0;font-size:13px;line-height:1.5;color:#71717a">${esc(fine)}</p>
-</div></div></body></html>`;
+  // Design "Waggle emails" (approved 18 Nov): the same frame as every Waggle email.
+  const html = brandedEmail({
+    eyebrow: { text: "You're invited", tone: "honey" },
+    title: `Join ${input.orgName}`,
+    bodyHtml:
+      paragraph(`${lead} ${WHAT_THEY_DO[input.role]}`) +
+      `<div style="margin:0 0 16px">${honeyButton(input.link, button)}</div>` +
+      paragraph(fine, { muted: true }),
+    businessName: input.orgName,
+    because: "invited to Waggle",
+    preheader: lead,
+  });
 
   return { subject, text, html };
 }

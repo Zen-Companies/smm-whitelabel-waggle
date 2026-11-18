@@ -5,9 +5,11 @@ import { Button } from "@/components/ui/button";
 import {
   connectEmailAction,
   connectLineAction,
+  connectWechatAction,
   discoverEmailAction,
   type EmailStep,
   type OwnKeyState,
+  type WechatState,
 } from "./own-key-actions";
 
 /**
@@ -172,6 +174,86 @@ export function LineKeysForm() {
         In LINE Official Account Manager: Settings → Messaging API. Turn the Messaging API on, then
         copy the Channel ID and Channel secret.
       </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" variant="primary" disabled={pending}>
+          {pending ? "Checking…" : "Connect"}
+        </Button>
+        {state.error && !state.field && (
+          <p role="alert" className="text-danger text-sm">
+            {state.error}
+          </p>
+        )}
+      </div>
+    </form>
+  );
+}
+
+/**
+ * WeChat Service Account (18 Nov, docs.zernio.com/platforms/wechat/connect): whitelist the IPs,
+ * type the AppID and AppSecret, then paste the three values Waggle shows into WeChat.
+ */
+export function WechatConnectForm({ ips }: { ips: string[] }) {
+  const [state, action, pending] = useActionState<WechatState, FormData>(connectWechatAction, {});
+  if (state.server) {
+    const rows: [string, string][] = [
+      ["Server URL", state.server.url],
+      ["Token", state.server.token],
+      ["EncodingAESKey", state.server.encodingAESKey],
+    ];
+    return (
+      <div role="status" className="flex flex-col gap-3 pt-3 text-sm">
+        <p className="text-success font-medium">WeChat is connected. One last step in WeChat:</p>
+        <p className="meta">
+          In the Weixin Official Accounts Platform: Settings and Development → Basic Configuration →
+          Server Configuration. Paste these, choose Safe mode, submit, then enable it. Messages
+          start once it&apos;s enabled. (The address is our technical partner&apos;s.)
+        </p>
+        <dl className="flex flex-col gap-2">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex flex-col gap-0.5">
+              <dt className="font-medium">{label}</dt>
+              <dd>
+                <input readOnly value={value} className="field w-full font-mono text-xs" />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    );
+  }
+  const err = (f: string) =>
+    state.field === f && state.error ? (
+      <span role="alert" className="text-danger text-sm">
+        {state.error}
+      </span>
+    ) : null;
+  return (
+    <form action={action} className="flex flex-col gap-3 pt-3">
+      <p className="meta">
+        Needs a verified Service Account. In the Weixin Official Accounts Platform: Settings and
+        Development → Basic Configuration.
+      </p>
+      {ips.length > 0 && (
+        <div className="flex flex-col gap-1 text-sm">
+          <b className="font-medium">1. Add these to the API IP whitelist</b>
+          <ul className="font-mono text-xs">
+            {ips.map((ip) => (
+              <li key={ip}>{ip}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <b className="text-sm font-medium">2. Copy your AppID and AppSecret here</b>
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
+        AppID
+        <input name="appId" autoComplete="off" className="field" required />
+        {err("appId")}
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm font-medium">
+        AppSecret
+        <input name="appSecret" type="password" autoComplete="off" className="field" required />
+        {err("appSecret")}
+      </label>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="submit" variant="primary" disabled={pending}>
           {pending ? "Checking…" : "Connect"}

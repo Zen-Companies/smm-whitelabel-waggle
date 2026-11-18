@@ -81,6 +81,39 @@ export type Database = {
           },
         ]
       }
+      alert_digest_entries: {
+        Row: {
+          alert_id: string
+          claimed_at: string | null
+          content: Json
+          created_at: string
+          id: string
+          sent_at: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          alert_id: string
+          claimed_at?: string | null
+          content: Json
+          created_at?: string
+          id?: string
+          sent_at?: string | null
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          alert_id?: string
+          claimed_at?: string | null
+          content?: Json
+          created_at?: string
+          id?: string
+          sent_at?: string | null
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       alerts: {
         Row: {
           attempts: number
@@ -514,6 +547,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      email_settings: {
+        Row: {
+          default_frequency: string
+          id: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          default_frequency?: string
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          default_frequency?: string
+          id?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      email_settings_changes: {
+        Row: {
+          after: string
+          before: string | null
+          changed_by: string | null
+          created_at: string
+          id: string
+        }
+        Insert: {
+          after: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          after?: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
       }
       feature_flags: {
         Row: {
@@ -1160,6 +1238,24 @@ export type Database = {
         }
         Relationships: []
       }
+      notification_prefs: {
+        Row: {
+          email_frequency: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          email_frequency: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          email_frequency?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
@@ -1548,6 +1644,62 @@ export type Database = {
           created_at?: string
           id?: string
           plan?: string
+        }
+        Relationships: []
+      }
+      platform_settings: {
+        Row: {
+          last_signin: string | null
+          last_signin_at: string | null
+          platform: string
+          status: string
+          updated_at: string
+          updated_by: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          last_signin?: string | null
+          last_signin_at?: string | null
+          platform: string
+          status: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          last_signin?: string | null
+          last_signin_at?: string | null
+          platform?: string
+          status?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      platform_settings_changes: {
+        Row: {
+          after: string
+          before: string | null
+          changed_by: string | null
+          created_at: string
+          id: string
+          platform: string
+        }
+        ComputedFields: never
+        Insert: {
+          after: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          platform: string
+        }
+        Update: {
+          after?: string
+          before?: string | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          platform?: string
         }
         Relationships: []
       }
@@ -2056,6 +2208,49 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      usage_charges: {
+        Row: {
+          amount_cents: number | null
+          created_at: string
+          done_at: string | null
+          id: string
+          kind: string
+          lines: Json | null
+          organization_id: string
+          period_end: string
+          period_start: string
+          status: string
+          stripe_invoice_id: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          amount_cents?: number | null
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          kind: string
+          lines?: Json | null
+          organization_id: string
+          period_end: string
+          period_start: string
+          status?: string
+          stripe_invoice_id?: string | null
+        }
+        Update: {
+          amount_cents?: number | null
+          created_at?: string
+          done_at?: string | null
+          id?: string
+          kind?: string
+          lines?: Json | null
+          organization_id?: string
+          period_end?: string
+          period_start?: string
+          status?: string
+          stripe_invoice_id?: string | null
+        }
+        Relationships: []
       }
       webhook_events: {
         Row: {

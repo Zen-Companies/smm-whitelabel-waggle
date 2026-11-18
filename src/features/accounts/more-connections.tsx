@@ -7,11 +7,11 @@ import { getCurrentTenant } from "@/features/tenants";
 import { brandSwitchOn } from "@/lib/flags/brand-switch";
 import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
-import type { Integration } from "@/lib/social/types";
+import { INTEGRATION_KINDS, type Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
 import { Button } from "@/components/ui/button";
-import { EmailConnectForm } from "./email-line-forms";
-import { connectMailAction } from "./own-key-actions";
+import { EmailConnectForm, WechatConnectForm } from "./email-line-forms";
+import { connectMailAction, connectIntegrationAction, wechatIpWhitelist } from "./own-key-actions";
 import {
   CONNECTED_PLATFORMS,
   isOwnKeyPlatform,
@@ -19,20 +19,46 @@ import {
   withSettingsLinks,
 } from "./own-keys";
 import { StateLabel } from "@/components/app/state-mark";
+import { loadPlatformStatuses, statusOf } from "@/features/platforms";
+import { ConnectNoteBox } from "./connect-note-box";
+
+/** Connections that sign in on the partner's page through Zernio's link (18 Nov). */
+const INTEGRATIONS: readonly string[] = INTEGRATION_KINDS;
 
 /**
  * Settings → Accounts → More connections (T80): groups under the social tiles. Sites connect
  * with the owner's own keys, typed here; the rest say Coming soon. Owners and admins only
  * (the caller checks accounts.manage).
  */
-export async function MoreConnections() {
+export async function MoreConnections({ before }: { before?: string | null } = {}) {
   const tenant = await getCurrentTenant();
   const db = getServiceClient();
   const [phone, messaging] = await Promise.all([
     brandSwitchOn(db, "phone", tenant.id),
     brandSwitchOn(db, "messaging", tenant.id),
   ]);
-  const groups = withSettingsLinks(MORE_CONNECTIONS, { phone, messaging });
+  // Staff → Platforms (18 Nov): Hidden rows are left out; Coming soon can't connect.
+  const statuses = await loadPlatformStatuses(db);
+  const groups = withSettingsLinks(MORE_CONNECTIONS, { phone, messaging })
+    .map((g) => ({
+      ...g,
+      items: g.items
+        .filter((item) => statusOf(statuses, item.id) !== "hidden")
+        .map((item) => {
+          const status = statusOf(statuses, item.id);
+          if (status === "soon" && item.how !== "link") return { ...item, how: "soon" as const };
+          if (status !== "available" && item.how === "wechat") {
+            return { ...item, how: "soon" as const };
+          }
+          if (status === "available" && INTEGRATIONS.includes(item.id)) {
+            return { ...item, how: "integration" as const };
+          }
+          return item;
+        }),
+    }))
+    .filter((g) => g.items.length);
+  const wechatOn = groups.some((g) => g.items.some((i) => i.how === "wechat"));
+  const ips = wechatOn ? await wechatIpWhitelist() : [];
   let connected: Integration[] = [];
   let unavailable = false;
   if (tenant.zernioProfileId) {
@@ -74,6 +100,18 @@ export async function MoreConnections() {
                       <span className="text-ink-2 text-[13px]">{item.line}</span>
                     </span>
                     {item.how === "soon" && <StateLabel state="soon">Coming soon</StateLabel>}
+                    {item.how === "integration" && !mine.length && (
+                      <form action={connectIntegrationAction}>
+                        <input type="hidden" name="kind" value={item.id} />
+                        <Button
+                          type="submit"
+                          variant="secondary"
+                          aria-label={`Connect ${item.label}`}
+                        >
+                          Connect
+                        </Button>
+                      </form>
+                    )}
                     {item.how === "mail" && item.platform && (
                       <form action={connectMailAction}>
                         <input type="hidden" name="platform" value={item.platform} />
@@ -90,6 +128,15 @@ export async function MoreConnections() {
                       </Link>
                     )}
                   </div>
+                  {before === item.id && (
+                    <div className="pt-3">
+                      <ConnectNoteBox
+                        id={item.id}
+                        label={item.label}
+                        mark={<BrandMark brand={item.id} size={40} />}
+                      />
+                    </div>
+                  )}
                   {mine.map((c) => (
                     <div
                       key={c.id}
@@ -112,6 +159,14 @@ export async function MoreConnections() {
                         Connect with your own key
                       </summary>
                       <SiteKeysForm kind={item.id} />
+                    </details>
+                  )}
+                  {item.how === "wechat" && (
+                    <details className="pl-11">
+                      <summary className="text-honey-text cursor-pointer text-sm font-medium">
+                        {mine.length ? "Connect another WeChat account" : "Connect WeChat"}
+                      </summary>
+                      <WechatConnectForm ips={ips} />
                     </details>
                   )}
                   {item.how === "email" && (

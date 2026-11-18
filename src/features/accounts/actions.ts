@@ -7,7 +7,9 @@ import { roomForAnotherAccount } from "@/features/billing";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
-import { isConnectable } from "@/lib/social/platforms";
+import { isConnectable, type PlatformId } from "@/lib/social/platforms";
+import { loadPlatformStatuses, statusOf } from "@/features/platforms";
+import { goToConnect } from "./connect-go";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { blueskyErrorText, blueskyInputSchema, connectBlueskyFor } from "./bluesky";
@@ -18,22 +20,31 @@ import {
   type TelegramCode,
 } from "./telegram";
 
+// X connects through the same sign-in once Staff → Platforms makes it Available (18 Nov).
+const ZERNIO_SIGNIN_LATER: readonly string[] = ["twitter"];
 const connectSchema = z.object({
-  platform: z.string().refine(isConnectable, "Not a platform Waggle connects yet."),
+  platform: z
+    .string()
+    .refine(
+      (p) => isConnectable(p) || ZERNIO_SIGNIN_LATER.includes(p),
+      "Not a platform Waggle connects yet.",
+    ),
 });
 
 /** Starts Zernio's connect flow; Zernio sends the browser back to /settings afterwards. */
 export async function connectAccount(formData: FormData): Promise<void> {
   const parsed = connectSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success || !isConnectable(parsed.data.platform)) {
-    redirect("/settings/accounts?connect_error=unavailable");
-  }
-  const platform = parsed.data.platform;
+  if (!parsed.success) redirect("/settings/accounts?connect_error=unavailable");
+  const platform = parsed.data.platform as PlatformId;
   // T73b: the first-time setup asks to come back to its Connect step.
   const back = formData.get("back") === "setup" ? `/setup?step=2&connecting=${platform}` : null;
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
   const db = getServiceClient();
+  // Staff → Platforms (18 Nov): only Available platforms connect.
+  if (statusOf(await loadPlatformStatuses(db), platform) !== "available") {
+    redirect(`/settings/accounts?connect_error=unavailable&platform=${platform}`);
+  }
   // The plan's connected accounts (Pricing Bible). Off until billing ships.
   if (!(await roomForAnotherAccount(db, tenant.id))) {
     redirect(`/settings/accounts?connect_error=accounts_full&platform=${platform}`);
@@ -68,7 +79,7 @@ export async function connectAccount(formData: FormData): Promise<void> {
       `/settings/accounts?connect_error=${planLimit ? "plan_limit" : "unavailable"}&platform=${platform}`,
     );
   }
-  redirect(authUrl);
+  await goToConnect({ db, id: platform, authUrl });
 }
 
 export interface BlueskyState {

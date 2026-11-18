@@ -48,13 +48,16 @@ export const AD_NETWORKS = {
 export type AdNetwork = keyof typeof AD_NETWORKS;
 export const AD_NETWORK_IDS = Object.keys(AD_NETWORKS) as AdNetwork[];
 
-/** Held: each signs in through the partner's own app (or X, which is off until beta). */
-export const ADS_COMING_SOON = [
-  "Google Ads",
-  "TikTok Ads",
-  "Reddit Ads",
-  "Microsoft Ads",
-  "X Ads",
+/**
+ * Connected in Settings → Accounts (18 Nov: the partner's own sign-in, after Waggle's "Before you
+ * connect" note). Boosting posts on them from Waggle isn't built yet.
+ */
+export const ADS_ELSEWHERE = [
+  { label: "Google Ads", connection: "googleads" },
+  { label: "TikTok Ads", connection: "tiktokads" },
+  { label: "Reddit Ads", connection: "redditads" },
+  { label: "Microsoft Ads", connection: "microsoftads" },
+  { label: "X Ads", connection: "xads" },
 ] as const;
 
 export const isAdNetwork = (v: unknown): v is AdNetwork =>

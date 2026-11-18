@@ -41,4 +41,5 @@ export type { BillingRecord } from "./billing-store";
 export { YourPlanSection } from "./your-plan-view";
 export type { YourPlanOrg } from "./your-plan-view";
 export { ReplyLimitNotice } from "./reply-limit-notice";
+export { chargeUsageAtCost } from "./usage-charges";
 export { TrialConversionTag } from "./trial-tag";

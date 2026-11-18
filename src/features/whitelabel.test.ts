@@ -3,9 +3,12 @@ import { join, relative, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PLATFORM_IDS, PLATFORMS } from "@/lib/social/platforms";
 
-// Whitelabel (T68): owners and their customers never see the name of Waggle's social layer.
-// Pages only our own team opens are allowed to name it.
-const STAFF_ONLY = [
+// Whitelabel (T68): owners and their customers never see the name of Waggle's social layer,
+// except in the "Before you connect" note (design "Every Zernio platform", approved 18 Nov), which
+// names it on purpose before a sign-in that shows it. Pages only our own team opens may name it.
+const ALLOWED = [
+  "src/features/accounts/connect-note-box.tsx",
+  "src/features/platforms",
   "src/app/(dashboard)/admin",
   "src/features/billing/cost-view.tsx",
   "src/features/lab",
@@ -34,7 +37,7 @@ describe("whitelabel", () => {
     const pages = [...files(join(root, "src", "app")), ...files(join(root, "src", "features"))]
       .filter((f) => f.endsWith(".tsx"))
       .map((f) => relative(root, f).split(sep).join("/"))
-      .filter((f) => !STAFF_ONLY.some((s) => f.startsWith(s)));
+      .filter((f) => !ALLOWED.some((s) => f.startsWith(s)));
     // The word itself; code names like `zernio_account_id` never reach the screen.
     const leaks = pages.filter((f) => /\bZernio\b/.test(withoutComments(readFileSync(f, "utf8"))));
     expect(leaks).toEqual([]);
