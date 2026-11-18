@@ -45,3 +45,4 @@ export { chargeUsageAtCost } from "./usage-charges";
 export { TrialConversionTag } from "./trial-tag";
 export { PLAN_HREF, PlanChip, PlanMenuRow, PlanMoreRow } from "./plan-chip";
 export type { PlanViewer } from "./plan-chip";
+export { FOUNDING_COUPON } from "./catalog";

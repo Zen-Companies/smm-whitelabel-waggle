@@ -1,0 +1,120 @@
+// GoHighLevel API client (docs/ghl-plan.md). Only the two calls Waggle needs:
+//   POST /contacts/upsert           find-or-create a contact by email, set its custom fields
+//   POST /contacts/{id}/tags        add tags (the trigger tag `waggle-app-event`)
+// Checked against HighLevel's API on 18 Nov. Never send `tags` in the upsert: it replaces every
+// tag the contact has. Auth is a Private Integration Token on the Waggle sub-account.
+
+export const GHL_BASE_URL = "https://services.leadconnectorhq.com";
+export const GHL_VERSION = "2021-07-28";
+
+export interface GhlConfig {
+  token: string;
+  locationId: string;
+}
+
+/** Token + sub-account from the environment, or null when HighLevel isn't set up here. */
+export function ghlConfig(env: Record<string, string | undefined> = process.env): GhlConfig | null {
+  const token = env.GHL_PRIVATE_TOKEN?.trim();
+  const locationId = env.GHL_LOCATION_ID?.trim();
+  return token && locationId ? { token, locationId } : null;
+}
+
+export interface GhlContactInput {
+  email: string;
+  name?: string | null;
+  companyName?: string | null;
+  /** Custom fields by key without the `contact.` prefix, e.g. `waggle_plan`. */
+  fields: Record<string, string>;
+}
+
+export class GhlError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    /** Milliseconds to wait before trying again (rate limited), when HighLevel says. */
+    readonly retryAfterMs: number | null = null,
+  ) {
+    super(message);
+    this.name = "GhlError";
+  }
+}
+
+export interface GhlClient {
+  /** Returns the contact's HighLevel id. */
+  upsertContact(input: GhlContactInput): Promise<{ contactId: string }>;
+  addTags(contactId: string, tags: string[]): Promise<void>;
+}
+
+/** Pure: how long a 429 says to wait (HighLevel sends no Retry-After; its own headers say). */
+export function rateLimitWaitMs(headers: Headers): number {
+  if (headers.get("x-ratelimit-daily-remaining") === "0") {
+    return Number(headers.get("x-ratelimit-daily-reset")) || 60 * 60_000;
+  }
+  return Number(headers.get("x-ratelimit-interval-milliseconds")) || 10_000;
+}
+
+/** Pure: the upsert body. Field keys go as `contact.<key>`, as the sub-account lists them. */
+export function upsertBody(locationId: string, input: GhlContactInput) {
+  return {
+    locationId,
+    email: input.email,
+    ...(input.name ? { name: input.name } : {}),
+    ...(input.companyName ? { companyName: input.companyName } : {}),
+    customFields: Object.entries(input.fields).map(([key, value]) => ({
+      key: `contact.${key}`,
+      fieldValue: value,
+    })),
+  };
+}
+
+export function createGhlClient(config: GhlConfig, doFetch: typeof fetch = fetch): GhlClient {
+  const call = async (method: "POST", path: string, body: unknown): Promise<unknown> => {
+    let res: Response;
+    try {
+      res = await doFetch(`${GHL_BASE_URL}${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${config.token}`,
+          Version: GHL_VERSION,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (err) {
+      throw new GhlError(`HighLevel unreachable (${err instanceof Error ? err.name : "error"})`, 0);
+    }
+    if (res.status === 429) {
+      throw new GhlError("HighLevel rate limit", 429, rateLimitWaitMs(res.headers));
+    }
+    if (!res.ok) {
+      const text = (await res.text().catch(() => "")).slice(0, 300);
+      throw new GhlError(
+        `HighLevel ${path.split("/")[1]} failed (${res.status}): ${text}`,
+        res.status,
+      );
+    }
+    return res.json().catch(() => ({}));
+  };
+
+  return {
+    async upsertContact(input) {
+      const data = (await call(
+        "POST",
+        "/contacts/upsert",
+        upsertBody(config.locationId, input),
+      )) as {
+        contact?: { id?: unknown };
+      };
+      const id = data.contact?.id;
+      if (typeof id !== "string" || !id) {
+        throw new GhlError("HighLevel upsert returned no contact id", 502);
+      }
+      return { contactId: id };
+    },
+    async addTags(contactId, tags) {
+      await call("POST", `/contacts/${encodeURIComponent(contactId)}/tags`, { tags });
+    },
+  };
+}

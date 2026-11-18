@@ -3,14 +3,18 @@ import { AccountBanner } from "@/features/accounts";
 import { Bell } from "@/features/alerts";
 import { NEEDS_OWNER } from "@/features/approvals";
 import { PlanChip, PlanMenuRow } from "@/features/billing";
+import { touchActivity } from "@/features/crm";
 import { Feedback } from "@/features/feedback";
 import { can, listMyOrgs } from "@/features/orgs";
 import { AppHeader, getCurrentTenant } from "@/features/tenants";
+import { getServiceClient } from "@/lib/supabase/service";
 
 /** The top bar with Your plan beside the account button (approved 18 Nov). */
 async function Header() {
   const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
   const org = orgs.find((o) => o.id === tenant.organizationId);
+  // CRM "last active" (inactive / app_active emails): never blocks the page.
+  await touchActivity(getServiceClient(), tenant.userId).catch(() => undefined);
   const viewer = { orgId: tenant.organizationId, isOwner: !!org && can(org.role, "billing.view") };
   return (
     <AppHeader

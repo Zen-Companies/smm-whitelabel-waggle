@@ -460,6 +460,54 @@ export type Database = {
           },
         ]
       }
+      crm_events: {
+        Row: {
+          attempts: number
+          created_at: string
+          dedupe_key: string
+          details: Json
+          event: string
+          ghl_contact_id: string | null
+          id: string
+          last_error: string | null
+          next_attempt_at: string | null
+          organization_id: string | null
+          sent_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          dedupe_key: string
+          details?: Json
+          event: string
+          ghl_contact_id?: string | null
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          organization_id?: string | null
+          sent_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string
+          details?: Json
+          event?: string
+          ghl_contact_id?: string | null
+          id?: string
+          last_error?: string | null
+          next_attempt_at?: string | null
+          organization_id?: string | null
+          sent_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       drafts: {
         Row: {
           body: string
@@ -2249,6 +2297,24 @@ export type Database = {
           period_start?: string
           status?: string
           stripe_invoice_id?: string | null
+        }
+        Relationships: []
+      }
+      user_activity: {
+        Row: {
+          inactive_sent_at: string | null
+          last_seen_at: string
+          user_id: string
+        }
+        Insert: {
+          inactive_sent_at?: string | null
+          last_seen_at?: string
+          user_id: string
+        }
+        Update: {
+          inactive_sent_at?: string | null
+          last_seen_at?: string
+          user_id?: string
         }
         Relationships: []
       }

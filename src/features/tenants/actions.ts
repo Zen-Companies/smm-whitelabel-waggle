@@ -6,6 +6,7 @@ import { signInNext } from "@/features/auth";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
+import { queueForOwners, queueQuietly } from "@/lib/crm";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -108,6 +109,15 @@ export async function updateBusinessProfile(
     actor: tenant.userId,
     details: { length: parsed.data.length },
   });
+  // CRM: the first time an organization saves its business info (once per organization).
+  if (parsed.data.length > 0) {
+    await queueQuietly(() =>
+      queueForOwners(getServiceClient(), tenant.organizationId, {
+        event: "business_info_saved",
+        dedupeKey: `business_info_saved:${tenant.organizationId}`,
+      }),
+    );
+  }
   revalidatePath("/settings", "layout");
   return { saved: true };
 }

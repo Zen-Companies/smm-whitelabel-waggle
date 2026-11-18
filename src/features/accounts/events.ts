@@ -1,5 +1,6 @@
 import { pauseAccountItems, resumeAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { queueForOwners, queueQuietly } from "@/lib/crm";
 import { hasLiveComments } from "@/lib/social/platforms";
 import { isSocialPlatform, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -53,6 +54,23 @@ export async function handleAccountConnected(
         previousStatus: row.previous_status,
         previousZernioAccountId: row.previous_zernio_account_id,
       },
+    });
+  }
+
+  // CRM: the organization's first connected account (once; the dedupe key holds it).
+  if (outcome === "created") {
+    await queueQuietly(async () => {
+      const { data: t } = await db
+        .from("tenants")
+        .select("organization_id")
+        .eq("id", input.tenantId)
+        .maybeSingle();
+      if (!t?.organization_id) return;
+      await queueForOwners(db, t.organization_id, {
+        event: "account_connected",
+        details: { platform: input.platform },
+        dedupeKey: `account_connected:${t.organization_id}`,
+      });
     });
   }
 
