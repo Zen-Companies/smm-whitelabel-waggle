@@ -15,6 +15,8 @@ describe("redirectAllowed", () => {
     expect(ok("http://127.0.0.1:8080/callback")).toBe(true);
     expect(ok("https://chatgpt.com/connector_platform_oauth_redirect")).toBe(true);
     expect(ok("https://chatgpt.com/connector/oauth/abc_123")).toBe(true);
+    expect(ok("https://www.cursor.com/agents/mcp/oauth/callback")).toBe(true);
+    expect(ok("https://www.cursor.com/agents/mcp/oauth/other")).toBe(false);
   });
 
   it("refuses look-alikes and anything else", () => {

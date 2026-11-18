@@ -3,6 +3,7 @@
 // assistants we support. Sources (checked 2026-11-06):
 // - Claude: https://claude.com/docs/connectors/building/authentication.md
 // - ChatGPT: https://developers.openai.com/apps-sdk/build/auth
+// - Cursor (any model in it, e.g. Grok): seen in production 2026-11-18, client "Cursor"
 // - Grok: not documented (https://docs.x.ai/grok/connectors); add it to MCP_REDIRECT_URIS once seen.
 
 /** `*` matches one path segment (or a port). */
@@ -12,6 +13,7 @@ export const DEFAULT_REDIRECT_URIS = [
   "http://127.0.0.1:*/callback",
   "https://chatgpt.com/connector_platform_oauth_redirect",
   "https://chatgpt.com/connector/oauth/*",
+  "https://www.cursor.com/agents/mcp/oauth/callback",
 ] as const;
 
 /** The allowlist: MCP_REDIRECT_URIS (comma-separated) replaces the defaults when set. */
@@ -47,6 +49,7 @@ export function assistantName(clientName: string | null | undefined, redirectUri
     const host = new URL(redirectUri).hostname;
     if (host === "claude.ai" || host === "localhost" || host === "127.0.0.1") return "Claude";
     if (host === "chatgpt.com") return "ChatGPT";
+    if (host === "www.cursor.com") return "Cursor";
     return host;
   } catch {
     return "AI assistant";
