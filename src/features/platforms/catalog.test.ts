@@ -20,10 +20,10 @@ describe("platform statuses (Staff → Platforms, 18 Nov)", () => {
     expect(resolveStatus(switchableOf("discord")!, "hidden")).toBe("hidden");
   });
 
-  it("every connection Zernio offers can be turned on (18 Nov); they start as Coming soon", () => {
+  it("every connection Zernio offers can be turned on, and starts Available (18 Nov)", () => {
     for (const id of ["wix", "hubspot", "salesforce", "stripe", "wechat", "xads", "tiktokads"]) {
       expect(resolveStatus(switchableOf(id)!, "available")).toBe("available");
-      expect(resolveStatus(switchableOf(id)!, null)).toBe("soon");
+      expect(resolveStatus(switchableOf(id)!, null)).toBe("available");
     }
   });
 

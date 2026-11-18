@@ -54,6 +54,8 @@ const item = (
 const later = { built: false, defaultStatus: "soon" as const };
 // Their sign-in names Zernio: built, but they start as Coming soon until staff turn them on.
 const namesZernio = { built: true, defaultStatus: "soon" as const };
+// 18 Nov (later): connections added that day start Available; the note says Zernio is behind them.
+const live = { built: true, defaultStatus: "available" as const };
 
 export const SWITCHABLE: readonly SwitchablePlatform[] = [
   social("instagram", "Instagram"),
@@ -83,24 +85,24 @@ export const SWITCHABLE: readonly SwitchablePlatform[] = [
   }),
   item("slack", "Slack", "Messaging", namesZernio),
   // The server address the owner pastes into WeChat is on zernio.com.
-  item("wechat", "WeChat", "Messaging", namesZernio),
+  item("wechat", "WeChat", "Messaging", live),
   item("gmail", "Gmail", "Email and calendar"),
   item("outlook", "Outlook", "Email and calendar"),
   item("email", "Email (IMAP)", "Email and calendar"),
   item("shopify", "Shopify", "Website and shop"),
   item("wordpress", "WordPress", "Website and shop"),
   item("webflow", "Webflow", "Website and shop"),
-  item("wix", "Wix", "Website and shop", namesZernio),
+  item("wix", "Wix", "Website and shop", live),
   item("metaads", "Meta Ads", "Ads"),
   item("googleads", "Google Ads", "Ads", namesZernio),
-  item("tiktokads", "TikTok Ads", "Ads", namesZernio),
-  item("redditads", "Reddit Ads", "Ads", namesZernio),
-  item("microsoftads", "Microsoft Ads", "Ads", namesZernio),
-  item("xads", "X Ads", "Ads", namesZernio),
+  item("tiktokads", "TikTok Ads", "Ads", live),
+  item("redditads", "Reddit Ads", "Ads", live),
+  item("microsoftads", "Microsoft Ads", "Ads", live),
+  item("xads", "X Ads", "Ads", live),
   item("googleanalytics", "Google Analytics", "Business tools", namesZernio),
-  item("hubspot", "HubSpot", "Business tools", namesZernio),
-  item("salesforce", "Salesforce", "Business tools", namesZernio),
-  item("stripe", "Stripe", "Business tools", namesZernio),
+  item("hubspot", "HubSpot", "Business tools", live),
+  item("salesforce", "Salesforce", "Business tools", live),
+  item("stripe", "Stripe", "Business tools", live),
 ];
 
 export const switchableOf = (id: string): SwitchablePlatform | null =>
