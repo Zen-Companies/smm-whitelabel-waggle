@@ -1,4 +1,11 @@
 import * as Sentry from "@sentry/nextjs";
+import {
+  isAutomatedEmail,
+  isEmailPlatform,
+  ownEmailDomains,
+  readableEmailText,
+  senderAddress,
+} from "./email-text";
 import type { z } from "zod";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -529,6 +536,14 @@ async function mapMessage(
   if (!account) return skipped("unsupported_platform");
   // T83d: STOP and START on texting channels are handled upstream, never answered.
   if (isOptKeyword(account.platform, e.message.text)) return skipped("opt_keyword");
+  // 18 Nov: no-reply senders and Waggle's own emails never need an answer.
+  const email = isEmailPlatform(account.platform);
+  if (
+    email &&
+    isAutomatedEmail(senderAddress(e.message.sender), ownEmailDomains(process.env.ALERT_FROM_EMAIL))
+  ) {
+    return skipped("automated_email");
+  }
 
   const resolved = await accountFor(deps, tenantId, account);
   if ("rejected" in resolved) return rejected(resolved.rejected);
@@ -589,7 +604,8 @@ async function mapMessage(
     })),
     authorName: participantName,
     // Attachment-only messages have no text ("Sent a photo", T72).
-    text: e.message.text ?? "",
+    // Email: the words, not every tracking link spelled out (18 Nov).
+    text: email ? readableEmailText(e.message.text ?? "") : (e.message.text ?? ""),
     receivedAt: e.message.sentAt,
   });
   return { outcome: "processed", detail: created ? "item_created" : "item_exists" };
