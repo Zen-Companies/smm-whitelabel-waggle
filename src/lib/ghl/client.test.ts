@@ -14,7 +14,7 @@ describe("ghlConfig", () => {
 });
 
 describe("upsertBody", () => {
-  it("sends fields by contact key and never tags", () => {
+  it("sends fields by their plain key (HighLevel ignores `contact.` keys) and never tags", () => {
     const body = upsertBody("loc1", {
       email: "ana@cafe.com",
       name: "Ana Cruz",
@@ -25,8 +25,8 @@ describe("upsertBody", () => {
       email: "ana@cafe.com",
       name: "Ana Cruz",
       customFields: [
-        { key: "contact.waggle_plan", fieldValue: "team" },
-        { key: "contact.waggle_founding", fieldValue: "true" },
+        { key: "waggle_plan", fieldValue: "team" },
+        { key: "waggle_founding", fieldValue: "true" },
       ],
     });
     expect(body).not.toHaveProperty("tags");

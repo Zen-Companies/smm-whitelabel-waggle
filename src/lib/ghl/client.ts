@@ -53,7 +53,11 @@ export function rateLimitWaitMs(headers: Headers): number {
   return Number(headers.get("x-ratelimit-interval-milliseconds")) || 10_000;
 }
 
-/** Pure: the upsert body. Field keys go as `contact.<key>`, as the sub-account lists them. */
+/**
+ * Pure: the upsert body. Field keys go WITHOUT the `contact.` prefix the sub-account shows
+ * (`waggle_plan`, not `contact.waggle_plan`): HighLevel silently ignores the prefixed form
+ * (found on a real send, 18 Nov).
+ */
 export function upsertBody(locationId: string, input: GhlContactInput) {
   return {
     locationId,
@@ -61,7 +65,7 @@ export function upsertBody(locationId: string, input: GhlContactInput) {
     ...(input.name ? { name: input.name } : {}),
     ...(input.companyName ? { companyName: input.companyName } : {}),
     customFields: Object.entries(input.fields).map(([key, value]) => ({
-      key: `contact.${key}`,
+      key,
       fieldValue: value,
     })),
   };
