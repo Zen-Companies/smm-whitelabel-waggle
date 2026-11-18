@@ -189,7 +189,13 @@ export async function choosePlan(
       adaptive_pricing: { enabled: false },
       metadata: { organization_id: orgId, kind: "plan" },
       client_reference_id: orgId,
-      success_url: appUrl(`${PLAN_PATH}?checkout=done`),
+      // A first checkout comes back with its session id, so Your plan can ask Stripe whether it
+      // started a trial and tell the ads (TrialConversionTag). Stripe fills {CHECKOUT_SESSION_ID}.
+      success_url: appUrl(
+        firstTime
+          ? `${PLAN_PATH}?checkout=done&session_id={CHECKOUT_SESSION_ID}`
+          : `${PLAN_PATH}?checkout=done`,
+      ),
       cancel_url: appUrl(`${PLAN_PATH}?checkout=cancelled`),
     });
     await auditOrg(db, orgId, "billing.checkout_started", user.id, {
