@@ -1,6 +1,18 @@
 import { BarChart3, ChevronRight, Send, Settings } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { ThemeChoice } from "@/components/app/theme-choice";
+import { PlanMoreRow } from "@/features/billing";
+import { can, listMyOrgs } from "@/features/orgs";
+import { getCurrentTenant } from "@/features/tenants";
+
+async function Plan() {
+  const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
+  const org = orgs.find((o) => o.id === tenant.organizationId);
+  return (
+    <PlanMoreRow orgId={tenant.organizationId} isOwner={!!org && can(org.role, "billing.view")} />
+  );
+}
 
 export const metadata = { title: "More" };
 
@@ -10,11 +22,14 @@ const LINKS = [
   { href: "/settings", label: "Settings", Icon: Settings },
 ] as const;
 
-/** The phone's More tab (design.md §4): Posts, Insights, Settings and Appearance. */
+/** The phone's More tab (design.md §4): Your plan first (18 Nov), Posts, Insights, Settings, Appearance. */
 export default function MorePage() {
   return (
     <main className="mx-auto flex w-full max-w-[640px] flex-col gap-4 px-4 py-6">
       <h1 className="page-title">More</h1>
+      <Suspense fallback={null}>
+        <Plan />
+      </Suspense>
       <ul className="card divide-line flex flex-col divide-y overflow-hidden">
         {LINKS.map(({ href, label, Icon }) => (
           <li key={href}>

@@ -38,10 +38,13 @@ export function ConnectNoteBox({
   id,
   label,
   mark,
+  actions,
 }: {
   id: string;
   label: string;
   mark: React.ReactNode;
+  /** Continue and Cancel from the in-place flow (18 Nov); without it, the cookie flow's links. */
+  actions?: React.ReactNode;
 }) {
   const copy = connectNoteCopy(id, label);
   return (
@@ -91,14 +94,16 @@ export function ConnectNoteBox({
           </dl>
         </div>
       )}
-      <div className="flex flex-wrap items-center gap-3">
-        <a href="/api/connect/continue" className={buttonVariants({ variant: "primary" })}>
-          Continue to {copy.platform}
-        </a>
-        <Link href="/settings/accounts" className={buttonVariants({ variant: "secondary" })}>
-          Not now
-        </Link>
-      </div>
+      {actions ?? (
+        <div className="flex flex-wrap items-center gap-3">
+          <a href="/api/connect/continue" className={buttonVariants({ variant: "primary" })}>
+            Continue to {copy.platform}
+          </a>
+          <Link href="/settings/accounts" className={buttonVariants({ variant: "secondary" })}>
+            Not now
+          </Link>
+        </div>
+      )}
       <details className="text-ink-2 text-[13px]">
         <summary className="w-fit cursor-pointer">Powered by Zernio · Why Zernio?</summary>
         <p className="mt-2 max-w-[640px]">
