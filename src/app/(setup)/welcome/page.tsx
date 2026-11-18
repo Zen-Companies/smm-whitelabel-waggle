@@ -9,6 +9,7 @@ import {
   matchKeys,
 } from "@/features/ad-tracking";
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
+import { requirePlan, TrialConversionTag } from "@/features/billing";
 import { StepsAhead } from "@/features/setup";
 import { AddBrandForm, getOpenOrg } from "@/features/tenants";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
@@ -114,6 +115,8 @@ async function Content({ beta }: { beta: boolean }) {
 
   const mayAdd = can(org.role, "brands.add");
   const invites = await loadInvites(user.id);
+  // Plan before setup (18 Nov): pick a plan first, unless an invite to a seat is waiting here.
+  if (invites.length === 0) await requirePlan(org.id, org.role);
   const name = firstName(user.user_metadata, user.email);
   const betaBanner = beta && (
     <p role="status" className="banner">
@@ -203,8 +206,8 @@ async function Content({ beta }: { beta: boolean }) {
         {mayAdd ? (
           <>
             <p className="text-ink-2">
-              {org.name} has no brands yet, so there&apos;s nothing to pay. Add the business whose
-              Instagram and Facebook Waggle should answer.
+              {org.name} has no brands yet. Add the business whose Instagram and Facebook Waggle
+              should answer.
             </p>
             <AddBrandForm
               orgId={org.id}
@@ -240,8 +243,23 @@ async function Content({ beta }: { beta: boolean }) {
 // T54 (design v3 "Organizations", OrgSignup): the first screen after sign-up, and the page for
 // an organization with no brands yet.
 async function WithParams({ searchParams }: PageProps<"/welcome">) {
-  const { beta } = await searchParams;
-  return <Content beta={beta === "1"} />;
+  const { beta, trial, session_id } = await searchParams;
+  return (
+    <>
+      <Content beta={beta === "1"} />
+      {trial === "started" && typeof session_id === "string" && (
+        <Suspense fallback={null}>
+          <TrialTag sessionId={session_id} />
+        </Suspense>
+      )}
+    </>
+  );
+}
+
+/** Back from the plan step's checkout: tell the ads a trial started (as Your plan does). */
+async function TrialTag({ sessionId }: { sessionId: string }) {
+  const org = await getOpenOrg();
+  return org ? <TrialConversionTag sessionId={sessionId} orgId={org.id} /> : null;
 }
 
 export default function WelcomePage(props: PageProps<"/welcome">) {

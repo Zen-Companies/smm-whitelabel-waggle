@@ -10,6 +10,9 @@ import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
 import { FOUNDING_COUPON, PRICE_KEYS, type Interval } from "./catalog";
 import { EXTRAS, FOUNDING, PLANS, TRIAL, isPlanId, type Plan, type PlanId } from "./plans";
 import { loadPlans } from "./usage";
+import { PLAN_GATE_PATH, PLAN_SKIP_COOKIE } from "./plan-gate";
+import { staffAccess } from "@/features/staff";
+import { cookies } from "next/headers";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
 import {
@@ -160,6 +163,7 @@ export async function choosePlan(
       return { done: `You're on ${PLANS[choice.plan].name} now.` };
     }
 
+    const fromGate = formData.get("from") === "start";
     const customer = await ensureCustomer(stripe, db, orgId, user.email, bill);
     const firstTime = !bill?.trial_ends_at && !bill?.stripe_subscription_id;
     const founding =
@@ -191,12 +195,17 @@ export async function choosePlan(
       client_reference_id: orgId,
       // A first checkout comes back with its session id, so Your plan can ask Stripe whether it
       // started a trial and tell the ads (TrialConversionTag). Stripe fills {CHECKOUT_SESSION_ID}.
+      // From the plan step before setup (/start): back through /start/done into setup.
       success_url: appUrl(
-        firstTime
-          ? `${PLAN_PATH}?checkout=done&session_id={CHECKOUT_SESSION_ID}`
-          : `${PLAN_PATH}?checkout=done`,
+        fromGate
+          ? `${PLAN_GATE_PATH}/done?session_id={CHECKOUT_SESSION_ID}`
+          : firstTime
+            ? `${PLAN_PATH}?checkout=done&session_id={CHECKOUT_SESSION_ID}`
+            : `${PLAN_PATH}?checkout=done`,
       ),
-      cancel_url: appUrl(`${PLAN_PATH}?checkout=cancelled`),
+      cancel_url: appUrl(
+        fromGate ? `${PLAN_GATE_PATH}?checkout=cancelled` : `${PLAN_PATH}?checkout=cancelled`,
+      ),
     });
     await auditOrg(db, orgId, "billing.checkout_started", user.id, {
       plan: choice.plan,
@@ -416,4 +425,24 @@ export async function setAutoTopUp(
   await auditOrg(who.db, who.orgId, "billing.auto_top_up", who.user.id, { on });
   revalidatePath(PLAN_PATH);
   return { done: on ? "Automatic top-up is on." : "Automatic top-up is off." };
+}
+
+/**
+ * Admin only (plan before setup): Waggle staff skip the plan step for this organization, for
+ * this browser session. Customers never see the button, and the action refuses them.
+ */
+export async function skipPlanGate(formData: FormData): Promise<void> {
+  const orgId = orgIdSchema.safeParse(formData.get("orgId"));
+  if (!orgId.success) return;
+  const user = await getCurrentUser();
+  const db = getServiceClient();
+  if ((await staffAccess(db, user.id)).role === null) return;
+  (await cookies()).set(PLAN_SKIP_COOKIE, orgId.data, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
+  await auditOrg(db, orgId.data, "billing.plan_step_skipped", user.id, {});
+  redirect("/welcome");
 }

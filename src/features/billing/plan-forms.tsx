@@ -73,6 +73,7 @@ export function PlanCards({
   mayChange,
   foundingNote,
   action,
+  from,
 }: {
   orgId: string;
   plans: PlanCardData[];
@@ -82,6 +83,8 @@ export function PlanCards({
   mayChange: boolean;
   foundingNote: string | null;
   action: Action;
+  /** "start": chosen on the plan step before setup (checkout comes back into setup). */
+  from?: string;
 }) {
   const [interval, setInterval] = useState<"month" | "year">(currentInterval ?? "month");
   return (
@@ -164,7 +167,7 @@ export function PlanCards({
                 ) : mayChange ? (
                   <PlanButton
                     action={action}
-                    fields={{ orgId, plan: p.id, interval }}
+                    fields={{ orgId, plan: p.id, interval, ...(from ? { from } : {}) }}
                     label={live ? `Move to ${p.name}` : "Start 7 days free"}
                     honey={!live && p.id === "business"}
                     className="items-start"
