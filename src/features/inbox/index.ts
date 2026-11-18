@@ -25,3 +25,4 @@ export {
 } from "./status";
 export type { AccountTransition, ItemStatus, ProcessingStatus, StatusEvent } from "./status";
 export { getProductionSteps } from "./steps";
+export { isEmailPlatform, readableEmailText } from "./email-text";
