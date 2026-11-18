@@ -6,6 +6,7 @@ import { z } from "zod";
 import { roomForAnotherAccount } from "@/features/billing";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
+import { queueForOwners, queueQuietly } from "@/lib/crm";
 import { getSocialProvider } from "@/lib/social";
 import { isConnectable, type PlatformId } from "@/lib/social/platforms";
 import { loadPlatformStatuses, statusOf } from "@/features/platforms";
@@ -47,6 +48,13 @@ export async function connectAccount(formData: FormData): Promise<void> {
   }
   // The plan's connected accounts (Pricing Bible). Off until billing ships.
   if (!(await roomForAnotherAccount(db, tenant.id))) {
+    // CRM: a connect blocked by the plan's accounts (once a day per organization).
+    await queueQuietly(() =>
+      queueForOwners(db, tenant.organizationId, {
+        event: "account_limit",
+        dedupeKey: `account_limit:${tenant.organizationId}:${new Date().toISOString().slice(0, 10)}`,
+      }),
+    );
     redirect(`/settings/accounts?connect_error=accounts_full&platform=${platform}`);
   }
 
