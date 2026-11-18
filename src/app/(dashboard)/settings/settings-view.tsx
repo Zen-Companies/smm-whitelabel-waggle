@@ -5,8 +5,7 @@ import { AccountSection } from "@/features/account";
 import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
 import { AssistantsCard } from "@/features/mcp";
-import { TrialConversionTag, YourPlanSection } from "@/features/billing";
-import { can, listMyOrgs, OrgGeneralSection, TeamSection } from "@/features/orgs";
+import { listMyOrgs, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { BusinessSettings, getCurrentTenant } from "@/features/tenants";
 import { messagingOn, MessagingSection } from "@/features/messaging";
 import { phoneOn, PhoneSection } from "@/features/phone";
@@ -67,16 +66,6 @@ function NavLink({
   );
 }
 
-/** Stripe's return to Your plan: after checkout, or after buying more replies. */
-function planNotice(
-  params: Record<string, string | string[] | undefined>,
-): "done" | "cancelled" | "top_up" | undefined {
-  if (params.top_up === "done") return "top_up";
-  if (params.checkout === "done") return "done";
-  if (params.checkout === "cancelled") return "cancelled";
-  return undefined;
-}
-
 // Plain props type: the generated route types need `next typegen`.
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 export type SettingsProps = {
@@ -87,6 +76,12 @@ export type SettingsProps = {
 async function Body({ params: route, searchParams }: SettingsProps) {
   const [{ section: raw } = {}, params] = await Promise.all([route, searchParams]);
   if (raw === "replies") redirect("/teach#replies");
+  // Your plan has its own page since 18 Nov (/plan); old links and Stripe returns land there.
+  if (raw === "billing") {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (typeof v === "string") q.set(k, v);
+    redirect(q.size ? `/plan?${q}` : "/plan");
+  }
   if (raw !== undefined && !isSettingsSection(raw)) notFound();
   const section: Section = raw ?? DEFAULT_SETTINGS_SECTION;
   const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
@@ -107,7 +102,11 @@ async function Body({ params: route, searchParams }: SettingsProps) {
           Organization · {org?.name}
         </span>
         {ORG_SECTIONS.map((s) => (
-          <NavLink key={s.key} href={settingsHref(s.key)} active={s.key === section}>
+          <NavLink
+            key={s.key}
+            href={s.key === "billing" ? "/plan" : settingsHref(s.key)}
+            active={s.key === section}
+          >
             {s.label}
           </NavLink>
         ))}
@@ -132,17 +131,6 @@ async function Body({ params: route, searchParams }: SettingsProps) {
         )}
         {section === "general" && <OrgGeneralSection orgId={tenant.organizationId} />}
         {section === "team" && <TeamSection orgId={tenant.organizationId} />}
-        {section === "billing" && org && (
-          <YourPlanSection
-            org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}
-            notice={planNotice(params)}
-          />
-        )}
-        {section === "billing" && org && planNotice(params) === "done" && (
-          <Suspense fallback={null}>
-            <TrialConversionTag sessionId={params.session_id} orgId={org.id} />
-          </Suspense>
-        )}
         {section === "accounts" && <AccountsCard searchParams={searchParams} />}
         {section === "notifications" && <NotificationSettings />}
         {section === "business" && (

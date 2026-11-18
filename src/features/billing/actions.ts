@@ -110,6 +110,6 @@ export async function updatePlanSettings(
       .insert({ plan: p.id, changed_by: user.id, before: before ?? {}, after });
   }
   revalidatePath("/admin/plans");
-  revalidatePath("/settings/billing");
+  revalidatePath("/plan");
   return { saved: true };
 }

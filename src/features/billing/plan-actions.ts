@@ -29,7 +29,7 @@ export type PlanActionState = {
   fresh?: boolean;
 };
 
-const PLAN_PATH = "/settings/billing";
+const PLAN_PATH = "/plan";
 const orgIdSchema = z.string().uuid();
 
 async function ownerOf(orgIdRaw: FormDataEntryValue | null) {

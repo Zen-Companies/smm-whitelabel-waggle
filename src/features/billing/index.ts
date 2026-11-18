@@ -43,3 +43,5 @@ export type { YourPlanOrg } from "./your-plan-view";
 export { ReplyLimitNotice } from "./reply-limit-notice";
 export { chargeUsageAtCost } from "./usage-charges";
 export { TrialConversionTag } from "./trial-tag";
+export { PLAN_HREF, PlanChip, PlanMenuRow, PlanMoreRow } from "./plan-chip";
+export type { PlanViewer } from "./plan-chip";

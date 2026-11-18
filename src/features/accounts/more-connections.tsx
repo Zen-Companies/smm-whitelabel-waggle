@@ -11,7 +11,8 @@ import { INTEGRATION_KINDS, type Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
 import { Button } from "@/components/ui/button";
 import { EmailConnectForm, WechatConnectForm } from "./email-line-forms";
-import { connectMailAction, connectIntegrationAction, wechatIpWhitelist } from "./own-key-actions";
+import { connectMailAction, wechatIpWhitelist } from "./own-key-actions";
+import { ConnectButton } from "./connect-button";
 import {
   CONNECTED_PLATFORMS,
   isOwnKeyPlatform,
@@ -101,16 +102,11 @@ export async function MoreConnections({ before }: { before?: string | null } = {
                     </span>
                     {item.how === "soon" && <StateLabel state="soon">Coming soon</StateLabel>}
                     {item.how === "integration" && !mine.length && (
-                      <form action={connectIntegrationAction}>
-                        <input type="hidden" name="kind" value={item.id} />
-                        <Button
-                          type="submit"
-                          variant="secondary"
-                          aria-label={`Connect ${item.label}`}
-                        >
-                          Connect
-                        </Button>
-                      </form>
+                      <ConnectButton
+                        id={item.id}
+                        label={item.label}
+                        mark={<BrandMark brand={item.id} size={40} />}
+                      />
                     )}
                     {item.how === "mail" && item.platform && (
                       <form action={connectMailAction}>

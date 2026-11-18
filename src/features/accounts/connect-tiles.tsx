@@ -1,8 +1,8 @@
 import { PlatformMark } from "@/components/app/platform-mark";
 import Link from "next/link";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { hasSetupCard, PLATFORM_IDS, PLATFORMS, type Platform } from "@/lib/social/platforms";
-import { connectAccount } from "./actions";
+import { ConnectButton } from "./connect-button";
 import { StateLabel } from "@/components/app/state-mark";
 import { statusOf, type PlatformStatus, type PlatformStatuses } from "@/features/platforms";
 
@@ -44,7 +44,8 @@ function lines(p: Platform): { line: string; note: string | null } {
 function Tile({ p, status }: { p: Platform; status: PlatformStatus }) {
   const { line, note } = lines(p);
   return (
-    <li className="border-line bg-surface flex items-center gap-3.5 rounded-xl border px-4 py-3.5">
+    // Opening the note (18 Nov) widens the tile to the whole row.
+    <li className="border-line bg-surface flex flex-wrap items-center gap-3.5 rounded-xl border px-4 py-3.5 has-[[data-connect-open]]:col-span-full">
       <PlatformMark platform={p.id} size={40} />
       <span className="flex min-w-0 flex-1 flex-col">
         <b className="font-semibold">{p.label}</b>
@@ -60,12 +61,11 @@ function Tile({ p, status }: { p: Platform; status: PlatformStatus }) {
           Connect
         </Link>
       ) : availability(p, status) === "connect" ? (
-        <form action={connectAccount}>
-          <input type="hidden" name="platform" value={p.id} />
-          <Button type="submit" variant="secondary" aria-label={`Connect ${p.label}`}>
-            Connect
-          </Button>
-        </form>
+        <ConnectButton
+          id={p.id}
+          label={p.label}
+          mark={<PlatformMark platform={p.id} size={40} />}
+        />
       ) : (
         <StateLabel state="soon" className="text-xs">
           Coming soon

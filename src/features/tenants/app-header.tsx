@@ -19,9 +19,15 @@ import { getCurrentTenant } from "./current-tenant";
  */
 export async function AppHeader({
   bell,
+  plan,
+  planMenu,
   needsYouStatuses,
 }: {
   bell?: React.ReactNode;
+  /** Your plan chip, left of the account button (approved 18 Nov). */
+  plan?: React.ReactNode;
+  /** Your plan on top of the account menu. */
+  planMenu?: React.ReactNode;
   needsYouStatuses: readonly string[];
 }) {
   const [tenant, user, brands, orgs] = await Promise.all([
@@ -42,19 +48,22 @@ export async function AppHeader({
 
   return (
     <header className="border-line bg-surface sticky top-0 z-40 border-b">
-      <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-6 px-4 md:flex-nowrap md:px-8">
+      <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-3 px-4 md:flex-nowrap md:gap-x-6 md:px-8">
         <Link href="/today" className="flex min-h-14 items-center gap-2" aria-label="Waggle, Today">
           <Brand />
-          <span className="bg-honey-tint text-honey-text rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide">
+          {/* Phones: room for Your plan beside the account button (18 Nov). */}
+          <span className="bg-honey-tint text-honey-text hidden rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide min-[420px]:inline">
             BETA
           </span>
         </Link>
         <div className="hidden min-w-0 flex-1 md:block">
           <TopNav inboxCount={count ?? 0} />
         </div>
-        <div className="ml-auto flex min-h-14 items-center gap-2">
+        <div className="ml-auto flex min-h-14 items-center gap-1.5 md:gap-2">
           {bell}
+          {plan}
           <BusinessMenu
+            planRow={planMenu}
             signedInAs={fullName || user.email || ""}
             orgs={orgs}
             brands={brands}

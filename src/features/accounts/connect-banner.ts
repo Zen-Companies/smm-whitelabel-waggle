@@ -31,6 +31,11 @@ type Params = Record<string, string | string[] | undefined>;
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
+/** A connection's name: a social platform's label, or a More connections one (18 Nov). */
+export function connectionLabel(id: string): string {
+  return isPlatformId(id) ? platformLabel(id) : (CONNECTION_LABELS[id] ?? "Your account");
+}
+
 export function connectBanner(params: Params): ConnectBanner | null {
   const platformKey =
     first(params.platform) ?? first(params.connecting) ?? first(params.connected) ?? "";
