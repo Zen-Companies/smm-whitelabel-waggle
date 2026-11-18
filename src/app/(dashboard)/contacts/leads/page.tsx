@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { ContactsTabs } from "@/features/contacts";
 import { LeadsBoard } from "@/features/leads";
@@ -17,7 +18,7 @@ export default function LeadsPage() {
         </div>
         <ContactsTabs active="/contacts/leads" />
       </div>
-      <Suspense fallback={<div className="skeleton h-64 rounded-xl" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.contacts} />}>
         <LeadsBoard />
       </Suspense>
     </main>

@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { TrialConversionTag, YourPlanSection } from "@/features/billing";
 import { can, listMyOrgs } from "@/features/orgs";
@@ -51,7 +52,7 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
 export default function PlanPage(props: { searchParams: SearchParams }) {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-6 px-4 py-6 md:px-8">
-      <Suspense fallback={<div className="skeleton h-96" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.plan} />}>
         <Body searchParams={props.searchParams} />
       </Suspense>
     </main>

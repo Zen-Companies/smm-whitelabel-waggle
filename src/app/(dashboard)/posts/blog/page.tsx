@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { BlogPage } from "@/features/blog";
 
@@ -16,7 +17,7 @@ async function Blog({ searchParams }: Props) {
 export default function Page({ searchParams }: Props) {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-4 py-6 md:px-8">
-      <Suspense fallback={<div className="skeleton h-[600px] rounded-xl" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.posts} />}>
         <Blog searchParams={searchParams} />
       </Suspense>
     </main>

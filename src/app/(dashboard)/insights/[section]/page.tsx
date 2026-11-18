@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AnalyticsView } from "@/features/analytics";
@@ -21,7 +22,7 @@ async function View({ params, searchParams }: Props) {
 export default function InsightsSectionPage(props: Props) {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-5 px-4 py-6 md:px-8">
-      <Suspense fallback={<div className="skeleton h-[600px] rounded-xl" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.insights} />}>
         <View {...props} />
       </Suspense>
     </main>

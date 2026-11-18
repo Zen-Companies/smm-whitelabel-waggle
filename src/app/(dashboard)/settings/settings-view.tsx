@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -163,7 +164,7 @@ export function SettingsView(props: SettingsProps) {
           . Everything else is here.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-96 rounded-xl" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.settings} />}>
         <Body {...props} />
       </Suspense>
     </main>

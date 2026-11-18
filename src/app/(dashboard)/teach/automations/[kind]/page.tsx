@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { AutomationsView, isAutomationKind } from "@/features/automations";
@@ -18,7 +19,7 @@ async function View({ params }: Props) {
 export default function AutomationKindPage(props: Props) {
   return (
     <main className="mx-auto flex w-full max-w-[1240px] flex-col gap-4 px-4 py-6 md:px-8">
-      <Suspense fallback={<div className="skeleton h-[480px] rounded-xl" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.teach} />}>
         <View {...props} />
       </Suspense>
     </main>

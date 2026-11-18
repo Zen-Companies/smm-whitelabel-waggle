@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { TeachView } from "@/features/teach";
 
@@ -13,13 +14,7 @@ async function View({ searchParams }: Props) {
 
 export default function TeachPage(props: Props) {
   return (
-    <Suspense
-      fallback={
-        <div className="mx-auto w-full max-w-[1320px] px-4 py-9 md:px-6">
-          <div className="skeleton h-[560px] rounded-xl" />
-        </div>
-      }
-    >
+    <Suspense fallback={<PageLoading words={LOADING_WORDS.teach} />}>
       <View {...props} />
     </Suspense>
   );

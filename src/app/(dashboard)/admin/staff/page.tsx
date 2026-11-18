@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { StaffView } from "@/features/staff";
 
@@ -12,7 +13,7 @@ export default function Page() {
           Who at Zen Companies can open these staff pages, and what they can do.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-72" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <StaffView />
       </Suspense>
     </main>

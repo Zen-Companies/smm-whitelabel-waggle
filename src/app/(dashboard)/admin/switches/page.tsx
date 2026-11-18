@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { SwitchesView } from "@/features/mcp";
 import { BrandSwitches } from "@/features/staff";
@@ -14,7 +15,7 @@ export default function Page(props: PageProps<"/admin/switches">) {
           Turn AI assistants on for everyone or brand by brand, while billing tiers are decided.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-96" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <SwitchesView searchParams={props.searchParams} />
       </Suspense>
       <Suspense fallback={<div className="skeleton h-40" />}>

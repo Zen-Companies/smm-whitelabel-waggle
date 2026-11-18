@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { BrandsView } from "@/features/offboarding";
 
@@ -12,7 +13,7 @@ export default function Page(props: PageProps<"/admin/brands">) {
           Offboard a brand that is leaving Waggle, or bring one back within 3 months.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-96" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <BrandsView searchParams={props.searchParams} />
       </Suspense>
     </main>

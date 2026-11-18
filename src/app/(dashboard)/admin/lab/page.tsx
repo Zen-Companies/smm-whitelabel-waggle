@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { LabView } from "@/features/lab";
 
@@ -12,7 +13,7 @@ export default function LabPage(props: PageProps<"/admin/lab">) {
           Staff view: run one message through two setups and compare what would happen.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-96" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <LabView searchParams={props.searchParams} />
       </Suspense>
     </main>

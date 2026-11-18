@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { CostView } from "@/features/billing";
 
@@ -10,7 +11,7 @@ export default function CostsPage() {
         <h1 className="page-title">Costs</h1>
         <p className="text-ink-2">Staff view: what each business costs to run.</p>
       </div>
-      <Suspense fallback={<div className="skeleton h-72" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <CostView />
       </Suspense>
     </main>

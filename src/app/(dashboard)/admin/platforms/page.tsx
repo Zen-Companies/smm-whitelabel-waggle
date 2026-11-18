@@ -1,3 +1,4 @@
+import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import { PlatformsView } from "@/features/platforms";
 
@@ -14,7 +15,7 @@ export default function Page() {
           anyone already connected keeps working whatever you pick.
         </p>
       </div>
-      <Suspense fallback={<div className="skeleton h-64" />}>
+      <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>
         <PlatformsView />
       </Suspense>
     </main>

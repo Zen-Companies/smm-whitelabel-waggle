@@ -508,10 +508,23 @@
     color: var(--ink-3);
   }
 
-  /* Skeleton block (lists: shaped like the content, never spinners) */
+  /* Skeleton block (lists: shaped like the content, never spinners). A honey shine moves across
+     (loading, approved 18 Nov). */
   .skeleton {
     border-radius: 6px;
-    background: var(--subtle);
+    background:
+      linear-gradient(
+          90deg,
+          transparent 0,
+          color-mix(in oklab, var(--honey) 16%, transparent) 50%,
+          transparent 100%
+        )
+        no-repeat,
+      var(--subtle);
+    background-size:
+      40% 100%,
+      auto;
+    animation: skeleton-shine 1.6s linear infinite;
   }
 }
 
@@ -864,6 +877,98 @@ label:not(:has(:checked)) .choice-bee {
 @media (prefers-reduced-motion: reduce) {
   .side-panel,
   .side-panel-backdrop {
+    animation: none;
+  }
+}
+
+/* Loading screen (canvas "Loading", option B2, approved 18 Nov): the letters ripple, the honey dot
+   hops, a honey bar runs under the top bar. Fades in after 0.3 s so fast pages never flash it. */
+@keyframes skeleton-shine {
+  from {
+    background-position:
+      -40% 0,
+      0 0;
+  }
+  to {
+    background-position:
+      140% 0,
+      0 0;
+  }
+}
+@keyframes page-loading-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes page-loading-wave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-0.16em);
+  }
+}
+@keyframes page-loading-hop {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  40% {
+    transform: translateY(-0.3em) scale(1.15);
+  }
+  60% {
+    transform: translateY(0) scale(0.9, 1.1);
+  }
+}
+@keyframes page-loading-bar {
+  0% {
+    width: 0;
+  }
+  60% {
+    width: 72%;
+  }
+  100% {
+    width: 92%;
+  }
+}
+.page-loading {
+  animation: page-loading-in 200ms ease-out 300ms both;
+}
+.page-loading-letter {
+  display: inline-block;
+  animation: page-loading-wave 1.6s ease-in-out infinite;
+}
+.page-loading-dot {
+  display: inline-block;
+  transform-origin: bottom center;
+  animation: page-loading-hop 1.6s ease-in-out infinite;
+}
+.page-loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 60;
+  height: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--honey);
+  animation: page-loading-bar 2.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton,
+  .page-loading-letter,
+  .page-loading-dot,
+  .page-loading-bar {
+    animation: none;
+  }
+  .page-loading-bar {
+    display: none;
+  }
+  .page-loading {
     animation: none;
   }
 }
