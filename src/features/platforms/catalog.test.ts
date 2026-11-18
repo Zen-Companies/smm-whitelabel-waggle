@@ -16,8 +16,15 @@ describe("platform statuses (Staff → Platforms, 18 Nov)", () => {
   it("not built or blocked: never Available, even if stored", () => {
     expect(allowedStatuses(switchableOf("snapchat")!)).toEqual(["hidden", "soon"]);
     expect(resolveStatus(switchableOf("snapchat")!, "available")).toBe("soon");
-    expect(resolveStatus(switchableOf("hubspot")!, "available")).toBe("soon");
-    expect(resolveStatus(switchableOf("hubspot")!, "hidden")).toBe("hidden");
+    expect(resolveStatus(switchableOf("reddit")!, "available")).toBe("soon");
+    expect(resolveStatus(switchableOf("discord")!, "hidden")).toBe("hidden");
+  });
+
+  it("every connection Zernio offers can be turned on (18 Nov); they start as Coming soon", () => {
+    for (const id of ["wix", "hubspot", "salesforce", "stripe", "wechat", "xads", "tiktokads"]) {
+      expect(resolveStatus(switchableOf(id)!, "available")).toBe("available");
+      expect(resolveStatus(switchableOf(id)!, null)).toBe("soon");
+    }
   });
 
   it("a stored choice wins when allowed", () => {

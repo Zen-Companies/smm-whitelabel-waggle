@@ -7,11 +7,11 @@ import { getCurrentTenant } from "@/features/tenants";
 import { brandSwitchOn } from "@/lib/flags/brand-switch";
 import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
-import type { Integration } from "@/lib/social/types";
+import { INTEGRATION_KINDS, type Integration } from "@/lib/social/types";
 import { DisconnectSite, SiteKeysForm, WhatsAppKeysForm } from "./own-key-forms";
 import { Button } from "@/components/ui/button";
-import { EmailConnectForm } from "./email-line-forms";
-import { connectMailAction, connectIntegrationAction } from "./own-key-actions";
+import { EmailConnectForm, WechatConnectForm } from "./email-line-forms";
+import { connectMailAction, connectIntegrationAction, wechatIpWhitelist } from "./own-key-actions";
 import {
   CONNECTED_PLATFORMS,
   isOwnKeyPlatform,
@@ -22,8 +22,8 @@ import { StateLabel } from "@/components/app/state-mark";
 import { loadPlatformStatuses, statusOf } from "@/features/platforms";
 import { ConnectNoteBox } from "./connect-note-box";
 
-/** Connections that sign in through Zernio's link (Google Analytics, Slack, Google Ads). */
-const INTEGRATIONS = ["googleanalytics", "slack", "googleads"];
+/** Connections that sign in on the partner's page through Zernio's link (18 Nov). */
+const INTEGRATIONS: readonly string[] = INTEGRATION_KINDS;
 
 /**
  * Settings → Accounts → More connections (T80): groups under the social tiles. Sites connect
@@ -47,6 +47,9 @@ export async function MoreConnections({ before }: { before?: string | null } = {
         .map((item) => {
           const status = statusOf(statuses, item.id);
           if (status === "soon" && item.how !== "link") return { ...item, how: "soon" as const };
+          if (status !== "available" && item.how === "wechat") {
+            return { ...item, how: "soon" as const };
+          }
           if (status === "available" && INTEGRATIONS.includes(item.id)) {
             return { ...item, how: "integration" as const };
           }
@@ -54,6 +57,8 @@ export async function MoreConnections({ before }: { before?: string | null } = {
         }),
     }))
     .filter((g) => g.items.length);
+  const wechatOn = groups.some((g) => g.items.some((i) => i.how === "wechat"));
+  const ips = wechatOn ? await wechatIpWhitelist() : [];
   let connected: Integration[] = [];
   let unavailable = false;
   if (tenant.zernioProfileId) {
@@ -154,6 +159,14 @@ export async function MoreConnections({ before }: { before?: string | null } = {
                         Connect with your own key
                       </summary>
                       <SiteKeysForm kind={item.id} />
+                    </details>
+                  )}
+                  {item.how === "wechat" && (
+                    <details className="pl-11">
+                      <summary className="text-honey-text cursor-pointer text-sm font-medium">
+                        {mine.length ? "Connect another WeChat account" : "Connect WeChat"}
+                      </summary>
+                      <WechatConnectForm ips={ips} />
                     </details>
                   )}
                   {item.how === "email" && (

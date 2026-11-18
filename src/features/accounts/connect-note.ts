@@ -70,6 +70,49 @@ const NOTES: Record<string, ConnectNoteCopy> = {
     access: "You'll pick one channel for Waggle next.",
     after: "In Slack, the messages Waggle posts show as coming from Zernio.",
   },
+  // 18 Nov: the rest of Zernio's connections; what each can do, from its Zernio docs page.
+  wix: {
+    platform: "Wix",
+    youllSee: null,
+    access: "You pick a site and approve Zernio's app; Waggle can write blog posts there.",
+  },
+  hubspot: {
+    platform: "HubSpot",
+    youllSee: null,
+    access: "Waggle adds your inbox contacts and their messages to HubSpot.",
+    after: "In HubSpot, the app is listed as Zernio.",
+  },
+  salesforce: {
+    platform: "Salesforce",
+    youllSee: null,
+    access: "Waggle matches your inbox contacts to Contacts and Leads and logs each conversation.",
+  },
+  stripe: {
+    platform: "Stripe",
+    youllSee: null,
+    access: "Waggle only reads payments, so sales count on the ads that brought them.",
+    after: "In Stripe, the connected app is listed as Zernio.",
+  },
+  tiktokads: {
+    platform: "TikTok",
+    youllSee: null,
+    access: "Waggle can see your TikTok ad accounts and their results.",
+  },
+  redditads: {
+    platform: "Reddit",
+    youllSee: null,
+    access: "Waggle can see your Reddit ad accounts and their results.",
+  },
+  microsoftads: {
+    platform: "Microsoft",
+    youllSee: null,
+    access: "Waggle can see your Microsoft Advertising accounts and their results.",
+  },
+  xads: {
+    platform: "X",
+    youllSee: null,
+    access: "Waggle can see your X ad accounts and their results.",
+  },
   twitter: {
     platform: "X",
     youllSee: null,

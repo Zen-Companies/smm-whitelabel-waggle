@@ -70,4 +70,10 @@ describe("the plan's account cap (Pricing Bible)", () => {
       text: "Your plan's connected accounts are all in use, so TikTok can't be added yet. Add an extra account for $10 a month, or move to a bigger plan.",
     });
   });
+  it("names More connections and asks for X before X Ads (18 Nov)", () => {
+    expect(connectBanner({ connecting: "hubspot" })?.text).toBe(
+      "HubSpot connected. It will appear here shortly.",
+    );
+    expect(connectBanner({ connect_error: "needs_x" })?.text).toBe("Connect X first, then X Ads.");
+  });
 });

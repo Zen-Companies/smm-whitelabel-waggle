@@ -11,6 +11,22 @@ export interface ConnectBanner {
 
 const MAX_MESSAGE = 300;
 
+/** More connections that aren't social platforms (18 Nov). */
+const CONNECTION_LABELS: Record<string, string> = {
+  googleanalytics: "Google Analytics",
+  slack: "Slack",
+  wix: "Wix",
+  hubspot: "HubSpot",
+  salesforce: "Salesforce",
+  stripe: "Stripe",
+  wechat: "WeChat",
+  googleads: "Google Ads",
+  tiktokads: "TikTok Ads",
+  redditads: "Reddit Ads",
+  microsoftads: "Microsoft Ads",
+  xads: "X Ads",
+};
+
 type Params = Record<string, string | string[] | undefined>;
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
@@ -18,7 +34,14 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 export function connectBanner(params: Params): ConnectBanner | null {
   const platformKey =
     first(params.platform) ?? first(params.connecting) ?? first(params.connected) ?? "";
-  const platform = isPlatformId(platformKey) ? platformLabel(platformKey) : "the account";
+  const platform = isPlatformId(platformKey)
+    ? platformLabel(platformKey)
+    : (CONNECTION_LABELS[platformKey] ?? "the account");
+
+  // X Ads hangs off the brand's X account.
+  if (first(params.connect_error) === "needs_x") {
+    return { tone: "error", text: "Connect X first, then X Ads." };
+  }
 
   // X needs pay-per-use set up on our side first (Zernio's 402): ours to fix, not the owner's.
   if (first(params.connect_error) === "plan_limit" && platformKey === "twitter") {

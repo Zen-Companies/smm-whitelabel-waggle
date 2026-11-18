@@ -117,6 +117,27 @@ export interface CallOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Connections that sign in on the partner's own page through Zernio's link (18 Nov; every one is
+ * on docs.zernio.com/for-you/platforms). Ad networks go through `/v1/connect/{platform}/ads`.
+ */
+export const INTEGRATION_KINDS = [
+  "googleanalytics",
+  "slack",
+  "wix",
+  "hubspot",
+  "salesforce",
+  "stripe",
+  "googleads",
+  "tiktokads",
+  "redditads",
+  "microsoftads",
+  "xads",
+] as const;
+export type IntegrationKind = (typeof INTEGRATION_KINDS)[number];
+export const isIntegrationKind = (v: unknown): v is IntegrationKind =>
+  typeof v === "string" && (INTEGRATION_KINDS as readonly string[]).includes(v);
+
 /** A top-level comment on a post (inbox backfill, T16). Ids are the platform's, as in webhooks. */
 export interface ProviderComment {
   id: string;
@@ -666,17 +687,34 @@ export interface SocialProvider {
     } & CallOptions,
   ): Promise<{ authUrl: string }>;
   /**
-   * The sign-in link for Google Analytics, Slack or Google Ads (design "Every Zernio platform",
-   * approved 18 Nov). Zernio skips the welcome page on these, so Waggle shows its "Before you
-   * connect" note first. `alreadyConnected` when Google Ads is already connected on the profile.
+   * The sign-in link for a connection that opens the partner's own page (design "Every Zernio
+   * platform", approved 18 Nov): Google Analytics, Slack, Wix, HubSpot, Salesforce, Stripe and the
+   * ad networks. Zernio skips the welcome page on these, so Waggle shows its "Before you connect"
+   * note first. `alreadyConnected` when an ads connection already exists on the profile.
    */
   getIntegrationConnectUrl(
     input: {
-      kind: "googleanalytics" | "slack" | "googleads";
+      kind: IntegrationKind;
       profileId: string;
       redirectUrl: string;
+      /** X Ads only: the brand's X posting account (Zernio requires it). */
+      postingAccountId?: string;
     } & CallOptions,
   ): Promise<{ authUrl: string } | { alreadyConnected: true }>;
+  /** The IPs a WeChat Service Account must whitelist before connecting (18 Nov). */
+  getWechatIpWhitelist(input?: CallOptions): Promise<string[]>;
+  /**
+   * Connects a verified WeChat Service Account with its AppID and AppSecret (18 Nov,
+   * docs.zernio.com/platforms/wechat/connect). Returns the values the owner pastes into WeChat's
+   * Server Configuration; messages arrive only once that's enabled.
+   */
+  connectWechat(
+    input: { profileId: string; appId: string; appSecret: string } & CallOptions,
+  ): Promise<{
+    accountId: string;
+    name: string;
+    server: { url: string; token: string; encodingAESKey: string };
+  }>;
   /**
    * What Zernio billed for one profile's pay-per-use over a window (usage at cost, approved
    * 18 Nov): USD per product family from Zernio's usage report (`GET /v1/usage`, metering mode,

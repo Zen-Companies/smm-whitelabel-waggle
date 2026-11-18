@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { ensureZernioProfile, getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
-import { SocialProviderError } from "@/lib/social/types";
+import { isIntegrationKind, SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { handleAccountConnected } from "./events";
 import {
@@ -17,6 +17,7 @@ import {
   parseEmail,
   parseLineKeys,
   parseSiteKeys,
+  parseWechatKeys,
   parseWhatsAppKeys,
 } from "./own-keys";
 import type { EmailDiscovery, ProviderErrorInfo } from "@/lib/social/types";
@@ -366,14 +367,26 @@ export async function connectMailAction(formData: FormData): Promise<void> {
  */
 export async function connectIntegrationAction(formData: FormData): Promise<void> {
   const kind = formData.get("kind");
-  if (kind !== "googleanalytics" && kind !== "slack" && kind !== "googleads") {
-    redirect("/settings/accounts");
-  }
+  if (!isIntegrationKind(kind)) redirect("/settings/accounts");
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
   const db = getServiceClient();
   if (statusOf(await loadPlatformStatuses(db), kind) !== "available") {
     redirect(`/settings/accounts?connect_error=unavailable&platform=${kind}`);
+  }
+  // X Ads hangs off the brand's X account (docs.zernio.com/connect/connect-ads).
+  let postingAccountId: string | undefined;
+  if (kind === "xads") {
+    const { data } = await db
+      .from("social_accounts")
+      .select("zernio_account_id")
+      .eq("tenant_id", tenant.id)
+      .eq("platform", "twitter")
+      .eq("status", "active")
+      .limit(1)
+      .maybeSingle();
+    if (!data?.zernio_account_id) redirect("/settings/accounts?connect_error=needs_x#more-heading");
+    postingAccountId = data.zernio_account_id;
   }
   let result: { authUrl: string } | { alreadyConnected: true };
   try {
@@ -381,6 +394,7 @@ export async function connectIntegrationAction(formData: FormData): Promise<void
     result = await getSocialProvider().getIntegrationConnectUrl({
       kind,
       profileId,
+      postingAccountId,
       redirectUrl: `${process.env.APP_URL}/settings/accounts?connecting=${kind}`,
       signal: AbortSignal.timeout(20_000),
     });
@@ -396,4 +410,72 @@ export async function connectIntegrationAction(formData: FormData): Promise<void
   }
   if ("alreadyConnected" in result) redirect(`/settings/accounts?connected=${kind}`);
   await goToConnect({ db, id: kind, authUrl: result.authUrl });
+}
+
+export type WechatState = {
+  error?: string;
+  field?: string;
+  /** After connecting: what the owner pastes into WeChat's Server Configuration. */
+  server?: { url: string; token: string; encodingAESKey: string };
+};
+
+/** The IPs to whitelist in WeChat first; empty when Zernio can't be reached right now. */
+export async function wechatIpWhitelist(): Promise<string[]> {
+  try {
+    return await getSocialProvider().getWechatIpWhitelist({ signal: AbortSignal.timeout(10_000) });
+  } catch (error) {
+    Sentry.captureException(error, { extra: { step: "getWechatIpWhitelist" } });
+    return [];
+  }
+}
+
+/**
+ * WeChat Service Account with its AppID and AppSecret (18 Nov, docs.zernio.com/platforms/wechat/
+ * connect). The keys go straight to Zernio; Waggle shows the server values to paste into WeChat.
+ */
+export async function connectWechatAction(
+  _prev: WechatState,
+  formData: FormData,
+): Promise<WechatState> {
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const db = getServiceClient();
+  if (statusOf(await loadPlatformStatuses(db), "wechat") !== "available") {
+    return { error: "WeChat isn't available yet." };
+  }
+  const parsed = parseWechatKeys(formData);
+  if (!parsed.ok) return { error: parsed.error, field: parsed.field };
+  let result: Awaited<ReturnType<ReturnType<typeof getSocialProvider>["connectWechat"]>>;
+  try {
+    const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
+    result = await getSocialProvider().connectWechat({
+      profileId,
+      ...parsed.value,
+      signal: AbortSignal.timeout(45_000),
+    });
+  } catch (error) {
+    if (
+      error instanceof SocialProviderError &&
+      error.details.code === "wechat_ip_not_whitelisted"
+    ) {
+      return { error: "WeChat refused: add every IP address above to the API IP whitelist first." };
+    }
+    const s = status(error);
+    if (s === 400) {
+      return {
+        error: "WeChat didn't accept these keys. Copy the AppID again, or reset the AppSecret.",
+      };
+    }
+    if (s === 402) return { error: PLAN_LIMIT };
+    Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "connectWechat" } });
+    return { error: "WeChat couldn't be connected right now. Try again in a moment." };
+  }
+  await writeAudit(db, {
+    tenantId: tenant.id,
+    action: "integration_connected",
+    actor: tenant.userId,
+    details: { platform: "wechat", zernioAccountId: result.accountId },
+  });
+  revalidatePath("/settings", "layout");
+  return { server: result.server };
 }

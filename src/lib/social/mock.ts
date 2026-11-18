@@ -830,10 +830,39 @@ export class MockSocialProvider implements SocialProvider {
     return { accounts: 6, xApi: 3.4, sms: 1.1, credits: -12, total: -1.5 };
   }
 
-  async getIntegrationConnectUrl(input: { kind: string; redirectUrl: string }) {
+  async getIntegrationConnectUrl(input: { kind: string; profileId: string; redirectUrl: string }) {
+    // The partner's sign-in "succeeds" at once: the connection shows on the profile.
+    const id = idFrom(`mock_${input.kind}`, input.profileId, input.kind);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [
+      ...list,
+      { id, platform: input.kind, name: `Your ${input.kind} account`, active: true },
+    ]);
     const url = new URL(input.redirectUrl);
     url.searchParams.set("connected", input.kind);
     return { authUrl: url.toString() };
+  }
+
+  async getWechatIpWhitelist() {
+    return ["203.0.113.10", "203.0.113.11"];
+  }
+
+  async connectWechat(input: { profileId: string; appId: string }) {
+    const id = idFrom("mock_wechat", input.profileId, input.appId);
+    const list = (this.integrations.get(input.profileId) ?? []).filter((i) => i.id !== id);
+    this.integrations.set(input.profileId, [
+      ...list,
+      { id, platform: "wechat", name: "Your WeChat account", active: true },
+    ]);
+    return {
+      accountId: id,
+      name: "Your WeChat account",
+      server: {
+        url: `https://example.test/webhook/wechat/${id}`,
+        token: "mockToken0123456789",
+        encodingAESKey: "mockAesKey0123456789012345678901234567890123",
+      },
+    };
   }
 
   async getMailConnectUrl(input: { platform: string; redirectUrl: string }) {

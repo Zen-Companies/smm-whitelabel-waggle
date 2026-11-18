@@ -93,6 +93,8 @@ export function fakeZernio() {
     discoverEmail: notImplemented,
     connectEmail: notImplemented,
     connectLine: notImplemented,
+    getWechatIpWhitelist: notImplemented,
+    connectWechat: notImplemented,
     listIntegrations: notImplemented,
     connectSiteWithKeys: notImplemented,
     connectWhatsAppWithKeys: notImplemented,

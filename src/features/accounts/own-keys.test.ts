@@ -5,6 +5,7 @@ import {
   OWN_KEY_PLATFORMS,
   parseEmail,
   parseLineKeys,
+  parseWechatKeys,
   parseSiteKeys,
   parseWhatsAppKeys,
 } from "./own-keys";
@@ -127,6 +128,25 @@ describe("parseWhatsAppKeys", () => {
   });
 });
 
+describe("parseWechatKeys", () => {
+  it("an AppID of wx + 16 and a 32-character AppSecret", () => {
+    expect(
+      parseWechatKeys(
+        form({ appId: " wx1234567890abcdef ", appSecret: "0123456789abcdef0123456789abcdef" }),
+      ),
+    ).toEqual({
+      ok: true,
+      value: { appId: "wx1234567890abcdef", appSecret: "0123456789abcdef0123456789abcdef" },
+    });
+    expect(parseWechatKeys(form({ appId: "1234", appSecret: "x" }))).toMatchObject({
+      field: "appId",
+    });
+    expect(
+      parseWechatKeys(form({ appId: "wx1234567890abcdef", appSecret: "short" })),
+    ).toMatchObject({ field: "appSecret" });
+  });
+});
+
 describe("parseLineKeys and parseEmail", () => {
   it("LINE: a numeric channel id and a 32-character secret", () => {
     expect(
@@ -155,20 +175,25 @@ describe("parseLineKeys and parseEmail", () => {
 });
 
 describe("MORE_CONNECTIONS", () => {
-  it("only key-paste and Waggle's own pages connect today; the rest say Coming soon", () => {
+  it("sites by keys, WeChat by its form; sign-in connections wait for Staff → Platforms", () => {
     const items = MORE_CONNECTIONS.flatMap((g) => g.items);
     expect(items.filter((i) => i.how === "keys").map((i) => i.id)).toEqual([...OWN_KEY_PLATFORMS]);
     expect(items.find((i) => i.id === "email")).toMatchObject({ how: "email", platform: "imap" });
     // LINE connects from its own tile (T81a).
     expect(items.find((i) => i.id === "line")).toBeUndefined();
+    expect(items.find((i) => i.id === "wechat")?.how).toBe("wechat");
+    // Turned into a Connect button by More connections once Available.
     for (const id of [
       "hubspot",
+      "salesforce",
       "wix",
       "stripe",
       "googleanalytics",
       "googleads",
       "tiktokads",
-      "wechat",
+      "redditads",
+      "microsoftads",
+      "xads",
     ]) {
       expect(items.find((i) => i.id === id)?.how).toBe("soon");
     }
@@ -187,6 +212,6 @@ describe("withSettingsLinks (T83d)", () => {
     expect(find("rcs")).toMatchObject({ how: "link", href: "/settings/messaging" });
     expect(find("imessage")).toMatchObject({ how: "link" });
     expect(find("sms")).toMatchObject({ how: item("sms")?.how });
-    expect(find("wechat")?.how).toBe("soon");
+    expect(find("wechat")?.how).toBe("wechat");
   });
 });
