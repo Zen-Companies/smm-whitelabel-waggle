@@ -62,7 +62,7 @@ export async function AssistantsCard() {
           </>
         ) : (
           <span className="text-ink-2 text-sm">
-            AI assistants aren&apos;t turned on yet. We&apos;re switching this on brand by brand.
+            AI assistants are switched off for this brand. Ask us if you need them.
           </span>
         )}
       </div>

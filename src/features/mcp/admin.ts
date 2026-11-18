@@ -220,14 +220,15 @@ export async function loadSwitches(db: ServiceClient, q: string, now: Date) {
   };
   const connected = tally((grants ?? []).flatMap((g) => g.tenant_ids));
   const sent = tally((sends ?? []).flatMap((s) => (s.tenant_id ? [s.tenant_id] : [])));
-  const on = new Set((flags ?? []).filter((f) => f.enabled).map((f) => f.tenant_id));
+  // On by default (18 Nov): off only when staff switched the brand off.
+  const off = new Set((flags ?? []).filter((f) => !f.enabled).map((f) => f.tenant_id));
 
   const rows: SwitchRow[] = page.map((t) => ({
     id: t.id,
     name: t.name,
     isTest: t.is_test,
     owner: emails.get(ownerOf.get(t.id) ?? "") ?? null,
-    on: on.has(t.id),
+    on: !off.has(t.id),
     connected: connected.get(t.id) ?? 0,
     sendsToday: sent.get(t.id) ?? 0,
     dailyCap: t.mcp_daily_send_cap,
@@ -321,10 +322,10 @@ export async function loadPlaygroundTargets(db: ServiceClient): Promise<Playgrou
       .from("feature_flags")
       .select("tenant_id")
       .eq("key", MCP_FLAG)
-      .eq("enabled", true)
+      .eq("enabled", false)
       .in("tenant_id", ids),
   ]);
-  const on = new Set((flags ?? []).map((f) => f.tenant_id));
+  const switchedOff = new Set((flags ?? []).map((f) => f.tenant_id));
   const emails = await emailsOf(
     db,
     (members ?? []).map((m) => m.user_id),
@@ -335,7 +336,7 @@ export async function loadPlaygroundTargets(db: ServiceClient): Promise<Playgrou
       const email = emails.get(m.user_id);
       if (!email) continue;
       const target = byUser.get(m.user_id) ?? { userId: m.user_id, email, brands: [] };
-      target.brands.push({ id: t.id, name: t.name, on: on.has(t.id) });
+      target.brands.push({ id: t.id, name: t.name, on: !switchedOff.has(t.id) });
       byUser.set(m.user_id, target);
     }
   }

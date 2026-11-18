@@ -19,22 +19,28 @@ export async function mcpOnGlobally(db: ServiceClient): Promise<boolean> {
   return data?.enabled ?? true;
 }
 
-/** Which of these brands have AI assistants switched on. */
+/**
+ * Which of these brands have AI assistants switched on. On by default (18 Nov): a brand is on
+ * unless staff switched it off in its row. An offboarded brand (T21) is always off.
+ */
 export async function mcpBrandsOn(
   db: ServiceClient,
   tenantIds: readonly string[],
 ): Promise<Set<string>> {
   if (!tenantIds.length) return new Set();
-  const { data, error } = await db
-    .from("feature_flags")
-    .select("tenant_id, tenants!inner (offboarded_at)")
-    .eq("key", MCP_FLAG)
-    .eq("enabled", true)
-    .in("tenant_id", [...tenantIds])
-    // An offboarded brand (T21) is off for AI assistants whatever its switch says.
-    .is("tenants.offboarded_at", null);
-  if (error) throw new Error(`mcp: reading switches failed: ${error.message}`);
-  return new Set((data ?? []).flatMap((r) => (r.tenant_id ? [r.tenant_id] : [])));
+  const ids = [...tenantIds];
+  const [{ data: live, error: e1 }, { data: off, error: e2 }] = await Promise.all([
+    db.from("tenants").select("id").in("id", ids).is("offboarded_at", null),
+    db
+      .from("feature_flags")
+      .select("tenant_id")
+      .eq("key", MCP_FLAG)
+      .eq("enabled", false)
+      .in("tenant_id", ids),
+  ]);
+  if (e1 || e2) throw new Error(`mcp: reading switches failed: ${(e1 ?? e2)?.message}`);
+  const switchedOff = new Set((off ?? []).map((r) => r.tenant_id));
+  return new Set((live ?? []).map((t) => t.id).filter((id) => !switchedOff.has(id)));
 }
 
 /** A brand's own daily limit for AI sends, or null for the default. */

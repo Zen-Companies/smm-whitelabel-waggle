@@ -122,7 +122,7 @@ export async function ConsentScreen({ authorizationId }: { authorizationId: stri
   if (!on.size) {
     return (
       <Message title="AI assistants aren't available for your brands yet">
-        <p>We&apos;re turning this on brand by brand. Nothing was shared with {assistant}.</p>
+        <p>AI assistants are switched off for this brand. Nothing was shared with {assistant}.</p>
         <form action={denyConnection}>
           <input type="hidden" name="authorizationId" value={details.authorization_id} />
           <Button type="submit">Back to {assistant}</Button>

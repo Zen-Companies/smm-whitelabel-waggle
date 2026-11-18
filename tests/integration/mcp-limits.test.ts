@@ -80,7 +80,10 @@ beforeAll(async () => {
   userIds.push(userId);
   onBrand = await brand("Switched On Cafe", true);
   offBrand = await brand("Switched Off Bakery", false);
-  await db.from("feature_flags").insert({ key: "mcp", tenant_id: onBrand.tenantId, enabled: true });
+  // On by default (18 Nov): only the off brand needs a row.
+  await db
+    .from("feature_flags")
+    .insert({ key: "mcp", tenant_id: offBrand.tenantId, enabled: false });
   p = {
     userId,
     clientId: "client-limits",
