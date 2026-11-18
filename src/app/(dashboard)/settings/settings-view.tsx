@@ -5,7 +5,7 @@ import { AccountSection } from "@/features/account";
 import { AccountsCard, ConnectedCount } from "@/features/accounts";
 import { NotificationSettings } from "@/features/alerts";
 import { AssistantsCard } from "@/features/mcp";
-import { YourPlanSection } from "@/features/billing";
+import { TrialConversionTag, YourPlanSection } from "@/features/billing";
 import { can, listMyOrgs, OrgGeneralSection, TeamSection } from "@/features/orgs";
 import { BusinessSettings, getCurrentTenant } from "@/features/tenants";
 import { messagingOn, MessagingSection } from "@/features/messaging";
@@ -137,6 +137,11 @@ async function Body({ params: route, searchParams }: SettingsProps) {
             org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}
             notice={planNotice(params)}
           />
+        )}
+        {section === "billing" && org && planNotice(params) === "done" && (
+          <Suspense fallback={null}>
+            <TrialConversionTag sessionId={params.session_id} orgId={org.id} />
+          </Suspense>
         )}
         {section === "accounts" && <AccountsCard searchParams={searchParams} />}
         {section === "notifications" && <NotificationSettings />}
