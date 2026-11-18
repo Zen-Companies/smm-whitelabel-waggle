@@ -206,7 +206,7 @@ export function WechatConnectForm({ ips }: { ips: string[] }) {
         <p className="meta">
           In the Weixin Official Accounts Platform: Settings and Development → Basic Configuration →
           Server Configuration. Paste these, choose Safe mode, submit, then enable it. Messages
-          start once it&apos;s enabled. (The address belongs to Zernio, our technical partner.)
+          start once it&apos;s enabled. (The address is our technical partner&apos;s.)
         </p>
         <dl className="flex flex-col gap-2">
           {rows.map(([label, value]) => (
