@@ -9,6 +9,7 @@ import {
   handlePlatformPause,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
+import { crmClient, deliverCrmEvents, sweepInactive, sweepUsage } from "@/features/crm";
 import { chargeUsageAtCost, getStripe } from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
 import { pruneCalls } from "@/features/mcp";
@@ -129,6 +130,28 @@ export async function POST(request: Request): Promise<Response> {
       appUrl: process.env.APP_URL ?? "",
       shouldContinue: () => deadline.remainingMs() > 10_000,
     });
+    // CRM (features/crm): every 15 minutes queue inactive / usage events, then send the queue.
+    const crmSweep =
+      new Date().getUTCMinutes() % 15 === 0
+        ? {
+            inactive: await sweepInactive(db).catch((e: unknown) => {
+              Sentry.captureException(e);
+              return 0;
+            }),
+            usage: await sweepUsage(db).catch((e: unknown) => {
+              Sentry.captureException(e);
+              return 0;
+            }),
+          }
+        : null;
+    const crm = await deliverCrmEvents({
+      db,
+      client: crmClient(),
+      shouldContinue: () => deadline.remainingMs() > 8_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
     // 18 Nov: the hourly / 2-hourly summaries that are due.
     const digests = await deliverDueDigests({
       db,
@@ -138,6 +161,8 @@ export async function POST(request: Request): Promise<Response> {
     });
 
     return Response.json({
+      crm,
+      crmSweep,
       digests,
       ...items,
       kbEmbedded: kb.embedded,

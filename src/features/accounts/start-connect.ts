@@ -5,6 +5,7 @@ import { roomForAnotherAccount } from "@/features/billing";
 import { loadPlatformStatuses, recordSignin, statusOf } from "@/features/platforms";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
+import { queueForOwners, queueQuietly } from "@/lib/crm";
 import { getSocialProvider } from "@/lib/social";
 import { isConnectable, type PlatformId } from "@/lib/social/platforms";
 import { isIntegrationKind, SocialProviderError, type IntegrationKind } from "@/lib/social/types";
@@ -37,6 +38,16 @@ const fail = (code: string, id: string): StartConnect => ({
   href: `/settings/accounts?connect_error=${code}&platform=${encodeURIComponent(id)}`,
 });
 
+/** CRM: a connect blocked by the plan's accounts (once a day per organization). */
+async function queueAccountLimit(db: ReturnType<typeof getServiceClient>, orgId: string) {
+  await queueQuietly(() =>
+    queueForOwners(db, orgId, {
+      event: "account_limit",
+      dedupeKey: `account_limit:${orgId}:${new Date().toISOString().slice(0, 10)}`,
+    }),
+  );
+}
+
 export async function startConnect(id: string, mode: "here" | "tab"): Promise<StartConnect> {
   const social = isConnectable(id) || SIGNIN_LATER.includes(id);
   if (!social && !isIntegrationKind(id)) return fail("unavailable", id);
@@ -44,7 +55,10 @@ export async function startConnect(id: string, mode: "here" | "tab"): Promise<St
   if (!tenant) return fail("not_allowed", id);
   const db = getServiceClient();
   if (statusOf(await loadPlatformStatuses(db), id) !== "available") return fail("unavailable", id);
-  if (social && !(await roomForAnotherAccount(db, tenant.id))) return fail("accounts_full", id);
+  if (social && !(await roomForAnotherAccount(db, tenant.id))) {
+    await queueAccountLimit(db, tenant.organizationId);
+    return fail("accounts_full", id);
+  }
 
   // X Ads hangs off the brand's X account (docs.zernio.com/connect/connect-ads).
   let postingAccountId: string | undefined;

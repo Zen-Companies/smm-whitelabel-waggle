@@ -2,6 +2,7 @@ import { queueUsageCharge } from "./usage-charges";
 import "server-only";
 import type Stripe from "stripe";
 import { writeAudit } from "@/lib/audit";
+import { lifecycleEvents, organizationHasPaid, queueForOwners } from "@/lib/crm";
 import { monthStart } from "@/lib/llm/spend";
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -181,6 +182,19 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
           kind: "trial_end",
           start: sub.trial_start,
           end: sub.ended_at,
+        });
+      }
+      // CRM (docs/ghl-plan.md): trial started, paid, failed, canceled… queued for the owners.
+      // Database writes only; the jobs route sends them to HighLevel.
+      const hasPaid =
+        before && ["past_due", "canceled", "active"].includes(row.status)
+          ? await organizationHasPaid(db, orgId)
+          : false;
+      for (const e of lifecycleEvents(before, row, hasPaid)) {
+        await queueForOwners(db, orgId, {
+          event: e.event,
+          details: e.details,
+          dedupeKey: `${event.id}:${e.event}`,
         });
       }
       if (before?.plan !== row.plan || before?.status !== row.status) {

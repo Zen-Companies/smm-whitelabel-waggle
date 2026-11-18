@@ -1,0 +1,72 @@
+// The contact fields one event sends (Walter's rule: every field, every time). Pure: the loader
+// (snapshot.ts) gathers the facts, this turns them into HighLevel's strings.
+
+import { PLANS, isPlanId } from "@/features/billing";
+import type { CrmEvent, CrmField } from "@/lib/crm";
+
+export interface CrmSnapshot {
+  event: CrmEvent;
+  eventAt: Date;
+  /** Event-only details from the queue row. */
+  details: Record<string, unknown>;
+  business: string;
+  /** Waggle's plan id while the plan is live, else null. */
+  planId: string | null;
+  founding: boolean;
+  status: string | null;
+  trialEndsAt: string | null;
+  periodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  accountsConnected: number;
+  repliesUsed: number | null;
+  replyLimit: number | null;
+  resetsOn: Date | null;
+  daysInactive: number;
+}
+
+/**
+ * HighLevel's plan words: solo, team ($99), business ($199). Careful: Waggle's ids are swapped
+ * for the two upper plans (id `business` is shown as Team, id `team` as Business), so the
+ * name decides, never the id.
+ */
+export function crmPlan(planId: string | null | undefined): string {
+  return planId && isPlanId(planId) ? PLANS[planId].name.toLowerCase() : "";
+}
+
+const day = (v: string | Date | null | undefined) => {
+  if (!v) return "";
+  const d = typeof v === "string" ? new Date(v) : v;
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+};
+
+/** When access ends: the period's (or trial's) end once a cancel is asked for or done. */
+function endsOn(s: CrmSnapshot): string {
+  const ending = s.cancelAtPeriodEnd || s.status === "canceled" || s.event === "trial_expired";
+  if (!ending) return "";
+  return day(
+    s.status === "trialing" ? (s.trialEndsAt ?? s.periodEnd) : (s.periodEnd ?? s.trialEndsAt),
+  );
+}
+
+const text = (v: unknown) => (typeof v === "string" || typeof v === "number" ? String(v) : "");
+
+export function crmFields(s: CrmSnapshot): Record<CrmField, string> {
+  return {
+    waggle_event: s.event,
+    waggle_event_at: s.eventAt.toISOString(),
+    waggle_plan: crmPlan(s.planId),
+    waggle_from_plan: crmPlan(text(s.details.from_plan)),
+    waggle_founding: s.founding ? "true" : "false",
+    waggle_trial_ends: day(s.trialEndsAt),
+    waggle_ends_on: endsOn(s),
+    waggle_platform: text(s.details.platform),
+    waggle_accounts_connected: String(s.accountsConnected),
+    waggle_days_inactive: String(
+      typeof s.details.days_inactive === "number" ? s.details.days_inactive : s.daysInactive,
+    ),
+    waggle_replies_used: s.repliesUsed === null ? "" : String(s.repliesUsed),
+    waggle_reply_limit: s.replyLimit === null ? "" : String(s.replyLimit),
+    waggle_resets_on: day(s.resetsOn),
+    waggle_business: s.business,
+  };
+}
