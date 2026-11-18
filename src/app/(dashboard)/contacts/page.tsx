@@ -8,7 +8,8 @@ type Props = { searchParams: Promise<Record<string, string | string[] | undefine
 
 async function View({ searchParams }: Props) {
   const p = await searchParams;
-  const one = (v: string | string[] | undefined) => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  const one = (v: string | string[] | undefined) =>
+    typeof v === "string" && v.trim() ? v.trim() : undefined;
   const page = Math.max(0, Math.min(200, Number(one(p.page) ?? 0) || 0));
   return <ContactsView q={one(p.q)} tag={one(p.tag)} page={page} />;
 }

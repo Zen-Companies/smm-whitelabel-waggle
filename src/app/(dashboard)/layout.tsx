@@ -2,8 +2,25 @@ import { Suspense } from "react";
 import { AccountBanner } from "@/features/accounts";
 import { Bell } from "@/features/alerts";
 import { NEEDS_OWNER } from "@/features/approvals";
+import { PlanChip, PlanMenuRow } from "@/features/billing";
 import { Feedback } from "@/features/feedback";
+import { can, listMyOrgs } from "@/features/orgs";
 import { AppHeader, getCurrentTenant } from "@/features/tenants";
+
+/** The top bar with Your plan beside the account button (approved 18 Nov). */
+async function Header() {
+  const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
+  const org = orgs.find((o) => o.id === tenant.organizationId);
+  const viewer = { orgId: tenant.organizationId, isOwner: !!org && can(org.role, "billing.view") };
+  return (
+    <AppHeader
+      bell={<Bell />}
+      plan={<PlanChip {...viewer} />}
+      planMenu={<PlanMenuRow {...viewer} />}
+      needsYouStatuses={NEEDS_OWNER}
+    />
+  );
+}
 
 async function DashboardFeedback() {
   const tenant = await getCurrentTenant();
@@ -19,7 +36,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
     // scrolls; its own areas scroll instead.
     <div className="flex min-h-dvh flex-col pb-16 md:pb-0 lg:has-[[data-fit-screen]]:h-dvh">
       <Suspense fallback={<div className="border-line h-14 border-b" />}>
-        <AppHeader bell={<Bell />} needsYouStatuses={NEEDS_OWNER} />
+        <Header />
       </Suspense>
       <Suspense fallback={null}>
         <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">

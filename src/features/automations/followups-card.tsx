@@ -50,7 +50,7 @@ export function FollowupsCard({
           On Solo you follow up yourself. Team and Business send your follow-up on their own when a
           lead goes quiet.
         </p>
-        <Link href="/settings/billing" className="action-link w-fit text-sm">
+        <Link href="/plan" className="action-link w-fit text-sm">
           See the plans
         </Link>
       </section>

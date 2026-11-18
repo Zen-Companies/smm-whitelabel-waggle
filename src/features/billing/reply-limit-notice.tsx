@@ -58,7 +58,7 @@ export async function ReplyLimitNotice({
             <b>{note.title}</b> {note.body}
           </span>
         </span>
-        <Link href="/settings/billing" className="action-link text-sm">
+        <Link href="/plan" className="action-link text-sm">
           See your plan
         </Link>
       </section>

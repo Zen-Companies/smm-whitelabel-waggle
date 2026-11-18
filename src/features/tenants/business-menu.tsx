@@ -43,6 +43,7 @@ export function BusinessMenu({
   canAddBrand,
   staffHref,
   signOut,
+  planRow,
 }: {
   signedInAs: string;
   orgs: OrgSummary[];
@@ -54,6 +55,8 @@ export function BusinessMenu({
   /** The first staff page the user's role may open, or none. */
   staffHref: string | null;
   signOut: () => Promise<void>;
+  /** Your plan, on top of the menu (approved 18 Nov). */
+  planRow?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [pending, startTransition] = useTransition();
@@ -99,6 +102,7 @@ export function BusinessMenu({
       <Menu.Portal>
         <Menu.Positioner align="end" sideOffset={8} className="z-50">
           <Menu.Popup className="border-line bg-surface w-[320px] max-w-[calc(100vw-32px)] rounded-[18px] border p-2 shadow-[var(--shadow-overlay)] outline-none">
+            {planRow}
             <p className="text-ink-3 truncate px-3 pt-1.5 pb-2 text-xs">
               Signed in as {signedInAs}
             </p>
