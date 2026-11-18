@@ -7,6 +7,20 @@ import { StateLabel } from "@/components/app/state-mark";
 import { statusOf, type PlatformStatus, type PlatformStatuses } from "@/features/platforms";
 
 /**
+ * Connected somewhere else (More connections, Settings → Phone or Messaging), so no tile: one
+ * row per platform on the page (18 Nov).
+ */
+const NOT_TILES = new Set<string>([
+  "imap",
+  "google",
+  "microsoft",
+  "phone",
+  "sms",
+  "rcs",
+  "imessage",
+]);
+
+/**
  * Where a tile's platform stands today: Zernio's sign-in, a form in Waggle (Bluesky), or later
  * (setup steps not built yet, or not available upstream).
  */
@@ -106,7 +120,7 @@ export function ConnectTiles({
 }) {
   // Staff → Platforms (18 Nov): Hidden platforms aren't shown at all.
   const all = PLATFORM_IDS.map((id) => PLATFORMS[id]).filter(
-    (p) => !exclude.includes(p.id) && statusOf(statuses, p.id) !== "hidden",
+    (p) => !NOT_TILES.has(p.id) && !exclude.includes(p.id) && statusOf(statuses, p.id) !== "hidden",
   );
   const at = (p: Platform) => availability(p, statusOf(statuses, p.id));
   const ready = all.filter((p) => at(p) !== "soon");
