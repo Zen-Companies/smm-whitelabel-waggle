@@ -1,4 +1,5 @@
 import "server-only";
+import { parseUtmCookie, queueCrmEvent, queueQuietly, UTM_COOKIE, type Utm } from "@/lib/crm";
 import { cookies } from "next/headers";
 import { cache } from "react";
 import { pictureUrl } from "@/lib/pictures";
@@ -68,5 +69,35 @@ export async function setOrgCookie(orgId: string): Promise<void> {
 export async function ensurePersonalOrg(db: ServiceClient, userId: string): Promise<string> {
   const { data, error } = await db.rpc("create_personal_org", { p_user: userId });
   if (error || !data) throw new Error(`create_personal_org failed: ${error?.message}`);
+  await queueQuietly(() => queueSignUp(db, userId, data));
   return data;
+}
+
+/**
+ * CRM: a new login (signed_up), once. Only logins made in the last 2 days, so people who signed
+ * up before this existed don't get a welcome on their next sign-in.
+ */
+async function queueSignUp(db: ServiceClient, userId: string, orgId: string): Promise<void> {
+  const { count } = await db
+    .from("crm_events")
+    .select("id", { count: "exact", head: true })
+    .eq("dedupe_key", `signed_up:${userId}`);
+  if (count) return;
+  const { data } = await db.auth.admin.getUserById(userId);
+  const created = data.user?.created_at ? new Date(data.user.created_at) : null;
+  if (!created || Date.now() - created.getTime() > 2 * 24 * 60 * 60_000) return;
+  // The first campaign they came from (proxy cookie), when this runs in their request.
+  let utm: Utm | null = null;
+  try {
+    utm = parseUtmCookie((await cookies()).get(UTM_COOKIE)?.value);
+  } catch {
+    utm = null;
+  }
+  await queueCrmEvent(db, {
+    event: "signed_up",
+    userId,
+    orgId,
+    dedupeKey: "signed_up",
+    details: utm ? { utm: JSON.stringify(utm) } : {},
+  });
 }

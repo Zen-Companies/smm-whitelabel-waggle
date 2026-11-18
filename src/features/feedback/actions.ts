@@ -1,5 +1,6 @@
 "use server";
 
+import { queueCrmEvent, queueQuietly } from "@/lib/crm";
 import { z } from "zod";
 import { sendGhlEvent } from "@/lib/ghl";
 import { getCurrentUser } from "@/lib/supabase/server";
@@ -61,6 +62,28 @@ export async function sendFeedback(_prev: SendState, formData: FormData): Promis
     .single();
   if (error || !row) return { error: "Couldn't send it. Try again in a moment." };
 
+  // CRM (API): a note on the person's HighLevel contact. The webhook below stays for now.
+  await queueQuietly(() =>
+    queueCrmEvent(db, {
+      event: "feedback",
+      userId: user.id,
+      orgId: ctx.organizationId,
+      dedupeKey: `feedback:${row.id}`,
+      note: {
+        title: `Waggle feedback${type ? ` · ${type}` : ""}`,
+        body: [
+          message,
+          followUp ? `Follow-up: ${followUp}` : "",
+          `OK to contact: ${contactOk ? "yes" : "no"}`,
+          `Page: ${page}`,
+          `Business: ${[ctx.organization, ctx.brand].filter(Boolean).join(" / ")}`,
+          ctx.role ? `Role: ${ctx.role}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      },
+    }),
+  );
   const sent = await sendGhlEvent({
     event: "feedback",
     email: user.email ?? "",
@@ -112,6 +135,15 @@ export async function ratePage(formData: FormData): Promise<{ ok: boolean; id?: 
     .select("id, created_at")
     .single();
   if (error || !row) return { ok: false };
+  await queueQuietly(() =>
+    queueCrmEvent(db, {
+      event: "page_rating",
+      userId: user.id,
+      orgId: ctx.organizationId,
+      dedupeKey: `page_rating:${row.id}`,
+      note: ratingNote(page, rating.data, reason, ctx),
+    }),
+  );
   const sent = await sendGhlEvent({
     event: "page_rating",
     email: user.email ?? "",
@@ -127,6 +159,22 @@ export async function ratePage(formData: FormData): Promise<{ ok: boolean; id?: 
     await db.from("feedback").update({ sent_to_ghl_at: new Date().toISOString() }).eq("id", row.id);
   }
   return { ok: true, id: row.id };
+}
+
+/** The CRM note for a page rating. */
+function ratingNote(
+  page: string,
+  rating: "good" | "not_good",
+  reason: string,
+  ctx: { organization: string; brand: string },
+): { title: string; body: string } {
+  return {
+    title: `Page rating · ${page}: ${rating === "good" ? "good" : "not good"}`,
+    body: [
+      reason ? `Why: ${reason}` : "No reason given.",
+      `Business: ${[ctx.organization, ctx.brand].filter(Boolean).join(" / ")}`,
+    ].join("\n"),
+  };
 }
 
 /** The optional "what made it good or not good?" after a tap: saved on that rating, sent again. */
@@ -148,6 +196,15 @@ export async function addRatingReason(formData: FormData): Promise<{ ok: boolean
     .maybeSingle();
   if (!row || !row.rating) return { ok: false };
   const ctx = await feedbackContext(db, user.id, row.organization_id, row.tenant_id);
+  await queueQuietly(() =>
+    queueCrmEvent(db, {
+      event: "page_rating",
+      userId: user.id,
+      orgId: ctx.organizationId,
+      dedupeKey: `page_rating_reason:${id}:${Date.now()}`,
+      note: ratingNote(row.page, row.rating === "good" ? "good" : "not_good", reason, ctx),
+    }),
+  );
   await sendGhlEvent({
     event: "page_rating",
     email: user.email ?? "",

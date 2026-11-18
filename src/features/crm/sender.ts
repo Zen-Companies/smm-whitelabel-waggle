@@ -6,7 +6,17 @@
 import * as Sentry from "@sentry/nextjs";
 import { FOUNDING, FOUNDING_COUPON, getStripe } from "@/features/billing";
 import { GhlError, type GhlClient } from "@/lib/ghl/client";
-import { CRM_MIN_GAP_MS, CRM_TRIGGER_TAG, isCrmEvent, queueCrmEvent } from "@/lib/crm";
+import {
+  CRM_MIN_GAP_MS,
+  CRM_NOTE_ONLY,
+  CRM_TAG_ONLY,
+  CRM_TRIGGER_TAG,
+  firstTouchUtm,
+  parseUtmCookie,
+  type Utm,
+  isCrmEvent,
+  queueCrmEvent,
+} from "@/lib/crm";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { crmFields } from "./fields";
 import { loadContact, loadSnapshot } from "./snapshot";
@@ -46,6 +56,14 @@ async function checkFoundingFull(db: ServiceClient, row: Row): Promise<void> {
       dedupeKey: "founding_full",
     });
   }
+}
+
+/** A note queued with the event (details.note = { title, body }), if any. */
+function noteOf(details: unknown): { title: string; body: string } | null {
+  const n = (details as { note?: { title?: unknown; body?: unknown } } | null)?.note;
+  return n && typeof n.title === "string" && typeof n.body === "string"
+    ? { title: n.title, body: n.body }
+    : null;
 }
 
 export async function deliverCrmEvents(deps: {
@@ -107,14 +125,40 @@ export async function deliverCrmEvents(deps: {
         out.skipped += 1;
         continue;
       }
-      const snapshot = await loadSnapshot(db, { ...row, event: row.event }, now);
-      const { contactId } = await client.upsertContact({
-        email: contact.email,
-        name: contact.name,
-        companyName: snapshot.business || null,
-        fields: crmFields(snapshot),
-      });
-      await client.addTags(contactId, [CRM_TRIGGER_TAG]);
+      const note = noteOf(row.details);
+      let contactId: string;
+      let founding = false;
+      const ownTag = CRM_TAG_ONLY[row.event];
+      if (ownTag) {
+        // Sign-up: the contact with its first campaign (never over one it already has) + its tag.
+        const raw = (row.details as { utm?: unknown } | null)?.utm;
+        const visit: Utm | null = parseUtmCookie(typeof raw === "string" ? raw : null);
+        const existing = visit ? await client.contactFields(contact.email) : {};
+        ({ contactId } = await client.upsertContact({
+          email: contact.email,
+          name: contact.name,
+          fields: firstTouchUtm(visit, existing) as Record<string, string>,
+        }));
+        await client.addTags(contactId, [ownTag]);
+      } else if (CRM_NOTE_ONLY.has(row.event)) {
+        // A note only (feedback, page ratings): the contact by email, no fields, no tag.
+        ({ contactId } = await client.upsertContact({
+          email: contact.email,
+          name: contact.name,
+          fields: {},
+        }));
+      } else {
+        const snapshot = await loadSnapshot(db, { ...row, event: row.event }, now);
+        founding = snapshot.founding;
+        ({ contactId } = await client.upsertContact({
+          email: contact.email,
+          name: contact.name,
+          companyName: snapshot.business || null,
+          fields: crmFields(snapshot),
+        }));
+        await client.addTags(contactId, [CRM_TRIGGER_TAG]);
+      }
+      if (note) await client.addNote(contactId, note);
       await db
         .from("crm_events")
         .update({
@@ -125,7 +169,7 @@ export async function deliverCrmEvents(deps: {
         })
         .eq("id", row.id);
       out.sent += 1;
-      if (row.event === "trial_started" && snapshot.founding) {
+      if (row.event === "trial_started" && founding) {
         await checkFoundingFull(db, row).catch((e: unknown) => Sentry.captureException(e));
       }
     } catch (err) {
