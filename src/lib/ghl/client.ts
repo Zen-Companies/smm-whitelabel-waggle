@@ -1,6 +1,8 @@
 // GoHighLevel API client (docs/ghl-plan.md). Only the two calls Waggle needs:
 //   POST /contacts/upsert           find-or-create a contact by email, set its custom fields
 //   POST /contacts/{id}/tags        add tags (the trigger tag `waggle-app-event`)
+//   POST /contacts/{id}/notes       a note on the contact (feedback, page ratings)
+//   GET  /contacts/search/duplicate the contact by email, to keep its first UTMs
 // Checked against HighLevel's API on 18 Nov. Never send `tags` in the upsert: it replaces every
 // tag the contact has. Auth is a Private Integration Token on the Waggle sub-account.
 
@@ -43,6 +45,9 @@ export interface GhlClient {
   /** Returns the contact's HighLevel id. */
   upsertContact(input: GhlContactInput): Promise<{ contactId: string }>;
   addTags(contactId: string, tags: string[]): Promise<void>;
+  addNote(contactId: string, note: { title: string; body: string }): Promise<void>;
+  /** An existing contact's custom fields by plain key (`utm_source`), or {} when there's none. */
+  contactFields(email: string): Promise<Record<string, string>>;
 }
 
 /** Pure: how long a 429 says to wait (HighLevel sends no Retry-After; its own headers say). */
@@ -72,7 +77,9 @@ export function upsertBody(locationId: string, input: GhlContactInput) {
 }
 
 export function createGhlClient(config: GhlConfig, doFetch: typeof fetch = fetch): GhlClient {
-  const call = async (method: "POST", path: string, body: unknown): Promise<unknown> => {
+  /** Field id → plain key, read once per client (the sub-account's fields rarely change). */
+  let fieldKeys: Promise<Map<string, string>> | null = null;
+  const call = async (method: "POST" | "GET", path: string, body?: unknown): Promise<unknown> => {
     let res: Response;
     try {
       res = await doFetch(`${GHL_BASE_URL}${path}`, {
@@ -83,7 +90,7 @@ export function createGhlClient(config: GhlConfig, doFetch: typeof fetch = fetch
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: body === undefined ? undefined : JSON.stringify(body),
         signal: AbortSignal.timeout(15_000),
       });
     } catch (err) {
@@ -119,6 +126,38 @@ export function createGhlClient(config: GhlConfig, doFetch: typeof fetch = fetch
     },
     async addTags(contactId, tags) {
       await call("POST", `/contacts/${encodeURIComponent(contactId)}/tags`, { tags });
+    },
+    async contactFields(email) {
+      fieldKeys ??= (
+        call(
+          "GET",
+          `/locations/${encodeURIComponent(config.locationId)}/customFields?model=contact`,
+        ) as Promise<{
+          customFields?: { id: string; fieldKey: string }[];
+        }>
+      ).then(
+        (r) =>
+          new Map((r.customFields ?? []).map((f) => [f.id, f.fieldKey.replace(/^contact\./, "")])),
+      );
+      const found = (await call(
+        "GET",
+        `/contacts/search/duplicate?locationId=${encodeURIComponent(config.locationId)}&email=${encodeURIComponent(email)}`,
+      )) as { contact?: { customFields?: { id: string; value?: unknown }[] } | null };
+      const keys = await fieldKeys;
+      const out: Record<string, string> = {};
+      for (const f of found.contact?.customFields ?? []) {
+        const key = keys.get(f.id);
+        if (key && (typeof f.value === "string" || typeof f.value === "number")) {
+          out[key] = String(f.value);
+        }
+      }
+      return out;
+    },
+    async addNote(contactId, note) {
+      await call("POST", `/contacts/${encodeURIComponent(contactId)}/notes`, {
+        title: note.title.slice(0, 200),
+        body: note.body.slice(0, 5000),
+      });
     },
   };
 }

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { legacyPath } from "@/lib/routes";
+import { UTM_COOKIE, UTM_COOKIE_MAX_AGE, utmFromParams } from "@/lib/crm/utm";
 
 // Refreshes the Supabase session cookie on page requests. Authorization happens close to the
 // data (getCurrentUser, Server Actions), not here. Old addresses (emails, bookmarks) forward to
@@ -25,6 +26,17 @@ export async function proxy(request: NextRequest) {
     },
   });
   await supabase.auth.getUser();
+  // First-touch campaign (CRM, 18 Nov): the first link with UTMs wins, for 90 days.
+  const utm = utmFromParams(request.nextUrl.searchParams);
+  if (utm && !request.cookies.get(UTM_COOKIE)) {
+    response.cookies.set(UTM_COOKIE, JSON.stringify(utm), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: UTM_COOKIE_MAX_AGE,
+      path: "/",
+    });
+  }
   return response;
 }
 

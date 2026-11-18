@@ -40,6 +40,19 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 | founding_full                                                                                            | `sender.ts`, after a founding trial takes the last spot                                 |
 | inactive, app_active                                                                                     | `activity.ts` (sweep in the jobs route; a visit)                                        |
 
+## Sign-up, feedback and first-touch UTM (18 Nov)
+
+| Event       | What HighLevel gets                                                                                                | Queued from                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| signed_up   | The contact (name, email, first-touch UTMs) + the tag `waggle-signup`. No note, no fields, no trigger.             | `features/orgs/server.ts` (a login's personal organization, logins under 2 days old) |
+| feedback    | A note on the contact ("Waggle feedback · type": message, follow-up, OK to contact, page, business, role). No tag. | `features/feedback/actions.ts`                                                       |
+| page_rating | A note ("Page rating · page: good / not good" + the reason). No tag.                                               | `features/feedback/actions.ts`                                                       |
+
+- **UTMs:** the proxy keeps the first link's `utm_source / utm_medium / utm_campaign / utm_content / ref` in the
+  `waggle_utm` cookie (90 days, first one wins). At sign-up they go to the contact's `utm_*` / `ref_code` fields,
+  **only when the contact has none yet** (the gowaggle.ai waitlist may have set them first). See `src/lib/crm/utm.ts`.
+- The old inbound webhook (`src/lib/ghl.ts`) still sends beta_joined / feedback / page_rating until it's retired.
+
 ## Rules (Walter's)
 
 - Plan words are `solo`, `team` ($99), `business` ($199). Waggle's **ids are swapped** for the two

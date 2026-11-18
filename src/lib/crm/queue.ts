@@ -9,6 +9,8 @@ import type { CrmEvent } from "./catalog";
 export interface QueuedCrmEvent {
   event: CrmEvent;
   details?: Record<string, string | number | boolean>;
+  /** A note added to the contact with the event (title + body; the owner's own words only). */
+  note?: { title: string; body: string };
   /** Unique per thing that happened, e.g. the Stripe event id. The user id is added. */
   dedupeKey: string;
 }
@@ -33,7 +35,7 @@ export async function queueCrmEvent(
       organization_id: input.orgId,
       user_id: input.userId,
       event: input.event,
-      details: (input.details ?? {}) as Json,
+      details: { ...(input.details ?? {}), ...(input.note ? { note: input.note } : {}) } as Json,
       dedupe_key: `${input.dedupeKey}:${input.userId}`,
     },
     { onConflict: "dedupe_key", ignoreDuplicates: true },

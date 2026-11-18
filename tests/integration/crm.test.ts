@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { deliverCrmEvents } from "@/features/crm";
-import { queueForOwners } from "@/lib/crm";
+import { queueCrmEvent, queueForOwners } from "@/lib/crm";
 import type { GhlClient, GhlContactInput } from "@/lib/ghl/client";
 import { anonClient, serviceClient, uniqueEmail } from "./helpers";
 
@@ -11,7 +11,11 @@ let userId: string;
 let orgId: string;
 let email: string;
 
-const calls: { upsert?: GhlContactInput; tags?: string[] }[] = [];
+const calls: {
+  upsert?: GhlContactInput;
+  tags?: string[];
+  note?: { title: string; body: string };
+}[] = [];
 const fake: GhlClient = {
   async upsertContact(input) {
     calls.push({ upsert: input });
@@ -20,7 +24,15 @@ const fake: GhlClient = {
   async addTags(_id, tags) {
     calls.push({ tags });
   },
+  async addNote(_id, note) {
+    calls.push({ note });
+  },
+  async contactFields() {
+    return existingFields;
+  },
 };
+/** What HighLevel already has on the contact (first-touch UTM tests). */
+let existingFields: Record<string, string> = {};
 
 beforeAll(async () => {
   email = uniqueEmail();
@@ -119,6 +131,10 @@ describe("crm queue", () => {
         throw new Error("HighLevel unreachable");
       },
       async addTags() {},
+      async addNote() {},
+      async contactFields() {
+        return {};
+      },
     };
     const later = new Date(Date.now() + 120_000);
     const r = await deliverCrmEvents({ db, client: broken, now: () => later });
@@ -132,5 +148,56 @@ describe("crm queue", () => {
     expect(data?.status).toBe("pending");
     expect(data?.attempts).toBe(1);
     expect(data?.next_attempt_at).not.toBeNull();
+  });
+
+  it("sign-up: the contact gets its first campaign and the waggle-signup tag, no note", async () => {
+    await db.from("crm_events").update({ status: "sent" }).eq("user_id", userId);
+    await queueCrmEvent(db, {
+      event: "signed_up",
+      userId,
+      orgId,
+      dedupeKey: "signed_up",
+      details: { utm: JSON.stringify({ utm_source: "meta", utm_campaign: "launch" }) },
+    });
+    const at = new Date(Date.now() + 10 * 60_000);
+    calls.length = 0;
+    existingFields = {};
+    expect((await deliverCrmEvents({ db, client: fake, now: () => at })).sent).toBe(1);
+    expect(calls).toEqual([
+      { upsert: { email, name: null, fields: { utm_source: "meta", utm_campaign: "launch" } } },
+      { tags: ["waggle-signup"] },
+    ]);
+  });
+
+  it("a contact that already has a campaign keeps it", async () => {
+    await queueCrmEvent(db, {
+      event: "signed_up",
+      userId,
+      orgId,
+      dedupeKey: "signed_up-again",
+      details: { utm: JSON.stringify({ utm_source: "google" }) },
+    });
+    const at = new Date(Date.now() + 20 * 60_000);
+    calls.length = 0;
+    existingFields = { utm_source: "meta" };
+    await deliverCrmEvents({ db, client: fake, now: () => at });
+    expect(calls.at(0)?.upsert?.fields).toEqual({});
+  });
+
+  it("feedback: a note on the contact, no fields, no tag", async () => {
+    await queueCrmEvent(db, {
+      event: "feedback",
+      userId,
+      orgId,
+      dedupeKey: "feedback:1",
+      note: { title: "Waggle feedback · Bug", body: "The inbox is slow" },
+    });
+    const at = new Date(Date.now() + 30 * 60_000);
+    calls.length = 0;
+    await deliverCrmEvents({ db, client: fake, now: () => at });
+    expect(calls).toEqual([
+      { upsert: { email, name: null, fields: {} } },
+      { note: { title: "Waggle feedback · Bug", body: "The inbox is slow" } },
+    ]);
   });
 });

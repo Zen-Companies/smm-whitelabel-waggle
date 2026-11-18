@@ -51,10 +51,6 @@ export async function AppHeader({
       <div className="mx-auto flex max-w-[1240px] flex-wrap items-center gap-x-3 px-4 md:flex-nowrap md:gap-x-6 md:px-8">
         <Link href="/today" className="flex min-h-14 items-center gap-2" aria-label="Waggle, Today">
           <Brand />
-          {/* Phones: room for Your plan beside the account button (18 Nov). */}
-          <span className="bg-honey-tint text-honey-text hidden rounded-full px-2 py-0.5 text-[11px] font-bold tracking-wide min-[420px]:inline">
-            BETA
-          </span>
         </Link>
         <div className="hidden min-w-0 flex-1 md:block">
           <TopNav inboxCount={count ?? 0} />
