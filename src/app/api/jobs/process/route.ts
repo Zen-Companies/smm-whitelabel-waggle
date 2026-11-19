@@ -15,6 +15,7 @@ import { chargeUsageAtCost, getStripe } from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
 import { pruneCalls } from "@/features/mcp";
 import { purgeDueBrands } from "@/features/offboarding";
+import { sweepIdleOrgs } from "@/features/idle";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
@@ -127,6 +128,19 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
 
+    // Free plan (19 Nov): organizations nobody used for 23 days get one warning, 30 days a
+    // disconnect. Each organization at most once a day; off until staff switch it on.
+    const idle = await sweepIdleOrgs({
+      db,
+      social: getSocialProvider,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
+
     // MCP: the AI-assistant activity log keeps 90 days.
     const mcpCallsPruned = await pruneCalls(db, new Date());
     const dmWindowsEscalated = await escalateClosingDmWindows(db);
@@ -190,6 +204,7 @@ export async function POST(request: Request): Promise<Response> {
       analytics,
       mcpCallsPruned,
       offboarding,
+      idle,
     });
   } catch (error) {
     // Visible in the Vercel logs even without Sentry. Our own error text only, never customer
