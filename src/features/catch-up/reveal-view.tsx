@@ -19,6 +19,7 @@ import {
   waitingFor,
 } from "./first-connect-copy";
 import { ReadingInbox } from "./reading-inbox";
+import { markHandledAction } from "@/features/approvals";
 import { AlreadyHandled, CountdownPill, MarkSeen } from "./reveal-parts";
 import { loadCatchUpProgress, loadReveal } from "./reveal-data";
 
@@ -204,7 +205,7 @@ export async function RevealView() {
             {wait.postLabel ? `On your post ${wait.postLabel}.` : "On one of your posts."} Comments
             can be answered at any age.
           </p>
-          <AlreadyHandled itemId={wait.itemId} />
+          <AlreadyHandled itemId={wait.itemId} action={markHandledAction} />
         </section>
       )}
 
