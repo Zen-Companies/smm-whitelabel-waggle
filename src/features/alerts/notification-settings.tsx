@@ -1,6 +1,8 @@
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { isFrequency, type Frequency } from "./digest";
+import { saveCheckInEmails } from "./check-in-actions";
+import { CheckInForm } from "./check-in-form";
 import { saveMyEmailFrequency, saveSiteEmailFrequency } from "./email-frequency-actions";
 import { EmailFrequencyForm } from "./email-frequency-form";
 
@@ -21,13 +23,19 @@ export async function NotificationSettings() {
   const user = await getCurrentUser();
   const emailOn = !!process.env.RESEND_API_KEY && !!process.env.ALERT_FROM_EMAIL;
   const supabase = await createServerSupabase();
-  const [{ data: mine }, fallback] = await Promise.all([
+  const [{ data: mine }, fallback, { data: checkInOff }] = await Promise.all([
     supabase
       .from("notification_prefs")
       .select("email_frequency")
       .eq("user_id", user.id)
       .maybeSingle(),
     siteDefault(),
+    supabase
+      .from("email_opt_outs")
+      .select("kind")
+      .eq("user_id", user.id)
+      .eq("kind", "check_in")
+      .maybeSingle(),
   ]);
   const current = isFrequency(mine?.email_frequency) ? mine.email_frequency : fallback;
   return (
@@ -53,6 +61,16 @@ export async function NotificationSettings() {
             action={saveMyEmailFrequency}
             note="An account that stopped connecting always emails right away. A summary is one email per business, grouped by person; nothing new, no email."
           />
+        </li>
+        <li className="flex flex-col gap-3 px-5 py-4">
+          <span className="flex flex-col">
+            <span className="font-medium">The morning after you connect</span>
+            <span className="text-ink-2 text-sm">
+              One email, once: what customers wrote overnight and the replies ready to approve. Only
+              when something new came in.
+            </span>
+          </span>
+          <CheckInForm initial={!checkInOff} action={saveCheckInEmails} />
         </li>
         <li className="flex flex-col px-5 py-4">
           <span className="font-medium">In the app</span>

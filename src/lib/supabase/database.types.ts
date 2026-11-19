@@ -651,6 +651,24 @@ export type Database = {
           },
         ]
       }
+      email_opt_outs: {
+        Row: {
+          created_at: string
+          kind: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          kind: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          kind?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_settings: {
         Row: {
           default_frequency: string
@@ -820,6 +838,54 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      first_morning_emails: {
+        Row: {
+          catch_up_id: string | null
+          created_at: string
+          messages: number | null
+          organization_id: string
+          outcome: string
+          reason: string | null
+          replies: number | null
+          sent_at: string | null
+        }
+        Insert: {
+          catch_up_id?: string | null
+          created_at?: string
+          messages?: number | null
+          organization_id: string
+          outcome: string
+          reason?: string | null
+          replies?: number | null
+          sent_at?: string | null
+        }
+        Update: {
+          catch_up_id?: string | null
+          created_at?: string
+          messages?: number | null
+          organization_id?: string
+          outcome?: string
+          reason?: string | null
+          replies?: number | null
+          sent_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "first_morning_emails_catch_up_id_fkey"
+            columns: ["catch_up_id"]
+            isOneToOne: false
+            referencedRelation: "catch_ups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "first_morning_emails_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       followup_settings: {
         Row: {

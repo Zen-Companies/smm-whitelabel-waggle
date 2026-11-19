@@ -6,6 +6,7 @@ export {
   CONNECT_WINDOW_MS,
   conversionEventId,
   cookieOptsOut,
+  FIRST_REPLY_WINDOW_MS,
   isNewRegistration,
   normalizeEmail,
   OPT_OUT_COOKIE,

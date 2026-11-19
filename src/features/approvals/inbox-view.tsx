@@ -4,6 +4,8 @@ import { CircleCheck, Clock3 } from "lucide-react";
 
 import Link from "next/link";
 
+import { Suspense } from "react";
+
 import { ActionLink } from "@/components/app/action-link";
 
 import { Avatar } from "@/components/app/avatar";
@@ -41,6 +43,8 @@ import { messageWords } from "./attachments";
 import { CaughtUpCard } from "./caught-up-card";
 
 import { ApprovalCard, RecentSends } from "./approval-card";
+
+import { SendingProgress } from "./sending-progress";
 
 import { loadConversation } from "./conversation-data";
 
@@ -678,6 +682,10 @@ export async function InboxView({
           {allowance}
         </p>
       )}
+
+      <Suspense fallback={null}>
+        <SendingProgress tenantId={tenant.id} />
+      </Suspense>
 
       <RecentSends />
 

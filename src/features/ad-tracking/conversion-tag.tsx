@@ -25,7 +25,7 @@ export interface ConversionTagProps {
   valueUsd?: number;
   /** StartTrial and Subscribe: the plan id. */
   plan?: string;
-  /** ConnectAccount: the platform connected. */
+  /** ConnectAccount: the platform connected. FirstReplyApproved: where the reply goes. */
   platform?: string;
 }
 
@@ -102,7 +102,9 @@ export function ConversionTag({
           }
         : event === "ConnectAccount"
           ? { content_name: platform ?? "account", status: "connected" }
-          : { content_name: "account", status: "registered" };
+          : event === "FirstReplyApproved"
+            ? { content_name: platform ?? "reply", status: "approved" }
+            : { content_name: "account", status: "registered" };
     const ttMatch = JSON.stringify({ ...(em ? { email: em } : {}), external_id: externalId });
     try {
       inject(

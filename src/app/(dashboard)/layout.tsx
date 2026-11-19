@@ -6,7 +6,7 @@ import { AccountBanner, FirstConnectTag } from "@/features/accounts";
 
 import { Bell } from "@/features/alerts";
 
-import { NEEDS_OWNER } from "@/features/approvals";
+import { FirstReplyTag, NEEDS_OWNER } from "@/features/approvals";
 
 import { PlanChip, PlanMenuRow } from "@/features/billing";
 
@@ -46,11 +46,21 @@ async function Header() {
   );
 }
 
-/** The ads' ConnectAccount event, once, after the organization's first connect (19 Nov). */
+/**
+ * The ads' ConnectAccount event, once, after the organization's first connect (19 Nov), and
+ * FirstReplyApproved after its first approved reply (20 Nov).
+ */
 async function ConnectTag() {
   const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
   const org = orgs.find((o) => o.id === tenant.organizationId);
-  return <FirstConnectTag orgId={tenant.organizationId} isOwner={org?.role === "owner"} />;
+  const isOwner = org?.role === "owner";
+  return (
+    <>
+      <FirstConnectTag orgId={tenant.organizationId} isOwner={isOwner} />
+      {/* FirstReplyApproved (20 Nov): once, on the page after the first approved reply. */}
+      <FirstReplyTag orgId={tenant.organizationId} isOwner={isOwner} />
+    </>
+  );
 }
 
 async function DashboardFeedback() {
