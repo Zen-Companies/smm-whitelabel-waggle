@@ -35,30 +35,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
-  # The production build: catches what tests and typecheck can't, like server-only code pulled
-  # into a client bundle (the staging deploy that failed on 20 Nov). Placeholder public values:
-  # nothing here talks to a real service.
-  build:
-    name: Production build
-    runs-on: ubuntu-latest
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:55321
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_ci_placeholder
-      SOCIAL_PROVIDER_MODE: mock
-      APP_URL: http://localhost:3000
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-
   db-tests:
-    name: Migrations, RLS and integration tests (local Supabase)
+    name: Migrations, RLS, integration tests and build (local Supabase)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -75,12 +53,21 @@ jobs:
       - run: supabase start -x studio,imgproxy,inbucket,logflare,vector,supavisor,edge-runtime
       - run: pnpm test:db
       - run: pnpm test:integration
+      # The production build, against this local Supabase (some staff pages read it while
+      # prerendering): catches what tests and typecheck can't, like server-only code pulled into a
+      # client bundle (the staging deploy that failed on 20 Nov). Nothing here reaches a real service.
+      - name: Production build
+        run: |
+          eval "$(supabase status -o env)"
+          export NEXT_PUBLIC_SUPABASE_URL="$API_URL" NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export SOCIAL_PROVIDER_MODE=mock APP_URL=http://localhost:3000 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_ci_placeholder
+          pnpm build
       - if: always()
         run: supabase stop --no-backup
 
   migrate:
     name: Apply migrations to hosted Supabase
-    needs: [checks, db-tests, build]
+    needs: [checks, db-tests]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: production
@@ -103,7 +90,7 @@ jobs:
   # (a token of the account that owns the staging project) and STAGING_SUPABASE_DB_PASSWORD.
   migrate-staging:
     name: Apply migrations to staging Supabase
-    needs: [checks, db-tests, build]
+    needs: [checks, db-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
     env:
