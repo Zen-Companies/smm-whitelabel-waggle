@@ -30,7 +30,7 @@ import {
   URGENT_CHIPS,
 } from "@/features/approvals";
 
-import { CatchUpCard } from "@/features/catch-up";
+import { CatchUpCard, TopQuestionsNotice } from "@/features/catch-up";
 
 import { can } from "@/features/orgs";
 
@@ -221,6 +221,9 @@ export async function TodayView() {
 
       {/* First connect (approved 19 Nov): what Waggle caught up on, until dismissed. */}
       {!noAccounts && <CatchUpCard />}
+
+      {/* Busy accounts (20 Nov): the customers' top questions came in after setup's step 3. */}
+      {!noAccounts && <TopQuestionsNotice />}
 
       {/* Spaced-out sending (20 Nov): "Sending 3 of 20…" while approved replies go out. */}
       {!noAccounts && (

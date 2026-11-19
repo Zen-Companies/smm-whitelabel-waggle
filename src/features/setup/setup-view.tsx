@@ -9,7 +9,14 @@ import { PlatformMark } from "@/components/app/platform-mark";
 import { StateMark } from "@/components/app/state-mark";
 import { connectAccount } from "@/features/accounts";
 import { orgOnFree, planAllowsAutoReply, upgradeHref, upgradeLabel } from "@/features/billing";
-import { loadCatchUpProgress, loadTopQuestions, ReadingInbox } from "@/features/catch-up";
+import {
+  loadCatchUpProgress,
+  loadTopQuestionsStatus,
+  PracticeWait,
+  ReadingInbox,
+  TopQuestionsNotice,
+  TopQuestionsWait,
+} from "@/features/catch-up";
 import { HelpButton } from "@/features/feedback";
 import { TryIt } from "@/features/lab";
 import { can } from "@/features/orgs";
@@ -143,11 +150,15 @@ export async function SetupView({
   // First connect (approved 20 Nov): step 2 shows the live counters while Waggle reads, steps 3
   // and 4 use what the customers really asked, step 6 leads to the reveal.
   const service = getServiceClient();
-  const [progress, top, onFree] = await Promise.all([
+  const [progress, topStatus, onFree] = await Promise.all([
     step === 2 || step === 6 ? loadCatchUpProgress(service, tenant.id) : null,
-    step === 3 || step === 4 ? loadTopQuestions(service, tenant.id) : [],
+    step === 3 || step === 4 ? loadTopQuestionsStatus(service, tenant.id) : null,
     step === 2 ? orgOnFree(service, tenant.organizationId) : false,
   ]);
+  const top = topStatus?.questions ?? [];
+  // Busy accounts (decided 20 Nov): Waggle is still reading and the customers' own questions
+  // aren't in yet, so steps 3 and 4 wait for them in place.
+  const waitingForTop = topStatus?.waiting ?? false;
   // Step 3's suggestions: the kind's three, or for Something else, ones for what they typed
   // (not asked for when the customers' own questions already fill the step).
   const ai =
@@ -171,6 +182,19 @@ export async function SetupView({
         unsure: 0,
         tag: suggestedFor ? `Suggested for ${suggestedFor}` : "Suggested",
       }));
+  const answersForm = (
+    <StepForm
+      action={saveAnswersStep}
+      submitLabel="Next"
+      backHref="/setup?step=2"
+      skipHref="/setup?step=4"
+    >
+      <QuestionsEditor seeds={seeds} more={moreQuestions} />
+      <p className="text-ink-3 text-sm">
+        Prices, complaints and anything you didn&apos;t write always come to you.
+      </p>
+    </StepForm>
+  );
   const reading = step === 2 && !!progress && progress.phase !== "ready" && !more && !problem;
   const connected = new Set((accounts ?? []).map((a) => a.platform));
   const allowed = can(tenant.role, "brand.settings");
@@ -413,7 +437,10 @@ export async function SetupView({
 
       {step === 3 && (
         <section className="flex flex-col gap-5">
-          {top.length ? (
+          <Suspense fallback={null}>
+            <TopQuestionsNotice />
+          </Suspense>
+          {top.length || waitingForTop ? (
             <div>
               <h1 className="page-title">Answer what your customers ask most</h1>
               <p className="text-ink-2 mt-1">
@@ -430,17 +457,11 @@ export async function SetupView({
               </p>
             </div>
           )}
-          <StepForm
-            action={saveAnswersStep}
-            submitLabel="Next"
-            backHref="/setup?step=2"
-            skipHref="/setup?step=4"
-          >
-            <QuestionsEditor seeds={seeds} more={moreQuestions} />
-            <p className="text-ink-3 text-sm">
-              Prices, complaints and anything you didn&apos;t write always come to you.
-            </p>
-          </StepForm>
+          {waitingForTop ? (
+            <TopQuestionsWait skip={<SkipLink to={4} />}>{answersForm}</TopQuestionsWait>
+          ) : (
+            answersForm
+          )}
         </section>
       )}
 
@@ -453,6 +474,7 @@ export async function SetupView({
               gets posted.
             </p>
           </div>
+          {waitingForTop && <PracticeWait />}
           <Suspense fallback={<div className="skeleton h-72 rounded-xl" />}>
             <TryIt
               goal={{ done: triesDone, of: PRACTICE_GOAL }}
