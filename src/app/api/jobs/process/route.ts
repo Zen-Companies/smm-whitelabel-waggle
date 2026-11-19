@@ -9,7 +9,7 @@ import {
   handlePlatformPause,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
-import { runCatchUps } from "@/features/catch-up";
+import { finishCatchUps, runCatchUps } from "@/features/catch-up";
 import { crmClient, deliverCrmEvents, sweepInactive, sweepUsage } from "@/features/crm";
 import { chargeUsageAtCost, getStripe } from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
@@ -87,6 +87,16 @@ export async function POST(request: Request): Promise<Response> {
       db,
       social: getSocialProvider,
       shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+    // First connect (20 Nov): catch-ups read and sorted get the reveal's drafts picked and their
+    // top questions (one AI call each, cached).
+    const catchUpFinish = await finishCatchUps({
+      db,
+      llm,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
     });
 
     // T13: DMs about to lose their reply window, drafts waiting > 30 min, then the alert outbox
@@ -200,6 +210,7 @@ export async function POST(request: Request): Promise<Response> {
       health,
       backfill,
       catchUp,
+      catchUpFinish,
       reviews,
       analytics,
       mcpCallsPruned,

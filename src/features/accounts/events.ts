@@ -1,4 +1,4 @@
-import { startCatchUp } from "@/features/catch-up";
+import { kickCatchUp, startCatchUp } from "@/features/catch-up";
 import { pauseAccountItems, resumeAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
@@ -43,7 +43,12 @@ export async function handleAccountConnected(
         tenantId: input.tenantId,
         socialAccountId: row.account_id,
         platform: input.platform,
+        zernioAccountId: input.zernioAccountId,
+        username: input.username,
       }));
+    // 20 Nov: start reading right away instead of at the next once-a-minute job run. Only asks
+    // the catch-up jobs route to run after this response (no AI here: CLAUDE.md rule 3).
+    if (caughtUp) kickCatchUp(input.tenantId);
     // T16: pull comments that arrived while the account was away.
     // Only where Waggle's inbox covers the platform today.
     if (!caughtUp && hasLiveComments(input.platform)) {

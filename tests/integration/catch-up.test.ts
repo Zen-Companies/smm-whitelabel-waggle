@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { handleAccountConnected } from "@/features/accounts/events";
+import { draftOnOpen } from "@/features/catch-up/draft-on-open";
+import { finishCatchUps } from "@/features/catch-up/finish";
 import { runCatchUps } from "@/features/catch-up/job";
+import { loadCatchUpProgress } from "@/features/catch-up/reveal-data";
+import { transitionItem } from "@/features/inbox";
 import { insertInboundItem } from "@/features/inbox/items";
 import { MockSocialProvider } from "@/lib/social/mock";
 import { anonClient, serviceClient, uniqueEmail } from "./helpers";
@@ -9,6 +13,8 @@ import { anonClient, serviceClient, uniqueEmail } from "./helpers";
 // First-connect catch-up (19 Nov): 30 days of comments and DMs on the first connect. DMs within
 // 24 hours become items, older unanswered ones are only listed, and a later webhook for a pulled
 // DM never makes a second item. Zernio is the mock.
+// First connect engine (20 Nov): praise and friend tags are counted, not sorted; the catch-up is
+// keyed on the real account; the reveal's drafts are picked once sorting is done.
 
 const db = serviceClient();
 const social = new MockSocialProvider();
@@ -44,6 +50,7 @@ beforeAll(async () => {
   social.catchUpPosts = [
     {
       postId: id("post"),
+      caption: "Winter menu is here",
       comments: [
         {
           id: fresh,
@@ -59,6 +66,20 @@ beforeAll(async () => {
           fromOwner: false,
           createdAt: hoursAgo(80),
           ownerReplied: true,
+        },
+        {
+          id: id("c"),
+          text: "love this! 😍",
+          authorName: "bea",
+          fromOwner: false,
+          createdAt: hoursAgo(60),
+        },
+        {
+          id: id("c"),
+          text: "@friend.one",
+          authorName: "cy",
+          fromOwner: false,
+          createdAt: hoursAgo(61),
         },
         {
           id: tooOld,
@@ -137,12 +158,24 @@ describe("first-connect catch-up", () => {
 
     const { data: items } = await db
       .from("inbound_items")
-      .select("kind, status, zernio_comment_id, platform_message_id")
+      .select("kind, status, zernio_comment_id, platform_message_id, post_caption")
       .eq("social_account_id", accountId)
       .order("kind");
     expect(items).toEqual([
-      { kind: "comment", status: "new", zernio_comment_id: fresh, platform_message_id: null },
-      { kind: "dm", status: "new", zernio_comment_id: null, platform_message_id: recentDm },
+      {
+        kind: "comment",
+        status: "new",
+        zernio_comment_id: fresh,
+        platform_message_id: null,
+        post_caption: "Winter menu is here",
+      },
+      {
+        kind: "dm",
+        status: "new",
+        zernio_comment_id: null,
+        platform_message_id: recentDm,
+        post_caption: null,
+      },
     ]);
     const { data: missed } = await db
       .from("missed_messages")
@@ -153,10 +186,23 @@ describe("first-connect catch-up", () => {
     // DMs are swept once more a little later (Zernio's replay can finish late).
     const { data: row } = await db
       .from("catch_ups")
-      .select("stage, comments_created, dms_created")
+      .select(
+        "stage, comments_created, dms_created, comments_found, praise_and_tags, posts_read, capped, account_key, read_at",
+      )
       .eq("social_account_id", accountId)
       .single();
-    expect(row).toEqual({ stage: "dms_again", comments_created: 1, dms_created: 1 });
+    expect(row).toMatchObject({
+      stage: "dms_again",
+      comments_created: 1,
+      dms_created: 1,
+      // The question, the praise and the friend tag were found; only the question is sorted.
+      comments_found: 3,
+      praise_and_tags: 2,
+      posts_read: 1,
+      capped: false,
+      account_key: "instagram:@catchupcafe",
+    });
+    expect(row!.read_at).not.toBeNull();
   });
 
   it("the second sweep creates nothing twice, then it's done", async () => {
@@ -196,6 +242,75 @@ describe("first-connect catch-up", () => {
     expect(again).toEqual({ itemId: item!.id, created: false });
   });
 
+  it("the reading screen's counters, before sorting", async () => {
+    const progress = await loadCatchUpProgress(db, tenantId);
+    expect(progress).toMatchObject({
+      phase: "sorting",
+      platform: "instagram",
+      handle: "@catchupcafe",
+      commentsFound: 3,
+      // One DM inside the 24-hour window, one older (missed).
+      messagesFound: 2,
+      waiting: 0,
+      capped: false,
+      dmAccessMissing: false,
+    });
+  });
+
+  it("once sorted, the reveal's drafts are picked (questions and leads, newest first)", async () => {
+    // What the classify and draft steps would do: Jev says question, the draft step holds it.
+    const { data: items } = await db
+      .from("inbound_items")
+      .select("id")
+      .eq("social_account_id", accountId);
+    for (const item of items ?? []) {
+      await db.from("inbound_items").update({ category: "faq" }).eq("id", item.id);
+      await transitionItem(db, { itemId: item.id, from: "new", event: "classified" });
+      await transitionItem(db, { itemId: item.id, from: "classified", event: "hold" });
+    }
+    const progress = await loadCatchUpProgress(db, tenantId);
+    expect(progress!.waiting).toBe(2);
+
+    // No LLM here: the top questions are cached as none.
+    expect(await finishCatchUps({ db, llm: null }, { tenantId })).toEqual({
+      picked: 2,
+      topQuestions: 0,
+    });
+    const { data: picked } = await db
+      .from("inbound_items")
+      .select("status, draft_requested_at")
+      .eq("social_account_id", accountId);
+    for (const p of picked ?? []) {
+      expect(p.status).toBe("classified");
+      expect(p.draft_requested_at).not.toBeNull();
+    }
+    const { data: row } = await db
+      .from("catch_ups")
+      .select("sorted_at, top_questions")
+      .eq("social_account_id", accountId)
+      .single();
+    expect(row!.sorted_at).not.toBeNull();
+    expect(row!.top_questions).toEqual([]);
+    expect((await loadCatchUpProgress(db, tenantId))!.phase).toBe("drafting");
+    // Picked once only.
+    expect(await finishCatchUps({ db, llm: null }, { tenantId })).toEqual({
+      picked: 0,
+      topQuestions: 0,
+    });
+  });
+
+  it("draft on open only works on an undrafted pulled item of the brand", async () => {
+    const { data: item } = await db
+      .from("inbound_items")
+      .select("id")
+      .eq("platform_message_id", recentDm)
+      .single();
+    // Already picked (classified): nothing to ask for.
+    expect(
+      await draftOnOpen({ db, steps: {} }, { tenantId, itemId: item!.id, actor: "system" }),
+    ).toEqual({ outcome: "not_waiting" });
+  });
+
   it("a reconnect keeps the 24-hour backfill and starts no second catch-up", async () => {
     await db.from("social_accounts").update({ status: "disconnected" }).eq("id", accountId);
     const result = await handleAccountConnected(db, {
@@ -216,5 +331,54 @@ describe("first-connect catch-up", () => {
       .select("id", { count: "exact", head: true })
       .eq("social_account_id", accountId);
     expect(count).toBe(1);
+  });
+
+  it("deleting the account and connecting it again never repeats the catch-up", async () => {
+    await db.from("social_accounts").delete().eq("id", accountId);
+    const { data: kept } = await db
+      .from("catch_ups")
+      .select("social_account_id")
+      .eq("account_key", "instagram:@catchupcafe")
+      .single();
+    expect(kept!.social_account_id).toBeNull();
+
+    const result = await handleAccountConnected(db, {
+      tenantId,
+      zernioAccountId: id("acc"),
+      platform: "instagram",
+      username: "CatchUpCafe",
+    });
+    expect(result.outcome).toBe("created");
+    const { count } = await db
+      .from("catch_ups")
+      .select("id", { count: "exact", head: true })
+      .eq("social_account_id", result.accountId);
+    expect(count).toBe(0);
+    const { data: account } = await db
+      .from("social_accounts")
+      .select("backfill_from")
+      .eq("id", result.accountId)
+      .single();
+    expect(account!.backfill_from).not.toBeNull();
+  });
+
+  it("no DM access: comments still count, the catch-up says DMs are missing", async () => {
+    social.catchUpPosts = [];
+    social.catchUpDmAccessMissing = true;
+    const result = await handleAccountConnected(db, {
+      tenantId,
+      zernioAccountId: id("acc"),
+      platform: "instagram",
+      username: "nodmcafe",
+    });
+    await run(new Date());
+    const { data: row } = await db
+      .from("catch_ups")
+      .select("stage, dm_access_missing")
+      .eq("social_account_id", result.accountId)
+      .single();
+    expect(row).toEqual({ stage: "dms_again", dm_access_missing: true });
+    expect((await loadCatchUpProgress(db, tenantId))!.dmAccessMissing).toBe(true);
+    social.catchUpDmAccessMissing = false;
   });
 });

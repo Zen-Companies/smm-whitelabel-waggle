@@ -401,6 +401,22 @@ export type Database = {
       }
       catch_ups: {
         Row: {
+          account_key: string | null
+          capped: boolean
+          comments_found: number
+          comments_read: number
+          dm_access_missing: boolean
+          handle: string | null
+          read_at: string | null
+          over_cap: number
+          platform: string | null
+          post_offset: number
+          posts_read: number
+          praise_and_tags: number
+          sorted_at: string | null
+          top_questions: Json | null
+          top_questions_at: string | null
+          zernio_account_id: string | null
           attempts: number
           comments_created: number
           created_at: string
@@ -413,12 +429,28 @@ export type Database = {
           locked_at: string | null
           next_run_at: string
           posts_cursor: string | null
-          social_account_id: string
+          social_account_id: string | null
           stage: string
           tenant_id: string
         }
         ComputedFields: never
         Insert: {
+          account_key?: string | null
+          capped?: boolean
+          comments_found?: number
+          comments_read?: number
+          dm_access_missing?: boolean
+          handle?: string | null
+          read_at?: string | null
+          over_cap?: number
+          platform?: string | null
+          post_offset?: number
+          posts_read?: number
+          praise_and_tags?: number
+          sorted_at?: string | null
+          top_questions?: Json | null
+          top_questions_at?: string | null
+          zernio_account_id?: string | null
           attempts?: number
           comments_created?: number
           created_at?: string
@@ -431,11 +463,27 @@ export type Database = {
           locked_at?: string | null
           next_run_at?: string
           posts_cursor?: string | null
-          social_account_id: string
+          social_account_id?: string | null
           stage?: string
           tenant_id: string
         }
         Update: {
+          account_key?: string | null
+          capped?: boolean
+          comments_found?: number
+          comments_read?: number
+          dm_access_missing?: boolean
+          handle?: string | null
+          read_at?: string | null
+          over_cap?: number
+          platform?: string | null
+          post_offset?: number
+          posts_read?: number
+          praise_and_tags?: number
+          sorted_at?: string | null
+          top_questions?: Json | null
+          top_questions_at?: string | null
+          zernio_account_id?: string | null
           attempts?: number
           comments_created?: number
           created_at?: string
@@ -448,7 +496,7 @@ export type Database = {
           locked_at?: string | null
           next_run_at?: string
           posts_cursor?: string | null
-          social_account_id?: string
+          social_account_id?: string | null
           stage?: string
           tenant_id?: string
         }
@@ -857,6 +905,9 @@ export type Database = {
       }
       inbound_items: {
         Row: {
+          catch_up_id: string | null
+          draft_requested_at: string | null
+          post_caption: string | null
           answered_on_platform_at: string | null
           attachments: Json
           attempts: number
@@ -892,6 +943,9 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          catch_up_id?: string | null
+          draft_requested_at?: string | null
+          post_caption?: string | null
           answered_on_platform_at?: string | null
           attachments?: Json
           attempts?: number
@@ -926,6 +980,9 @@ export type Database = {
           zernio_review_id?: string | null
         }
         Update: {
+          catch_up_id?: string | null
+          draft_requested_at?: string | null
+          post_caption?: string | null
           answered_on_platform_at?: string | null
           attachments?: Json
           attempts?: number

@@ -7,8 +7,17 @@ export type NewInboundItem = {
   authorName: string | null;
   text: string;
   receivedAt: string;
+  /** First connect (20 Nov): the catch-up that pulled it (comments and DMs only). */
+  catchUpId?: string | null;
 } & (
-  | { kind: "comment"; zernioCommentId: string; zernioPostId: string; permalink?: string | null }
+  | {
+      kind: "comment";
+      zernioCommentId: string;
+      zernioPostId: string;
+      permalink?: string | null;
+      /** First connect: the post's caption, for the reveal's labels and top questions. */
+      postCaption?: string | null;
+    }
   | {
       kind: "dm";
       zernioMessageId: string;
@@ -55,6 +64,8 @@ export async function insertInboundItem(
             zernio_comment_id: item.zernioCommentId,
             zernio_post_id: item.zernioPostId,
             permalink: item.permalink ?? null,
+            catch_up_id: item.catchUpId ?? null,
+            post_caption: item.postCaption ?? null,
           },
           "zernio_comment_id" as const,
           item.zernioCommentId,
@@ -66,6 +77,7 @@ export async function insertInboundItem(
             conversation_id: item.conversationId,
             platform_message_id: item.platformMessageId ?? null,
             attachments: item.attachments ?? [],
+            catch_up_id: item.catchUpId ?? null,
           },
           "zernio_message_id" as const,
           item.zernioMessageId,
