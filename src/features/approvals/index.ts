@@ -59,6 +59,11 @@ export type {
 } from "./policy";
 export { createPolicyStep, loadPolicyInput } from "./policy-step";
 export { createSendStep } from "./send-step";
+export { SEND_SPACING_MS } from "./send-spacing";
+export type { SendingProgress as SendingProgressCounts } from "./send-spacing";
+export { SendingProgress } from "./sending-progress";
+export { FirstReplyTag } from "./first-reply-tag";
+export type { FirstApproval } from "./first-approval";
 export { hideErrorOutcome, setCommentHidden } from "./hide-spam";
 export {
   defaultReplyVia,

@@ -23,7 +23,10 @@ const poll = () => pollFacebookReviews({ db, social: () => social, shouldContinu
 const run = () =>
   processDueItems({
     db,
-    steps: { drafted: createPolicyStep(), sending: createSendStep({ social: () => social }) },
+    steps: {
+      drafted: createPolicyStep(),
+      sending: createSendStep({ social: () => social, spacingMs: 0 }),
+    },
     deadline: createDeadline(),
     claim: claimFor(() => tenantId),
   });

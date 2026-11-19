@@ -7,6 +7,7 @@ import {
   enqueueDraftNudges,
   getMailer,
   handlePlatformPause,
+  sendMorningAfterEmails,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
 import { finishCatchUps, runCatchUps } from "@/features/catch-up";
@@ -191,8 +192,21 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 8_000,
     });
 
+    // First connect (20 Nov): the one "Waggle caught N new messages overnight" email, the
+    // morning after an organization's first connect.
+    const morningAfter = await sendMorningAfterEmails({
+      db,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 8_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
+
     return Response.json({
       crm,
+      morningAfter,
       crmSweep,
       digests,
       ...items,

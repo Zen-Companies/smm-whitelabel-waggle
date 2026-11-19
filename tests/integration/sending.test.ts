@@ -6,6 +6,7 @@ import { handlePlatformPause } from "@/features/alerts/platform";
 import type { Email, Mailer } from "@/lib/email/mailer";
 import { approveDraft } from "@/features/approvals/decisions";
 import { createSendStep } from "@/features/approvals/send-step";
+import { SEND_SPACING_MS } from "@/features/approvals/send-spacing";
 import { processDueItems } from "@/features/inbox/processor";
 import { signZernioBody } from "@/features/inbox/signature";
 import { createDeadline } from "@/lib/jobs";
@@ -66,10 +67,12 @@ let profileId: string;
 let accountId: string;
 let zernioAccountId: string;
 
-const run = () =>
+// Spacing off here: these tests send many replies from one account back to back. Spaced-out
+// sending has its own test below.
+const run = (spacingMs = 0) =>
   processDueItems({
     db,
-    steps: { sending: createSendStep({ social: () => social }) },
+    steps: { sending: createSendStep({ social: () => social, spacingMs }) },
     deadline: createDeadline(),
     claim: claimFor(() => tenantId),
   });
@@ -310,6 +313,54 @@ describe("send step", () => {
     expect(item.status).toBe("failed");
     expect(sendsFor(key)).toHaveLength(3);
     expect(audit.some((a) => a.action === "escalated")).toBe(true);
+  });
+
+  it("spaced-out sending: a second reply on the account waits its turn, uncounted", async () => {
+    social = new ScriptedSocial();
+    // Earlier tests sent from this account seconds ago, and may have left replies waiting.
+    const longAgo = new Date(Date.now() - 10 * SEND_SPACING_MS).toISOString();
+    await db
+      .from("drafts")
+      .update({ sent_at: longAgo })
+      .eq("tenant_id", tenantId)
+      .not("sent_at", "is", null);
+    await db
+      .from("drafts")
+      .update({ send_attempted_at: null })
+      .eq("tenant_id", tenantId)
+      .not("send_attempted_at", "is", null);
+    await db
+      .from("inbound_items")
+      .update({ next_run_at: new Date(Date.now() + 3_600_000).toISOString() })
+      .eq("tenant_id", tenantId)
+      .eq("status", "sending");
+    const first = await approvedItem({ kind: "comment" });
+    const second = await approvedItem({ kind: "comment" });
+    const before = Date.now();
+
+    await run(SEND_SPACING_MS);
+
+    const a = await state(first.itemId);
+    const b = await state(second.itemId);
+    expect(a.item.status).toBe("sent");
+    expect(sendsFor(first.key)).toHaveLength(1);
+    // Not sent, not an attempt, not a failure: rescheduled for after the spacing.
+    expect(sendsFor(second.key)).toHaveLength(0);
+    expect(b.item).toMatchObject({ status: "sending", attempts: 0, last_error: null });
+    expect(b.draft.send_attempted_at).toBeNull();
+    const wait = new Date(b.item.next_run_at!).getTime() - before;
+    expect(wait).toBeGreaterThan(SEND_SPACING_MS - 5_000);
+    expect(wait).toBeLessThanOrEqual(SEND_SPACING_MS + 1_000);
+
+    // Once the spacing has passed it goes out, with its own idempotency key.
+    await db
+      .from("drafts")
+      .update({ sent_at: new Date(Date.now() - SEND_SPACING_MS - 1_000).toISOString() })
+      .eq("id", first.draftId);
+    await dueNow(second.itemId);
+    await run(SEND_SPACING_MS);
+    expect((await state(second.itemId)).item.status).toBe("sent");
+    expect(sendsFor(second.key)).toHaveLength(1);
   });
 
   it("429 waits for X-RateLimit-Reset and doesn't count an attempt", async () => {

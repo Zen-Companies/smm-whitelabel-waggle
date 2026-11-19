@@ -2,6 +2,8 @@ import { viewerTimeZone } from "@/lib/time/viewer-zone";
 
 import Link from "next/link";
 
+import { Suspense } from "react";
+
 import { ArrowRight } from "lucide-react";
 
 import { ActionLink } from "@/components/app/action-link";
@@ -22,6 +24,7 @@ import {
   reasonChip,
   REPLY_MAX,
   sendAllReadyAction,
+  SendingProgress,
   undoApprovalAction,
   UNDO_WINDOW_MS,
   URGENT_CHIPS,
@@ -218,6 +221,13 @@ export async function TodayView() {
 
       {/* First connect (approved 19 Nov): what Waggle caught up on, until dismissed. */}
       {!noAccounts && <CatchUpCard />}
+
+      {/* Spaced-out sending (20 Nov): "Sending 3 of 20…" while approved replies go out. */}
+      {!noAccounts && (
+        <Suspense fallback={null}>
+          <SendingProgress tenantId={tenant.id} />
+        </Suspense>
+      )}
 
       {noAccounts ? (
         // A brand with nothing connected: one clear next step, not a page of zeros.

@@ -25,6 +25,10 @@ import {
   type DecisionResult,
 } from "./decisions";
 import { sendApprovedReplyAfterUndoWindow } from "./send-now";
+import type { FirstApproval } from "./first-approval";
+import { loadFirstApproval } from "./first-approval-data";
+import { loadSendingProgress } from "./send-schedule";
+import type { SendingProgress } from "./send-spacing";
 
 export interface AutonomyFormState {
   error?: string;
@@ -86,6 +90,8 @@ export interface DecisionFormState {
   error?: string;
   /** Approved: the card collapses into "Sent to [name]" with Undo (design.md §4). */
   approved?: { at: string };
+  /** The organization's first approved reply: the moment is named in place (20 Nov). */
+  first?: FirstApproval;
   rejected?: boolean;
 }
 
@@ -126,8 +132,9 @@ export async function decideDraft(
   if (!result.ok) return { error: DECISION_ERRORS[result.error] };
   // Sent right after the undo window rather than on the next cron tick.
   after(() => sendApprovedReplyAfterUndoWindow(db, itemId));
+  const first = await loadFirstApproval(db, { tenantId: tenant.id, itemId, draftId });
   // No revalidate here: the card shows the Sent row with Undo first, then refreshes itself.
-  return { approved: { at: new Date().toISOString() } };
+  return { approved: { at: new Date().toISOString() }, ...(first ? { first } : {}) };
 }
 
 export interface SendAllState {
@@ -449,4 +456,14 @@ export async function sendTemplateAction(
   if (!result.ok) return { error: TEMPLATE_ERRORS[result.error] };
   after(() => sendApprovedReplyAfterUndoWindow(db, parsed.data.itemId));
   return { approved: { at: new Date().toISOString() } };
+}
+
+/**
+ * "Sending N of M…" (20 Nov): the brand's replies going out spaced, asked for every few seconds
+ * by the card while it shows. Null when nothing is queued.
+ */
+export async function sendingProgressAction(): Promise<SendingProgress | null> {
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return null;
+  return loadSendingProgress(getServiceClient(), tenant.id).catch(() => null);
 }
