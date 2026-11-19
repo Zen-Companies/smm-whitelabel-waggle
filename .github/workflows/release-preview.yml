@@ -1,0 +1,41 @@
+name: Release preview
+
+# Comments the upcoming version, release notes and deploy checklist on every
+# PR into main, and keeps that one comment up to date. Never blocks a merge.
+# See CLAUDE.md "Releases".
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "PR number to preview again (e.g. after editing another PR's release note)"
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: release-preview-${{ github.event.pull_request.number || inputs.pr }}
+  cancel-in-progress: true
+
+jobs:
+  release-preview:
+    name: release-preview
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        run: node --test scripts/release/notes.test.mjs
+      - name: Preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/run.mjs preview ${{ github.event.pull_request.number || inputs.pr }}

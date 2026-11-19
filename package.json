@@ -22,7 +22,8 @@
     "local:owner": "tsx --tsconfig tsconfig.scripts.json scripts/local-owner.ts",
     "local:staff": "tsx --tsconfig tsconfig.scripts.json scripts/local-staff.ts",
     "demo:seed": "tsx --tsconfig tsconfig.scripts.json scripts/demo-seed.ts",
-    "analytics:seed": "tsx --tsconfig tsconfig.scripts.json scripts/analytics-seed.ts"
+    "analytics:seed": "tsx --tsconfig tsconfig.scripts.json scripts/analytics-seed.ts",
+    "test:release": "node --test scripts/release/notes.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
