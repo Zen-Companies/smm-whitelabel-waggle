@@ -2,7 +2,7 @@ import { TimeZoneCookie } from "@/components/app/time-zone-cookie";
 
 import { Suspense } from "react";
 
-import { AccountBanner, FirstConnectTag } from "@/features/accounts";
+import { AccountBanner, ConnectResult, FirstConnectTag } from "@/features/accounts";
 
 import { Bell } from "@/features/alerts";
 
@@ -89,6 +89,13 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
       <Suspense fallback={null}>
         <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">
           <AccountBanner />
+        </div>
+      </Suspense>
+
+      {/* What happened to a connect started on this page, said here (20 Nov). */}
+      <Suspense fallback={null}>
+        <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">
+          <ConnectResult />
         </div>
       </Suspense>
 

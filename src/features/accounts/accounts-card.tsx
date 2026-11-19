@@ -16,6 +16,7 @@ import { TelegramSetup } from "./telegram-setup";
 import { WhatsAppSetup } from "./whatsapp-setup";
 import { LineSetup } from "./line-setup";
 import { connectBanner } from "./connect-banner";
+import { safeReturnPath } from "./connect-return";
 import { ConnectTiles } from "./connect-tiles";
 import { MoreConnections } from "./more-connections";
 
@@ -47,6 +48,7 @@ export async function AccountsCard({
         id={before}
         label={name(before)}
         mark={<PlatformMark platform={before} size={40} />}
+        notNowHref={safeReturnPath(params.back) ?? undefined}
       />
     ) : null;
   // A setup step opened from its tile (?setup=bluesky), shown above the tiles.

@@ -39,12 +39,15 @@ export function ConnectNoteBox({
   label,
   mark,
   actions,
+  notNowHref = "/settings/accounts",
 }: {
   id: string;
   label: string;
   mark: React.ReactNode;
   /** Continue and Cancel from the in-place flow (18 Nov); without it, the cookie flow's links. */
   actions?: React.ReactNode;
+  /** The cookie flow's Not now: back to the page the connect started from (20 Nov). */
+  notNowHref?: string;
 }) {
   const copy = connectNoteCopy(id, label);
   return (
@@ -99,7 +102,7 @@ export function ConnectNoteBox({
           <a href="/api/connect/continue" className={buttonVariants({ variant: "primary" })}>
             Continue to {copy.platform}
           </a>
-          <Link href="/settings/accounts" className={buttonVariants({ variant: "secondary" })}>
+          <Link href={notNowHref} className={buttonVariants({ variant: "secondary" })}>
             Not now
           </Link>
         </div>

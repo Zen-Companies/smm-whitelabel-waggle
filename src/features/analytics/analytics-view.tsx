@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { platformName } from "@/components/app/time";
-import { BrandSetup } from "@/features/accounts";
+import { NotConnectedYet } from "@/features/accounts";
+import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { AudienceSection } from "./audience-section";
@@ -84,8 +85,15 @@ export async function AnalyticsView({
     loadAccounts(supabase, tenant.id),
     latestSync(supabase, tenant.id),
   ]);
-  // First run of a brand: nothing connected yet (T47 "Set up <brand>").
-  if (accounts.length === 0) return <BrandSetup brandName={tenant.name} />;
+  // Nothing connected yet: one line into setup's Connect step (20 Nov).
+  if (accounts.length === 0) {
+    return (
+      <>
+        <h1 className="page-title">Insights</h1>
+        <NotConnectedYet brandName={tenant.name} canConnect={can(tenant.role, "accounts.manage")} />
+      </>
+    );
+  }
 
   const connected = [...new Set(accounts.map((a) => a.platform))];
   // Platform filters only where the analytics pages cover the platform today.
