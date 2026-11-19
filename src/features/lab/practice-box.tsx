@@ -92,10 +92,13 @@ function Feedback({ tried }: { tried: PracticeTry }) {
 function TeachForm({
   kind,
   text,
+  itemId,
   onCancel,
 }: {
   kind: "comment" | "dm";
   text: string;
+  /** A real message from the inbox: the re-run includes its conversation, as in production. */
+  itemId?: string;
   onCancel: () => void;
 }) {
   const [state, action, pending] = useActionState<PracticeState, FormData>(teachAndRetry, {});
@@ -123,6 +126,7 @@ function TeachForm({
       <b className="text-sm font-semibold">Teach Waggle this one</b>
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="text" value={text} />
+      {itemId && <input type="hidden" name="itemId" value={itemId} />}
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-ink-2">The question</span>
         <input
@@ -199,7 +203,7 @@ function Outcome({
 }: {
   card: PracticeCard;
   /** The message tried, for Add an answer in place. */
-  message?: { kind: "comment" | "dm"; text: string };
+  message?: { kind: "comment" | "dm"; text: string; itemId?: string };
 }) {
   const [teaching, setTeaching] = useState(false);
   return (
@@ -231,7 +235,12 @@ function Outcome({
       {card.offerAddAnswer &&
         message &&
         (teaching ? (
-          <TeachForm kind={message.kind} text={message.text} onCancel={() => setTeaching(false)} />
+          <TeachForm
+            kind={message.kind}
+            text={message.text}
+            itemId={message.itemId}
+            onCancel={() => setTeaching(false)}
+          />
         ) : (
           <span className="self-start">
             <AddAnswerButton onClick={() => setTeaching(true)} />
@@ -371,7 +380,10 @@ function RecentMessages({ triesLeft }: { triesLeft: number }) {
                   </p>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Outcome card={r.card} message={{ kind: r.kind, text: r.text }} />
+                  <Outcome
+                    card={r.card}
+                    message={{ kind: r.kind, text: r.text, itemId: r.itemId }}
+                  />
                   <span className="meta">{r.then}</span>
                 </div>
               </li>
