@@ -14,7 +14,7 @@ const KICK_TIMEOUT_MS = 10_000;
 
 /** The kick's request, or null when the app URL or the job secret isn't set (pure). */
 export function catchUpKickRequest(
-  env: { APP_URL?: string; CRON_SECRET?: string },
+  env: { APP_URL?: string; CRON_SECRET?: string; VERCEL_AUTOMATION_BYPASS_SECRET?: string },
   tenantId: string,
   hop: number,
 ): { url: string; init: RequestInit } | null {
@@ -26,6 +26,11 @@ export function catchUpKickRequest(
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${env.CRON_SECRET}`,
+        // Staging sits behind Vercel Authentication: Vercel sets this when the protection bypass
+        // for automation is on, so the app can call itself.
+        ...(env.VERCEL_AUTOMATION_BYPASS_SECRET
+          ? { "x-vercel-protection-bypass": env.VERCEL_AUTOMATION_BYPASS_SECRET }
+          : {}),
       },
       body: JSON.stringify({ tenantId, hop }),
     },
@@ -34,8 +39,12 @@ export function catchUpKickRequest(
 
 /** Schedules the kick after the current response. Outside a request (scripts, tests): nothing. */
 export function kickCatchUp(tenantId: string, hop = 0): void {
-  const { APP_URL, CRON_SECRET } = process.env;
-  const request = catchUpKickRequest({ APP_URL, CRON_SECRET }, tenantId, hop);
+  const { APP_URL, CRON_SECRET, VERCEL_AUTOMATION_BYPASS_SECRET } = process.env;
+  const request = catchUpKickRequest(
+    { APP_URL, CRON_SECRET, VERCEL_AUTOMATION_BYPASS_SECRET },
+    tenantId,
+    hop,
+  );
   if (!request) return;
   try {
     after(async () => {

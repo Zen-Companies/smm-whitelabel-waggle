@@ -12,6 +12,13 @@ describe("catchUpKickRequest", () => {
     expect(JSON.parse(r.init.body as string)).toEqual({ tenantId: "t1", hop: 0 });
   });
 
+  it("passes Vercel's protection bypass when it's set (staging behind Vercel Authentication)", () => {
+    const plain = catchUpKickRequest(env, "t1", 0)!.init.headers as Record<string, string>;
+    expect(plain["x-vercel-protection-bypass"]).toBeUndefined();
+    const r = catchUpKickRequest({ ...env, VERCEL_AUTOMATION_BYPASS_SECRET: "byp" }, "t1", 0)!;
+    expect((r.init.headers as Record<string, string>)["x-vercel-protection-bypass"]).toBe("byp");
+  });
+
   it("does nothing without the URL or the secret, or past the last hop", () => {
     expect(catchUpKickRequest({ CRON_SECRET: "x" }, "t1", 0)).toBeNull();
     expect(catchUpKickRequest({ APP_URL: "https://a" }, "t1", 0)).toBeNull();
