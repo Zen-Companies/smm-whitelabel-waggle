@@ -401,10 +401,13 @@ export function PracticeBox({
   examplesFromTopics,
   recentTries,
   goal,
+  examplesLabel,
 }: {
   triesLeft: number;
   examples: string[];
   examplesFromTopics: boolean;
+  /** Overrides the examples' label ("What your customers asked", setup step 4). */
+  examplesLabel?: string;
   recentTries: PracticeTry[];
   /**
    * Setup's step 4 (approved 17 Nov): the step's count leads ("1 of 3 tried" with honeycombs);
@@ -490,9 +493,11 @@ export function PracticeBox({
             />
             <div className="flex flex-col gap-2">
               <span className="meta">
-                {examplesFromTopics
-                  ? "From your business info"
-                  : "Examples to start with (add business info for your own)"}
+                {examplesLabel
+                  ? examplesLabel
+                  : examplesFromTopics
+                    ? "From your business info"
+                    : "Examples to start with (add business info for your own)"}
               </span>
               <div className="flex flex-wrap gap-2">
                 {examples.map((s) => (
