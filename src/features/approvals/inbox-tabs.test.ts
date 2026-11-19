@@ -14,7 +14,7 @@ import {
 describe("inbox tabs (Waggle: For you / Answered / Hidden)", () => {
   it("For you holds everything that needs the owner", () => {
     expect(INBOX_TABS.map((t) => [t.label, t.statuses])).toEqual([
-      ["For you", ["awaiting_approval", "escalated", "failed"]],
+      ["For you", ["awaiting_approval", "awaiting_draft", "escalated", "failed"]],
       ["Answered", ["sending", "sent"]],
       ["Hidden", ["ignored", "handled", "rejected"]],
     ]);

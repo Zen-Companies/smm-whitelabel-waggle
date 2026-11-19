@@ -65,7 +65,9 @@ export interface InboxData {
 const ESCALATED = ["escalated", "failed"] as const;
 
 /** Statuses where the owner has to act: a reply to approve, or a message handed to them. */
-export const NEEDS_OWNER = ["awaiting_approval", ...ESCALATED] as const;
+// First connect (20 Nov): pulled questions and leads past the reveal's first 20 wait here for
+// their draft (awaiting_draft); opening one writes it.
+export const NEEDS_OWNER = ["awaiting_approval", "awaiting_draft", ...ESCALATED] as const;
 
 export type InboxTab = "for_you" | "answered" | "ignored";
 export const INBOX_TABS: { key: InboxTab; label: string; statuses: string[] }[] = [

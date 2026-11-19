@@ -1,5 +1,6 @@
 import { viewerTimeZone } from "@/lib/time/viewer-zone";
 
+import { DraftOnOpenCard } from "./draft-on-open-card";
 import { CircleCheck, Clock3 } from "lucide-react";
 
 import Link from "next/link";
@@ -593,6 +594,8 @@ export async function InboxView({
     // T82b: a missed call or voicemail: listen, call back, mark handled. Never a reply.
 
     <CallCard key={selected.itemId} entry={selected} />
+  ) : selected.status === "awaiting_draft" ? (
+    <DraftOnOpenCard key={selected.itemId} itemId={selected.itemId} />
   ) : selected.status === "awaiting_approval" ? (
     <ApprovalCard
       key={selected.itemId}

@@ -281,7 +281,8 @@ export async function sendMorningAfterEmails(deps: MorningAfterDeps): Promise<Mo
     .order("created_at", { ascending: true })
     .limit(200);
   if (error) throw new Error(`morning email: reading catch-ups failed: ${error.message}`);
-  const rows: CatchUpRow[] = data ?? [];
+  // A catch-up whose account row was deleted keeps no account (set null): nothing to report.
+  const rows = (data ?? []).filter((r): r is CatchUpRow => r.social_account_id !== null);
   if (rows.length === 0) return summary;
   const { data: tenants, error: tErr } = await db
     .from("tenants")
