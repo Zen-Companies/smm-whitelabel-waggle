@@ -315,7 +315,7 @@ export async function SetupView({
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <form action={connectAccount}>
                   <input type="hidden" name="platform" value="instagram" />
-                  <input type="hidden" name="back" value="setup" />
+                  <input type="hidden" name="back" value="/setup?step=2" />
                   <Button type="submit" variant="primary">
                     Connect again
                   </Button>
@@ -323,7 +323,7 @@ export async function SetupView({
                 {!connected.has("facebook") && (
                   <form action={connectAccount}>
                     <input type="hidden" name="platform" value="facebook" />
-                    <input type="hidden" name="back" value="setup" />
+                    <input type="hidden" name="back" value="/setup?step=2" />
                     <Button type="submit" variant="secondary">
                       Connect Facebook instead
                     </Button>
@@ -356,7 +356,7 @@ export async function SetupView({
                     ) : (
                       <form action={connectAccount}>
                         <input type="hidden" name="platform" value={a.platform} />
-                        <input type="hidden" name="back" value="setup" />
+                        <input type="hidden" name="back" value="/setup?step=2" />
                         <Button type="submit" variant="secondary">
                           Connect
                         </Button>
@@ -383,7 +383,7 @@ export async function SetupView({
                           ) : (
                             <form action={connectAccount}>
                               <input type="hidden" name="platform" value={id} />
-                              <input type="hidden" name="back" value="setup" />
+                              <input type="hidden" name="back" value="/setup?step=2" />
                               <Button
                                 type="submit"
                                 variant="secondary"

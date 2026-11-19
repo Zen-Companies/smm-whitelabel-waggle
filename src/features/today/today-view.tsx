@@ -257,7 +257,8 @@ export async function TodayView() {
                 Set up Waggle
               </Link>
 
-              <Link href="/settings/accounts" className={buttonVariants({ variant: "secondary" })}>
+              {/* Into setup's Connect step, so the first connect reads the inbox (20 Nov). */}
+              <Link href="/setup?step=2" className={buttonVariants({ variant: "secondary" })}>
                 Just connect an account
               </Link>
             </div>

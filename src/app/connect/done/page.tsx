@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
 import { StateMark } from "@/components/app/state-mark";
 import { buttonVariants } from "@/components/ui/button";
-import { connectionLabel } from "@/features/accounts";
+import { connectionLabel, DEFAULT_RETURN, safeReturnPath } from "@/features/accounts";
 import { TellOtherTab } from "./tell-other-tab";
 
 export const metadata = { title: "Connected" };
@@ -14,7 +14,8 @@ const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v
 /**
  * Where the new tab lands after the partner's sign-in (design "connecting in a new tab", approved
  * 18 Nov). Tells the Waggle tab that started it, and always has a way back (phones often can't
- * close a tab for you). Zernio adds `error` and `error_message` when it didn't work.
+ * close a tab for you). Zernio adds `error` and `error_message` when it didn't work. `back` is the
+ * page the connect started from (setup step 2 for the brand's first account, 20 Nov).
  */
 async function Body({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -23,6 +24,9 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
   const error = first(params.error);
   const message = first(params.error_message)?.slice(0, 300);
   const ok = !error || error === "code_already_redeemed";
+  const back = safeReturnPath(first(params.back)) ?? DEFAULT_RETURN;
+  const onAccounts = back === DEFAULT_RETURN;
+  const where = onAccounts ? "Connected accounts" : back.startsWith("/setup") ? "setup" : "Waggle";
   return (
     <div className="card flex w-full max-w-[480px] flex-col items-start gap-4 p-7">
       <Brand />
@@ -38,13 +42,13 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
       <p className="text-ink-2">
         {ok
           ? "Go back to your other Waggle tab: it already shows it. Or carry on here."
-          : (message ?? "The sign-in didn't finish. Try again from Connected accounts.")}
+          : (message ?? `The sign-in didn't finish. Try again from ${where}.`)}
       </p>
       <Link
-        href={ok ? "/settings/accounts" : "/settings/accounts#more-heading"}
+        href={ok || !onAccounts ? back : `${back}#more-heading`}
         className={buttonVariants({ variant: "primary" })}
       >
-        {ok ? "Back to Connected accounts" : "Try again"}
+        {ok ? `Back to ${where}` : "Try again"}
       </Link>
       <TellOtherTab id={id} ok={ok} />
     </div>

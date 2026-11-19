@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { StateMark } from "@/components/app/state-mark";
 import { ConnectNoteBox } from "./connect-note-box";
@@ -14,7 +14,7 @@ export const CONNECT_CHANNEL = "waggle-connect";
 type Phase =
   | { at: "idle" }
   | { at: "note" }
-  | { at: "waiting"; url: string | null; blocked: boolean }
+  | { at: "waiting"; url: string | null; blocked: boolean; after: string | null }
   | { at: "error"; text: string };
 
 /**
@@ -37,6 +37,8 @@ export function ConnectButton({
   buttonLabel?: string;
 }) {
   const router = useRouter();
+  // Where the sign-in comes back to (checked on the server).
+  const here = usePathname();
   const [phase, setPhase] = useState<Phase>({ at: "idle" });
   const [pending, startTransition] = useTransition();
   const box = useRef<HTMLDivElement>(null);
@@ -50,15 +52,19 @@ export function ConnectButton({
   }, [phase.at]);
 
   // Waiting: refresh when the other tab says it's done, when this tab comes back, and every few
-  // seconds for 10 minutes. Once connected, the page no longer renders this button.
+  // seconds for 10 minutes. Once connected, the page no longer renders this button. The brand's
+  // first account goes on to setup step 2 (20 Nov).
+  const after = phase.at === "waiting" ? phase.after : null;
   useEffect(() => {
     if (phase.at !== "waiting") return;
     const refresh = () => router.refresh();
     let channel: BroadcastChannel | null = null;
     try {
       channel = new BroadcastChannel(CONNECT_CHANNEL);
-      channel.onmessage = (e: MessageEvent<{ id?: string }>) => {
-        if (e.data?.id === id) refresh();
+      channel.onmessage = (e: MessageEvent<{ id?: string; ok?: boolean }>) => {
+        if (e.data?.id !== id) return;
+        if (after && e.data.ok !== false) router.push(after);
+        else refresh();
       };
     } catch {
       // older browsers: focus and the timer still work
@@ -72,11 +78,11 @@ export function ConnectButton({
       window.clearInterval(timer);
       window.clearTimeout(stop);
     };
-  }, [phase.at, id, router]);
+  }, [phase.at, after, id, router]);
 
   const begin = () =>
     startTransition(async () => {
-      const r = await startConnect(id, "here");
+      const r = await startConnect(id, "here", here);
       if (r.kind === "go") {
         const url = safeContinueUrl(r.url) ?? (r.url.startsWith("/") ? r.url : null);
         if (url) window.location.assign(url);
@@ -84,7 +90,8 @@ export function ConnectButton({
           setPhase({ at: "error", text: `Couldn't start connecting ${label}. Please try again.` });
       } else if (r.kind === "note") setPhase({ at: "note" });
       else if (r.kind === "connected") router.refresh();
-      else if (r.kind === "error") router.push(r.href);
+      else if (r.kind === "upgrade") router.push(r.href);
+      else if (r.kind === "error") setPhase({ at: "error", text: r.text });
     });
 
   const continueInNewTab = () => {
@@ -92,9 +99,9 @@ export function ConnectButton({
     // follows a moment later.
     const tab = window.open("", "_blank");
     if (tab) tab.opener = null;
-    setPhase({ at: "waiting", url: null, blocked: !tab });
+    setPhase({ at: "waiting", url: null, blocked: !tab, after: null });
     startTransition(async () => {
-      const r = await startConnect(id, "tab");
+      const r = await startConnect(id, "tab", here);
       if (r.kind === "open") {
         const url = safeContinueUrl(r.url);
         if (!url) {
@@ -102,14 +109,15 @@ export function ConnectButton({
           setPhase({ at: "error", text: `Couldn't start connecting ${label}. Please try again.` });
         } else if (tab) {
           tab.location.href = url;
-          setPhase({ at: "waiting", url, blocked: false });
+          setPhase({ at: "waiting", url, blocked: false, after: r.after });
         } else {
-          setPhase({ at: "waiting", url, blocked: true });
+          setPhase({ at: "waiting", url, blocked: true, after: r.after });
         }
       } else {
         tab?.close();
         if (r.kind === "connected") router.refresh();
-        else if (r.kind === "error") router.push(r.href);
+        else if (r.kind === "upgrade") router.push(r.href);
+        else if (r.kind === "error") setPhase({ at: "error", text: r.text });
         else setPhase({ at: "note" });
       }
     });

@@ -63,6 +63,7 @@ export async function IdleNotice() {
             platforms.map((p) => (
               <form key={p} action={connectAccount}>
                 <input type="hidden" name="platform" value={p} />
+                <input type="hidden" name="back" value="/today" />
                 <Button type="submit" variant="primary" className="min-h-[38px]">
                   Reconnect {platformLabel(p)}
                 </Button>

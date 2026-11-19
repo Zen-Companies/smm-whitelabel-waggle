@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import Link from "next/link";
+import { NotConnectedYet } from "@/features/accounts";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { getSocialProvider } from "@/lib/social";
@@ -16,12 +17,18 @@ import { ContactsTabs } from "./contacts-tabs";
 export async function ContactsView({ q, tag, page }: { q?: string; tag?: string; page: number }) {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
-  const { count: wa } = await supabase
-    .from("social_accounts")
-    .select("id", { count: "exact", head: true })
-    .eq("tenant_id", tenant.id)
-    .eq("platform", "whatsapp")
-    .eq("status", "active");
+  const [{ count: wa }, { count: anyAccount }] = await Promise.all([
+    supabase
+      .from("social_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenant.id)
+      .eq("platform", "whatsapp")
+      .eq("status", "active"),
+    supabase
+      .from("social_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenant.id),
+  ]);
   let contacts: Contact[] = [];
   let total = 0;
   let problem: ContactsProblem | null = null;
@@ -42,6 +49,9 @@ export async function ContactsView({ q, tag, page }: { q?: string; tag?: string;
     }
   }
   const canEdit = can(tenant.role, "replies.approve");
+  // Nothing connected and no one here yet: one line into setup's Connect step (20 Nov).
+  const notConnected =
+    !anyAccount && (problem === "not_set_up" || (!problem && !contacts.length && !q && !tag));
   const href = (p: number) => {
     const s = new URLSearchParams({
       ...(q ? { q } : {}),
@@ -89,7 +99,9 @@ export async function ContactsView({ q, tag, page }: { q?: string; tag?: string;
           Search
         </button>
       </form>
-      {problem === "not_set_up" ? (
+      {notConnected ? (
+        <NotConnectedYet brandName={tenant.name} canConnect={can(tenant.role, "accounts.manage")} />
+      ) : problem === "not_set_up" ? (
         <p className="card text-ink-2 p-5">
           <b className="text-ink font-semibold">
             Contacts aren&apos;t set up for this business yet.

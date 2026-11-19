@@ -11,6 +11,14 @@ import { getSocialProvider } from "@/lib/social";
 import { isConnectable, type PlatformId } from "@/lib/social/platforms";
 import { loadPlatformStatuses, statusOf } from "@/features/platforms";
 import { goToConnect } from "./connect-go";
+import {
+  connectErrorHref,
+  connectOrigin,
+  connectReturnHref,
+  DEFAULT_RETURN,
+  firstConnectHref,
+} from "./connect-return";
+import { isFirstAccount } from "./first-account";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { blueskyErrorText, blueskyInputSchema, connectBlueskyFor } from "./bluesky";
@@ -32,19 +40,22 @@ const connectSchema = z.object({
     ),
 });
 
-/** Starts Zernio's connect flow; Zernio sends the browser back to /settings afterwards. */
+/**
+ * Starts the connect flow for a social platform. The form may send `back`, the page it was on:
+ * errors go back there and say so in place, and so does the sign-in, except for the brand's
+ * first account, which lands on setup step 2 (20 Nov).
+ */
 export async function connectAccount(formData: FormData): Promise<void> {
-  const parsed = connectSchema.safeParse(Object.fromEntries(formData));
-  if (!parsed.success) redirect("/settings/accounts?connect_error=unavailable");
+  const origin = connectOrigin(formData.get("back"));
+  const parsed = connectSchema.safeParse({ platform: formData.get("platform") });
+  if (!parsed.success) redirect(connectErrorHref(origin, "unavailable"));
   const platform = parsed.data.platform as PlatformId;
-  // T73b: the first-time setup asks to come back to its Connect step.
-  const back = formData.get("back") === "setup" ? `/setup?step=2&connecting=${platform}` : null;
   const tenant = await getTenantFor("accounts.manage");
-  if (!tenant) redirect("/settings/accounts?connect_error=not_allowed");
+  if (!tenant) redirect(connectErrorHref(origin, "not_allowed", platform));
   const db = getServiceClient();
   // Staff → Platforms (18 Nov): only Available platforms connect.
   if (statusOf(await loadPlatformStatuses(db), platform) !== "available") {
-    redirect(`/settings/accounts?connect_error=unavailable&platform=${platform}`);
+    redirect(connectErrorHref(origin, "unavailable", platform));
   }
   // The plan's connected accounts (Pricing Bible). Off until billing ships.
   if (!(await roomForAnotherAccount(db, tenant.id))) {
@@ -57,8 +68,13 @@ export async function connectAccount(formData: FormData): Promise<void> {
     );
     // Free: the upgrade screen, never an add-on (19 Nov).
     if (await orgOnFree(db, tenant.organizationId)) redirect(upgradeHref("accounts"));
-    redirect(`/settings/accounts?connect_error=accounts_full&platform=${platform}`);
+    redirect(connectErrorHref(origin, "accounts_full", platform));
   }
+  const back = connectReturnHref({
+    origin,
+    platform,
+    firstAccount: await isFirstAccount(db, tenant.id),
+  });
 
   let authUrl: string;
   try {
@@ -67,7 +83,7 @@ export async function connectAccount(formData: FormData): Promise<void> {
     ({ authUrl } = await getSocialProvider().getConnectUrl({
       platform,
       profileId,
-      redirectUrl: `${process.env.APP_URL}${back ?? `/settings/accounts?connecting=${platform}`}`,
+      redirectUrl: `${process.env.APP_URL}${back}`,
     }));
     await writeAudit(db, {
       tenantId: tenant.id,
@@ -85,11 +101,9 @@ export async function connectAccount(formData: FormData): Promise<void> {
     );
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform } });
     const planLimit = error instanceof SocialProviderError && error.details.status === 402;
-    redirect(
-      `/settings/accounts?connect_error=${planLimit ? "plan_limit" : "unavailable"}&platform=${platform}`,
-    );
+    redirect(connectErrorHref(origin, planLimit ? "plan_limit" : "unavailable", platform));
   }
-  await goToConnect({ db, id: platform, authUrl });
+  await goToConnect({ db, id: platform, authUrl, back: origin });
 }
 
 export interface BlueskyState {
@@ -98,7 +112,8 @@ export interface BlueskyState {
 
 /**
  * Settings → Accounts → Connect Bluesky (T60): handle + app password, sent to Zernio and never
- * kept. On success the owner lands back on Accounts with the new account listed.
+ * kept. On success the owner lands back on Accounts with the new account listed, or on setup step
+ * 2 when it's the brand's first account (20 Nov).
  */
 export async function connectBluesky(
   _prev: BlueskyState,
@@ -113,6 +128,7 @@ export async function connectBluesky(
   if (!tenant) return { error: "Only Owners and Admins can connect accounts." };
   const db = getServiceClient();
 
+  const firstAccount = await isFirstAccount(db, tenant.id);
   let result;
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
@@ -137,21 +153,31 @@ export async function connectBluesky(
     }
     return { error: blueskyErrorText(result.error) };
   }
+  if (firstAccount) redirect(firstConnectHref("bluesky"));
   // Without an account in Zernio's answer, the webhook lists it a moment later.
-  redirect(`/settings/accounts?${result.username ? "connected" : "connecting"}=bluesky`);
+  redirect(`${DEFAULT_RETURN}?${result.username ? "connected" : "connecting"}=bluesky`);
 }
 
-/** Settings → Accounts → Connect Telegram (T60): a fresh code for Zernio's bot. */
-export async function startTelegram(): Promise<TelegramCode | { error: string }> {
+/**
+ * Settings → Accounts → Connect Telegram (T60): a fresh code for Zernio's bot. `after` is where
+ * the card goes once it connects: setup step 2 for the brand's first account (20 Nov).
+ */
+export async function startTelegram(): Promise<
+  (TelegramCode & { after: string | null }) | { error: string }
+> {
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) return { error: "Only Owners and Admins can connect accounts." };
   const db = getServiceClient();
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
-    return await startTelegramFor(
-      { db, social: getSocialProvider() },
-      { tenantId: tenant.id, actor: tenant.userId, profileId },
-    );
+    const [code, firstAccount] = await Promise.all([
+      startTelegramFor(
+        { db, social: getSocialProvider() },
+        { tenantId: tenant.id, actor: tenant.userId, profileId },
+      ),
+      isFirstAccount(db, tenant.id),
+    ]);
+    return { ...code, after: firstAccount ? firstConnectHref("telegram") : null };
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform: "telegram" } });
     const planLimit = error instanceof SocialProviderError && error.details.status === 402;

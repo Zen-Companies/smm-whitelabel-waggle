@@ -19,7 +19,7 @@ import { StateLabel } from "@/components/app/state-mark";
 
 import { clockTime, shortTime } from "@/components/app/time";
 
-import { BrandSetup } from "@/features/accounts";
+import { NotConnectedYet } from "@/features/accounts";
 
 import { MarkItemRead } from "@/features/alerts";
 
@@ -549,9 +549,16 @@ export async function InboxView({
     </div>
   );
 
-  // First run of a brand: nothing connected yet (T47 "Set up <brand>").
+  // Nothing connected yet: one line into setup's Connect step (20 Nov).
 
-  if (!accounts) return <BrandSetup brandName={tenant.name} />;
+  if (!accounts) {
+    return (
+      <>
+        <h1 className="page-title">Inbox</h1>
+        <NotConnectedYet brandName={tenant.name} canConnect={can(tenant.role, "accounts.manage")} />
+      </>
+    );
+  }
 
   const empty = found ? (
     <EmptySpot className="px-2 py-6" action={<ActionLink href="/inbox">Clear search</ActionLink>}>
