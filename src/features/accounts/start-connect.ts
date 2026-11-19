@@ -1,7 +1,7 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
-import { roomForAnotherAccount } from "@/features/billing";
+import { orgOnFree, roomForAnotherAccount, upgradeHref } from "@/features/billing";
 import { loadPlatformStatuses, recordSignin, statusOf } from "@/features/platforms";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
@@ -57,6 +57,10 @@ export async function startConnect(id: string, mode: "here" | "tab"): Promise<St
   if (statusOf(await loadPlatformStatuses(db), id) !== "available") return fail("unavailable", id);
   if (social && !(await roomForAnotherAccount(db, tenant.id))) {
     await queueAccountLimit(db, tenant.organizationId);
+    // Free: the upgrade screen, never an add-on (19 Nov).
+    if (await orgOnFree(db, tenant.organizationId)) {
+      return { kind: "error", href: upgradeHref("accounts") };
+    }
     return fail("accounts_full", id);
   }
 

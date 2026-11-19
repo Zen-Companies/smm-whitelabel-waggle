@@ -146,9 +146,17 @@ export function PlanBees({
   plan,
   className,
 }: {
-  plan: "solo" | "business" | "team";
+  plan: "free" | "solo" | "business" | "team";
   className?: string;
 }) {
+  // Free: one small bee, resting (no flight path).
+  if (plan === "free") {
+    return (
+      <span aria-hidden className={cn("relative block h-[70px] w-[70px] shrink-0", className)}>
+        <Bee w={26} style={{ left: 20, top: 26 }} />
+      </span>
+    );
+  }
   if (plan === "solo") {
     return (
       <span aria-hidden className={cn("relative block h-[70px] w-[70px] shrink-0", className)}>

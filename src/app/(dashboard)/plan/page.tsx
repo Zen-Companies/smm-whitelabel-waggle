@@ -1,6 +1,6 @@
 import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
-import { TrialConversionTag, YourPlanSection } from "@/features/billing";
+import { isUpgradeReason, TrialConversionTag, YourPlanSection } from "@/features/billing";
 import { can, listMyOrgs } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 
@@ -32,6 +32,7 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
       <YourPlanSection
         org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}
         notice={notice}
+        upgrade={isUpgradeReason(params.upgrade) ? params.upgrade : undefined}
       />
       {notice === "done" && (
         <Suspense fallback={null}>

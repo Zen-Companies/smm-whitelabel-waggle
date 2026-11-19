@@ -18,21 +18,30 @@ import {
 } from "./plans";
 import { limitEmailDue, NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 
-describe("plans match the Pricing Bible (updated 18 Nov 2026)", () => {
+describe("plans match the Pricing Bible (Free plan, 19 Nov 2026)", () => {
   it("prices, accounts and replies", () => {
-    expect(PLANS.solo).toMatchObject({ monthlyUsd: 49, yearlyUsd: 490, accounts: 3, replies: 200 });
+    expect(PLANS.free).toMatchObject({
+      monthlyUsd: 0,
+      yearlyUsd: null,
+      accounts: 1,
+      brands: 1,
+      replies: 100,
+      forSale: true,
+    });
+    expect(PLANS.solo).toMatchObject({ monthlyUsd: 49, yearlyUsd: 490, accounts: 3, replies: 300 });
     expect(PLANS.business).toMatchObject({
       monthlyUsd: 99,
       yearlyUsd: 990,
-      accounts: 4,
+      accounts: 6,
       replies: 750,
     });
+    // Business is by call only (19 Nov): off sale, anyone already on $199 keeps it.
     expect(PLANS.team).toMatchObject({
       monthlyUsd: 199,
       yearlyUsd: null,
       accounts: 10,
       replies: 1500,
-      forSale: true,
+      forSale: false,
     });
     // Shown names (Jason, 17 Nov): $99 is Team, $199 is Business; the ids stay.
     expect([PLANS.solo.name, PLANS.business.name, PLANS.team.name]).toEqual([
@@ -40,11 +49,18 @@ describe("plans match the Pricing Bible (updated 18 Nov 2026)", () => {
       "Team",
       "Business",
     ]);
-    expect(PROMOTED_PLAN).toBe("business");
+    expect(PROMOTED_PLAN).toBe("solo");
   });
 
   it("what each plan includes", () => {
-    expect(PLANS.solo.features).toMatchObject({ autoReply: false, leadsFlagged: false });
+    // Free: "Ask me first" only; auto-reply is the main reason to move up to Solo.
+    expect(PLANS.free.features).toEqual({
+      autoReply: false,
+      leadsFlagged: false,
+      followUps: false,
+      team: false,
+    });
+    expect(PLANS.solo.features).toMatchObject({ autoReply: true, leadsFlagged: false });
     expect(PLANS.business.features).toMatchObject({
       autoReply: true,
       leadsFlagged: true,
@@ -56,7 +72,7 @@ describe("plans match the Pricing Bible (updated 18 Nov 2026)", () => {
   });
 
   it("trial, extras and the founding offer", () => {
-    expect(TRIAL).toEqual({ days: 7, cardRequired: true });
+    expect(TRIAL).toEqual({ days: 7, cardRequired: false });
     expect(trialEndsAt(new Date("2026-11-18T10:00:00Z")).toISOString()).toBe(
       "2026-11-25T10:00:00.000Z",
     );
@@ -82,11 +98,13 @@ describe("plans match the Pricing Bible (updated 18 Nov 2026)", () => {
 
   it("accounts and replies with extras", () => {
     expect(accountAllowance(PLANS.solo)).toBe(3);
-    expect(accountAllowance(PLANS.business, 2)).toBe(6);
+    expect(accountAllowance(PLANS.business, 2)).toBe(8);
     expect(canConnectAnother(3, accountAllowance(PLANS.solo))).toBe(false);
     expect(canConnectAnother(2, 3)).toBe(true);
-    expect(replyAllowance(PLANS.solo)).toBe(200);
-    expect(replyAllowance(PLANS.solo, { thisMonth: 1, carriedReplies: 50 })).toBe(450);
+    expect(replyAllowance(PLANS.solo)).toBe(300);
+    expect(replyAllowance(PLANS.solo, { thisMonth: 1, carriedReplies: 50 })).toBe(550);
+    expect(accountAllowance(PLANS.free)).toBe(1);
+    expect(canConnectAnother(1, accountAllowance(PLANS.free))).toBe(false);
   });
 });
 
@@ -113,6 +131,15 @@ describe("the AI reply limit", () => {
     expect(replyLimitNote(replyLimit(750, 750, now), "business")!.offers).toEqual([
       "+200 replies for $15",
     ]);
+  });
+
+  it("on Free, only ever offers Solo (no add-ons)", () => {
+    const warn = replyLimitNote(replyLimit(80, 100, now), "free")!;
+    expect(warn.body).toContain("To get more replies this month, upgrade to Solo or above.");
+    const reached = replyLimitNote(replyLimit(100, 100, now), "free")!;
+    expect(reached.offers).toEqual(["Upgrade to Solo"]);
+    expect(reached.body).toContain("upgrade to Solo or above");
+    expect(reached.body).not.toContain("$15");
   });
 
   it("sends each email once a month", () => {
@@ -190,7 +217,7 @@ describe("plan settings (Staff → Plans, 18 Nov)", () => {
     expect(plans.solo).toMatchObject({
       brands: 2,
       accounts: 4,
-      replies: 200,
+      replies: 300,
       features: { autoReply: true, team: false },
     });
     expect(plans.business).toMatchObject({
@@ -236,15 +263,22 @@ describe("plan settings (Staff → Plans, 18 Nov)", () => {
 
 describe("plan card lines (Pricing Bible, 18 Nov)", () => {
   it("from the plan as staff set it", () => {
+    expect(planBullets(PLANS.free)).toEqual([
+      "1 business, just you",
+      "1 account, no add-ons",
+      "About 100 AI replies a month",
+      "You approve every reply",
+    ]);
     expect(planBullets(PLANS.solo)).toEqual([
       "1 business, just you",
       "3 accounts, then $10 each",
-      "About 200 AI replies a month",
-      "You approve every reply",
+      "About 300 AI replies a month",
+      "Replies on its own, once you trust it",
     ]);
+    expect(planBullets(PLANS.team)[1]).toBe("10+ accounts");
     expect(planBullets(PLANS.business)).toEqual([
       "Unlimited businesses and team members",
-      "4 accounts, then $10 each",
+      "6 accounts, then $10 each",
       "About 750 AI replies a month",
       "Replies on its own, once you trust it",
       "Leads and complaints flagged",

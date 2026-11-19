@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { roomForAnotherAccount } from "@/features/billing";
+import { orgOnFree, roomForAnotherAccount, upgradeHref } from "@/features/billing";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
@@ -55,6 +55,8 @@ export async function connectAccount(formData: FormData): Promise<void> {
         dedupeKey: `account_limit:${tenant.organizationId}:${new Date().toISOString().slice(0, 10)}`,
       }),
     );
+    // Free: the upgrade screen, never an add-on (19 Nov).
+    if (await orgOnFree(db, tenant.organizationId)) redirect(upgradeHref("accounts"));
     redirect(`/settings/accounts?connect_error=accounts_full&platform=${platform}`);
   }
 

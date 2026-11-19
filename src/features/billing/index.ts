@@ -7,6 +7,8 @@ export {
   canConnectAnother,
   EXTRAS,
   FOUNDING,
+  BUSINESS_CALL_URL,
+  isPaidPlanId,
   isPlanId,
   monthlyPrice,
   PLANS,
@@ -15,7 +17,16 @@ export {
   TRIAL,
   trialEndsAt,
 } from "./plans";
-export type { Plan, PlanId } from "./plans";
+export type { PaidPlanId, Plan, PlanId } from "./plans";
+export {
+  isUpgradeReason,
+  UPGRADE,
+  upgradeHref,
+  upgradeLabel,
+  upgradeLine,
+  UPGRADE_REASONS,
+} from "./upgrade";
+export type { UpgradeReason } from "./upgrade";
 export { NEVER_DARK, limitEmailDue, replyLimit, replyLimitNote } from "./reply-limit";
 export type { ReplyLimit, ReplyLimitLevel } from "./reply-limit";
 export {
@@ -24,6 +35,7 @@ export {
   loadReplyLimit,
   PLANS_FLAG,
   loadPlans,
+  orgOnFree,
   planAllowsAutoReply,
   planAllowsFollowUps,
   planAllowsTeam,
@@ -46,7 +58,3 @@ export { TrialConversionTag } from "./trial-tag";
 export { PLAN_HREF, PlanChip, PlanMenuRow, PlanMoreRow } from "./plan-chip";
 export type { PlanViewer } from "./plan-chip";
 export { FOUNDING_COUPON } from "./catalog";
-export { PlanStep } from "./plan-step";
-export { planGateFor, requirePlan } from "./plan-gate-server";
-export type { PlanGateState } from "./plan-gate-server";
-export { CHECKOUT_OK_COOKIE, PLAN_GATE_PATH } from "./plan-gate";

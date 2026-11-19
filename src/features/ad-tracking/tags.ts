@@ -3,7 +3,12 @@
 // them only for the two moments an ad needs to learn from, and never on pages with customer
 // messages:
 //   - CompleteRegistration: a new owner's first look at /welcome after signing up.
-//   - StartTrial: Stripe's return from a first-time plan checkout, checked with Stripe first.
+//   - StartTrial: Stripe's return from a first-time plan checkout that started a trial (subscriptions
+//     from before the Free plan), checked with Stripe first.
+//   - Subscribe: the same return when the checkout started a paid plan straight away (moving up
+//     from Free, 19 Nov), checked with Stripe first.
+//   - ConnectAccount: the organization's first connected social account (Atlas, 19 Nov: so the
+//     ads can optimize for owners who connect, not only owners who sign up). A custom event.
 // Pure helpers only; the browser part is conversion-tag.tsx.
 
 // Same IDs as gowaggle.ai (gowaggle repo, app/lib/pixels.ts), so both halves of the funnel land
@@ -18,7 +23,14 @@ export const LIVE_HOSTS = ["app.gowaggle.ai"];
 /** The "Your privacy choices" opt-out. A cookie on .gowaggle.ai so the site's choice reaches the app. */
 export const OPT_OUT_COOKIE = "waggle_no_ads";
 
-export type ConversionEvent = "CompleteRegistration" | "StartTrial";
+export type ConversionEvent =
+  "CompleteRegistration" | "StartTrial" | "Subscribe" | "ConnectAccount";
+
+/** Events that aren't one of Meta's standard events (sent with trackCustom). */
+export const CUSTOM_EVENTS: readonly ConversionEvent[] = ["ConnectAccount"];
+
+/** A first connect counts for the ads only shortly after it happened. */
+export const CONNECT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /** A registration counts only on the first visits to /welcome, not weeks later. */
 export const REGISTRATION_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -37,7 +49,13 @@ export function isNewRegistration(createdAt: string | undefined, now: Date): boo
  * server-side copy added later is counted once (Meta and TikTok drop repeats of an event id).
  */
 export function conversionEventId(event: ConversionEvent, key: string): string {
-  return `${event === "StartTrial" ? "trial" : "reg"}-${key}`;
+  const prefix = {
+    CompleteRegistration: "reg",
+    StartTrial: "trial",
+    Subscribe: "sub",
+    ConnectAccount: "connect",
+  }[event];
+  return `${prefix}-${key}`;
 }
 
 /** Pure: an email as Meta and TikTok want it before hashing: trimmed, lower case. */

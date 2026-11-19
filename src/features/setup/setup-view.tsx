@@ -8,6 +8,7 @@ import { BeeBySend, BeeDance, BeeOnItsOwn } from "@/components/app/bee-setup";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { StateMark } from "@/components/app/state-mark";
 import { connectAccount } from "@/features/accounts";
+import { planAllowsAutoReply, upgradeHref, upgradeLabel } from "@/features/billing";
 import { HelpButton } from "@/features/feedback";
 import { TryIt } from "@/features/lab";
 import { can } from "@/features/orgs";
@@ -85,7 +86,11 @@ export async function SetupView({
   // Staff → Platforms (18 Nov): only Available platforms are offered here.
   const statuses = await loadPlatformStatuses(getServiceClient());
   const tenant = await getCurrentTenant();
-  const steps = await loadReadySteps(tenant.id);
+  const [steps, autoOk] = await Promise.all([
+    loadReadySteps(tenant.id),
+    // Free approves every reply (19 Nov): Reply on its own shows, locked, with the upgrade.
+    planAllowsAutoReply(getServiceClient(), tenant.id),
+  ]);
   const step: SetupStepNumber = requested ?? nextReadyStep(steps)?.n ?? 6;
   const left = steps.filter((s) => !s.done);
   const tries = steps.find((s) => s.key === "practice");
@@ -390,27 +395,49 @@ export async function SetupView({
                     desc: "When your answers cover the question, Waggle replies right away. Everything else still comes to you.",
                     bee: <BeeOnItsOwn />,
                   },
-                ].map((m) => (
-                  <label
-                    key={m.mode}
-                    className="card has-[:checked]:border-honey has-[:checked]:ring-honey flex cursor-pointer flex-col gap-2 p-4 has-[:checked]:ring-1"
-                  >
-                    {m.bee}
-                    <span className="flex items-start gap-3">
-                      <input
-                        type="radio"
-                        name="mode"
-                        value={m.mode}
-                        defaultChecked={(faq?.mode === "auto" ? "auto" : "approve") === m.mode}
-                        className="mt-1"
-                      />
-                      <span className="flex flex-col">
-                        <b className="font-semibold">{m.title}</b>
-                        <span className="text-ink-2 text-sm">{m.desc}</span>
+                ].map((m) => {
+                  const locked = m.mode === "auto" && !autoOk;
+                  return (
+                    <label
+                      key={m.mode}
+                      className={
+                        locked
+                          ? "card flex flex-col gap-2 p-4"
+                          : "card has-[:checked]:border-honey has-[:checked]:ring-honey flex cursor-pointer flex-col gap-2 p-4 has-[:checked]:ring-1"
+                      }
+                    >
+                      {m.bee}
+                      <span className="flex items-start gap-3">
+                        <input
+                          type="radio"
+                          name="mode"
+                          value={m.mode}
+                          disabled={locked}
+                          defaultChecked={
+                            (faq?.mode === "auto" && autoOk ? "auto" : "approve") === m.mode
+                          }
+                          className="mt-1"
+                        />
+                        <span className="flex flex-col gap-1">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <b className="font-semibold">{m.title}</b>
+                            {locked && (
+                              <span className="border-honey-border bg-honey-tint text-honey-text rounded-full border px-2 py-0.5 text-[11px] font-bold tracking-wide uppercase">
+                                Solo and up
+                              </span>
+                            )}
+                          </span>
+                          <span className="text-ink-2 text-sm">{m.desc}</span>
+                          {locked && (
+                            <Link href={upgradeHref("auto_reply")} className="action-link text-sm">
+                              {upgradeLabel("auto_reply")}
+                            </Link>
+                          )}
+                        </span>
                       </span>
-                    </span>
-                  </label>
-                ))}
+                    </label>
+                  );
+                })}
               </div>
             </fieldset>
           </StepForm>

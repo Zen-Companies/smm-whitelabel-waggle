@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { z } from "zod";
-import { planAllowsAutoReply } from "@/features/billing";
+import { planAllowsAutoReply, upgradeLine } from "@/features/billing";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -46,10 +46,10 @@ export async function updateAutonomyMode(
   const { category, mode } = parsed.data;
   const tenant = await getTenantFor("brand.settings");
   if (!tenant) return { error: NOT_ALLOWED };
-  // Solo approves every reply (Pricing Bible). Off until billing ships.
+  // Free approves every reply (19 Nov): replying on its own is Solo and up.
   if (mode === "auto" && !(await planAllowsAutoReply(getServiceClient(), tenant.id))) {
     return {
-      error: "Replying on its own comes with Business. On Solo, you approve every reply.",
+      error: `On Free, you approve every reply. ${upgradeLine("auto_reply")} See Your plan.`,
     };
   }
 
