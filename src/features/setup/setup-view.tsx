@@ -29,8 +29,9 @@ import {
   platformLabel,
 } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { saveAnswersStep, saveBusinessStep, saveRepliesStep } from "./actions";
+import { passSetup, saveAnswersStep, saveBusinessStep, saveRepliesStep } from "./actions";
 import { nextReadyStep, PRACTICE_GOAL } from "./checklist";
+import { showWelcomeBack } from "./gate";
 import {
   commonForLabel,
   questionSeeds,
@@ -81,11 +82,37 @@ function ConnectGate({ inApp, children }: { inApp: string | null; children: Reac
   return inApp ? <InAppGate app={inApp}>{list}</InAppGate> : list;
 }
 
+/**
+ * A way on that passes setup (Setup first, then free, 20 Nov): the first Skip for now or Finish
+ * later lets the owner into the app, and back to the page they were going to, if any.
+ */
+function PassButton({
+  how,
+  to,
+  className,
+  children,
+}: {
+  how: "skipped" | "finish_later";
+  to: string;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <form action={passSetup} className="contents">
+      <input type="hidden" name="how" value={how} />
+      <input type="hidden" name="to" value={to} />
+      <button type="submit" className={className}>
+        {children}
+      </button>
+    </form>
+  );
+}
+
 function SkipLink({ to }: { to: SetupStepNumber }) {
   return (
-    <Link href={`/setup?step=${to}`} className="action-link">
+    <PassButton how="skipped" to={`/setup?step=${to}`} className="action-link">
       Skip for now
-    </Link>
+    </PassButton>
   );
 }
 
@@ -100,6 +127,7 @@ export async function SetupView({
   more = false,
   inApp = null,
   problem = null,
+  resume = false,
 }: {
   step: SetupStepNumber | null;
   connecting?: string;
@@ -109,6 +137,8 @@ export async function SetupView({
   inApp?: string | null;
   /** The connect flow came back with an error. */
   problem?: ConnectProblem | null;
+  /** Sent here by the setup gate (resume=1): "Welcome back" on top of the step. */
+  resume?: boolean;
 }) {
   // Staff → Platforms (18 Nov): only Available platforms are offered here.
   const statuses = await loadPlatformStatuses(getServiceClient());
@@ -188,6 +218,7 @@ export async function SetupView({
       submitLabel="Next"
       backHref="/setup?step=2"
       skipHref="/setup?step=4"
+      skipAction={passSetup}
     >
       <QuestionsEditor seeds={seeds} more={moreQuestions} />
       <p className="text-ink-3 text-sm">
@@ -215,6 +246,14 @@ export async function SetupView({
       {/* The end keeps the same frame (approved 17 Nov): stepper and step line stay. */}
       <Stepper step={step} steps={steps} />
 
+      {/* Setup first, then free (20 Nov): only when they come back through the gate. */}
+      {showWelcomeBack({ resume: resume ? "1" : null, step, done: steps.length - left.length }) && (
+        <p className="border-honey-border bg-honey-tint rounded-xl border px-4 py-3 text-sm">
+          <b className="font-semibold">Welcome back.</b> Pick up where you left off:{" "}
+          {steps.length - left.length} of {SETUP_LAST} done.
+        </p>
+      )}
+
       {/* Five steps fill the row, so help and the way out sit on the step line. Nothing here
           leaves setup by accident (approved 17 Nov): help opens in place, Finish later is the
           one way out, and Today's Get Waggle ready line keeps the place. */}
@@ -229,9 +268,13 @@ export async function SetupView({
           {(step <= SETUP_LAST || left.length > 0) && (
             <>
               <span aria-hidden>·</span>
-              <Link href="/today" className="text-ink-3 hover:text-ink text-sm">
+              <PassButton
+                how="finish_later"
+                to="/today"
+                className="text-ink-3 hover:text-ink cursor-pointer text-sm"
+              >
                 Finish later
-              </Link>
+              </PassButton>
             </>
           )}
         </span>
@@ -250,6 +293,7 @@ export async function SetupView({
             submitLabel="Next"
             backHref={null}
             skipHref="/setup?step=2"
+            skipAction={passSetup}
           >
             <KindPicker current={kind?.key ?? null} custom={custom} />
             <label className="flex flex-col gap-1.5 text-sm font-medium">
@@ -427,9 +471,7 @@ export async function SetupView({
                 Next
               </Link>
             ) : (
-              <Link href="/setup?step=3" className="action-link">
-                Skip for now
-              </Link>
+              <SkipLink to={3} />
             )}
           </div>
         </section>
@@ -509,6 +551,7 @@ export async function SetupView({
             submitLabel="Finish"
             backHref="/setup?step=4"
             skipHref="/setup?step=6"
+            skipAction={passSetup}
           >
             <fieldset className="flex flex-col gap-3">
               <legend className="sr-only">How replies go out</legend>
@@ -638,9 +681,13 @@ export async function SetupView({
           )}
           {left.length > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <Link href="/today" className="text-ink-2 hover:text-ink text-sm font-medium">
+              <PassButton
+                how="finish_later"
+                to="/today"
+                className="text-ink-2 hover:text-ink cursor-pointer text-sm font-medium"
+              >
                 Go to Today instead
-              </Link>
+              </PassButton>
               <Link
                 href={`/setup?step=${left[0].n}`}
                 className={buttonVariants({ variant: "primary" })}

@@ -19,6 +19,7 @@ async function Setup({ searchParams }: Props) {
       more={params.more === "1"}
       inApp={isInAppBrowser(h.get("user-agent"))}
       problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
+      resume={params.resume === "1"}
     />
   );
 }

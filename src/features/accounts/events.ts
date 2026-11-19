@@ -2,6 +2,7 @@ import { kickCatchUp, startCatchUp } from "@/features/catch-up";
 import { pauseAccountItems, resumeAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
+import { markSetupPassed } from "@/lib/setup/passed";
 import { hasLiveComments } from "@/lib/social/platforms";
 import { isSocialPlatform, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -70,6 +71,9 @@ export async function handleAccountConnected(
         previousZernioAccountId: row.previous_zernio_account_id,
       },
     });
+    // Setup first, then free (20 Nov): a connected account means the brand is through setup,
+    // so the reveal's and the morning email's links into the app always open (once; audited).
+    await markSetupPassed(db, { tenantId: input.tenantId, how: "connected", userId: null });
   }
 
   // CRM: the organization's first connected account (once; the dedupe key holds it).
