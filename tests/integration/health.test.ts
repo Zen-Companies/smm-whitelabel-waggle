@@ -205,7 +205,7 @@ describe("comment backfill (T16)", () => {
     expect(await backfillComments(deps(), { tenantId })).toEqual({ accounts: 1, created: 0 });
   });
 
-  it("a fresh connect asks for the last 24 hours", async () => {
+  it("a fresh connect starts the 30-day catch-up instead of the 24-hour backfill (19 Nov)", async () => {
     const zid = `acc_${randomUUID().slice(0, 8)}`;
     const { accountId: id } = await handleAccountConnected(db, {
       tenantId,
@@ -214,8 +214,11 @@ describe("comment backfill (T16)", () => {
       username: "healthcafe.fb",
     });
     const { data } = await db.from("social_accounts").select("backfill_from").eq("id", id).single();
-    const from = Date.parse(data!.backfill_from!);
-    expect(Date.now() - from).toBeGreaterThan(23 * 3_600_000);
-    expect(Date.now() - from).toBeLessThan(25 * 3_600_000);
+    expect(data!.backfill_from).toBeNull();
+    const { count } = await db
+      .from("catch_ups")
+      .select("id", { count: "exact", head: true })
+      .eq("social_account_id", id);
+    expect(count).toBe(1);
   });
 });

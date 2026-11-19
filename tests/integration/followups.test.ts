@@ -89,6 +89,19 @@ beforeAll(async () => {
   });
   tenantId = rows![0].tenant_id;
   tenantIds.push(tenantId);
+  // Follow-ups are Team and up; without a paid plan an organization is on Free (19 Nov).
+  const { data: t } = await db
+    .from("tenants")
+    .select("organization_id")
+    .eq("id", tenantId)
+    .single();
+  await db.from("org_billing").insert({
+    organization_id: t!.organization_id!,
+    stripe_customer_id: `cus_test_${randomUUID().slice(0, 8)}`,
+    stripe_subscription_id: `sub_test_${randomUUID().slice(0, 8)}`,
+    plan: "business",
+    status: "active",
+  });
   zernioAccountId = `acc_${randomUUID().slice(0, 8)}`;
   const { data: account } = await db
     .from("social_accounts")
