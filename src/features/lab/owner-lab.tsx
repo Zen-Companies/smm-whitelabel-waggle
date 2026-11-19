@@ -35,8 +35,14 @@ export async function OwnerLab() {
   );
 }
 
-/** Teach Waggle's "Try it" (T73): the practice box on its own; nothing gets posted. */
-export async function TryIt({ goal }: { goal?: { done: number; of: number } } = {}) {
+/**
+ * Teach Waggle's "Try it" (T73): the practice box on its own; nothing gets posted. Setup's step 4
+ * passes the customers' own top questions as the examples (first connect, approved 20 Nov).
+ */
+export async function TryIt({
+  goal,
+  examples,
+}: { goal?: { done: number; of: number }; examples?: string[] } = {}) {
   const tenant = await getCurrentTenant();
   const page = await loadPracticePage(getServiceClient(), tenant.id);
   return (
@@ -47,8 +53,9 @@ export async function TryIt({ goal }: { goal?: { done: number; of: number } } = 
     >
       <PracticeBox
         triesLeft={page.triesLeft}
-        examples={page.examples}
-        examplesFromTopics={page.examplesFromTopics}
+        examples={examples?.length ? examples.slice(0, 5) : page.examples}
+        examplesFromTopics={examples?.length ? true : page.examplesFromTopics}
+        examplesLabel={examples?.length ? "What your customers asked" : undefined}
         recentTries={page.recentTries}
         goal={goal}
       />

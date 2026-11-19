@@ -1,6 +1,7 @@
+import { headers } from "next/headers";
 import { Suspense } from "react";
-import { FirstConnectTag } from "@/features/accounts";
-import { parseStep, SetupView } from "@/features/setup";
+import { connectBanner, FirstConnectTag } from "@/features/accounts";
+import { connectProblem, isInAppBrowser, parseStep, SetupView } from "@/features/setup";
 import { getOpenOrg } from "@/features/tenants";
 
 export const metadata = { title: "Set up Waggle" };
@@ -8,10 +9,17 @@ export const metadata = { title: "Set up Waggle" };
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 async function Setup({ searchParams }: Props) {
-  const params = await searchParams;
+  const [params, h] = await Promise.all([searchParams, headers()]);
   const connecting = typeof params.connecting === "string" ? params.connecting : undefined;
+  const banner = connectBanner(params);
   return (
-    <SetupView step={parseStep(params.step)} connecting={connecting} more={params.more === "1"} />
+    <SetupView
+      step={parseStep(params.step)}
+      connecting={connecting}
+      more={params.more === "1"}
+      inApp={isInAppBrowser(h.get("user-agent"))}
+      problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
+    />
   );
 }
 
