@@ -2,15 +2,18 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { markHandledAction, type DecisionFormState } from "@/features/approvals";
+// The Inbox's mark-handled action is handed in by the (server) reveal view: importing the
+// approvals feature here would pull its server-only code into the browser bundle.
+type HandledState = { error?: string };
+type HandledAction = (prev: HandledState, fd: FormData) => Promise<HandledState>;
 import { timeLeft } from "./first-connect-copy";
 import { markRevealSeen } from "./reveal-actions";
 
 /** "Already handled" on the longest wait: takes it off the list, said in place (no toast). */
-export function AlreadyHandled({ itemId }: { itemId: string }) {
-  const [state, act, pending] = useActionState<DecisionFormState & { done?: boolean }, FormData>(
+export function AlreadyHandled({ itemId, action }: { itemId: string; action: HandledAction }) {
+  const [state, act, pending] = useActionState<HandledState & { done?: boolean }, FormData>(
     async (prev, fd) => {
-      const r = await markHandledAction(prev, fd);
+      const r = await action(prev, fd);
       return r.error ? r : { done: true };
     },
     {},
