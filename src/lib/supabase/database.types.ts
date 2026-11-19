@@ -1624,6 +1624,53 @@ export type Database = {
         }
         Relationships: []
       }
+      org_idle: {
+        Row: {
+          checked_at: string | null
+          disconnect_on: string | null
+          disconnected_account_ids: string[]
+          disconnected_at: string | null
+          last_active_at: string | null
+          notice_dismissed_at: string | null
+          organization_id: string
+          updated_at: string
+          warned_at: string | null
+          warned_for_active_at: string | null
+        }
+        Insert: {
+          checked_at?: string | null
+          disconnect_on?: string | null
+          disconnected_account_ids?: string[]
+          disconnected_at?: string | null
+          last_active_at?: string | null
+          notice_dismissed_at?: string | null
+          organization_id: string
+          updated_at?: string
+          warned_at?: string | null
+          warned_for_active_at?: string | null
+        }
+        Update: {
+          checked_at?: string | null
+          disconnect_on?: string | null
+          disconnected_account_ids?: string[]
+          disconnected_at?: string | null
+          last_active_at?: string | null
+          notice_dismissed_at?: string | null
+          organization_id?: string
+          updated_at?: string
+          warned_at?: string | null
+          warned_for_active_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_idle_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_settings: {
         Row: {
           accounts: number | null
@@ -2452,6 +2499,12 @@ export type Database = {
       disconnect_google: { Args: { p_user: string }; Returns: boolean }
       email_has_login: { Args: { p_email: string }; Returns: boolean }
       enqueue_draft_nudges: { Args: { p_older_than: string }; Returns: number }
+      idle_check_candidates: {
+        Args: { p_checked_before: string; p_limit: number }
+        Returns: {
+          organization_id: string
+        }[]
+      }
       invite_by_token: {
         Args: { p_token_hash: string }
         Returns: {
