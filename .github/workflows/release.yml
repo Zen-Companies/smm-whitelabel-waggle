@@ -1,0 +1,51 @@
+name: Release
+
+# After a merge into main finishes deploying, tags the commit and publishes the
+# release page (Zen Intent changelog layout). Minor/patch are automatic; major
+# is the "release: major" label, or a manual run. See CLAUDE.md "Releases".
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump (auto = decide from the merged PR)"
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+  statuses: read
+
+# One release at a time. GitHub keeps one running and ONE pending run per
+# group: a newer pending run replaces an older pending one. That loses nothing,
+# because each release covers every merge since the last tag and takes the
+# highest bump among them (run.mjs).
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    # A manual run from another branch must never tag an undeployed commit.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        run: node --test scripts/release/notes.test.mjs
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/release/run.mjs release ${{ github.sha }} --bump ${{ inputs.bump || 'auto' }}
