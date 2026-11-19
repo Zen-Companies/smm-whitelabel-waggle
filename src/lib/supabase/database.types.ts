@@ -399,6 +399,61 @@ export type Database = {
         }
         Relationships: []
       }
+      catch_ups: {
+        Row: {
+          attempts: number
+          comments_created: number
+          created_at: string
+          dismissed_at: string | null
+          dismissed_by: string | null
+          dm_offset: number
+          dms_created: number
+          finished_at: string | null
+          id: string
+          locked_at: string | null
+          next_run_at: string
+          posts_cursor: string | null
+          social_account_id: string
+          stage: string
+          tenant_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          attempts?: number
+          comments_created?: number
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          dm_offset?: number
+          dms_created?: number
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          next_run_at?: string
+          posts_cursor?: string | null
+          social_account_id: string
+          stage?: string
+          tenant_id: string
+        }
+        Update: {
+          attempts?: number
+          comments_created?: number
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          dm_offset?: number
+          dms_created?: number
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          next_run_at?: string
+          posts_cursor?: string | null
+          social_account_id?: string
+          stage?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           followed_up_at: string | null
@@ -1286,6 +1341,43 @@ export type Database = {
         }
         Relationships: []
       }
+      missed_messages: {
+        Row: {
+          created_at: string
+          id: string
+          platform_message_id: string
+          received_at: string
+          sender_name: string | null
+          social_account_id: string
+          tenant_id: string
+          text: string
+          zernio_conversation_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          id?: string
+          platform_message_id: string
+          received_at: string
+          sender_name?: string | null
+          social_account_id: string
+          tenant_id: string
+          text?: string
+          zernio_conversation_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform_message_id?: string
+          received_at?: string
+          sender_name?: string | null
+          social_account_id?: string
+          tenant_id?: string
+          text?: string
+          zernio_conversation_id?: string
+        }
+        Relationships: []
+      }
       notification_prefs: {
         Row: {
           email_frequency: string
@@ -1623,6 +1715,53 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      org_idle: {
+        Row: {
+          checked_at: string | null
+          disconnect_on: string | null
+          disconnected_account_ids: string[]
+          disconnected_at: string | null
+          last_active_at: string | null
+          notice_dismissed_at: string | null
+          organization_id: string
+          updated_at: string
+          warned_at: string | null
+          warned_for_active_at: string | null
+        }
+        Insert: {
+          checked_at?: string | null
+          disconnect_on?: string | null
+          disconnected_account_ids?: string[]
+          disconnected_at?: string | null
+          last_active_at?: string | null
+          notice_dismissed_at?: string | null
+          organization_id: string
+          updated_at?: string
+          warned_at?: string | null
+          warned_for_active_at?: string | null
+        }
+        Update: {
+          checked_at?: string | null
+          disconnect_on?: string | null
+          disconnected_account_ids?: string[]
+          disconnected_at?: string | null
+          last_active_at?: string | null
+          notice_dismissed_at?: string | null
+          organization_id?: string
+          updated_at?: string
+          warned_at?: string | null
+          warned_for_active_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "org_idle_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       plan_settings: {
         Row: {
@@ -2452,6 +2591,12 @@ export type Database = {
       disconnect_google: { Args: { p_user: string }; Returns: boolean }
       email_has_login: { Args: { p_email: string }; Returns: boolean }
       enqueue_draft_nudges: { Args: { p_older_than: string }; Returns: number }
+      idle_check_candidates: {
+        Args: { p_checked_before: string; p_limit: number }
+        Returns: {
+          organization_id: string
+        }[]
+      }
       invite_by_token: {
         Args: { p_token_hash: string }
         Returns: {

@@ -13,6 +13,7 @@ import type { ServiceClient } from "@/lib/supabase/service";
 import { isInboxLive } from "@/lib/social/platforms";
 import { isSocialPlatform, type SocialPlatform } from "@/lib/social/types";
 import { writeAudit } from "@/lib/audit";
+import { recordConversation } from "./conversations";
 import { insertInboundItem } from "./items";
 import { transitionItem } from "./status";
 import {
@@ -560,45 +561,19 @@ async function mapMessage(
   const participantName =
     e.message.sender.name ?? e.conversation?.participantName ?? e.message.sender.username ?? null;
   const { db } = deps;
-  const { error: upsertError } = await db.from("conversations").upsert(
-    {
-      tenant_id: tenantId,
-      social_account_id: resolved.accountId,
-      zernio_conversation_id: e.message.conversationId,
-      platform: account.platform,
-      participant_name: participantName,
-      participant_external_id: e.message.sender.id,
-      subject: e.metadata?.email?.subject?.trim() || null,
-    },
-    { onConflict: "zernio_conversation_id", ignoreDuplicates: true },
-  );
-  if (upsertError) throw new Error(`conversations upsert failed: ${upsertError.message}`);
-
-  const { data: conversation, error: lookupError } = await db
-    .from("conversations")
-    .select("id, tenant_id")
-    .eq("zernio_conversation_id", e.message.conversationId)
-    .single();
-  if (lookupError) throw new Error(`conversations lookup failed: ${lookupError.message}`);
-  if (conversation.tenant_id !== tenantId) return rejected("foreign_conversation");
-
-  // The person's Zernio contact, for follow-ups to quiet leads (18 Nov).
-  if (e.message.sender.contactId) {
-    const { error: contactError } = await db
-      .from("conversations")
-      .update({ zernio_contact_id: e.message.sender.contactId })
-      .eq("id", conversation.id);
-    if (contactError)
-      throw new Error(`conversation contact update failed: ${contactError.message}`);
-  }
-
-  // The 24-hour reply window (§7.4) runs from the latest customer message.
-  const { error: windowError } = await db
-    .from("conversations")
-    .update({ last_customer_message_at: e.message.sentAt })
-    .eq("id", conversation.id)
-    .or(`last_customer_message_at.is.null,last_customer_message_at.lt."${e.message.sentAt}"`);
-  if (windowError) throw new Error(`conversation window update failed: ${windowError.message}`);
+  const recorded = await recordConversation(db, {
+    tenantId,
+    socialAccountId: resolved.accountId,
+    zernioConversationId: e.message.conversationId,
+    platform: account.platform,
+    participantName,
+    participantExternalId: e.message.sender.id,
+    subject: e.metadata?.email?.subject?.trim() || null,
+    zernioContactId: e.message.sender.contactId ?? null,
+    customerMessageAt: e.message.sentAt,
+  });
+  if ("foreign" in recorded) return rejected("foreign_conversation");
+  const conversation = { id: recorded.conversationId };
 
   const { created } = await insertInboundItem(db, {
     kind: "dm",

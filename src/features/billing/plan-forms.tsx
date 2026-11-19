@@ -6,6 +6,7 @@ import { PlanBees } from "@/components/app/bee-plan";
 import { BeeDance } from "@/components/app/bee-setup";
 import { Button } from "@/components/ui/button";
 import type { PlanActionState } from "./plan-actions";
+import { BUSINESS_CALL_URL, PROMOTED_PLAN, type PlanId } from "./plans";
 
 type Action = (prev: PlanActionState, formData: FormData) => Promise<PlanActionState>;
 
@@ -52,7 +53,7 @@ export function PlanButton({
 }
 
 export interface PlanCardData {
-  id: "solo" | "business" | "team";
+  id: PlanId;
   name: string;
   monthlyUsd: number;
   yearlyUsd: number | null;
@@ -61,8 +62,9 @@ export interface PlanCardData {
 }
 
 /**
- * Change plan: three cards with their bees, the current plan in honey, any plan not for sale as coming soon.
- * Monthly or yearly is picked once above the cards.
+ * The plans side by side (Free plan, approved 20 Nov): Free first, then Solo (promoted), Team
+ * and Business. Business is by call only: its button opens Jason's booking page. The current plan
+ * is in honey. Monthly or yearly is picked once above the cards.
  */
 export function PlanCards({
   orgId,
@@ -73,18 +75,17 @@ export function PlanCards({
   mayChange,
   foundingNote,
   action,
-  from,
 }: {
   orgId: string;
   plans: PlanCardData[];
+  /** The organization's plan id ("free" when it has no paid plan). */
   current: string | null;
   currentInterval: "month" | "year" | null;
+  /** On a paid plan (moves are prorated in place). */
   live: boolean;
   mayChange: boolean;
   foundingNote: string | null;
   action: Action;
-  /** "start": chosen on the plan step before setup (checkout comes back into setup). */
-  from?: string;
 }) {
   const [interval, setInterval] = useState<"month" | "year">(currentInterval ?? "month");
   return (
@@ -113,14 +114,20 @@ export function PlanCards({
         </div>
         {foundingNote && <span className="meta">{foundingNote}</span>}
       </div>
-      <div className="grid gap-4 pt-3 md:grid-cols-3">
+      <div className="grid gap-4 pt-3 md:grid-cols-2 xl:grid-cols-4">
         {plans.map((p) => {
-          const isCurrent = live && current === p.id && currentInterval === interval;
-          const price =
-            interval === "year" && p.yearlyUsd !== null
+          const free = p.id === "free";
+          const byCall = p.id === "team" && !p.forSale;
+          const isCurrent = free
+            ? current === "free"
+            : live && current === p.id && currentInterval === interval;
+          const price = free
+            ? "$0 forever"
+            : interval === "year" && p.yearlyUsd !== null
               ? `$${p.yearlyUsd} a year`
               : `$${p.monthlyUsd} a month`;
-          const noYearly = interval === "year" && p.yearlyUsd === null;
+          const noYearly = !free && interval === "year" && p.yearlyUsd === null;
+          const promoted = p.id === PROMOTED_PLAN && !live;
           return (
             <div
               key={p.id}
@@ -129,24 +136,31 @@ export function PlanCards({
                 isCurrent
                   ? "border-honey border-2 shadow-[0_6px_24px_rgba(246,178,27,0.18)]"
                   : "border-line",
-                !p.forSale && "opacity-80",
               )}
             >
-              {isCurrent && (
+              {isCurrent ? (
                 <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
                   Your plan
                 </span>
-              )}
-              {!p.forSale && (
-                <span className="bg-subtle text-ink-2 absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
-                  Coming soon
-                </span>
+              ) : (
+                promoted && (
+                  <span className="bg-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white">
+                    Most picked
+                  </span>
+                )
               )}
               <PlanBees plan={p.id} />
               <b className="font-display text-[22px] font-semibold">{p.name}</b>
-              <b className="text-lg font-semibold">
-                {noYearly ? `$${p.monthlyUsd} a month` : price}
-              </b>
+              {byCall ? (
+                <span className="flex flex-col">
+                  <b className="text-lg font-semibold">Priced for you</b>
+                  <span className="meta">10 or more accounts, after a short call</span>
+                </span>
+              ) : (
+                <b className="text-lg font-semibold">
+                  {noYearly ? `$${p.monthlyUsd} a month` : price}
+                </b>
+              )}
               <ul className="flex flex-col gap-2 text-sm">
                 {p.bullets.map((b) => (
                   <li key={b} className="flex items-start gap-2">
@@ -158,18 +172,31 @@ export function PlanCards({
                 ))}
               </ul>
               <div className="mt-auto pt-2">
-                {!p.forSale ? (
-                  <span className="meta">Not for sale yet.</span>
-                ) : isCurrent ? (
-                  <span className="meta">You&apos;re on this plan.</span>
+                {isCurrent ? (
+                  <span className="meta">
+                    {free ? "You’re on Free. No card, no time limit." : "You’re on this plan."}
+                  </span>
+                ) : byCall ? (
+                  <a
+                    href={BUSINESS_CALL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="border-ink text-ink hover:bg-subtle inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-semibold"
+                  >
+                    Book a call
+                  </a>
+                ) : free ? (
+                  <span className="meta">Cancel your plan in Stripe to go back to Free.</span>
+                ) : !p.forSale ? (
+                  <span className="meta">Not for sale right now.</span>
                 ) : noYearly ? (
                   <span className="meta">Monthly only for now.</span>
                 ) : mayChange ? (
                   <PlanButton
                     action={action}
-                    fields={{ orgId, plan: p.id, interval, ...(from ? { from } : {}) }}
-                    label={live ? `Move to ${p.name}` : "Start 7 days free"}
-                    honey={!live && p.id === "business"}
+                    fields={{ orgId, plan: p.id, interval }}
+                    label={live ? `Move to ${p.name}` : `Upgrade to ${p.name}`}
+                    honey={promoted}
                     className="items-start"
                   />
                 ) : (

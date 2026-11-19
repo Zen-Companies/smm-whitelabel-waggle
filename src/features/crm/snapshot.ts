@@ -7,6 +7,7 @@ import type { ServiceClient } from "@/lib/supabase/service";
 import type { CrmSnapshot } from "./fields";
 
 const LIVE = new Set(["trialing", "active", "past_due"]);
+const ENDING = new Set<CrmEvent>(["canceled", "trial_expired"]);
 const DAY_MS = 24 * 60 * 60_000;
 
 export interface CrmContact {
@@ -55,7 +56,8 @@ export async function loadSnapshot(
     eventAt: now,
     details: (row.details ?? {}) as Record<string, unknown>,
     business: brands.data?.[0]?.name ?? "",
-    planId: live ? bill!.plan : (bill?.plan ?? null),
+    // No paid plan is Free (19 Nov); an ending event still names the plan that ended.
+    planId: live ? bill!.plan : ENDING.has(row.event) && bill?.plan ? bill.plan : "free",
     founding: !!bill?.founding,
     status: bill?.status ?? null,
     trialEndsAt: bill?.trial_ends_at ?? null,

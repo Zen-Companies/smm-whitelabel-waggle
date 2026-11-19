@@ -2,13 +2,13 @@ import { TimeZoneCookie } from "@/components/app/time-zone-cookie";
 
 import { Suspense } from "react";
 
-import { AccountBanner } from "@/features/accounts";
+import { AccountBanner, FirstConnectTag } from "@/features/accounts";
 
 import { Bell } from "@/features/alerts";
 
 import { NEEDS_OWNER } from "@/features/approvals";
 
-import { PlanChip, PlanMenuRow, requirePlan } from "@/features/billing";
+import { PlanChip, PlanMenuRow } from "@/features/billing";
 
 import { touchActivity } from "@/features/crm";
 
@@ -46,16 +46,11 @@ async function Header() {
   );
 }
 
-/** Plan before setup (18 Nov): an organization without a plan goes to the plan step. */
-
-async function PlanGate() {
+/** The ads' ConnectAccount event, once, after the organization's first connect (19 Nov). */
+async function ConnectTag() {
   const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
-
   const org = orgs.find((o) => o.id === tenant.organizationId);
-
-  await requirePlan(tenant.organizationId, org?.role ?? null);
-
-  return null;
+  return <FirstConnectTag orgId={tenant.organizationId} isOwner={org?.role === "owner"} />;
 }
 
 async function DashboardFeedback() {
@@ -92,11 +87,11 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
       <TimeZoneCookie />
 
       <Suspense fallback={null}>
-        <PlanGate />
+        <DashboardFeedback />
       </Suspense>
 
       <Suspense fallback={null}>
-        <DashboardFeedback />
+        <ConnectTag />
       </Suspense>
     </div>
   );

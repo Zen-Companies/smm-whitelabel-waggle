@@ -170,7 +170,8 @@ describe("crm queue", () => {
       utm_source: "meta",
       utm_campaign: "launch",
     });
-    expect(calls[0]?.upsert?.fields.waggle_plan ?? "").toBe("");
+    // No paid plan is Free (19 Nov).
+    expect(calls[0]?.upsert?.fields.waggle_plan).toBe("free");
     expect(calls[1]).toEqual({ tags: ["waggle-app-event", "waggle-signup"] });
   });
 

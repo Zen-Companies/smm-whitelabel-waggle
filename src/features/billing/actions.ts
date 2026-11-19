@@ -6,7 +6,7 @@ import { writeAudit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { parseCapInput } from "./ai-cap";
-import { parsePlanSettings, type PlanId } from "./plans";
+import { parsePlanSettings, PLAN_IDS } from "./plans";
 import { hasPermission } from "@/features/staff";
 
 export type CapFormState = { saved?: boolean; error?: string };
@@ -61,7 +61,7 @@ export async function updatePlanSettings(
 ): Promise<PlanSettingsState> {
   const user = await getCurrentUser();
   if (!(await hasPermission("admin.caps.manage"))) return { error: "Not available." };
-  const ids: PlanId[] = ["solo", "business", "team"];
+  const ids = PLAN_IDS;
   const parsed = [];
   for (const id of ids) {
     const r = parsePlanSettings(id, (field) => formData.get(`${id}.${field}`));

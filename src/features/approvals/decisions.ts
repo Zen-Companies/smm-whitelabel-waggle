@@ -1,5 +1,6 @@
 import { transitionItem } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { queueForOwners, queueQuietly } from "@/lib/crm";
 import type { SocialProvider } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { setCommentHidden } from "./hide-spam";
@@ -113,6 +114,20 @@ export async function approveDraft(
     .update({ next_run_at: new Date(Date.now() + UNDO_WINDOW_MS).toISOString() })
     .eq("id", item.id)
     .eq("status", "sending");
+  // CRM: the organization's first approved draft (once; the dedupe key holds it). Atlas's funnel
+  // (19 Nov): signed up → connected → approved a first draft → came back → paid.
+  await queueQuietly(async () => {
+    const { data: t } = await db
+      .from("tenants")
+      .select("organization_id")
+      .eq("id", input.tenantId)
+      .maybeSingle();
+    if (!t?.organization_id) return;
+    await queueForOwners(db, t.organization_id, {
+      event: "first_reply_approved",
+      dedupeKey: `first_reply_approved:${t.organization_id}`,
+    });
+  });
   return { ok: true };
 }
 

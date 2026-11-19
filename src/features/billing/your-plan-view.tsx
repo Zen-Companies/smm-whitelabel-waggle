@@ -16,12 +16,16 @@ import {
   accountAllowance,
   EXTRAS,
   FOUNDING,
-  isPlanId,
+  isPaidPlanId,
   planBullets,
+  PLAN_IDS,
   PLANS,
   TRIAL,
+  type PaidPlanId,
+  type Plan,
   type PlanId,
 } from "./plans";
+import { UPGRADE, upgradeLabel, upgradeLine, type UpgradeReason } from "./upgrade";
 import { NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 import { getStripe } from "./stripe-client";
 import { planIsLive } from "./subscription";
@@ -82,7 +86,7 @@ export function priceLine(
   /** The founding price applies right now. */
   founding: boolean;
 } {
-  const plan = isPlanId(bill.plan) ? PLANS[bill.plan] : PLANS.business;
+  const plan = isPaidPlanId(bill.plan) ? PLANS[bill.plan] : PLANS.business;
   if (bill.billing_interval === "year" && plan.yearlyUsd !== null) {
     return {
       line: `$${plan.yearlyUsd} a year. Paid yearly · no contract.`,
@@ -144,10 +148,13 @@ async function loadCardLabel(bill: BillingRecord): Promise<string | null> {
 export async function YourPlanSection({
   org,
   notice,
+  upgrade,
 }: {
   org: YourPlanOrg;
   /** From Stripe's return: "done" or "cancelled" after checkout, "top_up" after buying more. */
   notice?: "done" | "cancelled" | "top_up";
+  /** Opened from a limit: the upgrade screen for it on top (Free plan, 20 Nov). */
+  upgrade?: UpgradeReason;
 }) {
   const db = getServiceClient();
   const now = new Date();
@@ -158,11 +165,11 @@ export async function YourPlanSection({
     loadPlans(db),
   ]);
   const { accounts } = counts;
-  const live = !!bill && planIsLive(bill.status) && isPlanId(bill.plan);
-  const planId: PlanId | null = live && isPlanId(bill!.plan) ? bill!.plan : null;
+  const live = !!bill && planIsLive(bill.status) && isPaidPlanId(bill.plan);
+  const planId: PaidPlanId | null = live && isPaidPlanId(bill!.plan) ? bill!.plan : null;
   const fields = { orgId: org.id };
 
-  const cards: PlanCardData[] = (Object.keys(plans) as PlanId[]).map((id) => ({
+  const cards: PlanCardData[] = PLAN_IDS.map((id) => ({
     id,
     name: plans[id].name,
     monthlyUsd: plans[id].monthlyUsd,
@@ -185,38 +192,14 @@ export async function YourPlanSection({
     </div>
   );
 
-  // Stripe not connected on this server yet (no STRIPE_SECRET_KEY) and no plan: what's counted,
-  // and plans coming soon, never buttons that can't work. The full page appears once the keys are set.
-  if (!getStripe() && !planId) {
-    return (
-      <div className="flex max-w-[720px] flex-col gap-5">
-        {intro}
-        <section className="card flex flex-col p-5">
-          <div className="border-line flex justify-between gap-4 border-b py-2.5">
-            <span className="text-ink-2">Brands</span>
-            <b className="font-semibold">{counts.brands}</b>
-          </div>
-          <div className="border-line flex justify-between gap-4 border-b py-2.5">
-            <span className="text-ink-2">Connected accounts</span>
-            <b className="font-semibold">{accounts}</b>
-          </div>
-          <div className="flex justify-between gap-4 py-2.5">
-            <span className="text-ink-2">Plans and prices</span>
-            <span className="text-ink-3">Coming soon</span>
-          </div>
-        </section>
-        {!org.isOwner && (
-          <p className="meta">You see what&apos;s counted, not the card or invoices.</p>
-        )}
-      </div>
-    );
-  }
-
-  // No plan yet (or it ended): choose one.
+  // Free (19 Nov): no paid plan, or it ended. What's used, the upgrade, then the plans.
   if (!planId || !bill) {
     const ended = bill?.status === "canceled" && bill.current_period_end;
+    const free = plans.free;
+    const status = await loadReplyLimit(db, org.id, now);
+    const limit = status?.limit ?? replyLimit(0, free.replies, now);
     return (
-      <div className="flex max-w-[960px] flex-col gap-5">
+      <div className="flex max-w-[1100px] flex-col gap-5">
         {intro}
         {notice === "done" && (
           <p
@@ -229,35 +212,87 @@ export async function YourPlanSection({
         )}
         {notice === "cancelled" && (
           <p className="text-ink-2 text-sm" role="status">
-            Nothing was charged. Pick a plan whenever you&apos;re ready.
+            Nothing was charged. You&apos;re still on Free.
           </p>
         )}
-        <section className="card hexbg border-honey-border flex flex-wrap items-center gap-5 border p-6">
-          <PlanBees plan="business" />
-          <div className="flex min-w-[240px] flex-1 flex-col gap-1">
-            <h3 className="font-display text-[26px] font-semibold">
-              {ended ? "Your plan has ended" : "Choose your plan"}
-            </h3>
-            <p className="text-ink-2 text-sm">
-              {ended
-                ? `It ended on ${day(bill!.current_period_end!)}. Waggle isn't writing replies until you choose a plan again. Your brands, inbox and posts are all still here.`
-                : `${TRIAL.days} days free, card up front. Cancel any time before day ${TRIAL.days} and you pay nothing.`}
-            </p>
-          </div>
-        </section>
-        <section id="change-plan" className="flex flex-col gap-3">
-          <PlanCards
+        {upgrade && (
+          <UpgradePanel
+            reason={upgrade}
             orgId={org.id}
-            plans={cards}
-            current={null}
-            currentInterval={null}
+            isOwner={org.isOwner}
+            owners={owners}
+            plans={plans}
             live={false}
-            mayChange={org.isOwner}
-            foundingNote={foundingNote}
-            action={choosePlan}
           />
+        )}
+        <section className="card hexbg border-honey-border flex flex-col gap-4 border p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center gap-5">
+              <PlanBees plan="free" />
+              <div className="flex flex-col gap-1">
+                <h3 className="font-display text-[30px] leading-tight font-semibold">Free</h3>
+                <span className="text-ink-2 text-sm">
+                  {ended
+                    ? `Your paid plan ended on ${day(bill!.current_period_end!)}. You’re on Free now: everything you set up is still here.`
+                    : "No card, no time limit. Waggle drafts, you approve."}
+                </span>
+              </div>
+            </div>
+            {org.isOwner && getStripe() && (
+              <PlanButton
+                action={choosePlan}
+                fields={{ ...fields, plan: "solo", interval: "month" }}
+                label={`Upgrade to ${plans.solo.name}`}
+                honey
+              />
+            )}
+          </div>
+          <div className="text-ink-2 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
+            <span className="flex items-center gap-3">
+              <CombMeter used={limit.used} allowance={limit.allowance} size={11} />
+              <span>
+                <b className="text-ink">
+                  {limit.used} of {limit.allowance}
+                </b>{" "}
+                replies this month · resets {day(limit.resetsAt)}
+              </span>
+            </span>
+            <span>
+              <b className="text-ink">
+                {accounts} of {free.accounts}
+              </b>{" "}
+              account{free.accounts === 1 ? "" : "s"} connected
+            </span>
+          </div>
+          <span className="meta">
+            Replies count when you approve a draft. Extra accounts (${EXTRAS.accountUsd} each) and
+            reply top-ups (${EXTRAS.topUp.usd} for {EXTRAS.topUp.replies}) are on paid plans.{" "}
+            {upgradeLine("top_up")}
+          </span>
         </section>
-        <Counted accounts={accounts} />
+        {getStripe() ? (
+          <section id="change-plan" className="flex scroll-mt-6 flex-col gap-3">
+            <h3 className="text-base font-semibold">Plans</h3>
+            <PlanCards
+              orgId={org.id}
+              plans={cards}
+              current="free"
+              currentInterval={null}
+              live={false}
+              mayChange={org.isOwner}
+              foundingNote={foundingNote}
+              action={choosePlan}
+            />
+            <span className="meta">
+              Paid plans are charged at checkout. Cancel any time and you go back to Free.
+            </span>
+          </section>
+        ) : (
+          <p className="meta">Paid plans aren&apos;t set up on this server yet.</p>
+        )}
+        {!org.isOwner && (
+          <p className="meta">You see what&apos;s counted, not the card or invoices.</p>
+        )}
       </div>
     );
   }
@@ -298,6 +333,18 @@ export async function YourPlanSection({
           <b>{EXTRAS.topUp.replies} more replies are on their way.</b> They show here in a few
           seconds, and Stripe emails the receipt.
         </p>
+      )}
+
+      {upgrade && PLAN_IDS.indexOf(UPGRADE[upgrade].plan) > PLAN_IDS.indexOf(planId) && (
+        <UpgradePanel
+          reason={upgrade}
+          orgId={org.id}
+          isOwner={org.isOwner}
+          owners={owners}
+          plans={plans}
+          live
+          interval={bill.billing_interval === "year" ? "year" : "month"}
+        />
       )}
 
       {bill.status === "past_due" && (
@@ -573,11 +620,80 @@ export async function YourPlanSection({
   );
 }
 
-function Counted({ accounts }: { accounts: number }) {
+/**
+ * The upgrade screen (Free plan, approved 20 Nov): one screen, opened from every limit
+ * (`/plan?upgrade=<reason>`). Its title says which limit was hit, then "To …, upgrade to Solo or
+ * above" and the plan that lifts it. Never an add-on.
+ */
+function UpgradePanel({
+  reason,
+  orgId,
+  isOwner,
+  owners,
+  plans,
+  live,
+  interval = "month",
+}: {
+  reason: UpgradeReason;
+  orgId: string;
+  isOwner: boolean;
+  owners: string;
+  plans: Record<PlanId, Plan>;
+  live: boolean;
+  interval?: "month" | "year";
+}) {
+  const copy = UPGRADE[reason];
+  const target = plans[copy.plan];
   return (
-    <p className="meta">
-      Connected accounts right now: {accounts}. Each plan includes some; extras are $
-      {EXTRAS.accountUsd} a month each.
-    </p>
+    <section
+      id="upgrade"
+      aria-labelledby="upgrade-title"
+      className="border-honey bg-surface flex scroll-mt-6 flex-col gap-3 rounded-2xl border-2 p-6 shadow-[0_18px_50px_rgba(23,20,15,0.10)]"
+    >
+      <span className="text-honey-text text-xs font-bold tracking-wide uppercase">
+        {live ? "Plan limit" : "Free plan limit"}
+      </span>
+      <h3 id="upgrade-title" className="font-display text-[24px] leading-tight font-semibold">
+        {copy.title}
+      </h3>
+      <p className="text-ink-2 max-w-[640px]">{copy.why}</p>
+      <b className="text-[15px]">{upgradeLine(reason)}</b>
+      <div className="bg-page border-line flex max-w-[480px] flex-col gap-1.5 rounded-xl border px-4 py-3.5 text-sm">
+        <span className="flex justify-between gap-4">
+          <b className="font-display text-lg font-semibold">{target.name}</b>
+          <b>${target.monthlyUsd}/mo</b>
+        </span>
+        {planBullets(target)
+          .slice(1, 4)
+          .map((b) => (
+            <span key={b} className="text-ink-2">
+              {b}
+            </span>
+          ))}
+      </div>
+      {isOwner ? (
+        <div className="flex flex-wrap items-center gap-4">
+          {getStripe() ? (
+            <PlanButton
+              action={choosePlan}
+              fields={{ orgId, plan: copy.plan, interval }}
+              label={upgradeLabel(reason)}
+              honey
+              className="items-start"
+            />
+          ) : (
+            <span className="meta">Paid plans aren&apos;t set up on this server yet.</span>
+          )}
+          <a href="/plan" className="action-link text-sm">
+            Not now
+          </a>
+        </div>
+      ) : (
+        <p className="text-ink-2 text-sm">Ask {owners} (Owner) to upgrade the plan.</p>
+      )}
+      {!live && (
+        <span className="meta">Card at checkout. Cancel any time and you go back to Free.</span>
+      )}
+    </section>
   );
 }

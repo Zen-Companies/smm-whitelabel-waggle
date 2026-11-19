@@ -7,6 +7,7 @@ import {
   META_PIXEL_ID,
   TIKTOK_ADS_PIXEL_ID,
   TIKTOK_PIXEL_ID,
+  CUSTOM_EVENTS,
   type ConversionEvent,
 } from "./tags";
 
@@ -20,10 +21,12 @@ export interface ConversionTagProps {
   /** Hashed on the server (hash.ts); never a plain email. */
   em?: string;
   externalId: string;
-  /** StartTrial only: the plan's monthly price in US dollars. */
+  /** StartTrial and Subscribe: the plan's monthly price in US dollars. */
   valueUsd?: number;
-  /** StartTrial only: the plan id. */
+  /** StartTrial and Subscribe: the plan id. */
   plan?: string;
+  /** ConnectAccount: the platform connected. */
+  platform?: string;
 }
 
 function optedOut(): boolean {
@@ -84,19 +87,22 @@ export function ConversionTag({
   externalId,
   valueUsd,
   plan,
+  platform,
 }: ConversionTagProps) {
   useEffect(() => {
     if (!enabledHere() || alreadySent(eventId)) return;
     const match = JSON.stringify({ ...(em ? { em } : {}), external_id: externalId });
     const params =
-      event === "StartTrial"
+      event === "StartTrial" || event === "Subscribe"
         ? {
             value: valueUsd ?? 0,
             currency: "USD",
             content_name: plan ?? "plan",
             content_type: "product",
           }
-        : { content_name: "account", status: "registered" };
+        : event === "ConnectAccount"
+          ? { content_name: platform ?? "account", status: "connected" }
+          : { content_name: "account", status: "registered" };
     const ttMatch = JSON.stringify({ ...(em ? { email: em } : {}), external_id: externalId });
     try {
       inject(
@@ -105,7 +111,9 @@ export function ConversionTag({
           `fbq('set','autoConfig',false,'${META_PIXEL_ID}');fbq('init','${META_PIXEL_ID}',${match});`,
       );
       const w = window as Window & { fbq?: (...a: unknown[]) => void };
-      w.fbq?.("track", event, params, { eventID: eventId });
+      w.fbq?.(CUSTOM_EVENTS.includes(event) ? "trackCustom" : "track", event, params, {
+        eventID: eventId,
+      });
     } catch {}
     try {
       inject(
@@ -118,6 +126,6 @@ export function ConversionTag({
       };
       w.ttq?.track(event, params, { event_id: eventId });
     } catch {}
-  }, [event, eventId, em, externalId, valueUsd, plan]);
+  }, [event, eventId, em, externalId, valueUsd, plan, platform]);
   return null;
 }

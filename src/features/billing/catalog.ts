@@ -2,12 +2,12 @@
 // by these lookup keys, so no price id lives in the environment: `pnpm stripe:catalog` creates
 // them once per Stripe account (sandbox or live) and prints the ids.
 
-import { EXTRAS, FOUNDING, PLANS, type PlanId } from "./plans";
+import { EXTRAS, FOUNDING, PAID_PLAN_IDS, PLANS, type PaidPlanId } from "./plans";
 
 export type Interval = "month" | "year";
 
 export const PRICE_KEYS = {
-  plan: (plan: PlanId, interval: Interval) =>
+  plan: (plan: PaidPlanId, interval: Interval) =>
     `waggle_${plan}_${interval === "year" ? "yearly" : "monthly"}`,
   extraAccount: (interval: Interval) =>
     `waggle_extra_account_${interval === "year" ? "yearly" : "monthly"}`,
@@ -35,7 +35,8 @@ const cents = (usd: number) => Math.round(usd * 100);
 
 /** Every product and price Waggle needs in Stripe. */
 export function catalog(): CatalogProduct[] {
-  const plans = (Object.keys(PLANS) as PlanId[]).map((id) => {
+  // Free is no subscription, so it has no product.
+  const plans = PAID_PLAN_IDS.map((id) => {
     const p = PLANS[id];
     const prices: CatalogPrice[] = [
       { lookupKey: PRICE_KEYS.plan(id, "month"), amount: cents(p.monthlyUsd), interval: "month" },

@@ -1,4 +1,5 @@
 export { AccountBanner } from "./account-banner";
+export { FirstConnectTag } from "./first-connect-tag";
 export { AccountsCard, ConnectedCount } from "./accounts-card";
 export { connectAccount } from "./actions";
 export { BrandSetup } from "./brand-setup";

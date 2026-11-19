@@ -1,5 +1,6 @@
 import { AI_CAP_WARN_RATIO, nextMonthStart } from "@/lib/llm/spend";
 import { EXTRAS, PLANS, type PlanId } from "./plans";
+import { upgradeLabel, upgradeLine } from "./upgrade";
 
 // The AI reply limit (Pricing Bible, "When the AI reply limit runs out"). Pure. Only AI drafting
 // pauses at the limit: posting, the inbox, replying by hand and lead and review alerts go on.
@@ -36,7 +37,8 @@ export const NEVER_DARK = "You never go dark. Waggle just stops writing for you 
 
 /**
  * Pure: the owner's note at 80% and 100% (the Bible's words), or null below 80%. `plan` picks
- * the upgrade offer: Solo is offered Business; Business and Team only the top-up.
+ * the offer: Free is only offered Solo (no add-ons, 19 Nov); Solo the top-up or Team; Team and
+ * Business only the top-up.
  */
 export function replyLimitNote(
   limit: ReplyLimit,
@@ -48,8 +50,15 @@ export function replyLimitNote(
   if (limit.level === "warn") {
     return {
       title: `You've used ${limit.used} of ${limit.allowance} replies.`,
-      body: resets,
+      body: plan === "free" ? `${resets} ${upgradeLine("replies")}` : resets,
       offers: [],
+    };
+  }
+  if (plan === "free") {
+    return {
+      title: "Waggle has stopped writing replies for this month.",
+      body: `${NEVER_DARK} Messages still come into your Inbox, and you can answer them yourself. ${resets} ${upgradeLine("replies")}`,
+      offers: [upgradeLabel("replies")],
     };
   }
   return {

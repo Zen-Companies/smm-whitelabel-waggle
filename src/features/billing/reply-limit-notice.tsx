@@ -7,6 +7,7 @@ import { buyTopUpNow, choosePlan } from "./plan-actions";
 import { PlanButton, TopUpButton } from "./plan-forms";
 import { getStripe } from "./stripe-client";
 import { EXTRAS, PLANS } from "./plans";
+import { upgradeHref, upgradeLabel } from "./upgrade";
 
 /** The saved card's label for the confirm line, or null. */
 async function ownerCard(orgId: string): Promise<string | null> {
@@ -58,8 +59,11 @@ export async function ReplyLimitNotice({
             <b>{note.title}</b> {note.body}
           </span>
         </span>
-        <Link href="/plan" className="action-link text-sm">
-          See your plan
+        <Link
+          href={plan.plan === "free" ? upgradeHref("replies") : "/plan"}
+          className="action-link text-sm"
+        >
+          {plan.plan === "free" ? upgradeLabel("replies") : "See your plan"}
         </Link>
       </section>
     );
@@ -75,7 +79,20 @@ export async function ReplyLimitNotice({
         <b className="text-[15px]">{note.title}</b>
       </div>
       <span className="text-ink-2 text-sm">{note.body}</span>
-      {isOwner ? (
+      {plan.plan === "free" ? (
+        // Free: one button, the upgrade screen (no top-ups on Free, 19 Nov).
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href={upgradeHref("replies")}
+            className="bg-ink inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-white"
+          >
+            {upgradeLabel("replies")}
+          </Link>
+          <Link href="/plan" className="action-link text-sm">
+            See your plan
+          </Link>
+        </div>
+      ) : isOwner ? (
         <div className="flex flex-wrap gap-2">
           <TopUpButton
             action={buyTopUpNow}

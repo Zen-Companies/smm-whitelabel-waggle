@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { planAllowsTeam } from "@/features/billing";
+import { planAllowsTeam, upgradeLine } from "@/features/billing";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { can } from "./abilities";
@@ -67,10 +67,10 @@ export async function inviteMember(_prev: InviteState, formData: FormData): Prom
   }
 
   const db = getServiceClient();
-  // Team members and roles come with Business and Team (decided 17 Nov). Off until billing ships.
+  // Team members and roles come with Team and Business (decided 17 Nov).
   if (!(await planAllowsTeam(db, ctx.org.id))) {
     return {
-      error: "Team members come with Business. On Solo, it's just you.",
+      error: `On your plan it's just you. ${upgradeLine("team")} See Your plan.`,
       email: rawEmail,
     };
   }

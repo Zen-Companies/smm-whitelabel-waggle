@@ -2,14 +2,14 @@
 // few fields used, so tests don't need Stripe.
 
 import { FOUNDING_COUPON, type Interval } from "./catalog";
-import { EXTRAS, isPlanId, type PlanId } from "./plans";
+import { EXTRAS, isPaidPlanId, type PaidPlanId } from "./plans";
 
 /** Pure: a Waggle lookup key's plan and interval, or null for anything else (extras, top-ups). */
 export function parsePlanKey(
   key: string | null | undefined,
-): { plan: PlanId; interval: Interval } | null {
+): { plan: PaidPlanId; interval: Interval } | null {
   const m = /^waggle_([a-z]+)_(monthly|yearly)$/.exec(key ?? "");
-  if (!m || !isPlanId(m[1])) return null;
+  if (!m || !isPaidPlanId(m[1])) return null;
   return { plan: m[1], interval: m[2] === "yearly" ? "year" : "month" };
 }
 
@@ -46,7 +46,7 @@ export interface SubscriptionLike {
 export interface BillingRow {
   stripe_customer_id: string;
   stripe_subscription_id: string;
-  plan: PlanId | null;
+  plan: PaidPlanId | null;
   billing_interval: Interval | null;
   status: string;
   trial_ends_at: string | null;

@@ -1339,8 +1339,20 @@ describe("ZernioSocialProvider", () => {
     await expect(
       provider.listConversationMessages({ conversationId: "conv_1", accountId: "acc_1" }),
     ).resolves.toEqual([
-      { id: "m_2", direction: "outgoing", text: "Hi!", createdAt: "2026-10-28T10:01:00Z" },
-      { id: "m_1", direction: "incoming", text: null, createdAt: "2026-10-28T10:00:00Z" },
+      {
+        id: "m_2",
+        direction: "outgoing",
+        text: "Hi!",
+        createdAt: "2026-10-28T10:01:00Z",
+        senderName: null,
+      },
+      {
+        id: "m_1",
+        direction: "incoming",
+        text: null,
+        createdAt: "2026-10-28T10:00:00Z",
+        senderName: null,
+      },
     ]);
     const [req] = captured;
     expect(req.url.pathname).toBe("/api/v1/inbox/conversations/conv_1/messages");
@@ -1445,6 +1457,92 @@ describe("ZernioSocialProvider", () => {
       { id: "c_2", text: "Yes!", authorName: "Cafe", fromOwner: true, createdAt: null },
     ]);
     expect(captured[0].url.pathname).toBe("/api/v1/inbox/comments/1789");
+  });
+
+  it("listCommentedPostsPage follows the cursor and returns the next one (catch-up)", async () => {
+    respond = () =>
+      json({
+        data: [{ id: "1789" }, { id: "1790" }, { id: "1789" }],
+        pagination: { hasMore: true, nextCursor: "cur_2" },
+      });
+    await expect(
+      provider.listCommentedPostsPage({
+        accountId: "acc_1",
+        since: new Date("2026-08-22T12:00:00Z"),
+        cursor: "cur_1",
+        limit: 25,
+      }),
+    ).resolves.toEqual({ postIds: ["1789", "1790"], nextCursor: "cur_2" });
+    expect(Object.fromEntries(captured[0].url.searchParams)).toEqual({
+      accountId: "acc_1",
+      since: "2026-08-22T12:00:00.000Z",
+      limit: "25",
+      minComments: "1",
+      sortBy: "date",
+      sortOrder: "desc",
+      cursor: "cur_1",
+    });
+  });
+
+  it("listPostCommentsPage marks comments the account already answered (catch-up)", async () => {
+    respond = () =>
+      json({
+        comments: [
+          {
+            id: "c_1",
+            message: "Open Sunday?",
+            createdTime: "2026-11-19T10:01:00Z",
+            from: { username: "mika.r", isOwner: false },
+            replies: [{ id: "r_1", from: { isOwner: true } }],
+          },
+          { id: "c_2", message: "Price?", from: { username: "jo", isOwner: false }, replies: [] },
+        ],
+        pagination: { hasMore: true, cursor: "p_2" },
+      });
+    const page = await provider.listPostCommentsPage({ accountId: "acc_1", postId: "1789" });
+    expect(page.nextCursor).toBe("p_2");
+    expect(page.comments.map((c) => [c.id, c.ownerReplied])).toEqual([
+      ["c_1", true],
+      ["c_2", false],
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/inbox/comments/1789");
+
+    respond = () => json({ comments: [], pagination: { hasMore: false } });
+    await expect(
+      provider.listPostCommentsPage({ accountId: "acc_1", postId: "1789", cursor: "p_2" }),
+    ).resolves.toEqual({ comments: [], nextCursor: null });
+    expect(captured[1].url.searchParams.get("cursor")).toBe("p_2");
+  });
+
+  it("listConversations reads one account's conversations, newest first (catch-up)", async () => {
+    respond = () =>
+      json({
+        data: [
+          {
+            id: "conv_1",
+            platform: "instagram",
+            accountId: "acc_1",
+            participantId: "ig_9",
+            participantName: "Mika",
+            updatedTime: "2026-11-19T10:00:00Z",
+          },
+        ],
+        pagination: { hasMore: false, nextCursor: null },
+      });
+    await expect(provider.listConversations({ accountId: "acc_1" })).resolves.toEqual([
+      {
+        id: "conv_1",
+        participantId: "ig_9",
+        participantName: "Mika",
+        updatedTime: "2026-11-19T10:00:00Z",
+      },
+    ]);
+    expect(captured[0].url.pathname).toBe("/api/v1/inbox/conversations");
+    expect(Object.fromEntries(captured[0].url.searchParams)).toEqual({
+      accountId: "acc_1",
+      limit: "100",
+      sortOrder: "desc",
+    });
   });
 
   it("getUsageByProfile reads the cycle's spend per profile (T17)", async () => {

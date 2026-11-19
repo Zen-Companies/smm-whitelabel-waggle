@@ -98,10 +98,26 @@ export type ProviderPostStatus =
   | "cancelled";
 
 export interface ProviderMessage {
+  /** The platform's own message id (Meta's `mid`), the webhook's `message.platformMessageId`. */
   id: string;
   direction: "incoming" | "outgoing";
   text: string | null;
   createdAt: string;
+  /** Who wrote it, when the platform says (first-connect catch-up). */
+  senderName?: string | null;
+}
+
+/**
+ * A DM conversation of one account (`GET /v1/inbox/conversations`, docs.zernio.com
+ * /messages/list-inbox-conversations). On Instagram/Facebook it includes the history Zernio
+ * replays from Meta at connect (up to 500 conversations, stored as read, no webhooks).
+ */
+export interface ProviderConversation {
+  /** Opaque; the same id inbox webhooks carry as `conversationId`. */
+  id: string;
+  participantId: string | null;
+  participantName: string | null;
+  updatedTime: string | null;
 }
 
 export interface ProviderCommentReply {
@@ -145,6 +161,8 @@ export interface ProviderComment {
   authorName: string | null;
   fromOwner: boolean;
   createdAt: string | null;
+  /** One of the replies Zernio carries inline is the account's own (first-connect catch-up). */
+  ownerReplied?: boolean;
 }
 
 /** A review (recommendation) on a connected Facebook Page (T42). Ids are Zernio's. */
@@ -1340,6 +1358,39 @@ export interface SocialProvider {
       limit?: number;
     } & CallOptions,
   ): Promise<ProviderComment[]>;
+  /**
+   * First-connect catch-up: one page of an account's commented posts created since `since`
+   * (`GET /v1/inbox/comments`, default sort so `nextCursor` is coherent; docs.zernio.com
+   * /comments/list-inbox-comments). A page can be empty while `nextCursor` is set.
+   */
+  listCommentedPostsPage(
+    input: {
+      accountId: string;
+      since: Date;
+      cursor?: string | null;
+      limit?: number;
+    } & CallOptions,
+  ): Promise<{ postIds: string[]; nextCursor: string | null }>;
+  /**
+   * First-connect catch-up: one page of a post's top-level comments, with whether the account
+   * already replied inline (`GET /v1/inbox/comments/{postId}`, `pagination.cursor`;
+   * docs.zernio.com/comments/get-inbox-post-comments).
+   */
+  listPostCommentsPage(
+    input: {
+      accountId: string;
+      postId: string;
+      cursor?: string | null;
+      limit?: number;
+    } & CallOptions,
+  ): Promise<{ comments: ProviderComment[]; nextCursor: string | null }>;
+  /**
+   * First-connect catch-up: an account's DM conversations, most recently updated first, one page
+   * of up to 100 (`GET /v1/inbox/conversations`; Zernio has no further pages for this call).
+   */
+  listConversations(
+    input: { accountId: string; limit?: number } & CallOptions,
+  ): Promise<ProviderConversation[]>;
   /** `GET /v1/usage?range=cycle&groupBy=profile`; null where usage isn't available (mock). */
   getUsageByProfile(input?: CallOptions): Promise<ProviderUsage | null>;
   /** A cheap read (list one profile). Throws like any call; used to see whether a pause ended. */
