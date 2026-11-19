@@ -1370,7 +1370,12 @@ export interface SocialProvider {
       cursor?: string | null;
       limit?: number;
     } & CallOptions,
-  ): Promise<{ postIds: string[]; nextCursor: string | null }>;
+  ): Promise<{
+    postIds: string[];
+    /** The same posts with their captions (`content`), for the first-connect reveal's labels. */
+    posts?: { id: string; caption: string | null }[];
+    nextCursor: string | null;
+  }>;
   /**
    * First-connect catch-up: one page of a post's top-level comments, with whether the account
    * already replied inline (`GET /v1/inbox/comments/{postId}`, `pagination.cursor`;
@@ -1387,6 +1392,8 @@ export interface SocialProvider {
   /**
    * First-connect catch-up: an account's DM conversations, most recently updated first, one page
    * of up to 100 (`GET /v1/inbox/conversations`; Zernio has no further pages for this call).
+   * Throws a SocialProviderError with code DM_ACCESS_MISSING when Zernio couldn't read the
+   * account's messages (see isDmAccessMissing).
    */
   listConversations(
     input: { accountId: string; limit?: number } & CallOptions,
@@ -1428,3 +1435,14 @@ export class SocialProviderError extends Error {
   }
 }
 export type { WhatsAppTemplate } from "./whatsapp-templates";
+
+/**
+ * First connect (20 Nov): listing an account's conversations answers 200 even when that account
+ * failed: Zernio reports it in `meta.failedAccounts` (with `retryAfter` for a rate limit) or, for
+ * an account "not enabled" for messages, in `meta.accountsSkipped`
+ * (docs.zernio.com/messages/list-inbox-conversations). Either one, except a rate limit, means
+ * Waggle can't read the DMs: the adapter throws this code.
+ */
+export const DM_ACCESS_MISSING = "DM_ACCESS_MISSING";
+export const isDmAccessMissing = (error: unknown): boolean =>
+  error instanceof SocialProviderError && error.details.code === DM_ACCESS_MISSING;

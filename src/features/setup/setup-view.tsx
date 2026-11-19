@@ -2,13 +2,14 @@ import { getServiceClient } from "@/lib/supabase/service";
 import { loadPlatformStatuses, statusOf } from "@/features/platforms";
 import { Check } from "lucide-react";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, type ReactNode } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { BeeBySend, BeeDance, BeeOnItsOwn } from "@/components/app/bee-setup";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { StateMark } from "@/components/app/state-mark";
 import { connectAccount } from "@/features/accounts";
-import { planAllowsAutoReply, upgradeHref, upgradeLabel } from "@/features/billing";
+import { orgOnFree, planAllowsAutoReply, upgradeHref, upgradeLabel } from "@/features/billing";
+import { loadCatchUpProgress, loadTopQuestions, ReadingInbox } from "@/features/catch-up";
 import { HelpButton } from "@/features/feedback";
 import { TryIt } from "@/features/lab";
 import { can } from "@/features/orgs";
@@ -23,6 +24,13 @@ import {
 import { createServerSupabase } from "@/lib/supabase/server";
 import { saveAnswersStep, saveBusinessStep, saveRepliesStep } from "./actions";
 import { nextReadyStep, PRACTICE_GOAL } from "./checklist";
+import {
+  commonForLabel,
+  questionSeeds,
+  type ConnectProblem,
+  type QuestionSeed,
+} from "./first-connect";
+import { InAppGate } from "./in-app-gate";
 import { KindPicker } from "./kind-picker";
 import { QuestionsEditor } from "./questions-editor";
 import { loadReadySteps } from "./ready-data";
@@ -60,6 +68,12 @@ const MORE_ACCOUNTS = PLATFORM_IDS.filter(
 );
 const LATER_ACCOUNTS = PLATFORM_IDS.filter((id) => hasSetupCard(id));
 
+/** Step 2's Connect buttons, behind the in-app browser note when there is one. */
+function ConnectGate({ inApp, children }: { inApp: string | null; children: ReactNode }) {
+  const list = <div className="flex flex-col gap-5">{children}</div>;
+  return inApp ? <InAppGate app={inApp}>{list}</InAppGate> : list;
+}
+
 function SkipLink({ to }: { to: SetupStepNumber }) {
   return (
     <Link href={`/setup?step=${to}`} className="action-link">
@@ -77,11 +91,17 @@ export async function SetupView({
   step: requested,
   connecting,
   more = false,
+  inApp = null,
+  problem = null,
 }: {
   step: SetupStepNumber | null;
   connecting?: string;
   /** Step 2 with every place to connect open. */
   more?: boolean;
+  /** Open inside Instagram's or Facebook's own browser (first connect, 20 Nov). */
+  inApp?: string | null;
+  /** The connect flow came back with an error. */
+  problem?: ConnectProblem | null;
 }) {
   // Staff → Platforms (18 Nov): only Available platforms are offered here.
   const statuses = await loadPlatformStatuses(getServiceClient());
@@ -120,14 +140,38 @@ export async function SetupView({
   const kind = kindFromProfile(profile);
   const description = kind ? profile.split("\n").slice(1).join("\n") : profile;
   const custom = customKindFromProfile(profile);
-  // Step 3's suggestions: the kind's three, or for Something else, ones for what they typed.
+  // First connect (approved 20 Nov): step 2 shows the live counters while Waggle reads, steps 3
+  // and 4 use what the customers really asked, step 6 leads to the reveal.
+  const service = getServiceClient();
+  const [progress, top, onFree] = await Promise.all([
+    step === 2 || step === 6 ? loadCatchUpProgress(service, tenant.id) : null,
+    step === 3 || step === 4 ? loadTopQuestions(service, tenant.id) : [],
+    step === 2 ? orgOnFree(service, tenant.organizationId) : false,
+  ]);
+  // Step 3's suggestions: the kind's three, or for Something else, ones for what they typed
+  // (not asked for when the customers' own questions already fill the step).
   const ai =
-    step === 3 && kind?.key === "other" && custom
+    step === 3 && kind?.key === "other" && custom && top.length < 3
       ? await suggestedQuestions(tenant.id, custom)
       : null;
   const questionKind = kind ?? BUSINESS_KINDS[BUSINESS_KINDS.length - 1];
   const suggested = ai ? ai.slice(0, 3) : [...questionKind.questions];
   const moreQuestions = ai ? ai.slice(3) : [...questionKind.more];
+  const suggestedFor = ai
+    ? custom.toLowerCase()
+    : kind && kind.key !== "other"
+      ? kind.label.toLowerCase()
+      : "";
+  const seeds: QuestionSeed[] = top.length
+    ? questionSeeds(top, suggested, commonForLabel(kind?.key ?? null, custom))
+    : suggested.map((question) => ({
+        question,
+        asked: null,
+        items: [],
+        unsure: 0,
+        tag: suggestedFor ? `Suggested for ${suggestedFor}` : "Suggested",
+      }));
+  const reading = step === 2 && !!progress && progress.phase !== "ready" && !more && !problem;
   const connected = new Set((accounts ?? []).map((a) => a.platform));
   const allowed = can(tenant.role, "brand.settings");
 
@@ -199,16 +243,24 @@ export async function SetupView({
         </section>
       )}
 
-      {step === 2 && (
+      {reading && progress && (
+        <ReadingInbox
+          initial={progress}
+          next={{ href: "/setup?step=3", label: "Next: your top answers" }}
+        />
+      )}
+
+      {step === 2 && !reading && (
         <section className="flex flex-col gap-5">
           <div>
-            <h1 className="page-title">Where do customers message you?</h1>
+            <h1 className="page-title">
+              Connect Instagram or Facebook and we’ll show you who’s been waiting.
+            </h1>
             <p className="text-ink-2 mt-1">
-              Connect at least one. Waggle reads new messages only, never your old ones, and never
-              posts without you.
+              Waggle reads your last 30 days. Nothing is posted or sent until you tap approve.
             </p>
           </div>
-          {connecting && !connected.has(connecting) && (
+          {connecting && !connected.has(connecting) && !problem && (
             <p role="status" className="card p-4 text-sm">
               {platformLabel(connecting)} is connecting. It shows up here in a moment.{" "}
               <Link href="/setup?step=2" className="link-inline">
@@ -216,53 +268,72 @@ export async function SetupView({
               </Link>
             </p>
           )}
-          <ul className="card divide-line flex flex-col divide-y">
-            {FIRST_ACCOUNTS.map((a) => (
-              <li key={a.platform} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                <PlatformMark platform={a.platform} size={32} />
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <b className="font-semibold">{platformLabel(a.platform)}</b>
-                  <span className="text-ink-3 text-sm">{a.does}</span>
-                </span>
-                {connected.has(a.platform) ? (
-                  <span className="text-success flex items-center gap-1.5 text-sm font-semibold">
-                    <Check className="size-4" strokeWidth={2.2} aria-hidden /> Connected
-                  </span>
-                ) : (
+          {problem?.kind === "message" && (
+            <p
+              role="alert"
+              className="border-danger-border bg-danger-soft text-danger rounded-xl border p-4 text-sm"
+            >
+              {problem.text}
+            </p>
+          )}
+          {problem?.kind === "instagram-personal" ? (
+            <div className="border-danger-border bg-danger-soft rounded-xl border p-5">
+              <h2 className="section-title">This Instagram is a personal account</h2>
+              <p className="text-ink-2 mt-1 text-sm">
+                Instagram only lets apps read business inboxes. It takes about a minute to switch,
+                and you keep your posts and followers:
+              </p>
+              <ol className="text-ink-2 mt-2 list-decimal space-y-1 pl-5 text-sm">
+                <li>In Instagram, open Settings → Account type and tools.</li>
+                <li>Tap Switch to professional account, then Business.</li>
+                <li>Come back here and tap Connect again.</li>
+              </ol>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <form action={connectAccount}>
+                  <input type="hidden" name="platform" value="instagram" />
+                  <input type="hidden" name="back" value="setup" />
+                  <Button type="submit" variant="primary">
+                    Connect again
+                  </Button>
+                </form>
+                {!connected.has("facebook") && (
                   <form action={connectAccount}>
-                    <input type="hidden" name="platform" value={a.platform} />
+                    <input type="hidden" name="platform" value="facebook" />
                     <input type="hidden" name="back" value="setup" />
                     <Button type="submit" variant="secondary">
-                      Connect
+                      Connect Facebook instead
                     </Button>
                   </form>
                 )}
-              </li>
-            ))}
-          </ul>
-          {more ? (
-            <>
+              </div>
+            </div>
+          ) : (
+            <ConnectGate inApp={connected.size ? null : inApp}>
+              {onFree && connected.size === 0 && (
+                <div>
+                  <h2 className="section-title">Pick the one where most customers message you</h2>
+                  <p className="text-ink-2 text-sm">
+                    Free connects 1 account. Solo connects 3, so you can add the other later.
+                  </p>
+                </div>
+              )}
               <ul className="card divide-line flex flex-col divide-y">
-                {MORE_ACCOUNTS.filter((id) => statusOf(statuses, id) === "available").map((id) => (
-                  <li key={id} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                    <PlatformMark platform={id} size={32} />
+                {FIRST_ACCOUNTS.map((a) => (
+                  <li key={a.platform} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                    <PlatformMark platform={a.platform} size={32} />
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <b className="font-semibold">{PLATFORMS[id].label}</b>
-                      <span className="text-ink-3 text-sm">{PLATFORMS[id].line}</span>
+                      <b className="font-semibold">{platformLabel(a.platform)}</b>
+                      <span className="text-ink-3 text-sm">{a.does}</span>
                     </span>
-                    {connected.has(id) ? (
+                    {connected.has(a.platform) ? (
                       <span className="text-success flex items-center gap-1.5 text-sm font-semibold">
                         <Check className="size-4" strokeWidth={2.2} aria-hidden /> Connected
                       </span>
                     ) : (
                       <form action={connectAccount}>
-                        <input type="hidden" name="platform" value={id} />
+                        <input type="hidden" name="platform" value={a.platform} />
                         <input type="hidden" name="back" value="setup" />
-                        <Button
-                          type="submit"
-                          variant="secondary"
-                          aria-label={`Connect ${PLATFORMS[id].label}`}
-                        >
+                        <Button type="submit" variant="secondary">
                           Connect
                         </Button>
                       </form>
@@ -270,24 +341,58 @@ export async function SetupView({
                   </li>
                 ))}
               </ul>
-              {LATER_ACCOUNTS.length > 0 && (
-                <p className="text-ink-3 text-sm">
-                  {LATER_ACCOUNTS.map((id) => PLATFORMS[id].label).join(", ")} need a few more
-                  details, so they&apos;re in Settings → Connected accounts once setup is done.
-                </p>
+              {more ? (
+                <>
+                  <ul className="card divide-line flex flex-col divide-y">
+                    {MORE_ACCOUNTS.filter((id) => statusOf(statuses, id) === "available").map(
+                      (id) => (
+                        <li key={id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                          <PlatformMark platform={id} size={32} />
+                          <span className="flex min-w-0 flex-1 flex-col">
+                            <b className="font-semibold">{PLATFORMS[id].label}</b>
+                            <span className="text-ink-3 text-sm">{PLATFORMS[id].line}</span>
+                          </span>
+                          {connected.has(id) ? (
+                            <span className="text-success flex items-center gap-1.5 text-sm font-semibold">
+                              <Check className="size-4" strokeWidth={2.2} aria-hidden /> Connected
+                            </span>
+                          ) : (
+                            <form action={connectAccount}>
+                              <input type="hidden" name="platform" value={id} />
+                              <input type="hidden" name="back" value="setup" />
+                              <Button
+                                type="submit"
+                                variant="secondary"
+                                aria-label={`Connect ${PLATFORMS[id].label}`}
+                              >
+                                Connect
+                              </Button>
+                            </form>
+                          )}
+                        </li>
+                      ),
+                    )}
+                  </ul>
+                  {LATER_ACCOUNTS.length > 0 && (
+                    <p className="text-ink-3 text-sm">
+                      {LATER_ACCOUNTS.map((id) => PLATFORMS[id].label).join(", ")} need a few more
+                      details, so they&apos;re in Settings → Connected accounts once setup is done.
+                    </p>
+                  )}
+                  <Link href="/setup?step=2" scroll={false} className="action-link self-start">
+                    Show fewer
+                  </Link>
+                </>
+              ) : (
+                <Link
+                  href="/setup?step=2&more=1"
+                  scroll={false}
+                  className="action-link with-arrow self-start"
+                >
+                  More: TikTok, YouTube, LinkedIn and others
+                </Link>
               )}
-              <Link href="/setup?step=2" scroll={false} className="action-link self-start">
-                Show fewer
-              </Link>
-            </>
-          ) : (
-            <Link
-              href="/setup?step=2&more=1"
-              scroll={false}
-              className="action-link with-arrow self-start"
-            >
-              More: TikTok, YouTube, LinkedIn and others
-            </Link>
+            </ConnectGate>
           )}
           <div className="flex items-center justify-between gap-3">
             <Link href="/setup?step=1" className="text-ink-2 hover:text-ink text-sm font-medium">
@@ -308,29 +413,30 @@ export async function SetupView({
 
       {step === 3 && (
         <section className="flex flex-col gap-5">
-          <div>
-            <h1 className="page-title">Answer the 3 questions you get most</h1>
-            <p className="text-ink-2 mt-1">
-              Waggle only says what you write. Change any question to one your customers really ask.
-            </p>
-          </div>
+          {top.length ? (
+            <div>
+              <h1 className="page-title">Answer what your customers ask most</h1>
+              <p className="text-ink-2 mt-1">
+                From your own comments and messages this month. Waggle replies only with what you
+                write here.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <h1 className="page-title">Answer the 3 questions you get most</h1>
+              <p className="text-ink-2 mt-1">
+                Waggle only says what you write. Change any question to one your customers really
+                ask.
+              </p>
+            </div>
+          )}
           <StepForm
             action={saveAnswersStep}
             submitLabel="Next"
             backHref="/setup?step=2"
             skipHref="/setup?step=4"
           >
-            <QuestionsEditor
-              suggested={suggested}
-              more={moreQuestions}
-              suggestedFor={
-                ai
-                  ? custom.toLowerCase()
-                  : kind && kind.key !== "other"
-                    ? kind.label.toLowerCase()
-                    : ""
-              }
-            />
+            <QuestionsEditor seeds={seeds} more={moreQuestions} />
             <p className="text-ink-3 text-sm">
               Prices, complaints and anything you didn&apos;t write always come to you.
             </p>
@@ -348,7 +454,10 @@ export async function SetupView({
             </p>
           </div>
           <Suspense fallback={<div className="skeleton h-72 rounded-xl" />}>
-            <TryIt goal={{ done: triesDone, of: PRACTICE_GOAL }} />
+            <TryIt
+              goal={{ done: triesDone, of: PRACTICE_GOAL }}
+              examples={top.length ? top.map((q) => q.question) : undefined}
+            />
           </Suspense>
           <div className="flex items-center justify-between gap-3">
             <Link href="/setup?step=3" className="text-ink-2 hover:text-ink text-sm font-medium">
@@ -497,6 +606,14 @@ export async function SetupView({
               ))}
             </ul>
           )}
+          {progress && (
+            <Link
+              href="/reveal"
+              className={`${buttonVariants({ variant: left.length ? "secondary" : "primary" })} self-center`}
+            >
+              See what you’ve been missing
+            </Link>
+          )}
           {left.length > 0 ? (
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Link href="/today" className="text-ink-2 hover:text-ink text-sm font-medium">
@@ -511,7 +628,10 @@ export async function SetupView({
             </div>
           ) : (
             <div className="flex flex-wrap justify-center gap-2">
-              <Link href="/today" className={buttonVariants({ variant: "primary" })}>
+              <Link
+                href="/today"
+                className={buttonVariants({ variant: progress ? "secondary" : "primary" })}
+              >
                 Go to Today
               </Link>
               <Link href="/teach" className={buttonVariants({ variant: "secondary" })}>

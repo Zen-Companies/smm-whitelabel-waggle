@@ -8,7 +8,14 @@ import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
 import { joinNames } from "./today";
 
-type DecisionState = { error?: string; approved?: { at: string }; rejected?: boolean };
+/** The organization's first approval names the moment (first connect board, 20 Nov). */
+type FirstApproval = { title: string; usage: string; spaced: string | null; nextHref: string };
+type DecisionState = {
+  error?: string;
+  approved?: { at: string };
+  rejected?: boolean;
+  first?: FirstApproval;
+};
 type SendAllState = { error?: string; sent?: number; skipped?: number };
 type Action<S> = (prev: S, formData: FormData) => Promise<S>;
 
@@ -170,11 +177,13 @@ function ReadyCard({
   // When it was sent (approved); null while waiting or after Undo.
   const [sentAt, setSentAt] = useState<string | null>(null);
   const [expired, setExpired] = useState(false);
+  const [first, setFirst] = useState<FirstApproval | null>(null);
   const [state, send, sending] = useActionState(async (prev: DecisionState, fd: FormData) => {
     const r = await decide(prev, fd);
     if (r.approved) {
       setExpired(false);
       setSentAt(r.approved.at);
+      setFirst(r.first ?? null);
       onSent(true);
     }
     return r;
@@ -184,6 +193,7 @@ function ReadyCard({
       const r = await undo(prev, fd);
       if (!r.error) {
         setSentAt(null);
+        setFirst(null);
         onSent(false);
       }
       return r;
@@ -249,7 +259,18 @@ function ReadyCard({
               </Button>
             )}
           </p>
-        ) : !canSend ? (
+        ) : null}
+        {isSent && first && (
+          <div className="border-honey-border bg-honey-tint flex flex-col gap-2 rounded-xl border px-4 py-3.5">
+            <b className="font-display text-lg font-semibold">{first.title}</b>
+            <p className="text-ink-2 text-sm">{first.usage}</p>
+            {first.spaced && <p className="text-ink-3 text-[13px]">{first.spaced}</p>}
+            <Link href={first.nextHref} className="action-link with-arrow self-start">
+              Next reply
+            </Link>
+          </div>
+        )}
+        {isSent ? null : !canSend ? (
           <Link href={`/inbox/items/${item.itemId}`} className="action-link with-arrow">
             Open in the Inbox
           </Link>

@@ -22,7 +22,8 @@ export async function loadCatchUp(db: Db, tenantId: string): Promise<CatchUpSumm
     .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
-  if (!row) return null;
+  // The account was deleted from Waggle (the catch-up row stays, keyed on the real account).
+  if (!row?.social_account_id) return null;
   const [{ data: account }, { count }] = await Promise.all([
     db
       .from("social_accounts")

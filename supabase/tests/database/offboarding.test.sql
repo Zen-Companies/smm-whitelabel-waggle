@@ -29,7 +29,10 @@ select is(
        -- deleted with its alert (alert_id on delete cascade) when purge_tenant deletes alerts
        'alert_digest_entries',
        -- deleted with their account (social_account_id on delete cascade)
-       'catch_ups', 'missed_messages',
+       'missed_messages',
+       -- deleted by the tenants_forget_purged_catch_ups trigger (20 Nov: a catch-up outlives
+       -- its account row, keyed on the real account, until the brand is purged)
+       'catch_ups',
        -- kept: costs and the audit trail
        'ai_usage', 'audit_log',
        -- kept: feedback stays with the person (its tenant_id is set null if the brand row goes)

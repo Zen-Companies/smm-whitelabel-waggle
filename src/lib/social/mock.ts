@@ -52,7 +52,7 @@ import type {
   CommentAutomationLogEntry,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
-import { SocialProviderError } from "./types";
+import { DM_ACCESS_MISSING, SocialProviderError } from "./types";
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 import {
   MOCK_BEST_TIMES,
@@ -1826,18 +1826,25 @@ export class MockSocialProvider implements SocialProvider {
    * First-connect catch-up: what the account "already had" (tests and the local demo seed it).
    * Empty by default, so a mock connect pulls nothing.
    */
-  catchUpPosts: { postId: string; comments: ProviderComment[] }[] = [];
+  catchUpPosts: { postId: string; caption?: string | null; comments: ProviderComment[] }[] = [];
   catchUpConversations: (ProviderConversation & { messages: ProviderMessage[] })[] = [];
+  /** First connect: the account's messages can't be read (Zernio's failedAccounts). */
+  catchUpDmAccessMissing = false;
 
-  async listCommentedPostsPage(input: {
-    cursor?: string | null;
-    limit?: number;
-  }): Promise<{ postIds: string[]; nextCursor: string | null }> {
+  async listCommentedPostsPage(input: { cursor?: string | null; limit?: number }): Promise<{
+    postIds: string[];
+    posts: { id: string; caption: string | null }[];
+    nextCursor: string | null;
+  }> {
     const start = Number(input.cursor ?? 0);
     const size = input.limit ?? 50;
-    const page = this.catchUpPosts.slice(start, start + size).map((p) => p.postId);
+    const page = this.catchUpPosts.slice(start, start + size);
     const next = start + size < this.catchUpPosts.length ? String(start + size) : null;
-    return { postIds: page, nextCursor: next };
+    return {
+      postIds: page.map((p) => p.postId),
+      posts: page.map((p) => ({ id: p.postId, caption: p.caption ?? null })),
+      nextCursor: next,
+    };
   }
 
   async listPostCommentsPage(input: {
@@ -1853,6 +1860,12 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   async listConversations(): Promise<ProviderConversation[]> {
+    if (this.catchUpDmAccessMissing) {
+      throw new SocialProviderError("mock listConversations: account's messages unavailable", {
+        code: DM_ACCESS_MISSING,
+        ambiguous: false,
+      });
+    }
     return [...this.catchUpConversations]
       .sort((a, b) => ((a.updatedTime ?? "") < (b.updatedTime ?? "") ? 1 : -1))
       .map((c) => ({

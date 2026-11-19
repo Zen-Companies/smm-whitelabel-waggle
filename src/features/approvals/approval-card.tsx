@@ -7,9 +7,10 @@ import { useActionState, useEffect, useRef, useState, useSyncExternalStore } fro
 import { BeeSending } from "@/components/app/bee";
 import { clockTime } from "@/components/app/time";
 import { WaggleTrail } from "@/components/app/waggle-trail";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { privateReplyClosesAt, privateReplyLeft } from "./private-reply";
 import { decideDraft, undoApprovalAction, type DecisionFormState } from "./actions";
+import type { FirstApproval } from "./first-approval";
 import type { InboxEntry } from "./inbox-data";
 import { REPLY_MAX } from "./limits";
 import { draftReason } from "./reason-chip";
@@ -17,7 +18,7 @@ import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Recently approved replies live outside the card: approving moves the item out of the list
 // (Realtime refresh), which unmounts the card, but the Sent row must stay for the undo window.
-type RecentSend = { entry: InboxEntry; at: string };
+type RecentSend = { entry: InboxEntry; at: string; first?: FirstApproval };
 let recent: RecentSend[] = [];
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
@@ -46,7 +47,7 @@ export function RecentSends() {
   return (
     <div className="flex flex-col gap-2">
       {sends.map((s) => (
-        <SentRow key={s.entry.itemId} entry={s.entry} at={s.at} />
+        <SentRow key={s.entry.itemId} entry={s.entry} at={s.at} first={s.first} />
       ))}
     </div>
   );
@@ -54,6 +55,8 @@ export function RecentSends() {
 
 /** How long the Sent row offers Undo (decisions.ts UNDO_WINDOW_MS; the server allows a bit more). */
 const UNDO_MS = 8_000;
+/** The first approval's moment stays a while longer than a Sent row (until Next reply). */
+const FIRST_MS = 120_000;
 
 /** The 24-hour DM window, next to the button it affects (design v2). */
 function windowLeft(closesAt: string | null) {
@@ -63,8 +66,11 @@ function windowLeft(closesAt: string | null) {
   return hours < 1 ? "Under 1 h left to reply" : `${Math.floor(hours)} h left to reply`;
 }
 
-/** "Answered [name] · 2:14 PM · Undo" for 8 seconds, then it moves to Answered (§5). */
-function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
+/**
+ * "Answered [name] · 2:14 PM · Undo" for 8 seconds, then it moves to Answered (§5). The
+ * organization's first approval names the moment instead (first connect board, 20 Nov).
+ */
+function SentRow({ entry, at, first }: { entry: InboxEntry; at: string; first?: FirstApproval }) {
   const router = useRouter();
   const [state, undo, undoing] = useActionState<DecisionFormState, FormData>(
     async (prev: DecisionFormState, fd: FormData) => {
@@ -84,13 +90,51 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
         removeRecent(entry.itemId);
         router.refresh();
       },
-      Math.max(0, left) + 4_000,
+      Math.max(0, left) + (first ? FIRST_MS : 4_000),
     );
     return () => {
       clearTimeout(t);
       clearTimeout(gone);
     };
-  }, [at, entry.itemId, router]);
+  }, [at, entry.itemId, first, router]);
+
+  const undoForm = !expired && (
+    <form action={undo}>
+      <input type="hidden" name="itemId" value={entry.itemId} />
+      <input type="hidden" name="draftId" value={entry.draft!.id} />
+      <button type="submit" disabled={undoing} className="action-link mx-0">
+        {undoing ? "Undoing…" : "Undo"}
+      </button>
+    </form>
+  );
+
+  if (first) {
+    return (
+      <div
+        className="border-honey-border bg-honey-tint flex flex-col gap-2 rounded-[18px] border px-5 py-4"
+        role="status"
+      >
+        <b className="font-display text-xl font-semibold">{first.title}</b>
+        <p className="text-ink-2 text-sm">{first.usage}</p>
+        {first.spaced && <p className="text-ink-3 text-[13px]">{first.spaced}</p>}
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            href={first.nextHref}
+            onClick={() => removeRecent(entry.itemId)}
+            className={buttonVariants({ variant: "primary" })}
+          >
+            Next reply
+          </Link>
+          {undoForm}
+        </div>
+        {state.error && (
+          <p role="alert" className="text-danger text-sm">
+            {state.error}
+          </p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="card flex flex-wrap items-center gap-3 px-5 py-3" role="status">
@@ -102,15 +146,7 @@ function SentRow({ entry, at }: { entry: InboxEntry; at: string }) {
         Answered {entry.authorName ?? "the customer"} ·{" "}
         <span className="meta">{clockTime(at)}</span>
       </p>
-      {!expired && (
-        <form action={undo}>
-          <input type="hidden" name="itemId" value={entry.itemId} />
-          <input type="hidden" name="draftId" value={entry.draft!.id} />
-          <button type="submit" disabled={undoing} className="action-link mx-0">
-            {undoing ? "Undoing…" : "Undo"}
-          </button>
-        </form>
-      )}
+      {undoForm}
       {state.error && (
         <p role="alert" className="text-danger w-full text-sm">
           {state.error}
@@ -186,6 +222,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
       addRecent({
         entry: { ...entry, draft: { ...draft, editedBody: text } },
         at: state.approved.at,
+        first: state.first,
       });
       router.refresh();
     }

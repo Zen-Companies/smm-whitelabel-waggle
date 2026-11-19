@@ -28,7 +28,7 @@ let zernioAccountId: string;
 const run = () =>
   processDueItems({
     db,
-    steps: { sending: createSendStep({ social: () => social }) },
+    steps: { sending: createSendStep({ social: () => social, spacingMs: 0 }) },
     deadline: createDeadline(),
     claim: claimFor(() => tenantId),
   });

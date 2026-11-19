@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SocialProviderError } from "./types";
+import { isDmAccessMissing, SocialProviderError } from "./types";
 import {
   createZernioProvider,
   isPlatformPaused,
@@ -1462,7 +1462,7 @@ describe("ZernioSocialProvider", () => {
   it("listCommentedPostsPage follows the cursor and returns the next one (catch-up)", async () => {
     respond = () =>
       json({
-        data: [{ id: "1789" }, { id: "1790" }, { id: "1789" }],
+        data: [{ id: "1789", content: "Winter menu is here" }, { id: "1790" }, { id: "1789" }],
         pagination: { hasMore: true, nextCursor: "cur_2" },
       });
     await expect(
@@ -1472,7 +1472,15 @@ describe("ZernioSocialProvider", () => {
         cursor: "cur_1",
         limit: 25,
       }),
-    ).resolves.toEqual({ postIds: ["1789", "1790"], nextCursor: "cur_2" });
+    ).resolves.toEqual({
+      postIds: ["1789", "1790"],
+      // First connect (20 Nov): the caption, for the reveal's labels and top questions.
+      posts: [
+        { id: "1789", caption: "Winter menu is here" },
+        { id: "1790", caption: null },
+      ],
+      nextCursor: "cur_2",
+    });
     expect(Object.fromEntries(captured[0].url.searchParams)).toEqual({
       accountId: "acc_1",
       since: "2026-08-22T12:00:00.000Z",
@@ -1542,6 +1550,43 @@ describe("ZernioSocialProvider", () => {
       accountId: "acc_1",
       limit: "100",
       sortOrder: "desc",
+    });
+  });
+
+  it("listConversations: an account Zernio couldn't read is missing DM access (first connect)", async () => {
+    respond = () =>
+      json({
+        data: [],
+        meta: {
+          accountsQueried: 1,
+          accountsFailed: 1,
+          failedAccounts: [
+            { accountId: "acc_1", platform: "instagram", error: "no access", code: null },
+          ],
+        },
+      });
+    const err = await provider.listConversations({ accountId: "acc_1" }).catch((e: unknown) => e);
+    expect(isDmAccessMissing(err)).toBe(true);
+
+    respond = () => json({ data: [], meta: { accountsSkipped: [{ accountId: "acc_1" }] } });
+    const skipped = await provider
+      .listConversations({ accountId: "acc_1" })
+      .catch((e: unknown) => e);
+    expect(isDmAccessMissing(skipped)).toBe(true);
+  });
+
+  it("listConversations: a rate-limited account is retried later, not missing access", async () => {
+    respond = () =>
+      json({
+        data: [],
+        meta: { failedAccounts: [{ accountId: "acc_1", error: "slow down", retryAfter: 30 }] },
+      });
+    const err = await provider.listConversations({ accountId: "acc_1" }).catch((e: unknown) => e);
+    expect(isDmAccessMissing(err)).toBe(false);
+    expect(err).toBeInstanceOf(SocialProviderError);
+    expect((err as SocialProviderError).details).toMatchObject({
+      status: 429,
+      retryAfterSeconds: 30,
     });
   });
 

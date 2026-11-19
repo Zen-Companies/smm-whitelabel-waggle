@@ -7,6 +7,7 @@ import { setCommentHidden } from "./hide-spam";
 import type { ReplyVia } from "./private-reply";
 import { REPLY_MAX } from "./limits";
 import { renderTemplate } from "@/lib/social/whatsapp-templates";
+import { bookSendSlot } from "./send-schedule";
 
 // Owner decisions on a waiting draft (PRD F8, docs/tdd.md §7.3). The Server Actions resolve the
 // signed-in owner's tenant; everything here is scoped to that tenant id, so a draft or item id
@@ -28,7 +29,7 @@ async function loadDecidable(db: ServiceClient, input: DecisionInput) {
   const [{ data: item }, { data: draft }] = await Promise.all([
     db
       .from("inbound_items")
-      .select("id, status, kind")
+      .select("id, status, kind, social_account_id")
       .eq("id", input.itemId)
       .eq("tenant_id", input.tenantId)
       .maybeSingle(),
@@ -108,12 +109,13 @@ export async function approveDraft(
     details: { draftId: draft.id, decidedBy: input.userId },
   });
   if (!applied) return { ok: false, error: "already_decided" };
-  // Held for the undo window (design.md §4): the job runner won't pick it up before then.
-  await db
-    .from("inbound_items")
-    .update({ next_run_at: new Date(Date.now() + UNDO_WINDOW_MS).toISOString() })
-    .eq("id", item.id)
-    .eq("status", "sending");
+  // Held for the undo window (design.md §4), then spaced from the account's other replies
+  // (20 Nov): the job runner won't pick it up before its slot.
+  await bookSendSlot(db, {
+    itemId: item.id,
+    socialAccountId: item.social_account_id,
+    earliest: new Date(Date.now() + UNDO_WINDOW_MS),
+  });
   // CRM: the organization's first approved draft (once; the dedupe key holds it). Atlas's funnel
   // (19 Nov): signed up → connected → approved a first draft → came back → paid.
   await queueQuietly(async () => {
@@ -419,7 +421,7 @@ export async function writeOwnerReply(
   if (body.length > REPLY_MAX) return { ok: false, error: "too_long" };
   const { data: item } = await db
     .from("inbound_items")
-    .select("id, status, kind")
+    .select("id, status, kind, social_account_id")
     .eq("id", input.itemId)
     .eq("tenant_id", input.tenantId)
     .maybeSingle();
@@ -476,12 +478,12 @@ export async function writeOwnerReply(
     await db.from("drafts").update({ status: "rejected" }).eq("id", draft.id);
     return { ok: false, error: "already_decided" };
   }
-  // Held for the undo window, like an approval.
-  await db
-    .from("inbound_items")
-    .update({ next_run_at: new Date(now.getTime() + UNDO_WINDOW_MS).toISOString() })
-    .eq("id", item.id)
-    .eq("status", "sending");
+  // Held for the undo window and spaced from the account's other replies, like an approval.
+  await bookSendSlot(db, {
+    itemId: item.id,
+    socialAccountId: item.social_account_id,
+    earliest: new Date(now.getTime() + UNDO_WINDOW_MS),
+  });
   await writeAudit(db, {
     tenantId: input.tenantId,
     itemId: item.id,
@@ -521,7 +523,10 @@ export async function writeTemplateReply(
   const { db } = deps;
   const { data } = await db
     .from("inbound_items")
-    .select("id, status, kind, author_name, social_accounts!inner (platform, zernio_account_id)")
+    .select(
+      "id, status, kind, author_name, social_account_id, " +
+        "social_accounts!inner (platform, zernio_account_id)",
+    )
     .eq("id", input.itemId)
     .eq("tenant_id", input.tenantId)
     .maybeSingle();
@@ -530,6 +535,7 @@ export async function writeTemplateReply(
     status: string;
     kind: string;
     author_name: string | null;
+    social_account_id: string;
     social_accounts: { platform: string; zernio_account_id: string };
   } | null;
   if (!item) return { ok: false, error: "not_found" };
@@ -586,12 +592,12 @@ export async function writeTemplateReply(
     await db.from("drafts").update({ status: "rejected" }).eq("id", draft.id);
     return { ok: false, error: "already_decided" };
   }
-  // Held for the undo window, like an approval.
-  await db
-    .from("inbound_items")
-    .update({ next_run_at: new Date(now.getTime() + UNDO_WINDOW_MS).toISOString() })
-    .eq("id", item.id)
-    .eq("status", "sending");
+  // Held for the undo window and spaced from the account's other replies, like an approval.
+  await bookSendSlot(db, {
+    itemId: item.id,
+    socialAccountId: item.social_account_id,
+    earliest: new Date(now.getTime() + UNDO_WINDOW_MS),
+  });
   await writeAudit(db, {
     tenantId: input.tenantId,
     itemId: item.id,

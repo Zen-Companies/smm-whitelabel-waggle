@@ -11,6 +11,7 @@ import {
   toTimeline,
 } from "./analytics-map";
 import {
+  DM_ACCESS_MISSING,
   SocialProviderError,
   type TelegramConnectStatus,
   isVideoUrl,
@@ -69,6 +70,7 @@ import {
   type TargetExtras,
   type IntegrationKind,
 } from "./types";
+import { conversationsAccessIssue, conversationsMetaSchema } from "./dm-access";
 import { connectBranding } from "./whitelabel";
 
 const blogArticleSchema = z.object({
@@ -390,7 +392,17 @@ const postCommentsSchema = z.object({
 });
 // First-connect catch-up (docs.zernio.com/comments/list-inbox-comments,
 // /comments/get-inbox-post-comments, /messages/list-inbox-conversations).
-const commentedPostsPageSchema = commentedPostsSchema.extend({
+const commentedPostsPageSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        commentCount: z.number().optional(),
+        // The post's caption (first-connect reveal labels and top questions).
+        content: z.string().nullish(),
+      }),
+    )
+    .optional(),
   pagination: z.object({ nextCursor: z.string().nullish() }).nullish(),
 });
 const postCommentsPageSchema = z.object({
@@ -418,6 +430,7 @@ const postCommentsPageSchema = z.object({
   pagination: z.object({ hasMore: z.boolean().optional(), cursor: z.string().nullish() }).nullish(),
 });
 const conversationsSchema = z.object({
+  meta: conversationsMetaSchema,
   data: z
     .array(
       z.object({
@@ -4107,8 +4120,11 @@ export class ZernioSocialProvider implements SocialProvider {
         }),
       );
       const page = parse(commentedPostsPageSchema, data, "listCommentedPostsPage");
+      const seen = new Set<string>();
+      const posts = (page.data ?? []).filter((p) => !seen.has(p.id) && seen.add(p.id));
       return {
-        postIds: [...new Set((page.data ?? []).map((p) => p.id))],
+        postIds: posts.map((p) => p.id),
+        posts: posts.map((p) => ({ id: p.id, caption: p.content ?? null })),
         nextCursor: page.pagination?.nextCursor ?? null,
       };
     });
@@ -4160,7 +4176,23 @@ export class ZernioSocialProvider implements SocialProvider {
           query: { accountId: input.accountId, limit: input.limit ?? 100, sortOrder: "desc" },
         }),
       );
-      return (parse(conversationsSchema, data, "listConversations").data ?? []).map((c) => ({
+      const list = parse(conversationsSchema, data, "listConversations");
+      // 200 with the account in meta.failedAccounts / accountsSkipped: its DMs couldn't be read.
+      const issue = conversationsAccessIssue(list.meta, input.accountId);
+      if (issue?.issue === "rate_limited") {
+        throw new SocialProviderError("Zernio listConversations failed (rate limited)", {
+          status: 429,
+          ambiguous: false,
+          retryAfterSeconds: issue.retryAfterSeconds,
+        });
+      }
+      if (issue?.issue === "no_access") {
+        throw new SocialProviderError("Zernio listConversations: account's messages unavailable", {
+          code: DM_ACCESS_MISSING,
+          ambiguous: false,
+        });
+      }
+      return (list.data ?? []).map((c) => ({
         id: c.id,
         participantId: c.participantId ?? null,
         participantName: c.participantName ?? null,

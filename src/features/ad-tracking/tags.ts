@@ -9,6 +9,8 @@
 //     from Free, 19 Nov), checked with Stripe first.
 //   - ConnectAccount: the organization's first connected social account (Atlas, 19 Nov: so the
 //     ads can optimize for owners who connect, not only owners who sign up). A custom event.
+//   - FirstReplyApproved: the organization's first approved reply (first connect board, 20 Nov:
+//     the step after connecting in the funnel). A custom event.
 // Pure helpers only; the browser part is conversion-tag.tsx.
 
 // Same IDs as gowaggle.ai (gowaggle repo, app/lib/pixels.ts), so both halves of the funnel land
@@ -24,10 +26,13 @@ export const LIVE_HOSTS = ["app.gowaggle.ai"];
 export const OPT_OUT_COOKIE = "waggle_no_ads";
 
 export type ConversionEvent =
-  "CompleteRegistration" | "StartTrial" | "Subscribe" | "ConnectAccount";
+  "CompleteRegistration" | "StartTrial" | "Subscribe" | "ConnectAccount" | "FirstReplyApproved";
 
 /** Events that aren't one of Meta's standard events (sent with trackCustom). */
-export const CUSTOM_EVENTS: readonly ConversionEvent[] = ["ConnectAccount"];
+export const CUSTOM_EVENTS: readonly ConversionEvent[] = ["ConnectAccount", "FirstReplyApproved"];
+
+/** A first approved reply counts for the ads only shortly after it happened. */
+export const FIRST_REPLY_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /** A first connect counts for the ads only shortly after it happened. */
 export const CONNECT_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -54,6 +59,7 @@ export function conversionEventId(event: ConversionEvent, key: string): string {
     StartTrial: "trial",
     Subscribe: "sub",
     ConnectAccount: "connect",
+    FirstReplyApproved: "first-reply",
   }[event];
   return `${prefix}-${key}`;
 }
