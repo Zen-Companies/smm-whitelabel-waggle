@@ -5,7 +5,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
   workflow_dispatch:
 
@@ -71,6 +71,28 @@ jobs:
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - run: supabase link --project-ref vkwstnnrqxcbiafyjkfc
+      - name: Pending migrations
+        run: supabase migration list --remote
+      - run: supabase db push --remote --yes
+
+  # Staging (hive-723mp4.gowaggle.ai) has its own database: every push to the staging branch
+  # applies new migrations there too, so staging never runs code against an old schema.
+  # Vercel deploys staging itself (Git integration). Secrets: STAGING_SUPABASE_ACCESS_TOKEN
+  # (a token of the account that owns the staging project) and STAGING_SUPABASE_DB_PASSWORD.
+  migrate-staging:
+    name: Apply migrations to staging Supabase
+    needs: [checks, db-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - run: supabase link --project-ref jmtiruircxnaqtoozika
       - name: Pending migrations
         run: supabase migration list --remote
       - run: supabase db push --remote --yes
