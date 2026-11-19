@@ -36,7 +36,7 @@ jobs:
       - run: pnpm test
 
   db-tests:
-    name: Migrations, RLS, integration tests and build (local Supabase)
+    name: Migrations, RLS and integration tests (local Supabase)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
