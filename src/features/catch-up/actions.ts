@@ -61,3 +61,32 @@ export async function dismissCatchUp(formData: FormData): Promise<void> {
   }
   revalidatePath("/today");
 }
+
+/** Hides "Your customers' top 3 questions are ready" (Today and setup step 3), in place. */
+export async function dismissTopQuestionsNotice(formData: FormData): Promise<void> {
+  const parsed = idSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return;
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return;
+  const db = getServiceClient();
+  const { data } = await db
+    .from("catch_ups")
+    .update({
+      top_questions_notice_dismissed_at: new Date().toISOString(),
+      top_questions_notice_dismissed_by: tenant.userId,
+    })
+    .eq("id", parsed.data.id)
+    .eq("tenant_id", tenant.id)
+    .is("top_questions_notice_dismissed_at", null)
+    .select("id");
+  if (data?.length) {
+    await writeAudit(db, {
+      tenantId: tenant.id,
+      action: "catch_up_top_questions_notice_dismissed",
+      actor: tenant.userId,
+      details: { catchUpId: parsed.data.id },
+    });
+  }
+  revalidatePath("/today");
+  revalidatePath("/setup");
+}

@@ -6,12 +6,16 @@ import { loadTenantAiSpend } from "@/lib/llm/spend";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { REVEAL_DRAFTS, SORT_CAP } from "./reveal-data";
+import { topQuestionsPass, WAIT_GIVE_UP_MS } from "./busy-rules";
 import { pickRevealDrafts, readyToPick, TOP_QUESTIONS_INPUT_MAX } from "./reveal-rules";
 import { runTopQuestions, TOP_QUESTIONS_PROMPT_VERSION } from "./top-questions";
 
 // First connect (20 Nov): once a catch-up has read everything and Jev has sorted it, pick the
 // reveal's drafts (the newest REVEAL_DRAFTS questions and leads) and work out the top questions
 // (one AI call, cached on the catch-up). Runs from /api/jobs/process and /api/jobs/catch-up.
+// Busy accounts (20 Nov): while sorting is still going, the top questions are built early once
+// enough questions are sorted (busy-rules.ts), then once more when sorting is done. Two AI calls
+// at most per catch-up.
 
 interface Deps {
   db: ServiceClient;
@@ -30,7 +34,7 @@ export async function finishCatchUps(
   const summary = { picked: 0, topQuestions: 0 };
   let query = db
     .from("catch_ups")
-    .select("id, tenant_id, read_at")
+    .select("id, tenant_id, read_at, created_at, top_questions_at, top_questions_final_at")
     .is("sorted_at", null)
     .in("stage", ["dms_again", "done"])
     .order("created_at", { ascending: true })
@@ -63,18 +67,106 @@ export async function finishCatchUps(
     } catch (err) {
       Sentry.captureException(err, { extra: { catchUpId: row.id } });
     }
+    const pass = topQuestionsPass({
+      questionsSorted: 0,
+      startedAt: new Date(row.created_at),
+      now,
+      sortedAt: now.toISOString(),
+      topQuestionsAt: row.top_questions_at,
+      finalAt: row.top_questions_final_at,
+    });
+    if (pass !== "final") continue;
     try {
-      summary.topQuestions += await cacheTopQuestions(deps, row.id, row.tenant_id, now);
+      summary.topQuestions += await cacheTopQuestions(deps, row.id, row.tenant_id, now, "final");
     } catch (err) {
-      // Once only (cost cap): the reveal shows no top questions rather than trying again.
+      // Once only (cost cap): the reveal keeps the early questions, or shows none, rather than
+      // trying again.
       Sentry.captureException(err, { extra: { catchUpId: row.id } });
-      await db
-        .from("catch_ups")
-        .update({ top_questions: [], top_questions_at: now.toISOString() })
-        .eq("id", row.id);
+      await markFinal(db, row.id, now);
+    }
+  }
+
+  // Still sorting: the early top questions, once enough are sorted (after the finish above, so a
+  // catch-up that just finished never pays for both in one run).
+  if (deps.llm) {
+    try {
+      summary.topQuestions += await earlyTopQuestions(deps, now, opts);
+    } catch (err) {
+      Sentry.captureException(err);
     }
   }
   return summary;
+}
+
+/** Marks the final pass done, keeping any early questions (an empty list when there are none). */
+async function markFinal(db: ServiceClient, catchUpId: string, now: Date): Promise<void> {
+  await db
+    .from("catch_ups")
+    .update({ top_questions_final_at: now.toISOString(), top_questions_at: now.toISOString() })
+    .eq("id", catchUpId);
+  await db
+    .from("catch_ups")
+    .update({ top_questions: [] })
+    .eq("id", catchUpId)
+    .is("top_questions", null);
+}
+
+/** The early pass over catch-ups still sorting (busy accounts). */
+async function earlyTopQuestions(
+  deps: Deps,
+  now: Date,
+  opts: { tenantId?: string; limit?: number },
+): Promise<number> {
+  const { db } = deps;
+  let query = db
+    .from("catch_ups")
+    .select("id, tenant_id, created_at, sorted_at, top_questions_at, top_questions_final_at")
+    .is("sorted_at", null)
+    .is("top_questions_at", null)
+    // Only while setup may still be waiting (newest first, so a stalled one never blocks others).
+    .gte("created_at", new Date(now.getTime() - WAIT_GIVE_UP_MS).toISOString())
+    .order("created_at", { ascending: false })
+    .limit(opts.limit ?? 5);
+  if (opts.tenantId) query = query.eq("tenant_id", opts.tenantId);
+  const { data: rows, error } = await query;
+  if (error) throw new Error(`catch_ups lookup failed: ${error.message}`);
+
+  let found = 0;
+  for (const row of rows ?? []) {
+    if (deps.shouldContinue && !deps.shouldContinue()) break;
+    const { count } = await db
+      .from("inbound_items")
+      .select("id", { count: "exact", head: true })
+      .eq("catch_up_id", row.id)
+      .eq("category", "faq")
+      .in("kind", ["comment", "dm"]);
+    const pass = topQuestionsPass({
+      questionsSorted: count ?? 0,
+      startedAt: new Date(row.created_at),
+      now,
+      sortedAt: row.sorted_at,
+      topQuestionsAt: row.top_questions_at,
+      finalAt: row.top_questions_final_at,
+    });
+    if (pass !== "early") continue;
+
+    // Claim the early pass: only one run pays for it, and never after sorting finished.
+    const { data: claimed } = await db
+      .from("catch_ups")
+      .update({ top_questions_at: now.toISOString() })
+      .eq("id", row.id)
+      .is("top_questions_at", null)
+      .is("sorted_at", null)
+      .select("id");
+    if (!claimed?.length) continue;
+    try {
+      found += await cacheTopQuestions(deps, row.id, row.tenant_id, now, "early");
+    } catch (err) {
+      // Once only: the final pass tries again when sorting is done.
+      Sentry.captureException(err, { extra: { catchUpId: row.id } });
+    }
+  }
+  return found;
 }
 
 /** Asks for the reveal's drafts: they go back to the draft step, which now drafts them. */
@@ -148,17 +240,27 @@ async function cacheTopQuestions(
   catchUpId: string,
   tenantId: string,
   now: Date,
+  pass: "early" | "final",
 ): Promise<number> {
   const { db, llm } = deps;
-  const store = (questions: Json, model: string | null) =>
-    db
+  const stamp = now.toISOString();
+  const store = (questions: Json, model: string | null) => {
+    const update = db
       .from("catch_ups")
-      .update({ top_questions: questions, top_questions_at: now.toISOString() })
-      .eq("id", catchUpId)
-      .then(({ error }) => {
+      .update({
+        top_questions: questions,
+        top_questions_at: stamp,
+        ...(pass === "final" ? { top_questions_final_at: stamp } : {}),
+      })
+      .eq("id", catchUpId);
+    // A slow early call never overwrites the final questions.
+    return (pass === "early" ? update.is("top_questions_final_at", null) : update).then(
+      ({ error }) => {
         if (error) throw new Error(`top questions save failed: ${error.message}`);
         return model;
-      });
+      },
+    );
+  };
 
   const { data: items, error } = await db
     .from("inbound_items")
@@ -171,7 +273,9 @@ async function cacheTopQuestions(
   if (error) throw new Error(`questions lookup failed: ${error.message}`);
   const spend = await loadTenantAiSpend(db, tenantId, now);
   if (!llm || !items?.length || spend.level === "reached") {
-    await store([], null);
+    // Nothing to build (or the AI cap): the early pass leaves it for the final; the final keeps
+    // any early questions.
+    if (pass === "final") await markFinal(db, catchUpId, now);
     return 0;
   }
   const { data: tenant } = await db.from("tenants").select("name").eq("id", tenantId).single();
@@ -191,6 +295,7 @@ async function cacheTopQuestions(
     actor: "system",
     details: {
       catchUpId,
+      pass,
       model,
       promptVersion: TOP_QUESTIONS_PROMPT_VERSION,
       messages: items.length,

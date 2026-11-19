@@ -1,6 +1,7 @@
 import "server-only";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { unansweredTopQuestions, waitingForTopQuestions } from "./busy-rules";
 import {
   authorHandle,
   catchUpPhase,
@@ -37,6 +38,10 @@ export interface CatchUpProgress {
   capped: boolean;
   /** Instagram's message access is off, or the messages permission wasn't granted. */
   dmAccessMissing: boolean;
+  /** Some top questions are cached (early or final): setup's steps 3 and 4 refresh. */
+  topQuestionsReady?: boolean;
+  /** The final top questions are in (possibly none): setup stops waiting. */
+  topQuestionsDone?: boolean;
 }
 
 export interface PriceItem {
@@ -169,6 +174,54 @@ export async function loadTopQuestions(
   return row ? readCachedTopQuestions(row.top_questions) : [];
 }
 
+/** Setup's steps 3 and 4 (busy accounts, 20 Nov): the top questions, and whether to wait for them. */
+export interface TopQuestionsStatus {
+  questions: TopQuestion[];
+  /** A catch-up is still working and none are cached yet: show "still reading your inbox". */
+  waiting: boolean;
+}
+
+export async function loadTopQuestionsStatus(
+  db: ServiceClient,
+  tenantId: string,
+  now: Date = new Date(),
+): Promise<TopQuestionsStatus> {
+  const row = await latestCatchUp(db, tenantId);
+  const questions = row ? readCachedTopQuestions(row.top_questions) : [];
+  return {
+    questions,
+    waiting: waitingForTopQuestions({
+      hasCatchUp: !!row,
+      finalAt: row?.top_questions_final_at ?? null,
+      cached: questions.length,
+      startedAt: row ? new Date(row.created_at) : null,
+      now,
+    }),
+  };
+}
+
+/**
+ * "Your customers' top 3 questions are ready · Answer them" (Today and setup step 3): the newest
+ * catch-up's top 3 questions not answered in the knowledge base yet, unless dismissed. Null when
+ * there's nothing to show.
+ */
+export async function loadReadyLaterNotice(
+  db: ServiceClient,
+  tenantId: string,
+): Promise<{ catchUpId: string; unanswered: number } | null> {
+  const row = await latestCatchUp(db, tenantId);
+  if (!row || row.top_questions_notice_dismissed_at) return null;
+  const questions = readCachedTopQuestions(row.top_questions);
+  if (!questions.length) return null;
+  const { data: kb, error } = await db.from("kb_entries").select("title").eq("tenant_id", tenantId);
+  if (error) throw new Error(`kb_entries lookup failed: ${error.message}`);
+  const unanswered = unansweredTopQuestions(
+    questions,
+    (kb ?? []).map((e) => e.title),
+  ).length;
+  return unanswered ? { catchUpId: row.id, unanswered } : null;
+}
+
 type CatchUpRow = {
   id: string;
   social_account_id: string | null;
@@ -181,6 +234,9 @@ type CatchUpRow = {
   dm_access_missing: boolean;
   sorted_at: string | null;
   top_questions: Json | null;
+  created_at: string;
+  top_questions_final_at: string | null;
+  top_questions_notice_dismissed_at: string | null;
 };
 
 /** The brand's newest catch-up (one per connected Instagram/Facebook account). */
@@ -188,7 +244,7 @@ async function latestCatchUp(db: ServiceClient, tenantId: string): Promise<Catch
   const { data, error } = await db
     .from("catch_ups")
     .select(
-      "id, social_account_id, stage, platform, handle, comments_found, praise_and_tags, capped, dm_access_missing, sorted_at, top_questions",
+      "id, social_account_id, stage, platform, handle, comments_found, praise_and_tags, capped, dm_access_missing, sorted_at, top_questions, created_at, top_questions_final_at, top_questions_notice_dismissed_at",
     )
     .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false })
@@ -234,6 +290,8 @@ async function progressOf(db: ServiceClient, row: CatchUpRow, now: Date): Promis
     waiting: waiting.count ?? 0,
     capped: row.capped,
     dmAccessMissing: row.dm_access_missing,
+    topQuestionsReady: readCachedTopQuestions(row.top_questions).length > 0,
+    topQuestionsDone: row.top_questions_final_at !== null,
   };
 }
 

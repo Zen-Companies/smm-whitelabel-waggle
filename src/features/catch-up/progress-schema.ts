@@ -12,6 +12,8 @@ export const progressSchema = z.object({
   waiting: z.number().int().nonnegative(),
   capped: z.boolean(),
   dmAccessMissing: z.boolean(),
+  topQuestionsReady: z.boolean().optional(),
+  topQuestionsDone: z.boolean().optional(),
 }) satisfies z.ZodType<CatchUpProgress>;
 
 /** Pure: a poll's body as progress, or null (no catch-up, an error page, or a bad shape). */

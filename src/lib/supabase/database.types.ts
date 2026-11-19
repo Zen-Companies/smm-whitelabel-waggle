@@ -416,6 +416,9 @@ export type Database = {
           sorted_at: string | null
           top_questions: Json | null
           top_questions_at: string | null
+          top_questions_final_at: string | null
+          top_questions_notice_dismissed_at: string | null
+          top_questions_notice_dismissed_by: string | null
           zernio_account_id: string | null
           attempts: number
           comments_created: number
@@ -450,6 +453,9 @@ export type Database = {
           sorted_at?: string | null
           top_questions?: Json | null
           top_questions_at?: string | null
+          top_questions_final_at?: string | null
+          top_questions_notice_dismissed_at?: string | null
+          top_questions_notice_dismissed_by?: string | null
           zernio_account_id?: string | null
           attempts?: number
           comments_created?: number
@@ -483,6 +489,9 @@ export type Database = {
           sorted_at?: string | null
           top_questions?: Json | null
           top_questions_at?: string | null
+          top_questions_final_at?: string | null
+          top_questions_notice_dismissed_at?: string | null
+          top_questions_notice_dismissed_by?: string | null
           zernio_account_id?: string | null
           attempts?: number
           comments_created?: number

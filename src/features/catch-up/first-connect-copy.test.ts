@@ -232,4 +232,10 @@ describe("parseProgress", () => {
     expect(parseProgress({ error: "not found" })).toBeNull();
     expect(parseProgress({ ...progress(), phase: "done" })).toBeNull();
   });
+
+  it("carries the optional top questions flags (busy accounts)", () => {
+    const p = progress({ topQuestionsReady: true, topQuestionsDone: false });
+    expect(parseProgress(p)).toEqual(p);
+    expect(parseProgress({ ...progress(), topQuestionsReady: "yes" })).toBeNull();
+  });
 });
