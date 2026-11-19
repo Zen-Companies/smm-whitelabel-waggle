@@ -334,12 +334,15 @@ describe("send step", () => {
       .update({ next_run_at: new Date(Date.now() + 3_600_000).toISOString() })
       .eq("tenant_id", tenantId)
       .eq("status", "sending");
-    const first = await approvedItem({ kind: "comment" });
-    const second = await approvedItem({ kind: "comment" });
+    const one = await approvedItem({ kind: "comment" });
+    const two = await approvedItem({ kind: "comment" });
     const before = Date.now();
 
     await run(SEND_SPACING_MS);
 
+    // Both were due at once, so the job may take either first: one goes, the other waits.
+    const sentFirst = (await state(one.itemId)).item.status === "sent";
+    const [first, second] = sentFirst ? [one, two] : [two, one];
     const a = await state(first.itemId);
     const b = await state(second.itemId);
     expect(a.item.status).toBe("sent");
