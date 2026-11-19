@@ -1,3 +1,4 @@
+import { planAllowsTeam, UpgradeNote } from "@/features/billing";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { assignableRoles, can, canManageMember, ROLE_LABEL, type OrgRole } from "./abilities";
@@ -30,7 +31,10 @@ export async function TeamSection({ orgId }: { orgId: string }) {
   const org = orgs.find((o) => o.id === orgId);
   if (!org) return null;
   const manages = can(org.role, "team.manage");
-  const team = await loadTeam(getServiceClient(), org.id, manages);
+  const [team, teamOk] = await Promise.all([
+    loadTeam(getServiceClient(), org.id, manages),
+    planAllowsTeam(getServiceClient(), org.id),
+  ]);
   const brandName = new Map(team.brands.map((b) => [b.id, b.name]));
   const now = new Date();
   const open = team.invites.filter((i) => !i.declinedAt);
@@ -201,7 +205,8 @@ export async function TeamSection({ orgId }: { orgId: string }) {
         )}
       </section>
 
-      {manages && (
+      {manages && !teamOk && <UpgradeNote reason="team" isOwner={org.role === "owner"} />}
+      {manages && teamOk && (
         <InviteForm
           orgId={org.id}
           roles={assignableRoles(org.role).filter(

@@ -27,6 +27,7 @@ export {
   UPGRADE_REASONS,
 } from "./upgrade";
 export type { UpgradeReason } from "./upgrade";
+export { UpgradeNote } from "./upgrade-note";
 export { NEVER_DARK, limitEmailDue, replyLimit, replyLimitNote } from "./reply-limit";
 export type { ReplyLimit, ReplyLimitLevel } from "./reply-limit";
 export {

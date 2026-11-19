@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { roomForAnotherBrand, UpgradeNote } from "@/features/billing";
 import { can, listMyOrgs } from "@/features/orgs";
+import { getServiceClient } from "@/lib/supabase/service";
 import { AddBrandForm, getCurrentTenant, getOpenOrg } from "@/features/tenants";
 
 export const metadata = { title: "Add a brand" };
@@ -13,6 +15,8 @@ async function Content({
   const { org: orgParam } = await searchParams;
   const [tenant, orgs, open] = await Promise.all([getCurrentTenant(), listMyOrgs(), getOpenOrg()]);
   const org = orgs.find((o) => o.id === orgParam) ?? open;
+  // The plan's businesses, said before anyone types (Free and Solo are one business).
+  const room = org ? await roomForAnotherBrand(getServiceClient(), org.id) : { ok: true };
   return (
     <>
       <div className="flex flex-col gap-2">
@@ -25,7 +29,9 @@ async function Content({
           inbox and reply rules.{org ? ` It belongs to ${org.name}.` : ""}
         </p>
       </div>
-      {org && can(org.role, "brands.add") ? (
+      {org && can(org.role, "brands.add") && !room.ok ? (
+        <UpgradeNote reason="brands" isOwner={org.role === "owner"} />
+      ) : org && can(org.role, "brands.add") ? (
         <AddBrandForm orgId={org.id} orgName={org.name} />
       ) : (
         <p role="status" className="text-ink-2">
