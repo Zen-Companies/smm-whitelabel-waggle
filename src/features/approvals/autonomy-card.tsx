@@ -66,6 +66,7 @@ export async function AutonomyCard({ variant = "settings" }: { variant?: "settin
               label={CATEGORY_LABELS[category]}
               hint={CATEGORY_HINTS[category]}
               mode={modes.get(category) ?? "off"}
+              autoAllowed={autoOk}
             />
           ))}
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-3 p-5">

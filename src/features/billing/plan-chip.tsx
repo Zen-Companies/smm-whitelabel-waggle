@@ -7,8 +7,8 @@ import { cn } from "cn";
 import { loadBilling } from "./billing-store";
 import { isPlanId } from "./plans";
 import { planChipState, planChipText, showOnPhone, type PlanChipState } from "./plan-chip-state";
-import { getStripe } from "./stripe-client";
 import { planIsLive } from "./subscription";
+import { upgradeHref } from "./upgrade";
 import { loadPlans, loadReplyLimit } from "./usage";
 
 // Your plan next to your profile (design "Your plan next to your profile, and connecting in a
@@ -24,14 +24,14 @@ const loadChip = cache(
     const now = new Date();
     const [bill, plans] = await Promise.all([loadBilling(db, orgId), loadPlans(db)]);
     const live = !!bill && planIsLive(bill.status) && isPlanId(bill.plan);
-    const replies = live ? await loadReplyLimit(db, orgId, now) : null;
+    // Free counts replies too (19 Nov).
+    const replies = await loadReplyLimit(db, orgId, now);
     const state = planChipState({
       status: bill?.status ?? null,
       planName: live && isPlanId(bill!.plan) ? plans[bill!.plan].name : null,
       trialEndsAt: bill?.trial_ends_at ?? null,
       replies: replies ? { used: replies.limit.used, allowance: replies.limit.allowance } : null,
       now,
-      stripeOn: !!getStripe(),
     });
     const renews =
       live && bill?.current_period_end && bill.status === "active"
@@ -65,14 +65,15 @@ const TONE: Record<PlanChipState["kind"], string> = {
   trial: "border-honey-border bg-honey-tint text-ink",
   plan: "border-line bg-surface text-ink",
   reached: "border-honey bg-honey text-[#17140F]",
-  choose: "border-honey bg-honey text-[#17140F]",
+  free: "border-honey-border bg-honey-tint text-ink",
   past_due: "border-danger/40 bg-surface text-danger",
 };
 
 function Mark({ state }: { state: PlanChipState }) {
   if (state.kind === "trial") return <StateMark state="waiting" />;
   if (state.kind === "past_due") return <StateMark state="needs" />;
-  if (state.kind === "plan") return <MiniComb used={state.used} allowance={state.allowance} />;
+  if (state.kind === "plan" || state.kind === "free")
+    return <MiniComb used={state.used} allowance={state.allowance} />;
   return null;
 }
 
@@ -84,7 +85,7 @@ export async function PlanChip({ orgId, isOwner }: PlanViewer) {
   if (!state || !isOwner) return null;
   return (
     <Link
-      href={PLAN_HREF}
+      href={chipHref(state)}
       aria-label={`Your plan: ${planChipText(state)}`}
       className={cn(
         "min-h-9 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 hover:opacity-90",
@@ -104,6 +105,10 @@ export async function PlanChip({ orgId, isOwner }: PlanViewer) {
   );
 }
 
+/** Free out of replies goes straight to the upgrade screen; everything else to Your plan. */
+const chipHref = (state: PlanChipState) =>
+  state.kind === "reached" && state.free ? upgradeHref("replies") : PLAN_HREF;
+
 function summary(state: PlanChipState, renews: string | null): { title: string; line: string } {
   switch (state.kind) {
     case "trial":
@@ -113,12 +118,17 @@ function summary(state: PlanChipState, renews: string | null): { title: string; 
         title: renews ? `${state.planName} · renews ${renews}` : state.planName,
         line: `${state.used} of ${state.allowance} replies this month`,
       };
+    case "free":
+      return { title: "Free", line: `${state.used} of ${state.allowance} replies this month` };
     case "reached":
-      return { title: "Replies used up", line: "Add 200 for $15, or wait for next month" };
+      return state.free
+        ? {
+            title: "Replies used up",
+            line: "To get more replies this month, upgrade to Solo or above",
+          }
+        : { title: "Replies used up", line: "Add 200 for $15, or wait for next month" };
     case "past_due":
       return { title: "Card declined", line: "Update your card so Waggle keeps writing" };
-    case "choose":
-      return { title: "No plan yet", line: "Choose a plan to keep Waggle writing" };
   }
 }
 
@@ -132,7 +142,9 @@ export async function PlanMenuRow({ orgId, isOwner }: PlanViewer) {
       <span className="text-ink-3 text-xs">Your plan</span>
       <b className="text-sm font-semibold">{title}</b>
       <span className="text-ink-2 flex items-center gap-2 text-[13px]">
-        {state.kind === "plan" && <MiniComb used={state.used} allowance={state.allowance} />}
+        {(state.kind === "plan" || state.kind === "free") && (
+          <MiniComb used={state.used} allowance={state.allowance} />
+        )}
         {line}
       </span>
       {isOwner && (
@@ -163,7 +175,9 @@ export async function PlanMoreRow({ orgId, isOwner }: PlanViewer) {
         <span className="text-ink-3 text-xs">Your plan</span>
         <b className="font-semibold">{title}</b>
         <span className="text-ink-2 flex items-center gap-2 text-[13px]">
-          {state.kind === "plan" && <MiniComb used={state.used} allowance={state.allowance} />}
+          {(state.kind === "plan" || state.kind === "free") && (
+            <MiniComb used={state.used} allowance={state.allowance} />
+          )}
           {line}
         </span>
       </span>
