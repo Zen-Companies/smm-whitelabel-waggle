@@ -71,11 +71,33 @@ export async function insertInboundItem(
           item.zernioMessageId,
         ];
 
+  // A DM pulled at first connect is keyed by Meta's id, a webhook DM by Zernio's: both carry
+  // Meta's id as platform_message_id (unique per account), so either way round it's one item.
+  const platformMessageId = item.kind === "dm" ? (item.platformMessageId ?? null) : null;
+  const samePlatformMessage = async () => {
+    if (!platformMessageId) return null;
+    const { data, error: findError } = await db
+      .from("inbound_items")
+      .select("id")
+      .eq("social_account_id", item.socialAccountId)
+      .eq("platform_message_id", platformMessageId)
+      .maybeSingle();
+    if (findError) throw new Error(`inbound_items lookup failed: ${findError.message}`);
+    return data;
+  };
+  const known = await samePlatformMessage();
+  if (known) return { itemId: known.id, created: false };
+
   const { data: inserted, error } = await db
     .from("inbound_items")
     .upsert(row, { onConflict: conflictColumn, ignoreDuplicates: true })
     .select("id");
-  if (error) throw new Error(`inbound_items insert failed: ${error.message}`);
+  if (error) {
+    // The other copy landed between the lookup and the insert.
+    const raced = error.code === "23505" ? await samePlatformMessage() : null;
+    if (raced) return { itemId: raced.id, created: false };
+    throw new Error(`inbound_items insert failed: ${error.message}`);
+  }
 
   if (inserted.length > 0) {
     const itemId = inserted[0].id;

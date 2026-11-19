@@ -399,6 +399,61 @@ export type Database = {
         }
         Relationships: []
       }
+      catch_ups: {
+        Row: {
+          attempts: number
+          comments_created: number
+          created_at: string
+          dismissed_at: string | null
+          dismissed_by: string | null
+          dm_offset: number
+          dms_created: number
+          finished_at: string | null
+          id: string
+          locked_at: string | null
+          next_run_at: string
+          posts_cursor: string | null
+          social_account_id: string
+          stage: string
+          tenant_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          attempts?: number
+          comments_created?: number
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          dm_offset?: number
+          dms_created?: number
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          next_run_at?: string
+          posts_cursor?: string | null
+          social_account_id: string
+          stage?: string
+          tenant_id: string
+        }
+        Update: {
+          attempts?: number
+          comments_created?: number
+          created_at?: string
+          dismissed_at?: string | null
+          dismissed_by?: string | null
+          dm_offset?: number
+          dms_created?: number
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          next_run_at?: string
+          posts_cursor?: string | null
+          social_account_id?: string
+          stage?: string
+          tenant_id?: string
+        }
+        Relationships: []
+      }
       conversations: {
         Row: {
           followed_up_at: string | null
@@ -1283,6 +1338,43 @@ export type Database = {
           id?: string
           issued?: Json
           tenant_id?: string
+        }
+        Relationships: []
+      }
+      missed_messages: {
+        Row: {
+          created_at: string
+          id: string
+          platform_message_id: string
+          received_at: string
+          sender_name: string | null
+          social_account_id: string
+          tenant_id: string
+          text: string
+          zernio_conversation_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          created_at?: string
+          id?: string
+          platform_message_id: string
+          received_at: string
+          sender_name?: string | null
+          social_account_id: string
+          tenant_id: string
+          text?: string
+          zernio_conversation_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform_message_id?: string
+          received_at?: string
+          sender_name?: string | null
+          social_account_id?: string
+          tenant_id?: string
+          text?: string
+          zernio_conversation_id?: string
         }
         Relationships: []
       }

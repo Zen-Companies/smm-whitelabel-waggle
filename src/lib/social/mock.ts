@@ -8,6 +8,7 @@ import type {
   CreatePostInput,
   ProviderComment,
   ProviderCommentReply,
+  ProviderConversation,
   ProviderMessage,
   ProviderReview,
   ProviderPostStatus,
@@ -1805,7 +1806,7 @@ export class MockSocialProvider implements SocialProvider {
     conversationId: string;
     accountId: string;
   }): Promise<ProviderMessage[]> {
-    return this.sends
+    const sent: ProviderMessage[] = this.sends
       .filter((s) => s.kind === "dm" && s.targetId === input.conversationId)
       .reverse()
       .map((s) => ({
@@ -1813,6 +1814,52 @@ export class MockSocialProvider implements SocialProvider {
         direction: "outgoing",
         text: s.message,
         createdAt: new Date().toISOString(),
+      }));
+    const seeded = this.catchUpConversations.find((c) => c.id === input.conversationId);
+    return [
+      ...sent,
+      ...[...(seeded?.messages ?? [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    ];
+  }
+
+  /**
+   * First-connect catch-up: what the account "already had" (tests and the local demo seed it).
+   * Empty by default, so a mock connect pulls nothing.
+   */
+  catchUpPosts: { postId: string; comments: ProviderComment[] }[] = [];
+  catchUpConversations: (ProviderConversation & { messages: ProviderMessage[] })[] = [];
+
+  async listCommentedPostsPage(input: {
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<{ postIds: string[]; nextCursor: string | null }> {
+    const start = Number(input.cursor ?? 0);
+    const size = input.limit ?? 50;
+    const page = this.catchUpPosts.slice(start, start + size).map((p) => p.postId);
+    const next = start + size < this.catchUpPosts.length ? String(start + size) : null;
+    return { postIds: page, nextCursor: next };
+  }
+
+  async listPostCommentsPage(input: {
+    postId: string;
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<{ comments: ProviderComment[]; nextCursor: string | null }> {
+    const all = this.catchUpPosts.find((p) => p.postId === input.postId)?.comments ?? [];
+    const start = Number(input.cursor ?? 0);
+    const size = input.limit ?? 50;
+    const next = start + size < all.length ? String(start + size) : null;
+    return { comments: all.slice(start, start + size), nextCursor: next };
+  }
+
+  async listConversations(): Promise<ProviderConversation[]> {
+    return [...this.catchUpConversations]
+      .sort((a, b) => ((a.updatedTime ?? "") < (b.updatedTime ?? "") ? 1 : -1))
+      .map((c) => ({
+        id: c.id,
+        participantId: c.participantId,
+        participantName: c.participantName,
+        updatedTime: c.updatedTime,
       }));
   }
 
