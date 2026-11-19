@@ -27,6 +27,8 @@ import {
   URGENT_CHIPS,
 } from "@/features/approvals";
 
+import { CatchUpCard } from "@/features/catch-up";
+
 import { can } from "@/features/orgs";
 
 import { ReadyLine } from "@/features/setup";
@@ -213,6 +215,9 @@ export async function TodayView() {
       </div>
 
       {!noAccounts && <ReadyLine />}
+
+      {/* First connect (approved 19 Nov): what Waggle caught up on, until dismissed. */}
+      {!noAccounts && <CatchUpCard />}
 
       {noAccounts ? (
         // A brand with nothing connected: one clear next step, not a page of zeros.

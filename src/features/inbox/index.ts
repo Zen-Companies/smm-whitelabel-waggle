@@ -1,5 +1,6 @@
 export { InvalidWebhookError, receiveZernioEvent } from "./ingest";
 export type { AccountHandlers, IngestDeps, IngestResult } from "./ingest";
+export { recordConversation } from "./conversations";
 export { insertInboundItem } from "./items";
 export type { NewInboundItem } from "./items";
 export { processDueItems } from "./processor";

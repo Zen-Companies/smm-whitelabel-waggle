@@ -1,3 +1,4 @@
+import { startCatchUp } from "@/features/catch-up";
 import { pauseAccountItems, resumeAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
@@ -8,7 +9,7 @@ import type { ServiceClient } from "@/lib/supabase/service";
 // account.connected / account.disconnected, called by the webhook mapping (T5) with a tenant it
 // has already verified. Both are safe to run twice for the same event.
 
-/** On a (re)connect, look this far back for comments (T16 backfill). */
+/** On a reconnect or recovery, look this far back for comments (T16 backfill). */
 export const BACKFILL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export const SUPPORTED_PLATFORMS = SOCIAL_PLATFORMS;
@@ -34,9 +35,18 @@ export async function handleAccountConnected(
   if (outcome === "foreign") return { accountId: row.account_id, outcome, resumedItems: 0 };
 
   if (outcome !== "existing" || row.previous_status !== "active") {
-    // T16: pull comments that arrived while the account was away (or before it was connected).
+    // First connect (19 Nov): a catch-up of the last 30 days of comments and DMs replaces the
+    // 24-hour backfill. A reconnect or a recovery keeps the 24-hour backfill (T16).
+    const caughtUp =
+      outcome === "created" &&
+      (await startCatchUp(db, {
+        tenantId: input.tenantId,
+        socialAccountId: row.account_id,
+        platform: input.platform,
+      }));
+    // T16: pull comments that arrived while the account was away.
     // Only where Waggle's inbox covers the platform today.
-    if (hasLiveComments(input.platform)) {
+    if (!caughtUp && hasLiveComments(input.platform)) {
       await db
         .from("social_accounts")
         .update({ backfill_from: new Date(Date.now() - BACKFILL_WINDOW_MS).toISOString() })

@@ -9,6 +9,7 @@ import {
   handlePlatformPause,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
+import { runCatchUps } from "@/features/catch-up";
 import { crmClient, deliverCrmEvents, sweepInactive, sweepUsage } from "@/features/crm";
 import { chargeUsageAtCost, getStripe } from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
@@ -76,6 +77,12 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
     const backfill = await backfillComments({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+    // First connect (19 Nov): the 30-day catch-up of comments and DMs, a slice per run.
+    const catchUp = await runCatchUps({
       db,
       social: getSocialProvider,
       shouldContinue: () => deadline.remainingMs() > 15_000,
@@ -178,6 +185,7 @@ export async function POST(request: Request): Promise<Response> {
       posts,
       health,
       backfill,
+      catchUp,
       reviews,
       analytics,
       mcpCallsPruned,
