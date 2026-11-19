@@ -1,3 +1,4 @@
+import { startOfDayIn } from "@/lib/time/zone";
 import type { Database } from "@/lib/supabase/database.types";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseAttachments, type Attachment } from "./attachments";
@@ -198,9 +199,9 @@ export async function searchInbox(
   return found.reverse();
 }
 
-/** Pure: midnight UTC of `now`'s day ("today" until businesses have a time zone). */
+/** Pure: midnight UTC of `now`'s day. */
 export function startOfTodayUtc(now: Date): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return startOfDayIn(now, "UTC");
 }
 
 /**
@@ -211,8 +212,10 @@ export async function loadTodaySummary(
   supabase: SupabaseClient<Database>,
   tenantId: string,
   now = new Date(),
+  timeZone = "UTC",
 ): Promise<TodaySummary> {
-  const since = startOfTodayUtc(now).toISOString();
+  // "Today" starts at the viewer's own midnight (19 Nov).
+  const since = startOfDayIn(now, timeZone).toISOString();
   const [answered, forYou, ignored, hidden] = await Promise.all([
     supabase
       .from("drafts")
@@ -245,14 +248,15 @@ export async function loadTodaySummary(
   };
 }
 
-/** "What Waggle did today" (empty inbox): replies sent and messages ignored since midnight UTC. */
+/** "What Waggle did today" (empty inbox): replies sent and messages ignored since the viewer's midnight. */
 export async function loadTodayActivity(
   supabase: SupabaseClient<Database>,
   tenantId: string,
   now = new Date(),
   limit = 5,
+  timeZone = "UTC",
 ): Promise<ActivityEntry[]> {
-  const since = startOfTodayUtc(now).toISOString();
+  const since = startOfDayIn(now, timeZone).toISOString();
   const [sent, ignored] = await Promise.all([
     supabase
       .from("drafts")
