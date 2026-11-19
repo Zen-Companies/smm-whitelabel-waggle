@@ -5,7 +5,7 @@ import { sendGhlEvent } from "@/lib/ghl";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 
-/** The global switch: new logins need a beta code (no row = on). */
+/** The global switch: new logins need a beta code (no row = off since 19 Nov: sign-up is open). */
 export const BETA_FLAG = "beta.required";
 
 export async function betaRequired(db: ServiceClient): Promise<boolean> {
@@ -15,7 +15,7 @@ export async function betaRequired(db: ServiceClient): Promise<boolean> {
     .eq("key", BETA_FLAG)
     .is("tenant_id", null)
     .maybeSingle();
-  return data?.enabled ?? true;
+  return data?.enabled ?? false;
 }
 
 export async function hasBetaAccess(db: ServiceClient, userId: string): Promise<boolean> {
