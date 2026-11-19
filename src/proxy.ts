@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { legacyPath } from "@/lib/routes";
+import { legacyPath, PATH_HEADER } from "@/lib/routes";
 import { UTM_COOKIE, UTM_COOKIE_MAX_AGE, utmFromParams } from "@/lib/crm/utm";
 
 // Refreshes the Supabase session cookie on page requests. Authorization happens close to the
@@ -10,7 +10,14 @@ export async function proxy(request: NextRequest) {
   const moved = legacyPath(request.nextUrl.pathname, request.nextUrl.searchParams);
   if (moved) return NextResponse.redirect(new URL(moved, request.url), 308);
 
-  let response = NextResponse.next({ request });
+  // The page asked for, for server layouts (the setup gate, 20 Nov). Always ours: set here,
+  // replacing anything the browser sent.
+  const forward = () => {
+    const headers = new Headers(request.headers);
+    headers.set(PATH_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
+    return NextResponse.next({ request: { headers } });
+  };
+  let response = forward();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) return response;
@@ -20,7 +27,7 @@ export async function proxy(request: NextRequest) {
       getAll: () => request.cookies.getAll(),
       setAll: (toSet) => {
         for (const { name, value } of toSet) request.cookies.set(name, value);
-        response = NextResponse.next({ request });
+        response = forward();
         for (const { name, value, options } of toSet) response.cookies.set(name, value, options);
       },
     },

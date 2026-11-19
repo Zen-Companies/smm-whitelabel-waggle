@@ -2453,6 +2453,9 @@ export type Database = {
           purge_tried_at: string | null
           purged_at: string | null
           replies_paused: boolean
+          setup_passed_at: string | null
+          setup_passed_by: string | null
+          setup_passed_how: string | null
           stripe_customer_id: string | null
           subscription_status: string
           zernio_profile_id: string | null
@@ -2484,6 +2487,9 @@ export type Database = {
           purge_tried_at?: string | null
           purged_at?: string | null
           replies_paused?: boolean
+          setup_passed_at?: string | null
+          setup_passed_by?: string | null
+          setup_passed_how?: string | null
           stripe_customer_id?: string | null
           subscription_status?: string
           zernio_profile_id?: string | null
@@ -2514,6 +2520,9 @@ export type Database = {
           purge_tried_at?: string | null
           purged_at?: string | null
           replies_paused?: boolean
+          setup_passed_at?: string | null
+          setup_passed_by?: string | null
+          setup_passed_how?: string | null
           stripe_customer_id?: string | null
           subscription_status?: string
           zernio_profile_id?: string | null

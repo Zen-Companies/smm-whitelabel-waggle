@@ -78,6 +78,15 @@ describe("account events", () => {
       .select("platform, username, status")
       .eq("tenant_id", tenantId);
     expect(data).toEqual([{ platform: "instagram", username: "AccountsCafe", status: "active" }]);
+
+    // Setup first, then free (20 Nov): a connected account passes the brand's setup, audited.
+    const { data: t } = await db
+      .from("tenants")
+      .select("setup_passed_at, setup_passed_how")
+      .eq("id", tenantId)
+      .single();
+    expect(t?.setup_passed_at).not.toBeNull();
+    expect(t?.setup_passed_how).toBe("connected");
   });
 
   it("the same event again changes nothing and writes no second audit row", async () => {
@@ -94,6 +103,12 @@ describe("account events", () => {
       .eq("tenant_id", tenantId)
       .eq("action", "account_connected");
     expect(count).toBe(1);
+    const { count: passed } = await db
+      .from("audit_log")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("action", "setup_passed");
+    expect(passed).toBe(1);
   });
 
   it("account.disconnected pauses only new/classified/drafted items", async () => {

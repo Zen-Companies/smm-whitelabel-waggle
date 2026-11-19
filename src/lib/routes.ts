@@ -10,6 +10,9 @@
 // The old addresses (?section=, ?tab=, /leads, /knowledge-base, /automations, /lab, /analytics)
 // forward here through `legacyPath`, used by the proxy. Pure.
 
+/** Request header the proxy sets to the page asked for (pathname and query). */
+export const PATH_HEADER = "x-waggle-path";
+
 /** Settings sections, in the order of the side menu. */
 export const SETTINGS_SECTIONS = [
   "account",
