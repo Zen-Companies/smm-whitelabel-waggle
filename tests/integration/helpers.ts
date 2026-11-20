@@ -47,6 +47,7 @@ export function fakeZernio() {
       return { profileId: id, alreadyExisted: false };
     },
     getConnectUrl: notImplemented,
+    getBusinessProfile: notImplemented,
     connectBluesky: notImplemented,
     presignMedia: notImplemented,
     listPinterestBoards: notImplemented,
