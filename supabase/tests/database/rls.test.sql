@@ -93,7 +93,9 @@ select is_empty(
                                 -- Waggle emails (18 Nov): a person's own choice, and the site default.
                                 'notification_prefs', 'email_settings', 'email_settings_changes',
                                 -- CRM sync (18 Nov): per owner / per login, server-only.
-                                'crm_events', 'user_activity')
+                                'crm_events', 'user_activity',
+                                -- Free plan idle disconnect (20 Nov): per organization, server-only.
+                                'org_idle', 'first_morning_emails', 'email_opt_outs')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

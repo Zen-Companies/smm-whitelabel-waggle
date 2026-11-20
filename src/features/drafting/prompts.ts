@@ -4,7 +4,7 @@ import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Drafting prompt (docs/tdd.md §10). Bump the version on any wording change; drafts record the
 // model, and ai_usage records cost, so versions can be compared.
-export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-11-13.1";
+export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-11-20.1";
 
 /** An earlier message in the same DM thread (T30): context for the latest one. */
 export interface ThreadMessage {
@@ -152,6 +152,21 @@ export function draftUserPromptCalendar(input: {
   return [base, "", "CALENDAR (busy times, next 7 days):", input.calendar.today, busy].join("\n");
 }
 
+/** The rule 4 of 2026-10-29.1 to 2026-11-13.1: English or Taglish only. */
+const ENGLISH_OR_TAGLISH =
+  "4. Reply in the customer's language: English, or Taglish if they wrote Taglish.";
+/** Rule 4 from 2026-11-20.1 (first connect, 20 Nov). */
+export const REPLY_LANGUAGE_RULE =
+  "4. Reply in the language the customer wrote in, whatever it is (Taglish if they wrote Taglish). BUSINESS INFO may be written in another language: carry its facts over faithfully, word for word where it matters (prices, times, names), and add nothing that isn't there.";
+
+/**
+ * 2026-11-20.1: replies in the customer's own language, any language, still only from the
+ * owner's answers (first connect pulls a month of messages, some in other languages).
+ */
+export function draftSystemPromptLanguage(businessName: string): string {
+  return draftSystemPromptCalendar(businessName).replace(ENGLISH_OR_TAGLISH, REPLY_LANGUAGE_RULE);
+}
+
 // Nullable rather than optional: providers' strict structured-output modes need every key.
 export const draftOutputSchema = z.object({
   reply: z.string().min(1).max(1200),
@@ -202,6 +217,8 @@ export const DRAFT_PROMPTS = {
   "2026-11-12.1": { system: draftSystemPromptAllPlatforms, user: draftUserPromptAllPlatforms },
   /** Email named as a channel, and the owner's busy times for booking requests (T81d). */
   "2026-11-13.1": { system: draftSystemPromptCalendar, user: draftUserPromptCalendar },
+  /** Replies in the customer's language, any language, from the owner's answers only. */
+  "2026-11-20.1": { system: draftSystemPromptLanguage, user: draftUserPromptCalendar },
 } as const;
 
 export type DraftPromptVersion = keyof typeof DRAFT_PROMPTS;

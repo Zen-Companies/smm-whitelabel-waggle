@@ -161,7 +161,7 @@ export function AuthForm({
             <>
               New to Waggle?{" "}
               <Link href="/signup" className="link-inline">
-                Start with your beta code
+                Create an account
               </Link>
             </>
           )}

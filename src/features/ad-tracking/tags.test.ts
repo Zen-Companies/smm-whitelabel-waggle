@@ -3,6 +3,7 @@ import { matchKeys, sha256Hex } from "./hash";
 import {
   conversionEventId,
   cookieOptsOut,
+  CUSTOM_EVENTS,
   isNewRegistration,
   normalizeEmail,
   REGISTRATION_WINDOW_MS,
@@ -30,6 +31,11 @@ describe("conversionEventId", () => {
   it("is stable per signup and per checkout, and different between the two", () => {
     expect(conversionEventId("CompleteRegistration", "u1")).toBe("reg-u1");
     expect(conversionEventId("StartTrial", "cs_test_1")).toBe("trial-cs_test_1");
+  });
+
+  it("counts the first approved reply once per organization, as a custom event", () => {
+    expect(conversionEventId("FirstReplyApproved", "org1")).toBe("first-reply-org1");
+    expect(CUSTOM_EVENTS).toContain("FirstReplyApproved");
   });
 });
 

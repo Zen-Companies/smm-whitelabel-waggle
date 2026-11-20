@@ -3,6 +3,7 @@ import { IllustratedEmpty } from "@/components/app/illustrated-empty";
 import { platformName } from "@/components/app/time";
 import { Button } from "@/components/ui/button";
 import { connectAccount } from "@/features/accounts";
+import { ReturnHere } from "@/features/accounts/client";
 import { cn } from "cn";
 import type { Delta } from "./format";
 import type { AnalyticsAccount } from "./data";
@@ -130,6 +131,7 @@ export function AccountProblems({ accounts }: { accounts: AnalyticsAccount[] }) 
             before it disconnected.
           </span>
           <input type="hidden" name="platform" value={a.platform} />
+          <ReturnHere />
           <Button type="submit" variant="secondary">
             Reconnect {platformName(a.platform)}
           </Button>

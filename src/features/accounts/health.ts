@@ -107,9 +107,9 @@ export async function checkAccountsHealth(
 
 /**
  * Comments received since `backfill_from` on accounts that asked for it, inserted the same way
- * the webhook does (unique platform comment id, so nothing duplicates). DMs aren't backfilled:
- * the webhook's message id is Zernio's internal id, and the list endpoint's id isn't confirmed
- * to match (VERIFY), so a backfilled DM could become a second item and a second reply.
+ * the webhook does (unique platform comment id, so nothing duplicates). Reconnects and recoveries
+ * only; a first connect gets the 30-day catch-up instead (features/catch-up), which also pulls
+ * DMs, deduplicated on Meta's message id.
  */
 export async function backfillComments(
   deps: Deps,

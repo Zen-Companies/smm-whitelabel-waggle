@@ -4,9 +4,10 @@
 export type PlanChipState =
   | { kind: "trial"; planName: string; daysLeft: number }
   | { kind: "plan"; planName: string; used: number; allowance: number }
-  | { kind: "reached" }
-  | { kind: "past_due" }
-  | { kind: "choose" };
+  /** Free (19 Nov): no paid plan. Its offer is always Upgrade to Solo, never an add-on. */
+  | { kind: "free"; used: number; allowance: number }
+  | { kind: "reached"; free?: boolean }
+  | { kind: "past_due" };
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -18,10 +19,15 @@ export function planChipState(input: {
   trialEndsAt: string | null;
   replies: { used: number; allowance: number } | null;
   now: Date;
-  /** Stripe is set up on this server; without it nobody can choose a plan. */
-  stripeOn: boolean;
+  /** Stripe is set up on this server. Unused since Free (no paid plan is still a plan). */
+  stripeOn?: boolean;
 }): PlanChipState | null {
-  if (!input.planName) return input.stripeOn ? { kind: "choose" } : null;
+  if (!input.planName) {
+    // No replies counted (an organization holding a test brand): nothing to show.
+    if (!input.replies) return null;
+    if (input.replies.used >= input.replies.allowance) return { kind: "reached", free: true };
+    return { kind: "free", used: input.replies.used, allowance: input.replies.allowance };
+  }
   if (input.status === "past_due") return { kind: "past_due" };
   if (input.replies && input.replies.used >= input.replies.allowance) return { kind: "reached" };
   if (input.status === "trialing" && input.trialEndsAt) {
@@ -45,12 +51,13 @@ export function planChipText(state: PlanChipState, short = false): string {
     }
     case "plan":
       return state.planName;
+    case "free":
+      return short ? "Free" : "Free · Upgrade";
     case "reached":
+      if (state.free) return short ? "Upgrade" : "Replies used up · Upgrade to Solo";
       return short ? "Add 200 replies" : "Replies used up · Add 200 for $15";
     case "past_due":
       return short ? "Update card" : "Card declined · Update card";
-    case "choose":
-      return "Choose a plan";
   }
 }
 

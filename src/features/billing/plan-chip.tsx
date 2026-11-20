@@ -5,10 +5,11 @@ import { StateMark } from "@/components/app/state-mark";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
 import { loadBilling } from "./billing-store";
-import { isPlanId } from "./plans";
+import { accountAllowance, BUSINESS_CALL_URL, EXTRAS, isPlanId } from "./plans";
+import { planPeek, type PlanPeek } from "./plan-peek";
 import { planChipState, planChipText, showOnPhone, type PlanChipState } from "./plan-chip-state";
-import { getStripe } from "./stripe-client";
 import { planIsLive } from "./subscription";
+import { upgradeHref } from "./upgrade";
 import { loadPlans, loadReplyLimit } from "./usage";
 
 // Your plan next to your profile (design "Your plan next to your profile, and connecting in a
@@ -19,31 +20,73 @@ export const PLAN_HREF = "/plan";
 
 /** Once per request: the header, the menu and More share it. */
 const loadChip = cache(
-  async (orgId: string): Promise<{ state: PlanChipState | null; renews: string | null }> => {
+  async (
+    orgId: string,
+  ): Promise<{ state: PlanChipState | null; renews: string | null; peek: PlanPeek | null }> => {
     const db = getServiceClient();
     const now = new Date();
-    const [bill, plans] = await Promise.all([loadBilling(db, orgId), loadPlans(db)]);
+    const [bill, plans, brandRows] = await Promise.all([
+      loadBilling(db, orgId),
+      loadPlans(db),
+      db.from("tenants").select("id").eq("organization_id", orgId).is("offboarded_at", null),
+    ]);
     const live = !!bill && planIsLive(bill.status) && isPlanId(bill.plan);
-    const replies = live ? await loadReplyLimit(db, orgId, now) : null;
+    // Free counts replies too (19 Nov).
+    const replies = await loadReplyLimit(db, orgId, now);
     const state = planChipState({
       status: bill?.status ?? null,
       planName: live && isPlanId(bill!.plan) ? plans[bill!.plan].name : null,
       trialEndsAt: bill?.trial_ends_at ?? null,
       replies: replies ? { used: replies.limit.used, allowance: replies.limit.allowance } : null,
       now,
-      stripeOn: !!getStripe(),
     });
     const renews =
       live && bill?.current_period_end && bill.status === "active"
-        ? new Date(bill.current_period_end).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            timeZone: "UTC",
-          })
+        ? shortDay(bill.current_period_end)
         : null;
-    return { state, renews };
+    if (!state || !replies) return { state, renews, peek: null };
+
+    // The hover card (20 Nov): accounts, businesses and replies on their own, as Your plan says.
+    const ids = (brandRows.data ?? []).map((b) => b.id);
+    const [accounts, autos] = ids.length
+      ? await Promise.all([
+          db
+            .from("social_accounts")
+            .select("id", { count: "exact", head: true })
+            .in("tenant_id", ids)
+            .eq("status", "active")
+            .then((r) => r.count ?? 0),
+          db
+            .from("autonomy_settings")
+            .select("category")
+            .in("tenant_id", ids)
+            .eq("mode", "auto")
+            .then((r) => (r.data ?? []).map((a) => a.category as string)),
+        ])
+      : [0, [] as string[]];
+    const { plan, limit } = replies;
+    const peek = planPeek({
+      state,
+      planName: plan.details.name,
+      planId: plan.plan,
+      renews,
+      replies: { used: limit.used, allowance: limit.allowance, resets: shortDay(limit.resetsAt) },
+      accounts: {
+        connected: accounts,
+        allowance: accountAllowance(plan.details, plan.extraAccounts),
+        paid: plan.plan !== "free",
+      },
+      brands: { count: ids.length, limit: plan.details.brands },
+      autoReplyIncluded: plan.details.features.autoReply,
+      autoCategories: autos,
+      accountUsd: EXTRAS.accountUsd,
+    });
+    return { state, renews, peek };
   },
 );
+
+const shortDay = (d: Date | string) =>
+  new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** Five small cells, filled by replies used. */
 function MiniComb({ used, allowance }: { used: number; allowance: number }) {
@@ -65,14 +108,15 @@ const TONE: Record<PlanChipState["kind"], string> = {
   trial: "border-honey-border bg-honey-tint text-ink",
   plan: "border-line bg-surface text-ink",
   reached: "border-honey bg-honey text-[#17140F]",
-  choose: "border-honey bg-honey text-[#17140F]",
+  free: "border-honey-border bg-honey-tint text-ink",
   past_due: "border-danger/40 bg-surface text-danger",
 };
 
 function Mark({ state }: { state: PlanChipState }) {
   if (state.kind === "trial") return <StateMark state="waiting" />;
   if (state.kind === "past_due") return <StateMark state="needs" />;
-  if (state.kind === "plan") return <MiniComb used={state.used} allowance={state.allowance} />;
+  if (state.kind === "plan" || state.kind === "free")
+    return <MiniComb used={state.used} allowance={state.allowance} />;
   return null;
 }
 
@@ -80,11 +124,11 @@ function Mark({ state }: { state: PlanChipState }) {
 export type PlanViewer = { orgId: string; isOwner: boolean };
 
 export async function PlanChip({ orgId, isOwner }: PlanViewer) {
-  const { state } = await loadChip(orgId);
+  const { state, peek } = await loadChip(orgId);
   if (!state || !isOwner) return null;
-  return (
+  const pill = (
     <Link
-      href={PLAN_HREF}
+      href={chipHref(state)}
       aria-label={`Your plan: ${planChipText(state)}`}
       className={cn(
         "min-h-9 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 hover:opacity-90",
@@ -102,7 +146,142 @@ export async function PlanChip({ orgId, isOwner }: PlanViewer) {
       )}
     </Link>
   );
+  if (!peek) return pill;
+  // Hover (after a short pause) or keyboard focus opens the card; clicking the pill still goes to
+  // Your plan. Screens without hover (phones) never show it: the plan is under More there.
+  return (
+    <span
+      className={cn(
+        "group/peek relative",
+        showOnPhone(state) ? "inline-flex" : "hidden md:inline-flex",
+      )}
+    >
+      {pill}
+      <span className="invisible absolute top-full right-0 z-50 hidden pt-2 opacity-0 transition-[opacity,visibility] duration-150 group-focus-within/peek:visible group-focus-within/peek:opacity-100 md:block [@media(hover:hover)]:group-hover/peek:visible [@media(hover:hover)]:group-hover/peek:opacity-100 [@media(hover:hover)]:group-hover/peek:delay-150">
+        <PeekCard peek={peek} />
+      </span>
+    </span>
+  );
 }
+
+/** Ten comb cells for the month's AI replies. */
+function PeekComb({ used, allowance }: { used: number; allowance: number }) {
+  const cells = 10;
+  const full = allowance > 0 ? Math.min(cells, Math.round((used / allowance) * cells)) : 0;
+  const r = 8;
+  const dx = r * 1.732 + 2;
+  const w = Math.ceil(dx * cells + 2);
+  return (
+    <svg aria-hidden width={w} height={2 * r + 4} viewBox={`0 0 ${w} ${2 * r + 4}`}>
+      {Array.from({ length: cells }, (_, i) => {
+        const x = r + 1 + i * dx;
+        const points = Array.from({ length: 6 }, (_, k) => {
+          const a = ((60 * k - 30) * Math.PI) / 180;
+          return `${(x + r * Math.cos(a)).toFixed(1)},${(r + 2 + r * Math.sin(a)).toFixed(1)}`;
+        }).join(" ");
+        return (
+          <polygon
+            key={i}
+            points={points}
+            fill={i < full ? "var(--honey)" : "var(--surface)"}
+            stroke={i < full ? "var(--ink)" : "var(--line-strong)"}
+            strokeWidth="1.3"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+const PEEK_BUTTON =
+  "bg-ink inline-flex min-h-9 items-center rounded-xl px-3 text-[13px] font-semibold whitespace-nowrap text-white no-underline";
+
+function PeekAction({ peek }: { peek: PlanPeek }) {
+  switch (peek.action.kind) {
+    case "upgrade":
+      return (
+        <Link href={upgradeHref("replies")} className={PEEK_BUTTON}>
+          Upgrade to Solo
+        </Link>
+      );
+    case "top_up":
+      return (
+        <Link href={PLAN_HREF} className={PEEK_BUTTON}>
+          Add {EXTRAS.topUp.replies} for ${EXTRAS.topUp.usd}
+        </Link>
+      );
+    case "update_card":
+      return (
+        <Link href={PLAN_HREF} className={PEEK_BUTTON}>
+          Update card
+        </Link>
+      );
+    case "call":
+      return (
+        <a
+          href={BUSINESS_CALL_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-ink-3 hover:text-ink text-[13px]"
+        >
+          Changes: talk to Jason
+        </a>
+      );
+    case "none":
+      return null;
+  }
+}
+
+/** The card under the pill (canvas "Plan pill peek + Free and Solo bees", approved 20 Nov). */
+function PeekCard({ peek }: { peek: PlanPeek }) {
+  return (
+    <span
+      role="group"
+      aria-label="Your plan"
+      className="border-line bg-surface flex w-[340px] flex-col gap-1.5 rounded-2xl border p-4 text-left whitespace-normal shadow-[0_12px_32px_rgba(23,20,15,0.12)]"
+    >
+      <span className="text-ink-3 text-xs">Your plan</span>
+      <b className="text-base font-semibold">{peek.title}</b>
+      <span className="flex flex-col gap-1.5 pt-1 pb-2">
+        <PeekComb used={peek.replies.used} allowance={peek.replies.allowance} />
+        <span className="text-[13px]">
+          <b>
+            {peek.replies.used} of {peek.replies.allowance}
+          </b>{" "}
+          AI replies this month · resets {peek.replies.resets}
+        </span>
+      </span>
+      {peek.rows.map((row) => (
+        <span
+          key={row.name}
+          className="border-line flex items-baseline justify-between gap-3 border-t py-2"
+        >
+          <span className="text-ink-2 text-sm">{row.name}</span>
+          <span className="flex flex-col items-end gap-0.5 text-right">
+            <span className={cn("text-sm", row.quiet ? "text-ink-3" : "font-semibold")}>
+              {row.value}
+            </span>
+            {row.note && <span className="text-ink-3 text-xs">{row.note}</span>}
+          </span>
+        </span>
+      ))}
+      <span className="border-line flex items-center justify-between gap-3 border-t pt-3">
+        {peek.note ? (
+          <span className="text-ink-3 max-w-[180px] text-xs">{peek.note}</span>
+        ) : (
+          <Link href={PLAN_HREF} className="action-link with-arrow text-[13px]">
+            Open Your plan
+          </Link>
+        )}
+        <PeekAction peek={peek} />
+      </span>
+    </span>
+  );
+}
+
+/** Free out of replies goes straight to the upgrade screen; everything else to Your plan. */
+const chipHref = (state: PlanChipState) =>
+  state.kind === "reached" && state.free ? upgradeHref("replies") : PLAN_HREF;
 
 function summary(state: PlanChipState, renews: string | null): { title: string; line: string } {
   switch (state.kind) {
@@ -113,12 +292,17 @@ function summary(state: PlanChipState, renews: string | null): { title: string; 
         title: renews ? `${state.planName} · renews ${renews}` : state.planName,
         line: `${state.used} of ${state.allowance} replies this month`,
       };
+    case "free":
+      return { title: "Free", line: `${state.used} of ${state.allowance} replies this month` };
     case "reached":
-      return { title: "Replies used up", line: "Add 200 for $15, or wait for next month" };
+      return state.free
+        ? {
+            title: "Replies used up",
+            line: "To get more replies this month, upgrade to Solo or above",
+          }
+        : { title: "Replies used up", line: "Add 200 for $15, or wait for next month" };
     case "past_due":
       return { title: "Card declined", line: "Update your card so Waggle keeps writing" };
-    case "choose":
-      return { title: "No plan yet", line: "Choose a plan to keep Waggle writing" };
   }
 }
 
@@ -132,7 +316,9 @@ export async function PlanMenuRow({ orgId, isOwner }: PlanViewer) {
       <span className="text-ink-3 text-xs">Your plan</span>
       <b className="text-sm font-semibold">{title}</b>
       <span className="text-ink-2 flex items-center gap-2 text-[13px]">
-        {state.kind === "plan" && <MiniComb used={state.used} allowance={state.allowance} />}
+        {(state.kind === "plan" || state.kind === "free") && (
+          <MiniComb used={state.used} allowance={state.allowance} />
+        )}
         {line}
       </span>
       {isOwner && (
@@ -163,7 +349,9 @@ export async function PlanMoreRow({ orgId, isOwner }: PlanViewer) {
         <span className="text-ink-3 text-xs">Your plan</span>
         <b className="font-semibold">{title}</b>
         <span className="text-ink-2 flex items-center gap-2 text-[13px]">
-          {state.kind === "plan" && <MiniComb used={state.used} allowance={state.allowance} />}
+          {(state.kind === "plan" || state.kind === "free") && (
+            <MiniComb used={state.used} allowance={state.allowance} />
+          )}
           {line}
         </span>
       </span>

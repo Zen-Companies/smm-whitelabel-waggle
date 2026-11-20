@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { connectAccount } from "./actions";
 import { reconnectBarCopy } from "./banner-copy";
+import { ReturnHere } from "./return-here";
 import { platformLabel } from "@/lib/social/platforms";
 
 /**
@@ -65,6 +66,7 @@ export async function AccountBanner() {
         </p>
         <form action={connectAccount}>
           <input type="hidden" name="platform" value={down.platform} />
+          <ReturnHere />
           <Button type="submit" variant="primary" className="min-h-[38px]">
             Reconnect {platform}
           </Button>

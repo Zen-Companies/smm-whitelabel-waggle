@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
+import { redraftAfterAnswerChange } from "@/features/catch-up";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getLlmClientOrNull } from "@/lib/llm";
@@ -34,6 +35,20 @@ const entrySchema = z.object({
 /** Saving a suggested topic (T33) accepts the suggestion. */
 const createSchema = entrySchema.extend({ suggestionId: z.uuid().optional() });
 const idSchema = z.object({ id: z.uuid() });
+
+/**
+ * First connect (20 Nov): pulled drafts still waiting for approval that this answer could change
+ * are written again (bounded; after the response, so saving stays fast).
+ */
+function redraftLater(tenantId: string, kbEntryId: string | null, actor: string) {
+  after(async () => {
+    try {
+      await redraftAfterAnswerChange(getServiceClient(), { tenantId, kbEntryId, actor });
+    } catch (error) {
+      Sentry.captureException(error, { extra: { tenantId, kbEntryId } });
+    }
+  });
+}
 
 /** Embeds after the response is sent; if it fails or isn't configured, the job sweep retries. */
 function embedLater(entryId: string) {
@@ -88,6 +103,7 @@ export async function createKbEntry(_prev: KbFormState, formData: FormData): Pro
     }
   }
   embedLater(data.id);
+  redraftLater(tenant.id, null, tenant.userId);
   revalidatePath("/teach/business-info");
   revalidatePath("/teach");
   // Open the new topic in the editor (design v2: one topic at a time).
@@ -139,6 +155,7 @@ export async function answerQuestionAction(
     details: { kbEntryId: data.id, from: "teach_question" },
   });
   embedLater(data.id);
+  redraftLater(tenant.id, null, tenant.userId);
   revalidatePath("/teach");
   revalidatePath("/teach/business-info");
   return { saved: parsed.data.question, savedAt: Date.now() };
@@ -182,6 +199,7 @@ export async function addStarterAnswers(
     have.add(title.toLowerCase());
     saved += 1;
   }
+  if (saved > 0) redraftLater(tenant.id, null, tenant.userId);
   revalidatePath("/teach");
   revalidatePath("/teach/business-info");
   return { saved };
@@ -233,6 +251,7 @@ export async function addAnswerNow(pair: {
     // The sweep embeds it later; the try again just won't find it yet.
     Sentry.captureException(e, { extra: { kbEntryId: data.id } });
   }
+  redraftLater(tenant.id, null, tenant.userId);
   revalidatePath("/teach");
   revalidatePath("/teach/business-info");
   return { id: data.id, title };
@@ -262,6 +281,7 @@ export async function updateKbEntry(_prev: KbFormState, formData: FormData): Pro
   });
   // Unchanged text keeps its embedding; changed text was cleared by the T1 trigger.
   if (data[0].embedding === null) embedLater(id);
+  redraftLater(tenant.id, id, tenant.userId);
   revalidatePath("/teach/business-info");
   revalidatePath("/teach");
   return { saved: true };
@@ -285,6 +305,7 @@ export async function deleteKbEntry(formData: FormData): Promise<void> {
       actor: tenant.userId,
       details: { kbEntryId: id },
     });
+    redraftLater(tenant.id, id, tenant.userId);
   }
   revalidatePath("/teach/business-info");
   revalidatePath("/teach");

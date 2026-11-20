@@ -2,8 +2,15 @@
 // only Jason changes a price or a plan). Pure: no Stripe, no database. These are the defaults:
 // staff can change what each plan includes on Staff → Plans (plan_settings), and the app reads
 // the merged result (applyPlanSettings). Prices live here and in Stripe.
+//
+// 19 Nov (Jason): a Free plan with no card (1 account, 100 replies, "Ask me first" only, no
+// add-ons), Solo at 300 replies with auto-reply, Team at 6 accounts, and Business by call only.
 
-export type PlanId = "solo" | "business" | "team";
+export type PlanId = "free" | "solo" | "business" | "team";
+/** The plans sold in Stripe (Free is no subscription at all). */
+export type PaidPlanId = Exclude<PlanId, "free">;
+export const PAID_PLAN_IDS: PaidPlanId[] = ["solo", "business", "team"];
+export const PLAN_IDS: PlanId[] = ["free", ...PAID_PLAN_IDS];
 
 export interface Plan {
   id: PlanId;
@@ -20,7 +27,7 @@ export interface Plan {
   replies: number;
   /** The most AI may cost us a month on this plan (the margin table's worst case). */
   aiCostCapUsd: number;
-  /** Selling now, or coming soon. */
+  /** Selling now (self-serve). Business is off sale: by call only (19 Nov). */
   forSale: boolean;
   features: {
     /** Waggle answers regular questions on its own, once the owner trusts it. */
@@ -35,6 +42,18 @@ export interface Plan {
 }
 
 export const PLANS: Record<PlanId, Plan> = {
+  free: {
+    id: "free",
+    name: "Free",
+    monthlyUsd: 0,
+    yearlyUsd: null,
+    accounts: 1,
+    brands: 1,
+    replies: 100,
+    aiCostCapUsd: 2,
+    forSale: true,
+    features: { autoReply: false, leadsFlagged: false, followUps: false, team: false },
+  },
   solo: {
     id: "solo",
     name: "Solo",
@@ -42,10 +61,11 @@ export const PLANS: Record<PlanId, Plan> = {
     yearlyUsd: 490,
     accounts: 3,
     brands: 1,
-    replies: 200,
-    aiCostCapUsd: 4,
+    replies: 300,
+    aiCostCapUsd: 6,
     forSale: true,
-    features: { autoReply: false, leadsFlagged: false, followUps: false, team: false },
+    // Auto-reply is the main reason to leave Free (Jason, 19 Nov).
+    features: { autoReply: true, leadsFlagged: false, followUps: false, team: false },
   },
   business: {
     id: "business",
@@ -53,7 +73,7 @@ export const PLANS: Record<PlanId, Plan> = {
     name: "Team",
     monthlyUsd: 99,
     yearlyUsd: 990,
-    accounts: 4,
+    accounts: 6,
     brands: null,
     replies: 750,
     aiCostCapUsd: 15,
@@ -62,7 +82,8 @@ export const PLANS: Record<PlanId, Plan> = {
   },
   team: {
     id: "team",
-    // Shown as Business (Jason, 17 Nov), on sale from launch, monthly only for now.
+    // Shown as Business (Jason, 17 Nov). 19 Nov: 10+ accounts, custom price, by call only (Book a
+    // call); staff set the organization up by hand. Anyone already on the $199 price keeps it.
     name: "Business",
     monthlyUsd: 199,
     yearlyUsd: null,
@@ -70,20 +91,32 @@ export const PLANS: Record<PlanId, Plan> = {
     brands: null,
     replies: 1500,
     aiCostCapUsd: 30,
-    forSale: true,
+    forSale: false,
     features: { autoReply: true, leadsFlagged: true, followUps: true, team: true },
   },
 };
 
-/** The plan to promote. */
-export const PROMOTED_PLAN: PlanId = "business";
+/** The plan to promote: the first step up from Free. */
+export const PROMOTED_PLAN: PlanId = "solo";
 
 export function isPlanId(v: unknown): v is PlanId {
   return typeof v === "string" && Object.hasOwn(PLANS, v);
 }
 
-/** Every new customer: 7 days free, card up front, starting when a waitlist spot opens. */
-export const TRIAL = { days: 7, cardRequired: true } as const;
+/** A plan Stripe sells (lookup keys, org_billing, checkout). */
+export function isPaidPlanId(v: unknown): v is PaidPlanId {
+  return isPlanId(v) && v !== "free";
+}
+
+/** Business is sold after a call with Jason (19 Nov): the plan's button opens his booking page. */
+export const BUSINESS_CALL_URL = "https://ro.am/jason-kulha/";
+
+/**
+ * 19 Nov: Free replaces the card-up-front trial, so no card is needed to start using Waggle.
+ * Moving from Free to a paid plan pays at checkout, with no trial (Febron, 20 Nov). `days` stays
+ * for subscriptions that started with the old 7-day trial.
+ */
+export const TRIAL = { days: 7, cardRequired: false } as const;
 
 /** Extras, all self-serve. */
 export const EXTRAS = {
@@ -96,7 +129,7 @@ export const EXTRAS = {
 } as const;
 
 /** The first 50 businesses get the $99 plan (shown as Team) at $79 a month for 6 months, then $99. */
-export const FOUNDING = { plan: "business" as PlanId, monthlyUsd: 79, months: 6, spots: 50 };
+export const FOUNDING = { plan: "business" as PaidPlanId, monthlyUsd: 79, months: 6, spots: 50 };
 
 /** Pure: when a trial that started at `start` ends. */
 export function trialEndsAt(start: Date): Date {
@@ -260,9 +293,16 @@ export function planBullets(plan: Plan): string[] {
           ? "Unlimited businesses and team members"
           : "Unlimited businesses, just you"
         : `${plan.brands} businesses${plan.features.team ? " and team members" : ", just you"}`;
+  // Free has no add-ons (19 Nov); Business is 10 or more accounts, sized on a call.
+  const accounts =
+    plan.id === "free"
+      ? `${n(plan.accounts)} account${plan.accounts === 1 ? "" : "s"}, no add-ons`
+      : plan.id === "team" && !plan.forSale
+        ? `${n(plan.accounts)}+ accounts`
+        : `${n(plan.accounts)} accounts, then $${EXTRAS.accountUsd} each`;
   return [
     who,
-    `${n(plan.accounts)} accounts, then $${EXTRAS.accountUsd} each`,
+    accounts,
     `About ${n(plan.replies)} AI replies a month`,
     plan.features.autoReply ? "Replies on its own, once you trust it" : "You approve every reply",
     ...(plan.features.leadsFlagged ? ["Leads and complaints flagged"] : []),

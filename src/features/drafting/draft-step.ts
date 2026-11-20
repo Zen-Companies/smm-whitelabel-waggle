@@ -4,6 +4,7 @@ import { writeAudit } from "@/lib/audit";
 import type { LlmClient } from "@/lib/llm/client";
 import type { SocialProvider } from "@/lib/social/types";
 import { loadTenantAiSpend } from "@/lib/llm/spend";
+import { holdPulledItem } from "./catch-up-cap";
 import { generateDraft } from "./generate";
 import { loadThreadHistory } from "./history";
 import { DRAFT_PROMPT_VERSION } from "./prompts";
@@ -35,6 +36,28 @@ export function createDraftStep(deps: {
     // allowance (T32): no draft. The cap is checked only for messages that would be drafted.
     const { input } = await loadPolicyInput(db, item.id, now);
     let pre = triage(input);
+    if (pre.decision === "draft") {
+      // First connect (20 Nov): a pulled question or lead is drafted only once its draft is
+      // asked for (the reveal's first 20, or the owner opening it). Until then it waits, sorted
+      // but undrafted, and costs nothing.
+      const { data: pulled, error: pulledError } = await db
+        .from("inbound_items")
+        .select("catch_up_id, draft_requested_at")
+        .eq("id", item.id)
+        .single();
+      if (pulledError) throw new Error(`draft: item lookup failed: ${pulledError.message}`);
+      if (
+        holdPulledItem({
+          catchUpId: pulled.catch_up_id,
+          draftRequestedAt: pulled.draft_requested_at,
+        })
+      ) {
+        return {
+          event: "hold",
+          details: { decision: "hold", policyReason: "catch_up_draft_cap", drafted: false },
+        };
+      }
+    }
     if (pre.decision === "draft") {
       const spend = await loadTenantAiSpend(db, item.tenantId, now);
       // The plan's AI replies a month (Pricing Bible): the same pause as the spend cap. Off until

@@ -9,6 +9,8 @@ export const CRM_EVENTS = {
   page_rating: "A page rating, or its reason (a note on the contact only)",
   trial_started: "Stripe: a subscription starts with a trial",
   account_connected: "The organization's first social account is connected",
+  first_reply_approved:
+    "The organization's first approved Waggle draft (the step most likely to lead to paying, 19 Nov)",
   business_info_saved: "A business profile is saved for the first time",
   trial_converted: "Stripe: the first payment goes through (trial over, or no trial)",
   plan_changed: "Stripe: the subscription moves to another plan",

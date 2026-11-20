@@ -30,6 +30,7 @@ describe("trialFromSession", () => {
   it("is a trial start for this organization's first plan checkout", () => {
     expect(trialFromSession(session(), "org-1")).toEqual({
       sessionId: "cs_test_abc1234567",
+      kind: "trial",
       plan: "business",
       valueUsd: 99,
     });
@@ -50,9 +51,14 @@ describe("trialFromSession", () => {
     expect(trialFromSession(session({ mode: "payment" }), "org-1")).toBeNull();
     expect(trialFromSession(session({ metadata: { kind: "top_up" } }), "org-1")).toBeNull();
   });
-  it("is nothing without a trial (a paid plan straight away)", () => {
+  it("a paid plan straight away (moving up from Free, 19 Nov) is a paid start", () => {
     expect(
       trialFromSession(session({ subscription: sub({ status: "active" }) }), "org-1"),
+    ).toMatchObject({ kind: "paid", plan: "business" });
+  });
+  it("is nothing for a subscription that isn't trialing or active", () => {
+    expect(
+      trialFromSession(session({ subscription: sub({ status: "incomplete" }) }), "org-1"),
     ).toBeNull();
     expect(
       trialFromSession(session({ subscription: sub({ trial_end: null }) }), "org-1"),

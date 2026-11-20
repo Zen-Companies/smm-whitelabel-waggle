@@ -1,6 +1,8 @@
+import { kickCatchUp, startCatchUp } from "@/features/catch-up";
 import { pauseAccountItems, resumeAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
+import { markSetupPassed } from "@/lib/setup/passed";
 import { hasLiveComments } from "@/lib/social/platforms";
 import { isSocialPlatform, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -8,7 +10,7 @@ import type { ServiceClient } from "@/lib/supabase/service";
 // account.connected / account.disconnected, called by the webhook mapping (T5) with a tenant it
 // has already verified. Both are safe to run twice for the same event.
 
-/** On a (re)connect, look this far back for comments (T16 backfill). */
+/** On a reconnect or recovery, look this far back for comments (T16 backfill). */
 export const BACKFILL_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export const SUPPORTED_PLATFORMS = SOCIAL_PLATFORMS;
@@ -34,9 +36,23 @@ export async function handleAccountConnected(
   if (outcome === "foreign") return { accountId: row.account_id, outcome, resumedItems: 0 };
 
   if (outcome !== "existing" || row.previous_status !== "active") {
-    // T16: pull comments that arrived while the account was away (or before it was connected).
+    // First connect (19 Nov): a catch-up of the last 30 days of comments and DMs replaces the
+    // 24-hour backfill. A reconnect or a recovery keeps the 24-hour backfill (T16).
+    const caughtUp =
+      outcome === "created" &&
+      (await startCatchUp(db, {
+        tenantId: input.tenantId,
+        socialAccountId: row.account_id,
+        platform: input.platform,
+        zernioAccountId: input.zernioAccountId,
+        username: input.username,
+      }));
+    // 20 Nov: start reading right away instead of at the next once-a-minute job run. Only asks
+    // the catch-up jobs route to run after this response (no AI here: CLAUDE.md rule 3).
+    if (caughtUp) kickCatchUp(input.tenantId);
+    // T16: pull comments that arrived while the account was away.
     // Only where Waggle's inbox covers the platform today.
-    if (hasLiveComments(input.platform)) {
+    if (!caughtUp && hasLiveComments(input.platform)) {
       await db
         .from("social_accounts")
         .update({ backfill_from: new Date(Date.now() - BACKFILL_WINDOW_MS).toISOString() })
@@ -55,6 +71,9 @@ export async function handleAccountConnected(
         previousZernioAccountId: row.previous_zernio_account_id,
       },
     });
+    // Setup first, then free (20 Nov): a connected account means the brand is through setup,
+    // so the reveal's and the morning email's links into the app always open (once; audited).
+    await markSetupPassed(db, { tenantId: input.tenantId, how: "connected", userId: null });
   }
 
   // CRM: the organization's first connected account (once; the dedupe key holds it).

@@ -10,6 +10,7 @@ import {
   UNDO_WINDOW_MS,
 } from "@/features/approvals/decisions";
 import { loadInbox } from "@/features/approvals/inbox-data";
+import { SEND_SPACING_MS } from "@/features/approvals/send-spacing";
 import type { Database } from "@/lib/supabase/database.types";
 import { anonClient, serviceClient, uniqueEmail } from "./helpers";
 
@@ -63,6 +64,14 @@ function ownerClient(o: Owner) {
     accessToken: async () => o.token,
   });
 }
+
+/** As if every reply approved so far had gone out: nothing booked on the account. */
+const clearBookings = (o: Owner) =>
+  db
+    .from("inbound_items")
+    .update({ next_run_at: null })
+    .eq("social_account_id", o.accountId)
+    .eq("status", "sending");
 
 let kbHours: string;
 async function waitingItem(o: Owner, body = "We're open 8am to 10pm on Sundays.") {
@@ -247,6 +256,9 @@ describe("approval inbox", () => {
   });
 
   it("approve holds the reply for the undo window; undo puts it back to waiting", async () => {
+    // Replies approved by earlier tests are booked on the same account; spacing would push this
+    // one after them (tested below).
+    await clearBookings(a);
     const { itemId, draftId } = await waitingItem(a);
     const input = { tenantId: a.tenantId, userId: a.userId, itemId, draftId };
     const before = Date.now();
@@ -272,6 +284,33 @@ describe("approval inbox", () => {
     expect(item?.status).toBe("awaiting_approval");
     expect(draft).toMatchObject({ status: "pending", decided_by: null, edited_body: null });
     expect(audit?.map((r) => r.action)).toContain("draft_approval_undone");
+  });
+
+  it("replies approved back to back on one account are booked SEND_SPACING_MS apart", async () => {
+    await clearBookings(a);
+    const first = await waitingItem(a);
+    const second = await waitingItem(a);
+    const third = await waitingItem(a);
+    for (const it of [first, second, third]) {
+      expect(await approveDraft(db, { tenantId: a.tenantId, userId: a.userId, ...it })).toEqual({
+        ok: true,
+      });
+    }
+    const slots = await Promise.all(
+      [first, second, third].map(async (it) => {
+        const { data } = await db
+          .from("inbound_items")
+          .select("next_run_at")
+          .eq("id", it.itemId)
+          .single();
+        return new Date(data!.next_run_at!).getTime();
+      }),
+    );
+    // Approving stays instant: all three are sending, each held past the undo window.
+    expect(slots[1]! - slots[0]!).toBeGreaterThanOrEqual(SEND_SPACING_MS);
+    expect(slots[2]! - slots[1]!).toBeGreaterThanOrEqual(SEND_SPACING_MS);
+    expect(slots[2]! - slots[0]!).toBeLessThan(2 * SEND_SPACING_MS + 5_000);
+    await clearBookings(a);
   });
 
   it("undo is refused once the send has started or the window has passed", async () => {

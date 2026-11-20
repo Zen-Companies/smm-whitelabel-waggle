@@ -9,7 +9,7 @@ import {
   matchKeys,
 } from "@/features/ad-tracking";
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
-import { requirePlan, TrialConversionTag } from "@/features/billing";
+import { TrialConversionTag } from "@/features/billing";
 import { StepsAhead } from "@/features/setup";
 import { AddBrandForm, getOpenOrg } from "@/features/tenants";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
@@ -115,8 +115,6 @@ async function Content({ beta }: { beta: boolean }) {
 
   const mayAdd = can(org.role, "brands.add");
   const invites = await loadInvites(user.id);
-  // Plan before setup (18 Nov): pick a plan first, unless an invite to a seat is waiting here.
-  if (invites.length === 0) await requirePlan(org.id, org.role);
   const name = firstName(user.user_metadata, user.email);
   const betaBanner = beta && (
     <p role="status" className="banner">

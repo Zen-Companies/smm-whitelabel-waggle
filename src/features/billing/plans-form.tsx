@@ -5,9 +5,9 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { updatePlanSettings, type PlanSettingsState } from "./actions";
-import type { Plan, PlanId } from "./plans";
+import { PLAN_IDS, type Plan, type PlanId } from "./plans";
 
-const IDS: PlanId[] = ["solo", "business", "team"];
+const IDS: PlanId[] = PLAN_IDS;
 
 const SWITCHES = [
   { field: "team", label: "Team members", get: (p: Plan) => p.features.team },

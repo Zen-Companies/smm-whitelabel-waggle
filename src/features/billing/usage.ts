@@ -6,7 +6,7 @@ import {
   applyPlanSettings,
   canAddBrand,
   canConnectAnother,
-  isPlanId,
+  isPaidPlanId,
   replyAllowance,
   type Plan,
   type PlanId,
@@ -16,11 +16,11 @@ import { loadBilling, loadTopUps } from "./billing-store";
 import { replyLimit, type ReplyLimit } from "./reply-limit";
 import { planIsLive } from "./subscription";
 
-// Plan limits in the app (Pricing Bible, "Still to build": per-plan reply limits). Off until
-// billing ships: the `billing.plans` switch is off by default, and no organization has a plan
-// until it's stored with its Stripe subscription (T86). Until both, nothing is limited.
+// Plan limits in the app (Pricing Bible). 19 Nov: every organization without a paid plan is on
+// Free (1 account, 100 replies, "Ask me first" only), so limits are on unless staff switch them
+// off. Organizations holding a test brand are never limited.
 
-/** Staff switch for plan limits (one row, no brand). Off unless switched on. */
+/** Staff switch for plan limits (one row, no brand). On unless a row switches it off (19 Nov). */
 export const PLANS_FLAG = "billing.plans";
 
 export async function planLimitsOn(db: ServiceClient): Promise<boolean> {
@@ -30,7 +30,7 @@ export async function planLimitsOn(db: ServiceClient): Promise<boolean> {
     .eq("key", PLANS_FLAG)
     .is("tenant_id", null)
     .maybeSingle();
-  return data?.enabled === true;
+  return data?.enabled !== false;
 }
 
 /**
@@ -56,10 +56,25 @@ export interface OrgPlan {
   carriedReplies: number;
 }
 
+/** Pure: an organization's plan id: its live paid plan, else Free (19 Nov). */
+export function orgPlanId(bill: { status: string | null; plan: string | null } | null): PlanId {
+  return bill && planIsLive(bill.status) && isPaidPlanId(bill.plan) ? bill.plan : "free";
+}
+
+/** Whether the organization holds a test brand (Staff → Brands): never limited. */
+async function hasTestBrand(db: ServiceClient, orgId: string): Promise<boolean> {
+  const { count } = await db
+    .from("tenants")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .eq("is_test", true);
+  return (count ?? 0) > 0;
+}
+
 /**
  * The organization's plan (the organization owns the bill, decided 10 Nov), from its Stripe
- * subscription as the webhook stored it. Null without a subscription that's trialing, active or
- * past due (Stripe still retrying the card).
+ * subscription as the webhook stored it (trialing, active or past due). Without one it's on Free
+ * (19 Nov). Null only for an organization holding a test brand: nothing is limited there.
  */
 export async function loadOrgPlan(
   db: ServiceClient,
@@ -67,11 +82,22 @@ export async function loadOrgPlan(
   now: Date = new Date(),
 ): Promise<OrgPlan | null> {
   const bill = await loadBilling(db, orgId);
-  if (!bill || !planIsLive(bill.status) || !isPlanId(bill.plan)) return null;
-  const details = (await loadPlans(db))[bill.plan];
+  const id = orgPlanId(bill);
+  if (id === "free") {
+    if (await hasTestBrand(db, orgId)) return null;
+    return {
+      plan: "free",
+      details: (await loadPlans(db)).free,
+      extraAccounts: 0,
+      topUpsThisMonth: 0,
+      carriedReplies: 0,
+    };
+  }
+  if (!bill) return null;
+  const details = (await loadPlans(db))[id];
   const topUps = await loadTopUps(db, orgId, details.replies, now);
   return {
-    plan: bill.plan,
+    plan: id,
     details,
     extraAccounts: bill.extra_accounts,
     topUpsThisMonth: topUps.thisMonth,
@@ -166,6 +192,15 @@ async function planForBrand(
 }
 
 /**
+ * Whether the organization is on Free with limits on (19 Nov): its limits open the upgrade
+ * screen instead of offering an add-on.
+ */
+export async function orgOnFree(db: ServiceClient, orgId: string): Promise<boolean> {
+  if (!(await planLimitsOn(db))) return false;
+  return (await loadOrgPlan(db, orgId))?.plan === "free";
+}
+
+/**
  * For Connect: whether the organization's plan has room for one more account (its plan's
  * accounts plus extras, counted across its brands). True while plan limits are off or there's
  * no plan.
@@ -189,8 +224,8 @@ export async function roomForAnotherAccount(db: ServiceClient, tenantId: string)
 }
 
 /**
- * For "Reply on its own": Solo approves every reply (Pricing Bible); Business and Team may let
- * Waggle answer regular questions on its own. True while plan limits are off or there's no plan.
+ * For "Reply on its own": Free approves every reply; Solo and up may let Waggle answer regular
+ * questions on its own (19 Nov). True while plan limits are off or there's no plan.
  */
 export async function planAllowsAutoReply(db: ServiceClient, tenantId: string): Promise<boolean> {
   const found = await planForBrand(db, tenantId);

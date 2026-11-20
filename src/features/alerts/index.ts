@@ -19,3 +19,5 @@ export { Bell } from "./bell";
 export { MarkItemRead } from "./mark-item-read";
 export { countUnreadNeedingAction, describeNotification, loadNotifications } from "./notifications";
 export type { NotificationKind, NotificationView } from "./notifications";
+export { sendMorningAfterEmails } from "./morning-after-send";
+export type { MorningAfterSummary } from "./morning-after-send";

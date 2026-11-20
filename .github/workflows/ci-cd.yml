@@ -5,7 +5,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, staging]
   pull_request:
   workflow_dispatch:
 
@@ -53,6 +53,15 @@ jobs:
       - run: supabase start -x studio,imgproxy,inbucket,logflare,vector,supavisor,edge-runtime
       - run: pnpm test:db
       - run: pnpm test:integration
+      # The production build, against this local Supabase (some staff pages read it while
+      # prerendering): catches what tests and typecheck can't, like server-only code pulled into a
+      # client bundle (the staging deploy that failed on 20 Nov). Nothing here reaches a real service.
+      - name: Production build
+        run: |
+          eval "$(supabase status -o env)"
+          export NEXT_PUBLIC_SUPABASE_URL="$API_URL" NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export SOCIAL_PROVIDER_MODE=mock APP_URL=http://localhost:3000 NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_ci_placeholder
+          pnpm build
       - if: always()
         run: supabase stop --no-backup
 
@@ -71,6 +80,28 @@ jobs:
         with:
           version: ${{ env.SUPABASE_CLI_VERSION }}
       - run: supabase link --project-ref vkwstnnrqxcbiafyjkfc
+      - name: Pending migrations
+        run: supabase migration list --remote
+      - run: supabase db push --remote --yes
+
+  # Staging (hive-723mp4.gowaggle.ai) has its own database: every push to the staging branch
+  # applies new migrations there too, so staging never runs code against an old schema.
+  # Vercel deploys staging itself (Git integration). Secrets: STAGING_SUPABASE_ACCESS_TOKEN
+  # (a token of the account that owns the staging project) and STAGING_SUPABASE_DB_PASSWORD.
+  migrate-staging:
+    name: Apply migrations to staging Supabase
+    needs: [checks, db-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/staging'
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.STAGING_SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.STAGING_SUPABASE_DB_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+      - run: supabase link --project-ref jmtiruircxnaqtoozika
       - name: Pending migrations
         run: supabase migration list --remote
       - run: supabase db push --remote --yes

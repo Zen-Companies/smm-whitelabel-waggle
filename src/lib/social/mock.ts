@@ -8,6 +8,7 @@ import type {
   CreatePostInput,
   ProviderComment,
   ProviderCommentReply,
+  ProviderConversation,
   ProviderMessage,
   ProviderReview,
   ProviderPostStatus,
@@ -51,7 +52,7 @@ import type {
   CommentAutomationLogEntry,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
-import { SocialProviderError } from "./types";
+import { DM_ACCESS_MISSING, SocialProviderError } from "./types";
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 import {
   MOCK_BEST_TIMES,
@@ -1805,7 +1806,7 @@ export class MockSocialProvider implements SocialProvider {
     conversationId: string;
     accountId: string;
   }): Promise<ProviderMessage[]> {
-    return this.sends
+    const sent: ProviderMessage[] = this.sends
       .filter((s) => s.kind === "dm" && s.targetId === input.conversationId)
       .reverse()
       .map((s) => ({
@@ -1813,6 +1814,65 @@ export class MockSocialProvider implements SocialProvider {
         direction: "outgoing",
         text: s.message,
         createdAt: new Date().toISOString(),
+      }));
+    const seeded = this.catchUpConversations.find((c) => c.id === input.conversationId);
+    return [
+      ...sent,
+      ...[...(seeded?.messages ?? [])].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    ];
+  }
+
+  /**
+   * First-connect catch-up: what the account "already had" (tests and the local demo seed it).
+   * Empty by default, so a mock connect pulls nothing.
+   */
+  catchUpPosts: { postId: string; caption?: string | null; comments: ProviderComment[] }[] = [];
+  catchUpConversations: (ProviderConversation & { messages: ProviderMessage[] })[] = [];
+  /** First connect: the account's messages can't be read (Zernio's failedAccounts). */
+  catchUpDmAccessMissing = false;
+
+  async listCommentedPostsPage(input: { cursor?: string | null; limit?: number }): Promise<{
+    postIds: string[];
+    posts: { id: string; caption: string | null }[];
+    nextCursor: string | null;
+  }> {
+    const start = Number(input.cursor ?? 0);
+    const size = input.limit ?? 50;
+    const page = this.catchUpPosts.slice(start, start + size);
+    const next = start + size < this.catchUpPosts.length ? String(start + size) : null;
+    return {
+      postIds: page.map((p) => p.postId),
+      posts: page.map((p) => ({ id: p.postId, caption: p.caption ?? null })),
+      nextCursor: next,
+    };
+  }
+
+  async listPostCommentsPage(input: {
+    postId: string;
+    cursor?: string | null;
+    limit?: number;
+  }): Promise<{ comments: ProviderComment[]; nextCursor: string | null }> {
+    const all = this.catchUpPosts.find((p) => p.postId === input.postId)?.comments ?? [];
+    const start = Number(input.cursor ?? 0);
+    const size = input.limit ?? 50;
+    const next = start + size < all.length ? String(start + size) : null;
+    return { comments: all.slice(start, start + size), nextCursor: next };
+  }
+
+  async listConversations(): Promise<ProviderConversation[]> {
+    if (this.catchUpDmAccessMissing) {
+      throw new SocialProviderError("mock listConversations: account's messages unavailable", {
+        code: DM_ACCESS_MISSING,
+        ambiguous: false,
+      });
+    }
+    return [...this.catchUpConversations]
+      .sort((a, b) => ((a.updatedTime ?? "") < (b.updatedTime ?? "") ? 1 : -1))
+      .map((c) => ({
+        id: c.id,
+        participantId: c.participantId,
+        participantName: c.participantName,
+        updatedTime: c.updatedTime,
       }));
   }
 

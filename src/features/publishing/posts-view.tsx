@@ -2,6 +2,8 @@ import { CalendarClock, ChevronLeft, ChevronRight, CircleAlert, CircleCheck } fr
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { SidePanel } from "@/components/app/side-panel";
+import { NotConnectedYet } from "@/features/accounts";
+import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { cn } from "cn";
 import {
@@ -108,6 +110,15 @@ export async function PostsView({
   // Tenant (cookies) first: the calendar reads the current date, which needs a request.
   const tenant = await getCurrentTenant();
   const { posts, accounts } = await loadPosts(tenant.id);
+  // Nothing connected and nothing posted yet: one line into setup's Connect step (20 Nov).
+  if (!accounts.length && !posts.length) {
+    return (
+      <>
+        <PostsHeader />
+        <NotConnectedYet brandName={tenant.name} canConnect={can(tenant.role, "accounts.manage")} />
+      </>
+    );
+  }
   const str = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
   const view: View = str("view") === "list" ? "list" : str("view") === "month" ? "month" : "week";
   const day = parseDay(str("day"));

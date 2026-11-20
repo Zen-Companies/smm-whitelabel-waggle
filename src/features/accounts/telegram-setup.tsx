@@ -11,7 +11,14 @@ const POLL_MS = 4_000;
 
 type State =
   | { step: "loading" }
-  | { step: "waiting"; code: string; expiresAt: string; botUsername: string }
+  | {
+      step: "waiting";
+      code: string;
+      expiresAt: string;
+      botUsername: string;
+      /** Setup step 2 when this is the brand's first account. */
+      after: string | null;
+    }
   | { step: "expired" }
   | { step: "error"; message: string };
 
@@ -43,6 +50,7 @@ export function TelegramSetup() {
   useEffect(() => {
     if (state.step !== "waiting") return;
     const code = state.code;
+    const after = state.after;
     const expiresAt = new Date(state.expiresAt).getTime();
     let stopped = false;
     const timer = setInterval(async () => {
@@ -61,7 +69,9 @@ export function TelegramSetup() {
         });
       } else if (result.status === "connected") {
         stopped = true;
-        router.push(`/settings/accounts?${result.username ? "connected" : "connecting"}=telegram`);
+        router.push(
+          after ?? `/settings/accounts?${result.username ? "connected" : "connecting"}=telegram`,
+        );
       }
     }, POLL_MS);
     return () => {

@@ -7,13 +7,16 @@ import {
   enqueueDraftNudges,
   getMailer,
   handlePlatformPause,
+  sendMorningAfterEmails,
 } from "@/features/alerts";
 import { syncAnalytics } from "@/features/analytics";
+import { finishCatchUps, runCatchUps } from "@/features/catch-up";
 import { crmClient, deliverCrmEvents, sweepInactive, sweepUsage } from "@/features/crm";
 import { chargeUsageAtCost, getStripe } from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
 import { pruneCalls } from "@/features/mcp";
 import { purgeDueBrands } from "@/features/offboarding";
+import { sweepIdleOrgs } from "@/features/idle";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
@@ -80,6 +83,22 @@ export async function POST(request: Request): Promise<Response> {
       social: getSocialProvider,
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
+    // First connect (19 Nov): the 30-day catch-up of comments and DMs, a slice per run.
+    const catchUp = await runCatchUps({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+    // First connect (20 Nov): catch-ups read and sorted get the reveal's drafts picked and their
+    // top questions (one AI call each, cached).
+    const catchUpFinish = await finishCatchUps({
+      db,
+      llm,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
 
     // T13: DMs about to lose their reply window, drafts waiting > 30 min, then the alert outbox
     // (escalations, leads, disconnects, nudges). Each sweep is cheap; delivery stops when time's up.
@@ -118,6 +137,19 @@ export async function POST(request: Request): Promise<Response> {
       db,
       social: getSocialProvider,
       shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+
+    // Free plan (19 Nov): organizations nobody used for 23 days get one warning, 30 days a
+    // disconnect. Each organization at most once a day; off until staff switch it on.
+    const idle = await sweepIdleOrgs({
+      db,
+      social: getSocialProvider,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
     });
 
     // MCP: the AI-assistant activity log keeps 90 days.
@@ -160,8 +192,21 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 8_000,
     });
 
+    // First connect (20 Nov): the one "Waggle caught N new messages overnight" email, the
+    // morning after an organization's first connect.
+    const morningAfter = await sendMorningAfterEmails({
+      db,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 8_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
+
     return Response.json({
       crm,
+      morningAfter,
       crmSweep,
       digests,
       ...items,
@@ -178,10 +223,13 @@ export async function POST(request: Request): Promise<Response> {
       posts,
       health,
       backfill,
+      catchUp,
+      catchUpFinish,
       reviews,
       analytics,
       mcpCallsPruned,
       offboarding,
+      idle,
     });
   } catch (error) {
     // Visible in the Vercel logs even without Sentry. Our own error text only, never customer

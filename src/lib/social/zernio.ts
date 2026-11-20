@@ -11,6 +11,7 @@ import {
   toTimeline,
 } from "./analytics-map";
 import {
+  DM_ACCESS_MISSING,
   SocialProviderError,
   type TelegramConnectStatus,
   isVideoUrl,
@@ -19,6 +20,8 @@ import {
   type AccountPicture,
   type CreatePostInput,
   type ProviderCommentReply,
+  type ProviderComment,
+  type ProviderConversation,
   type ProviderMessage,
   type ProviderPostStatus,
   type MediaCheck,
@@ -67,6 +70,7 @@ import {
   type TargetExtras,
   type IntegrationKind,
 } from "./types";
+import { conversationsAccessIssue, conversationsMetaSchema } from "./dm-access";
 import { connectBranding } from "./whitelabel";
 
 const blogArticleSchema = z.object({
@@ -347,6 +351,7 @@ const messagesSchema = z.object({
       direction: z.enum(["incoming", "outgoing"]),
       message: z.string().nullish(),
       createdAt: z.string(),
+      senderName: z.string().nullish(),
     }),
   ),
 });
@@ -381,6 +386,58 @@ const postCommentsSchema = z.object({
             isOwner: z.boolean().optional(),
           })
           .nullish(),
+      }),
+    )
+    .optional(),
+});
+// First-connect catch-up (docs.zernio.com/comments/list-inbox-comments,
+// /comments/get-inbox-post-comments, /messages/list-inbox-conversations).
+const commentedPostsPageSchema = z.object({
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        commentCount: z.number().optional(),
+        // The post's caption (first-connect reveal labels and top questions).
+        content: z.string().nullish(),
+      }),
+    )
+    .optional(),
+  pagination: z.object({ nextCursor: z.string().nullish() }).nullish(),
+});
+const postCommentsPageSchema = z.object({
+  comments: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        message: z.string().nullish(),
+        createdTime: z.string().nullish(),
+        from: z
+          .object({
+            name: z.string().nullish(),
+            username: z.string().nullish(),
+            isOwner: z.boolean().optional(),
+          })
+          .nullish(),
+        // Up to a few inline replies; the docs give them the comment's shape.
+        replies: z
+          .array(z.object({ from: z.object({ isOwner: z.boolean().optional() }).nullish() }))
+          .nullish(),
+      }),
+    )
+    .optional(),
+  // `cursor` is only present while hasMore is true.
+  pagination: z.object({ hasMore: z.boolean().optional(), cursor: z.string().nullish() }).nullish(),
+});
+const conversationsSchema = z.object({
+  meta: conversationsMetaSchema,
+  data: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        participantId: z.string().nullish(),
+        participantName: z.string().nullish(),
+        updatedTime: z.string().nullish(),
       }),
     )
     .optional(),
@@ -3955,6 +4012,7 @@ export class ZernioSocialProvider implements SocialProvider {
         direction: m.direction,
         text: m.message ?? null,
         createdAt: m.createdAt,
+        senderName: m.senderName ?? null,
       }));
     });
   }
@@ -4034,6 +4092,111 @@ export class ZernioSocialProvider implements SocialProvider {
         authorName: c.from?.username ?? c.from?.name ?? null,
         fromOwner: c.from?.isOwner ?? false,
         createdAt: c.createdTime ?? null,
+      }));
+    });
+  }
+
+  async listCommentedPostsPage(input: {
+    accountId: string;
+    since: Date;
+    cursor?: string | null;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<{ postIds: string[]; nextCursor: string | null }> {
+    return call("listCommentedPostsPage", async (withFetch) => {
+      const { data } = await this.zernio.comments.listInboxComments(
+        withFetch({
+          signal: input.signal,
+          query: {
+            accountId: input.accountId,
+            since: input.since.toISOString(),
+            limit: input.limit ?? 50,
+            minComments: 1,
+            // The default sort: the only one the cursor walks coherently.
+            sortBy: "date",
+            sortOrder: "desc",
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+          },
+        }),
+      );
+      const page = parse(commentedPostsPageSchema, data, "listCommentedPostsPage");
+      const seen = new Set<string>();
+      const posts = (page.data ?? []).filter((p) => !seen.has(p.id) && seen.add(p.id));
+      return {
+        postIds: posts.map((p) => p.id),
+        posts: posts.map((p) => ({ id: p.id, caption: p.content ?? null })),
+        nextCursor: page.pagination?.nextCursor ?? null,
+      };
+    });
+  }
+
+  async listPostCommentsPage(input: {
+    accountId: string;
+    postId: string;
+    cursor?: string | null;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<{ comments: ProviderComment[]; nextCursor: string | null }> {
+    return call("listPostCommentsPage", async (withFetch) => {
+      const { data } = await this.zernio.comments.getInboxPostComments(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          query: {
+            accountId: input.accountId,
+            limit: input.limit ?? 50,
+            ...(input.cursor ? { cursor: input.cursor } : {}),
+          },
+        }),
+      );
+      const page = parse(postCommentsPageSchema, data, "listPostCommentsPage");
+      return {
+        comments: (page.comments ?? []).map((c) => ({
+          id: c.id,
+          text: c.message ?? "",
+          authorName: c.from?.username ?? c.from?.name ?? null,
+          fromOwner: c.from?.isOwner ?? false,
+          createdAt: c.createdTime ?? null,
+          ownerReplied: (c.replies ?? []).some((r) => r.from?.isOwner === true),
+        })),
+        nextCursor: page.pagination?.hasMore ? (page.pagination.cursor ?? null) : null,
+      };
+    });
+  }
+
+  async listConversations(input: {
+    accountId: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<ProviderConversation[]> {
+    return call("listConversations", async (withFetch) => {
+      const { data } = await this.zernio.messages.listInboxConversations(
+        withFetch({
+          signal: input.signal,
+          query: { accountId: input.accountId, limit: input.limit ?? 100, sortOrder: "desc" },
+        }),
+      );
+      const list = parse(conversationsSchema, data, "listConversations");
+      // 200 with the account in meta.failedAccounts / accountsSkipped: its DMs couldn't be read.
+      const issue = conversationsAccessIssue(list.meta, input.accountId);
+      if (issue?.issue === "rate_limited") {
+        throw new SocialProviderError("Zernio listConversations failed (rate limited)", {
+          status: 429,
+          ambiguous: false,
+          retryAfterSeconds: issue.retryAfterSeconds,
+        });
+      }
+      if (issue?.issue === "no_access") {
+        throw new SocialProviderError("Zernio listConversations: account's messages unavailable", {
+          code: DM_ACCESS_MISSING,
+          ambiguous: false,
+        });
+      }
+      return (list.data ?? []).map((c) => ({
+        id: c.id,
+        participantId: c.participantId ?? null,
+        participantName: c.participantName ?? null,
+        updatedTime: c.updatedTime ?? null,
       }));
     });
   }

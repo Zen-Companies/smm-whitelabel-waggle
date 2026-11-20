@@ -13,7 +13,7 @@ import { parseCommentDmForm } from "./comment-dm";
 import { parseSequenceForm, toSequenceSteps } from "./sequence";
 import { parseFollowupForm } from "./quiet-leads";
 import { saveFollowups } from "./quiet-leads-store";
-import { planAllowsFollowUps } from "@/features/billing";
+import { planAllowsFollowUps, upgradeLine } from "@/features/billing";
 
 export type AutomationFormState = { error?: string; field?: string; savedAt?: number };
 
@@ -406,7 +406,7 @@ export async function saveFollowupsAction(
   if (!parsed.ok) return { error: parsed.error, field: parsed.field };
   const db = getServiceClient();
   if (parsed.value.enabled && !(await planAllowsFollowUps(db, tenant.id))) {
-    return { error: "Follow-ups come with Team and Business. See Your plan." };
+    return { error: `${upgradeLine("follow_ups")} See Your plan.` };
   }
   try {
     await saveFollowups(

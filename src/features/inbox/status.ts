@@ -17,6 +17,11 @@ export const ITEM_STATUSES = [
   "paused",
   "failed",
   "handled",
+  /**
+   * First connect (20 Nov): a pulled question or lead past the reveal's REVEAL_DRAFTS drafts.
+   * Sorted, not drafted: no job step runs on it, so it costs nothing until the owner opens it.
+   */
+  "awaiting_draft",
 ] as const;
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
@@ -66,7 +71,13 @@ export type StatusEvent =
    * T65: the owner answered on the platform itself (a Google review replied to in Google) before
    * Waggle sent anything: the waiting draft is dropped
    */
-  | "answered_elsewhere";
+  | "answered_elsewhere"
+  /** First connect (20 Nov): a pulled item past the reveal's drafts waits undrafted (draft step) */
+  | "hold"
+  /** ...until the owner opens it, or it is one of the reveal's first drafts */
+  | "request_draft"
+  /** The owner changed an answer: a pulled draft not yet decided is written again */
+  | "redraft";
 
 const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> = {
   new: {
@@ -83,6 +94,7 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
     pause: "paused",
     fail: "failed",
     answered_elsewhere: "handled",
+    hold: "awaiting_draft",
   },
   drafted: {
     await_approval: "awaiting_approval",
@@ -98,6 +110,7 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
     reject: "rejected",
     escalate: "escalated",
     answered_elsewhere: "handled",
+    redraft: "classified",
   },
   sending: {
     sent: "sent",
@@ -119,6 +132,11 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
   },
   failed: { handle: "handled", answered_elsewhere: "handled" },
   handled: {},
+  awaiting_draft: {
+    request_draft: "classified",
+    handle: "handled",
+    answered_elsewhere: "handled",
+  },
 };
 
 /** The status after `event`, or null if the event isn't allowed from `current`. Pure. */

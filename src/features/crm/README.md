@@ -34,6 +34,7 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | trial_started, trial_converted, plan_changed, payment_failed, payment_recovered, canceled, trial_expired | `features/billing/billing-store.ts` (Stripe subscription events, via `lifecycleEvents`) |
 | account_connected                                                                                        | `features/accounts/events.ts` (the organization's first account)                        |
+| first_reply_approved                                                                                     | `features/approvals/decisions.ts` (the organization's first approved draft, once)       |
 | business_info_saved                                                                                      | `features/tenants/actions.ts` (first save of a business profile)                        |
 | usage_80, usage_100                                                                                      | `features/billing` reply limit (once per month each)                                    |
 | account_limit                                                                                            | `features/accounts` connect actions (once a day)                                        |
@@ -42,11 +43,11 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 
 ## Sign-up, feedback and first-touch UTM (18 Nov)
 
-| Event       | What HighLevel gets                                                                                                                                                                                           | Queued from                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| signed_up   | Like every event: the fields (`waggle_event = signed_up`, plan blank, founding false) + first-touch UTMs, then `waggle-app-event` and `waggle-signup`. The trial starts later, at checkout (`trial_started`). | `features/orgs/server.ts` (a login's personal organization, logins under 2 days old) |
-| feedback    | A note on the contact ("Waggle feedback · type": message, follow-up, OK to contact, page, business, role). No tag.                                                                                            | `features/feedback/actions.ts`                                                       |
-| page_rating | A note ("Page rating · page: good / not good" + the reason). No tag.                                                                                                                                          | `features/feedback/actions.ts`                                                       |
+| Event       | What HighLevel gets                                                                                                                                                                                                                                                                 | Queued from                                                                          |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| signed_up   | Like every event: the fields (`waggle_event = signed_up`, plan `free` since 19 Nov, founding false) + first-touch UTMs, then `waggle-app-event` and `waggle-signup`. Since the Free plan (19 Nov) there is no trial: moving up to a paid plan pays at checkout (`trial_converted`). | `features/orgs/server.ts` (a login's personal organization, logins under 2 days old) |
+| feedback    | A note on the contact ("Waggle feedback · type": message, follow-up, OK to contact, page, business, role). No tag.                                                                                                                                                                  | `features/feedback/actions.ts`                                                       |
+| page_rating | A note ("Page rating · page: good / not good" + the reason). No tag.                                                                                                                                                                                                                | `features/feedback/actions.ts`                                                       |
 
 - **UTMs:** the proxy keeps the first link's `utm_source / utm_medium / utm_campaign / utm_content / ref` in the
   `waggle_utm` cookie (90 days, first one wins). At sign-up they go to the contact's `utm_*` / `ref_code` fields,
@@ -55,7 +56,7 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 
 ## Rules (Walter's)
 
-- Plan words are `solo`, `team` ($99), `business` ($199). Waggle's **ids are swapped** for the two
+- Plan words are `free` (no paid plan, 19 Nov), `solo`, `team` ($99), `business` (by call). Waggle's **ids are swapped** for the two
   upper plans, so `crmPlan()` uses the plan's name, never its id.
 - Every field on every event; `waggle_founding` is always `true` or `false`.
 - `trial_converted` always before a later `canceled` (the queue keeps order per person).

@@ -113,3 +113,27 @@ describe("answered on the platform (T65)", () => {
     expect(nextStatus("handled", "answered_elsewhere")).toBeNull();
   });
 });
+
+describe("first connect: drafts past the reveal's 20 (20 Nov)", () => {
+  it("a pulled question past the cap waits undrafted, and is drafted when opened", () => {
+    expect(nextStatus("classified", "hold")).toBe("awaiting_draft");
+    expect(nextStatus("awaiting_draft", "request_draft")).toBe("classified");
+  });
+  it("an undrafted item can be dealt with by the owner or on the platform", () => {
+    expect(nextStatus("awaiting_draft", "handle")).toBe("handled");
+    expect(nextStatus("awaiting_draft", "answered_elsewhere")).toBe("handled");
+  });
+  it("nothing else moves an undrafted item (no send, no draft without asking)", () => {
+    for (const event of ["drafted", "send", "await_approval", "classified", "pause"] as const) {
+      expect(nextStatus("awaiting_draft", event)).toBeNull();
+    }
+    expect(nextStatus("new", "hold")).toBeNull();
+    expect(nextStatus("drafted", "hold")).toBeNull();
+  });
+  it("a draft waiting for approval is rewritten after the owner changes an answer", () => {
+    expect(nextStatus("awaiting_approval", "redraft")).toBe("classified");
+    for (const from of ["sending", "sent", "drafted", "escalated"] as const) {
+      expect(nextStatus(from, "redraft")).toBeNull();
+    }
+  });
+});

@@ -13,6 +13,8 @@ import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { dmRepliesSince } from "./dm-replies";
 import { privateReplyClosesAt, type ReplyVia } from "./private-reply";
+import { lastSendOnAccount } from "./send-schedule";
+import { SEND_SPACING_MS, spacingWaitMs } from "./send-spacing";
 import {
   policy,
   type AutonomyMode,
@@ -261,7 +263,13 @@ async function findDelivered(
   );
 }
 
-export function createSendStep(opts: { social: () => SocialProvider; now?: () => Date }): Step {
+export function createSendStep(opts: {
+  social: () => SocialProvider;
+  now?: () => Date;
+  /** Least time between two replies from one account (SEND_SPACING_MS; 0 turns it off). */
+  spacingMs?: number;
+}): Step {
+  const spacingMs = opts.spacingMs ?? SEND_SPACING_MS;
   return async (item, ctx): Promise<StepResult> => {
     const { db } = ctx;
     const now = opts.now?.() ?? new Date();
@@ -318,6 +326,20 @@ export function createSendStep(opts: { social: () => SocialProvider; now?: () =>
       await recordPlatformPause(db);
       throw new RetryLaterError(PLATFORM_PAUSE_RETRY_SECONDS);
     };
+
+    // Spaced-out sending (20 Nov): never two replies from one account closer than spacingMs.
+    // Checked before this attempt is marked, so waiting leaves nothing to reconcile, and a retry
+    // that must reconcile first waits too (its own earlier attempt doesn't count). Not an
+    // attempt and not a failure: the runner just reschedules it (RetryLaterError).
+    if (spacingMs > 0) {
+      const last = await lastSendOnAccount(db, {
+        socialAccountId: item.socialAccountId,
+        exceptItemId: item.id,
+        since: new Date(now.getTime() - spacingMs),
+      });
+      const waitMs = spacingWaitMs(now.getTime(), last?.getTime() ?? null, spacingMs);
+      if (waitMs > 0) throw new RetryLaterError(Math.max(1, Math.ceil(waitMs / 1000)));
+    }
 
     const social = opts.social();
     /** A definite refusal (bad request, permissions, deleted comment): retrying won't help. */

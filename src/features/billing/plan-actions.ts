@@ -8,13 +8,20 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
 import { FOUNDING_COUPON, PRICE_KEYS, type Interval } from "./catalog";
-import { EXTRAS, FOUNDING, PLANS, TRIAL, isPlanId, type Plan, type PlanId } from "./plans";
+import {
+  EXTRAS,
+  FOUNDING,
+  PLANS,
+  isPaidPlanId,
+  type PaidPlanId,
+  type Plan,
+  type PlanId,
+} from "./plans";
 import { loadPlans } from "./usage";
-import { PLAN_GATE_PATH, PLAN_SKIP_COOKIE } from "./plan-gate";
-import { staffAccess } from "@/features/staff";
-import { cookies } from "next/headers";
+import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
+import { foundingSpotsLeft } from "./founding";
 import {
   billingFromSubscription,
   isExtraAccountKey,
@@ -79,15 +86,6 @@ async function ensureCustomer(
   return customer.id;
 }
 
-async function foundingSpotsLeft(stripe: Stripe): Promise<boolean> {
-  try {
-    const c = await stripe.coupons.retrieve(FOUNDING_COUPON);
-    return c.valid && (c.max_redemptions ?? FOUNDING.spots) > c.times_redeemed;
-  } catch {
-    return false;
-  }
-}
-
 /** Stores the subscription now, so the page is right before the webhook lands. */
 async function syncNow(db: ServiceClient, orgId: string, sub: Stripe.Subscription) {
   await db
@@ -99,19 +97,20 @@ async function syncNow(db: ServiceClient, orgId: string, sub: Stripe.Subscriptio
 function readChoice(
   formData: FormData,
   plans: Record<PlanId, Plan>,
-): { plan: PlanId; interval: Interval } | null {
+): { plan: PaidPlanId; interval: Interval } | null {
   const plan = formData.get("plan");
   const interval = formData.get("interval") === "year" ? "year" : "month";
   // "For sale" as staff set it on Staff → Plans.
-  if (!isPlanId(plan) || !plans[plan].forSale) return null;
+  // Free is no checkout; Business is by call only (19 Nov).
+  if (!isPaidPlanId(plan) || !plans[plan].forSale) return null;
   if (interval === "year" && PLANS[plan].yearlyUsd === null) return null;
   return { plan, interval };
 }
 
 /**
- * Choose a plan. Without a plan: Stripe Checkout with the 7-day trial and a card up front (and
- * the founding price on Business monthly while spots last). With one: switch it in place,
- * prorated.
+ * Choose a plan. From Free: Stripe Checkout, paid right away (no trial since Free, 19-20 Nov),
+ * with the founding price on Team monthly while spots last. With a paid plan: switch it in
+ * place, prorated.
  */
 export async function choosePlan(
   _prev: PlanActionState,
@@ -163,7 +162,6 @@ export async function choosePlan(
       return { done: `You're on ${PLANS[choice.plan].name} now.` };
     }
 
-    const fromGate = formData.get("from") === "start";
     const customer = await ensureCustomer(stripe, db, orgId, user.email, bill);
     const firstTime = !bill?.trial_ends_at && !bill?.stripe_subscription_id;
     const founding =
@@ -184,7 +182,6 @@ export async function choosePlan(
       subscription_data: {
         // Stripe's subscription events list discounts by id only, so founding is marked here too.
         metadata: { organization_id: orgId, ...(founding ? { founding: "1" } : {}) },
-        ...(firstTime ? { trial_period_days: TRIAL.days } : {}),
       },
       ...(founding
         ? { discounts: [{ coupon: FOUNDING_COUPON }] }
@@ -193,19 +190,14 @@ export async function choosePlan(
       adaptive_pricing: { enabled: false },
       metadata: { organization_id: orgId, kind: "plan" },
       client_reference_id: orgId,
-      // A first checkout comes back with its session id, so Your plan can ask Stripe whether it
-      // started a trial and tell the ads (TrialConversionTag). Stripe fills {CHECKOUT_SESSION_ID}.
-      // From the plan step before setup (/start): back through /start/done into setup.
+      // A first checkout comes back with its session id, so Your plan can ask Stripe what it
+      // started and tell the ads (TrialConversionTag). Stripe fills {CHECKOUT_SESSION_ID}.
       success_url: appUrl(
-        fromGate
-          ? `${PLAN_GATE_PATH}/done?session_id={CHECKOUT_SESSION_ID}`
-          : firstTime
-            ? `${PLAN_PATH}?checkout=done&session_id={CHECKOUT_SESSION_ID}`
-            : `${PLAN_PATH}?checkout=done`,
+        firstTime
+          ? `${PLAN_PATH}?checkout=done&session_id={CHECKOUT_SESSION_ID}`
+          : `${PLAN_PATH}?checkout=done`,
       ),
-      cancel_url: appUrl(
-        fromGate ? `${PLAN_GATE_PATH}?checkout=cancelled` : `${PLAN_PATH}?checkout=cancelled`,
-      ),
+      cancel_url: appUrl(`${PLAN_PATH}?checkout=cancelled`),
     });
     await auditOrg(db, orgId, "billing.checkout_started", user.id, {
       plan: choice.plan,
@@ -289,7 +281,7 @@ export async function buyTopUp(
   const stripe = getStripe();
   if (!stripe) return { error: NO_STRIPE };
   const bill = await loadBilling(who.db, who.orgId);
-  if (!bill || !planIsLive(bill.status)) return { error: "Choose a plan first." };
+  if (!bill || !planIsLive(bill.status)) return { error: upgradeLine("top_up") };
   let url: string | null;
   try {
     url = await topUpCheckoutUrl(stripe, who.db, who.orgId, who.user.id, bill);
@@ -321,7 +313,7 @@ export async function buyTopUpNow(
   const stripe = getStripe();
   if (!stripe) return { error: NO_STRIPE };
   const bill = await loadBilling(who.db, who.orgId);
-  if (!bill || !planIsLive(bill.status)) return { error: "Choose a plan first." };
+  if (!bill || !planIsLive(bill.status)) return { error: upgradeLine("top_up") };
   let r: TopUpCharge;
   try {
     r = await chargeTopUp(who.db, stripe, bill, {
@@ -370,7 +362,7 @@ export async function changeExtraAccounts(
   if (!stripe) return { error: NO_STRIPE };
   const bill = await loadBilling(who.db, who.orgId);
   if (!bill?.stripe_subscription_id || !planIsLive(bill.status))
-    return { error: "Choose a plan first." };
+    return { error: upgradeLine("extra_account") };
   const next = bill.extra_accounts + delta;
   if (next < 0) return { error: "There are no extra accounts to remove." };
   try {
@@ -417,6 +409,9 @@ export async function setAutoTopUp(
   const who = await ownerOf(formData.get("orgId"));
   if (!who) return { error: NOT_OWNER };
   const on = formData.get("on") === "1";
+  // Free has no add-ons (19 Nov).
+  const bill = await loadBilling(who.db, who.orgId);
+  if (on && (!bill || !planIsLive(bill.status))) return { error: upgradeLine("top_up") };
   const { error } = await who.db
     .from("org_billing")
     .update({ auto_top_up: on, updated_at: new Date().toISOString() })
@@ -425,24 +420,4 @@ export async function setAutoTopUp(
   await auditOrg(who.db, who.orgId, "billing.auto_top_up", who.user.id, { on });
   revalidatePath(PLAN_PATH);
   return { done: on ? "Automatic top-up is on." : "Automatic top-up is off." };
-}
-
-/**
- * Admin only (plan before setup): Waggle staff skip the plan step for this organization, for
- * this browser session. Customers never see the button, and the action refuses them.
- */
-export async function skipPlanGate(formData: FormData): Promise<void> {
-  const orgId = orgIdSchema.safeParse(formData.get("orgId"));
-  if (!orgId.success) return;
-  const user = await getCurrentUser();
-  const db = getServiceClient();
-  if ((await staffAccess(db, user.id)).role === null) return;
-  (await cookies()).set(PLAN_SKIP_COOKIE, orgId.data, {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-  });
-  await auditOrg(db, orgId.data, "billing.plan_step_skipped", user.id, {});
-  redirect("/welcome");
 }

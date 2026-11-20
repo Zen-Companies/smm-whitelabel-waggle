@@ -2,7 +2,9 @@ import { FlaskConical } from "lucide-react";
 import Link from "next/link";
 import { can } from "@/features/orgs";
 import { getCurrentTenant, RoleGate } from "@/features/tenants";
+import { planAllowsAutoReply, upgradeHref, upgradeLabel, upgradeLine } from "@/features/billing";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
 import {
   CATEGORY_HINTS,
   CATEGORY_LABELS,
@@ -23,9 +25,10 @@ export async function AutonomyCard({ variant = "settings" }: { variant?: "settin
   const teach = variant === "teach";
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
-  const [{ data }, { data: settings }] = await Promise.all([
+  const [{ data }, { data: settings }, autoOk] = await Promise.all([
     supabase.from("autonomy_settings").select("category, mode").eq("tenant_id", tenant.id),
     supabase.from("tenants").select("replies_paused, auto_hide_spam").eq("id", tenant.id).single(),
+    planAllowsAutoReply(getServiceClient(), tenant.id),
   ]);
   const modes = new Map((data ?? []).map((row) => [row.category, row.mode as AutonomyMode]));
 
@@ -47,6 +50,14 @@ export async function AutonomyCard({ variant = "settings" }: { variant?: "settin
         what="the reply rules"
       >
         {!teach && <PauseForm paused={settings?.replies_paused ?? false} />}
+        {!autoOk && (
+          <p className="border-honey-border bg-honey-tint rounded-xl border px-4 py-3 text-sm">
+            <b>On Free, you approve every reply.</b> {upgradeLine("auto_reply")}{" "}
+            <Link href={upgradeHref("auto_reply")} className="action-link">
+              {upgradeLabel("auto_reply")}
+            </Link>
+          </p>
+        )}
         <div className="card flex flex-col divide-y">
           {CONFIGURABLE_CATEGORIES.map((category) => (
             <AutonomyForm
@@ -55,6 +66,7 @@ export async function AutonomyCard({ variant = "settings" }: { variant?: "settin
               label={CATEGORY_LABELS[category]}
               hint={CATEGORY_HINTS[category]}
               mode={modes.get(category) ?? "off"}
+              autoAllowed={autoOk}
             />
           ))}
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-3 p-5">

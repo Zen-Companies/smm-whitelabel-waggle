@@ -4,8 +4,9 @@ import { useActionState, useState } from "react";
 import { cn } from "cn";
 import { PlanBees } from "@/components/app/bee-plan";
 import { BeeDance } from "@/components/app/bee-setup";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import type { PlanActionState } from "./plan-actions";
+import { BUSINESS_CALL_URL, PROMOTED_PLAN, type PlanId } from "./plans";
 
 type Action = (prev: PlanActionState, formData: FormData) => Promise<PlanActionState>;
 
@@ -51,8 +52,15 @@ export function PlanButton({
   );
 }
 
+export interface FoundingOffer {
+  plan: PlanId;
+  monthlyUsd: number;
+  months: number;
+  spots: number;
+}
+
 export interface PlanCardData {
-  id: "solo" | "business" | "team";
+  id: PlanId;
   name: string;
   monthlyUsd: number;
   yearlyUsd: number | null;
@@ -61,8 +69,9 @@ export interface PlanCardData {
 }
 
 /**
- * Change plan: three cards with their bees, the current plan in honey, any plan not for sale as coming soon.
- * Monthly or yearly is picked once above the cards.
+ * The plans side by side (Free plan, approved 20 Nov): Free first, then Solo (promoted), Team
+ * and Business. Business is by call only: its button opens Jason's booking page. The current plan
+ * is in honey. Monthly or yearly is picked once above the cards.
  */
 export function PlanCards({
   orgId,
@@ -72,21 +81,24 @@ export function PlanCards({
   live,
   mayChange,
   foundingNote,
+  founding = null,
   action,
-  from,
 }: {
   orgId: string;
   plans: PlanCardData[];
+  /** The organization's plan id ("free" when it has no paid plan). */
   current: string | null;
   currentInterval: "month" | "year" | null;
+  /** On a paid plan (moves are prorated in place). */
   live: boolean;
   mayChange: boolean;
   foundingNote: string | null;
+  /** The founding offer, while spots are left, for owners who never had a paid plan. */
+  founding?: FoundingOffer | null;
   action: Action;
-  /** "start": chosen on the plan step before setup (checkout comes back into setup). */
-  from?: string;
 }) {
   const [interval, setInterval] = useState<"month" | "year">(currentInterval ?? "month");
+  const offerPlan = founding ? plans.find((p) => p.id === founding.plan) : undefined;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -113,40 +125,104 @@ export function PlanCards({
         </div>
         {foundingNote && <span className="meta">{foundingNote}</span>}
       </div>
-      <div className="grid gap-4 pt-3 md:grid-cols-3">
+      {founding && offerPlan && (
+        // Founding offer, highlighted (approved 20 Nov, canvas "Founding offer, highlighted").
+        <div className="border-honey bg-honey-tint flex flex-wrap items-center justify-between gap-4 rounded-2xl border-[1.5px] px-5 py-4">
+          <span className="flex flex-wrap items-center gap-3.5">
+            <span className="bg-honey text-ink rounded-full px-2.5 py-1 text-xs font-bold tracking-wide uppercase">
+              Founding offer
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <b className="font-display text-lg font-semibold">
+                {offerPlan.name} for ${founding.monthlyUsd} a month, your first {founding.months}{" "}
+                months
+              </b>
+              <span className="text-ink-2 text-sm">
+                Then ${offerPlan.monthlyUsd}. Only for the first {founding.spots} businesses.
+              </span>
+            </span>
+          </span>
+          {interval === "year" ? (
+            <button
+              type="button"
+              onClick={() => setInterval("month")}
+              className="action-link with-arrow text-sm"
+            >
+              Monthly only. Switch to Monthly
+            </button>
+          ) : (
+            mayChange && (
+              <PlanButton
+                action={action}
+                fields={{ orgId, plan: offerPlan.id, interval: "month" }}
+                label={`Get ${offerPlan.name} at $${founding.monthlyUsd}`}
+              />
+            )
+          )}
+        </div>
+      )}
+      <div className="grid gap-4 pt-3 md:grid-cols-2 xl:grid-cols-4">
         {plans.map((p) => {
-          const isCurrent = live && current === p.id && currentInterval === interval;
-          const price =
-            interval === "year" && p.yearlyUsd !== null
+          const free = p.id === "free";
+          const byCall = p.id === "team" && !p.forSale;
+          const isCurrent = free
+            ? current === "free"
+            : live && current === p.id && currentInterval === interval;
+          const price = free
+            ? "$0 forever"
+            : interval === "year" && p.yearlyUsd !== null
               ? `$${p.yearlyUsd} a year`
               : `$${p.monthlyUsd} a month`;
-          const noYearly = interval === "year" && p.yearlyUsd === null;
+          const noYearly = !free && interval === "year" && p.yearlyUsd === null;
+          const promoted = p.id === PROMOTED_PLAN && !live;
+          const offer = !!founding && founding.plan === p.id && interval === "month";
           return (
             <div
               key={p.id}
               className={cn(
                 "bg-surface relative flex flex-col gap-2.5 rounded-2xl border p-5",
-                isCurrent
+                isCurrent || offer
                   ? "border-honey border-2 shadow-[0_6px_24px_rgba(246,178,27,0.18)]"
                   : "border-line",
-                !p.forSale && "opacity-80",
               )}
             >
-              {isCurrent && (
+              {isCurrent ? (
                 <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
                   Your plan
                 </span>
-              )}
-              {!p.forSale && (
-                <span className="bg-subtle text-ink-2 absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
-                  Coming soon
+              ) : offer ? (
+                <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                  Founding price
                 </span>
+              ) : (
+                promoted && (
+                  <span className="bg-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white">
+                    Most picked
+                  </span>
+                )
               )}
               <PlanBees plan={p.id} />
               <b className="font-display text-[22px] font-semibold">{p.name}</b>
-              <b className="text-lg font-semibold">
-                {noYearly ? `$${p.monthlyUsd} a month` : price}
-              </b>
+              {byCall ? (
+                <span className="flex flex-col">
+                  <b className="text-lg font-semibold">Priced for you</b>
+                  <span className="meta">10 or more accounts, after a short call</span>
+                </span>
+              ) : offer && founding ? (
+                <span className="flex flex-col gap-0.5">
+                  <span className="flex items-baseline gap-2">
+                    <b className="text-lg font-semibold">${founding.monthlyUsd} a month</b>
+                    <s className="text-ink-3 text-[15px]">${p.monthlyUsd}</s>
+                  </span>
+                  <span className="meta">
+                    First {founding.months} months, then ${p.monthlyUsd}
+                  </span>
+                </span>
+              ) : (
+                <b className="text-lg font-semibold">
+                  {noYearly ? `$${p.monthlyUsd} a month` : price}
+                </b>
+              )}
               <ul className="flex flex-col gap-2 text-sm">
                 {p.bullets.map((b) => (
                   <li key={b} className="flex items-start gap-2">
@@ -158,18 +234,31 @@ export function PlanCards({
                 ))}
               </ul>
               <div className="mt-auto pt-2">
-                {!p.forSale ? (
-                  <span className="meta">Not for sale yet.</span>
-                ) : isCurrent ? (
-                  <span className="meta">You&apos;re on this plan.</span>
+                {isCurrent ? (
+                  <span className="meta">
+                    {free ? "You’re on Free. No card, no time limit." : "You’re on this plan."}
+                  </span>
+                ) : byCall ? (
+                  <a
+                    href={BUSINESS_CALL_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={buttonVariants({ variant: "secondary" })}
+                  >
+                    Book a call
+                  </a>
+                ) : free ? (
+                  <span className="meta">Cancel your plan in Stripe to go back to Free.</span>
+                ) : !p.forSale ? (
+                  <span className="meta">Not for sale right now.</span>
                 ) : noYearly ? (
                   <span className="meta">Monthly only for now.</span>
                 ) : mayChange ? (
                   <PlanButton
                     action={action}
-                    fields={{ orgId, plan: p.id, interval, ...(from ? { from } : {}) }}
-                    label={live ? `Move to ${p.name}` : "Start 7 days free"}
-                    honey={!live && p.id === "business"}
+                    fields={{ orgId, plan: p.id, interval }}
+                    label={live ? `Move to ${p.name}` : `Upgrade to ${p.name}`}
+                    honey={promoted}
                     className="items-start"
                   />
                 ) : (

@@ -3,8 +3,8 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { loadTrialConversion } from "./trial-conversion";
 
 /**
- * StartTrial for the ads (17 Nov): on Stripe's return from a first-time plan checkout, only
- * after Stripe confirms that checkout started this organization's trial.
+ * StartTrial or Subscribe for the ads (17 and 19 Nov): on Stripe's return from a first-time plan
+ * checkout, only after Stripe confirms that checkout started this organization's trial or plan.
  */
 export async function TrialConversionTag({
   sessionId,
@@ -19,8 +19,11 @@ export async function TrialConversionTag({
   const keys = matchKeys(user.id, user.email);
   return (
     <ConversionTag
-      event="StartTrial"
-      eventId={conversionEventId("StartTrial", trial.sessionId)}
+      event={trial.kind === "trial" ? "StartTrial" : "Subscribe"}
+      eventId={conversionEventId(
+        trial.kind === "trial" ? "StartTrial" : "Subscribe",
+        trial.sessionId,
+      )}
       em={keys.em}
       externalId={keys.externalId}
       valueUsd={trial.valueUsd}

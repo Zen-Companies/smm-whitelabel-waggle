@@ -37,9 +37,25 @@ describe("planChipState", () => {
     ).toBe("reached");
   });
 
-  it("no plan: choose one, but only once Stripe is set up", () => {
-    expect(planChipState({ ...base, planName: null, status: null })).toEqual({ kind: "choose" });
-    expect(planChipState({ ...base, planName: null, stripeOn: false })).toBeNull();
+  it("no paid plan is Free (19 Nov): its replies, and Upgrade to Solo when they run out", () => {
+    const free = planChipState({
+      ...base,
+      planName: null,
+      status: null,
+      replies: { used: 12, allowance: 100 },
+    })!;
+    expect(free).toEqual({ kind: "free", used: 12, allowance: 100 });
+    expect(planChipText(free)).toBe("Free · Upgrade");
+    const out = planChipState({
+      ...base,
+      planName: null,
+      status: null,
+      replies: { used: 100, allowance: 100 },
+    })!;
+    expect(out).toEqual({ kind: "reached", free: true });
+    expect(planChipText(out)).toBe("Replies used up · Upgrade to Solo");
+    // A test brand's organization has no counted replies: no chip.
+    expect(planChipState({ ...base, planName: null, status: null, replies: null })).toBeNull();
   });
 
   it("words for every state", () => {
