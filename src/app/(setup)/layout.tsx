@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
 import { Feedback } from "@/features/feedback";
 import { listMyOrgs, OrgMenu } from "@/features/orgs";
-import { ConfirmEmailLine, getOpenOrg, signOut } from "@/features/tenants";
+import { getOpenOrg, signOut } from "@/features/tenants";
 
 async function Switcher() {
   const [orgs, open] = await Promise.all([listMyOrgs(), getOpenOrg()]);
@@ -41,10 +41,8 @@ export default function SetupLayout({ children }: LayoutProps<"/">) {
           </form>
         </div>
       </header>
-      {/* Confirm later (hotfix 21 Nov): until the email is confirmed. */}
-      <Suspense fallback={null}>
-        <ConfirmEmailLine className="mx-auto w-full max-w-[640px] px-4 pt-4" />
-      </Suspense>
+      {/* Confirm later's line shows in the app only, once setup is done (21 Nov): during
+          onboarding "Wrong email?" led to Settings, which sends you back to setup. */}
       {children}
       <Suspense fallback={null}>
         <SetupFeedback />
