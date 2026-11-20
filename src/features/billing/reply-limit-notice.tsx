@@ -1,120 +1,50 @@
 import Link from "next/link";
-import { CombMeter, RestingBee } from "@/components/app/bee-plan";
+import { CombMeter } from "@/components/app/bee-plan";
 import { getServiceClient } from "@/lib/supabase/service";
-import { cardLabel } from "./auto-top-up";
-import { loadBilling } from "./billing-store";
-import { buyTopUpNow, choosePlan } from "./plan-actions";
-import { PlanButton, TopUpButton } from "./plan-forms";
-import { getStripe } from "./stripe-client";
-import { EXTRAS, PLANS } from "./plans";
-import { upgradeHref, upgradeLabel } from "./upgrade";
-
-/** The saved card's label for the confirm line, or null. */
-async function ownerCard(orgId: string): Promise<string | null> {
-  const stripe = getStripe();
-  if (!stripe) return null;
-  try {
-    const bill = await loadBilling(getServiceClient(), orgId);
-    return bill ? await cardLabel(stripe, bill) : null;
-  } catch {
-    return null;
-  }
-}
 import { replyLimitNote } from "./reply-limit";
+import { upgradeHref, upgradeLabel } from "./upgrade";
 import { loadReplyLimit, planLimitsOn } from "./usage";
 
 /**
- * When replies run low (Pricing Bible; approved 17 Nov, canvas "Settings · Your plan, with the
- * bee" section 3). On Today: the 80% note and the 100% banner. In the Inbox: the 100% banner,
- * where the paused drafts would be. Nothing while plan limits are off or there's no plan.
+ * Replies running low (Pricing Bible; canvas "Settings · Your plan, with the bee"): the 80% note
+ * on Today. Out of replies is the banner on every page and its pop-up once a session (Walter's
+ * flow, 20 Nov; BillingHost), so it isn't repeated here. Nothing while plan limits are off or
+ * there's no plan.
  */
 export async function ReplyLimitNotice({
   orgId,
-  isOwner,
   where,
 }: {
   orgId: string;
   isOwner: boolean;
   where: "today" | "inbox";
 }) {
+  if (where !== "today") return null;
   const db = getServiceClient();
   if (!(await planLimitsOn(db))) return null;
   const status = await loadReplyLimit(db, orgId, new Date());
-  if (!status) return null;
+  if (!status || status.limit.level !== "warn") return null;
   const { limit, plan } = status;
-  if (limit.level === "ok" || (where === "inbox" && limit.level !== "reached")) return null;
   const note = replyLimitNote(limit, plan.plan);
   if (!note) return null;
-  const fields = { orgId };
-
-  if (limit.level === "warn") {
-    return (
-      <section
-        role="status"
-        className="border-honey-border bg-honey-tint flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
-      >
-        <span className="flex flex-wrap items-center gap-3">
-          <CombMeter used={limit.used} allowance={limit.allowance} size={11} />
-          <span className="text-sm">
-            <b>{note.title}</b> {note.body}
-          </span>
-        </span>
-        <Link
-          href={plan.plan === "free" ? upgradeHref("replies") : "/plan"}
-          className="action-link text-sm"
-        >
-          {plan.plan === "free" ? upgradeLabel("replies") : "See your plan"}
-        </Link>
-      </section>
-    );
-  }
-
+  const free = plan.plan === "free";
   return (
     <section
       role="status"
-      className="border-honey bg-honey-tint flex flex-col gap-2.5 rounded-xl border p-4"
+      className="border-honey-border bg-honey-tint flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3"
     >
-      <div className="flex items-center gap-3">
-        <RestingBee />
-        <b className="text-[15px]">{note.title}</b>
-      </div>
-      <span className="text-ink-2 text-sm">{note.body}</span>
-      {plan.plan === "free" ? (
-        // Free: one button, the upgrade screen (no top-ups on Free, 19 Nov).
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href={upgradeHref("replies")}
-            className="bg-ink inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-white"
-          >
-            {upgradeLabel("replies")}
-          </Link>
-          <Link href="/plan" className="action-link text-sm">
-            See your plan
-          </Link>
-        </div>
-      ) : isOwner ? (
-        <div className="flex flex-wrap gap-2">
-          <TopUpButton
-            action={buyTopUpNow}
-            orgId={orgId}
-            card={await ownerCard(orgId)}
-            label={`+${EXTRAS.topUp.replies} replies for $${EXTRAS.topUp.usd}`}
-            usd={EXTRAS.topUp.usd}
-            replies={EXTRAS.topUp.replies}
-            honey
-          />
-          {plan.plan === "solo" && (
-            <PlanButton
-              action={choosePlan}
-              fields={{ ...fields, plan: "business", interval: "month" }}
-              label={`Upgrade to ${PLANS.business.name}`}
-              className="items-start"
-            />
-          )}
-        </div>
-      ) : (
-        <span className="meta">The Owner can add more replies on Your plan.</span>
-      )}
+      <span className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3">
+        <CombMeter used={limit.used} allowance={limit.allowance} size={11} />
+        <span className="min-w-[200px] flex-1 text-sm">
+          <b>{note.title}</b> {note.body}
+        </span>
+      </span>
+      <Link
+        href={free ? upgradeHref("replies", "/today") : upgradeHref("top_up", "/today")}
+        className="action-link text-sm"
+      >
+        {free ? upgradeLabel("replies") : "Get more replies"}
+      </Link>
     </section>
   );
 }

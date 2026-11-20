@@ -12,7 +12,7 @@ import { Bell } from "@/features/alerts";
 
 import { FirstReplyTag, NEEDS_OWNER } from "@/features/approvals";
 
-import { PlanChip, PlanMenuRow } from "@/features/billing";
+import { BillingHost, PlanChip, PlanMenuRow } from "@/features/billing";
 
 import { touchActivity } from "@/features/crm";
 
@@ -88,6 +88,24 @@ async function SetupGate() {
   return gate.watch ? <SetupGateWatch /> : null;
 }
 
+/**
+ * The plan banner on every page (Try Solo free on Free, or out of replies) and the plan pop-ups:
+ * `?upgrade=<reason>` on any page, `/inbox?welcome=1` after setup (Walter's flow, 20 Nov).
+ */
+async function PlanBanner() {
+  const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
+  const org = orgs.find((o) => o.id === tenant.organizationId);
+  return (
+    <BillingHost
+      orgId={tenant.organizationId}
+      isOwner={!!org && can(org.role, "billing.view")}
+      canInvite={!!org && can(org.role, "team.manage")}
+      tenantId={tenant.id}
+      needsYouStatuses={NEEDS_OWNER}
+    />
+  );
+}
+
 async function DashboardFeedback() {
   const tenant = await getCurrentTenant();
 
@@ -114,6 +132,12 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
       <Suspense fallback={null}>
         <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">
           <AccountBanner />
+        </div>
+      </Suspense>
+
+      <Suspense fallback={null}>
+        <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">
+          <PlanBanner />
         </div>
       </Suspense>
 
