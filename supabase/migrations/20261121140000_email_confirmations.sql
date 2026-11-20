@@ -17,6 +17,9 @@ create table public.email_confirmations (
 create unique index email_confirmations_token_hash on public.email_confirmations (token_hash);
 
 alter table public.email_confirmations enable row level security;
+create policy "no oauth clients" on public.email_confirmations as restrictive for all to authenticated, anon
+  using ((select auth.jwt() ->> 'client_id') is null)
+  with check ((select auth.jwt() ->> 'client_id') is null);
 
 create policy "own email confirmation" on public.email_confirmations
   for select to authenticated using (user_id = (select auth.uid()));
