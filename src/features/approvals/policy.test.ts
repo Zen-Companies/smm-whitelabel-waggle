@@ -423,3 +423,54 @@ describe("WhatsApp templates (T67)", () => {
     ).toBe("pause");
   });
 });
+
+describe("facts Waggle found but the owner hasn't checked (decision 7, 20 Nov)", () => {
+  const unchecked = { needsHuman: false, usesUncheckedFacts: true };
+
+  it("auto mode never sends them on its own: the owner approves", () => {
+    expect(run({ draft: unchecked, autonomyMode: "auto" })).toEqual({
+      decision: "approve",
+      reason: "facts_unchecked",
+    });
+  });
+
+  it("covers DMs and leads in auto mode too", () => {
+    expect(
+      run({
+        ...dm(1000),
+        classification: { category: "lead", confidence: 0.95 },
+        draft: unchecked,
+        autonomyMode: "auto",
+      }),
+    ).toEqual({ decision: "approve", reason: "facts_unchecked" });
+  });
+
+  it("the owner's approval sends it (that is how a found fact gets checked)", () => {
+    expect(
+      run({ draft: { ...unchecked, approvedByOwner: true }, autonomyMode: "auto" }).decision,
+    ).toBe("send");
+  });
+
+  it("approve mode is unchanged: the owner approves anyway", () => {
+    expect(run({ draft: unchecked, autonomyMode: "approve" })).toEqual({
+      decision: "approve",
+      reason: "approval_required",
+    });
+  });
+
+  it("never outranks the hard rules (DM window, needs a person)", () => {
+    expect(run({ ...dm(25 * 3600_000), draft: unchecked, autonomyMode: "auto" })).toEqual({
+      decision: "escalate",
+      reason: "dm_window_closed",
+    });
+    expect(
+      run({ draft: { ...unchecked, needsHuman: true }, autonomyMode: "auto" }).decision,
+    ).toBe("escalate");
+  });
+
+  it("checked facts send on their own as before", () => {
+    expect(
+      run({ draft: { needsHuman: false, usesUncheckedFacts: false }, autonomyMode: "auto" }),
+    ).toEqual({ decision: "send", reason: "auto_send" });
+  });
+});

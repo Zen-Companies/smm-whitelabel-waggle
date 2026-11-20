@@ -2,6 +2,7 @@ import { policy, triage, type AutonomyMode, type PolicyDecision } from "@/featur
 import { generateDraft, type DraftPromptVersion, type ThreadMessage } from "@/features/drafting";
 import type { Category, Classification, Classifier } from "@/lib/classifier/types";
 import type { LlmClient } from "@/lib/llm/client";
+import { uncheckedFactIds } from "@/lib/facts";
 import type { AiUsageRecord, UsageRecorder } from "@/lib/llm/usage";
 import type { ServiceClient } from "@/lib/supabase/service";
 
@@ -157,10 +158,15 @@ export async function previewMessage(
   }
   result.reachedStep = "draft";
 
+  // Decision 7: facts found on the account and not checked yet keep auto mode from sending.
+  const usesUncheckedFacts =
+    policyBase.autonomyMode === "auto"
+      ? (await uncheckedFactIds(deps.db, result.facts.map((f) => f.id))).length > 0
+      : false;
   // A fresh message: a DM's 24-hour window has just opened.
   result.policy = policy({
     ...policyBase,
-    draft: { needsHuman: result.draft.needsHuman },
+    draft: { needsHuman: result.draft.needsHuman, usesUncheckedFacts },
     lastCustomerMessageAt: now,
     now,
   });

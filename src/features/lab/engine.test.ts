@@ -27,11 +27,21 @@ const facts = [
   { id: "kb-1", title: "Opening hours", content: "Sundays 8am to 4pm.", similarity: 0.82 },
 ];
 
-/** Retrieval may call match_kb_entries; any table access fails the test (no writes allowed). */
-function fakeDb() {
+/**
+ * Retrieval may call match_kb_entries. The only table access allowed is reading which facts are
+ * not checked yet (auto mode, decision 7); anything else fails the test (no writes allowed).
+ */
+function fakeDb(unchecked: string[] = []) {
   const rpc = vi.fn(async () => ({ data: facts, error: null }));
-  const from = vi.fn(() => {
-    throw new Error("the dry run must not touch tables");
+  const from = vi.fn((table: string) => {
+    if (table !== "kb_entries") throw new Error("the dry run must not touch tables");
+    return {
+      select: () => ({
+        in: () => ({
+          eq: async () => ({ data: unchecked.map((id) => ({ id })), error: null }),
+        }),
+      }),
+    };
   });
   return { db: { rpc, from } as unknown as ServiceClient, rpc, from };
 }
@@ -135,6 +145,21 @@ describe("previewMessage", () => {
       },
     );
     expect(result.policy).toEqual({ decision: "send", reason: "auto_send" });
+  });
+
+  it("auto mode would ask first when the reply used a fact found on the account (not checked)", async () => {
+    const { db } = fakeDb(["kb-1"]);
+    const { llm } = fakeLlm();
+    const result = await previewMessage(
+      { db, classifier: classifierReturning({}), llm },
+      {
+        tenant: { ...tenant, modes: { faq: "auto" } },
+        text: "Open on Sunday?",
+        kind: "dm",
+        businessContext: tenant.name,
+      },
+    );
+    expect(result.policy).toEqual({ decision: "approve", reason: "facts_unchecked" });
   });
 
   it("reports a failed step without throwing", async () => {
