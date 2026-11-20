@@ -239,7 +239,7 @@ function SoloNudge({
         className="bg-honey/20 pointer-events-none absolute -right-12 -bottom-20 size-48 rounded-full blur-3xl"
       />
       <div className="relative flex flex-wrap items-center gap-x-5 gap-y-3 pr-8 sm:pr-10">
-        <span className="bg-honey-tint grid size-12 shrink-0 place-items-center rounded-full">
+        <span className="bg-honey-tint grid size-12 shrink-0 place-items-center overflow-hidden rounded-full">
           {/* The bee is drawn in a 70px box: kept, scaled to fit the circle. */}
           <PlanBees plan="solo" className="-m-[11px] scale-[0.68]" />
         </span>
