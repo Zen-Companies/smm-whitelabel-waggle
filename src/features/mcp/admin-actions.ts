@@ -44,14 +44,14 @@ export async function switchBrand(
   const actor = await staffWith("flags.manage");
   if (!actor) return { error: "Not available." };
   const tenantId = z.uuid().safeParse(formData.get("tenantId"));
-  if (!tenantId.success) return { error: "That brand wasn't found." };
+  if (!tenantId.success) return { error: "That business wasn't found." };
   const done = await setBrandSwitch(
     getServiceClient(),
     actor,
     tenantId.data,
     formData.get("on") === "true",
   );
-  if (!done) return { error: "That brand wasn't found." };
+  if (!done) return { error: "That business wasn't found." };
   revalidatePath("/admin/switches");
   return { saved: true };
 }
@@ -63,11 +63,11 @@ export async function saveDailyCap(
   const actor = await staffWith("flags.manage");
   if (!actor) return { error: "Not available." };
   const tenantId = z.uuid().safeParse(formData.get("tenantId"));
-  if (!tenantId.success) return { error: "That brand wasn't found." };
+  if (!tenantId.success) return { error: "That business wasn't found." };
   const parsed = parseDailyCap(formData.get("cap"));
   if ("error" in parsed) return { error: parsed.error };
   const done = await setBrandDailyCap(getServiceClient(), actor, tenantId.data, parsed.cap);
-  if (!done) return { error: "That brand wasn't found." };
+  if (!done) return { error: "That business wasn't found." };
   revalidatePath("/admin/switches");
   return { saved: true };
 }
@@ -91,7 +91,7 @@ export async function runTryIt(
     tenantId: formData.get("tenantId"),
     input: formData.get("input") ?? "",
   });
-  if (!parsed.success) return { error: "Pick who to run as and a test brand." };
+  if (!parsed.success) return { error: "Pick who to run as and a test business." };
   const db = getServiceClient();
   const staffEmail = (await emailsOf(db, [staffId])).get(staffId) ?? "staff";
   const out = await runPlayground(

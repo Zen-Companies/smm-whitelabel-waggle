@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import type { BrandSwitchKey } from "@/lib/flags/brand-switch";
 import { switchBrand, type StaffFormState } from "./actions";
 
-/** Staff: turn a paid channel off for one brand. */
+/** Staff: turn a paid channel off for one business. */
 export function SwitchOffForm({
   switchKey,
   tenantId,
@@ -31,14 +31,12 @@ export function SwitchOffForm({
   );
 }
 
-/** Staff: pick a brand to turn a paid channel on for. */
+/** Staff: pick a business to turn a paid channel on for. */
 export function SwitchOnForm({
   switchKey,
-  title,
   brands,
 }: {
   switchKey: BrandSwitchKey;
-  title: string;
   brands: { id: string; name: string }[];
 }) {
   const [state, action, pending] = useActionState<StaffFormState, FormData>(switchBrand, {});
@@ -47,7 +45,7 @@ export function SwitchOnForm({
       <input type="hidden" name="key" value={switchKey} />
       <input type="hidden" name="on" value="true" />
       <label className="flex flex-col gap-1.5 font-medium">
-        Brand
+        Business
         <select name="tenantId" className="field w-72">
           {brands.map((b) => (
             <option key={b.id} value={b.id}>
@@ -57,7 +55,7 @@ export function SwitchOnForm({
         </select>
       </label>
       <Button type="submit" variant="secondary" disabled={pending || !brands.length}>
-        Turn {title} on
+        Turn on for this business
       </Button>
       {state.error && (
         <span role="alert" className="text-danger">

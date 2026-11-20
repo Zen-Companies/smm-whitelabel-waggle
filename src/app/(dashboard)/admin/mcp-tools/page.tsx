@@ -10,8 +10,8 @@ export default function Page(props: PageProps<"/admin/mcp-tools">) {
       <div className="flex flex-col gap-1">
         <h1 className="page-title">MCP tools</h1>
         <p className="text-ink-2">
-          Every tool an AI assistant (Claude, ChatGPT, Cursor) can call, generated from the tool
-          registry so it always matches what&apos;s live.
+          Every tool an AI assistant (Claude, ChatGPT, Cursor) can use. Always matches what&apos;s
+          live.
         </p>
       </div>
       <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>

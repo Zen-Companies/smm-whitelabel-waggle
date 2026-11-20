@@ -10,7 +10,7 @@ export default function LabPage(props: PageProps<"/admin/lab">) {
       <div className="flex flex-col gap-1">
         <h1 className="page-title">Lab</h1>
         <p className="text-ink-2">
-          Staff view: run one message through two setups and compare what would happen.
+          Run one message through two setups and compare what would happen.
         </p>
       </div>
       <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>

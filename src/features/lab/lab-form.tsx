@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { runLab, saveLabCase, type LabCaseState, type LabRun, type LabRunState } from "./actions";
 import { RunComparison } from "./run-comparison";
 import type { Variant } from "./variants";
+import { versionLabels } from "./version-labels";
 
 const CONTEXT_LABELS = {
   profile: "Saved profile",
@@ -52,7 +53,7 @@ export function VariantFields({
       <select id={id(key)} name={`${side}_${key}`} defaultValue={val(key, value)} className="field">
         {values.map((v) => (
           <option key={v} value={v}>
-            {v}
+            {versionLabels(values)[v]}
             {v === current ? " (current)" : ""}
           </option>
         ))}
@@ -84,14 +85,14 @@ export function VariantFields({
       <div className="grid gap-4 sm:grid-cols-2">
         {select(
           "questionsVersion",
-          "Jev questions",
+          "Question set",
           options.questionsVersions,
           defaults.questionsVersion,
           defaults.questionsVersion,
         )}
         {select(
           "classifyPromptVersion",
-          "LLM classifier prompt",
+          "Sorting prompt",
           options.classifyPromptVersions,
           defaults.classifyPromptVersion,
           defaults.classifyPromptVersion,

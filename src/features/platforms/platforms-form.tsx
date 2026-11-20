@@ -29,6 +29,10 @@ export function PlatformsForm({ rows }: { rows: PlatformFormRow[] }) {
   const groups = [...new Set(rows.map((r) => r.group))];
   return (
     <form action={action} className="flex flex-col gap-5">
+      <p className="meta">
+        Hidden: not shown. Coming soon: shown, can&apos;t connect. Available: owners can connect.
+        Anyone already connected keeps working.
+      </p>
       {groups.map((g) => (
         <section key={g} className="flex flex-col gap-2">
           <h2 className="text-ink-2 text-sm font-semibold">{g}</h2>
@@ -44,7 +48,7 @@ export function PlatformsForm({ rows }: { rows: PlatformFormRow[] }) {
                         (r.signin === "welcome"
                           ? "Sign-in shows Waggle's welcome page"
                           : r.signin === "platform"
-                            ? "Sign-in names Zernio: the note shows first"
+                            ? "Sign-in shows our provider's name first"
                             : "Sign-in not seen yet")}
                       {r.usageAtCost && " · Usage charged at cost"}
                       {r.connected !== null && ` · ${r.connected} connected`}

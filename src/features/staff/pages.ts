@@ -27,14 +27,14 @@ export const firstStaffPage = (permissions: ReadonlySet<Permission>): string | n
 /** The permission matrix in plain words (Staff page). */
 export const PERMISSION_LABELS: Record<Permission, string> = {
   "admin.costs.view": "See costs",
-  "admin.caps.manage": "Change AI spending caps and plan settings",
+  "admin.caps.manage": "Change AI spending caps, plans and platforms",
   "admin.lab.use": "Use the lab",
   "mcp.docs.view": "Read MCP tool docs",
   "mcp.playground.run": "Run the Try it playground",
   "mcp.audit.view": "See MCP activity",
   "flags.manage": "Turn features on or off",
   "staff.manage": "Add or remove staff",
-  "brands.manage": "Offboard or restore brands",
+  "brands.manage": "Offboard, restore or mark test businesses",
   "beta.manage": "Create beta codes and see who joined",
 };
 

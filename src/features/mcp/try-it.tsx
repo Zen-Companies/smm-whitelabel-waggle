@@ -5,6 +5,7 @@ import { Chip } from "@/components/app/chip";
 import { Button } from "@/components/ui/button";
 import { runTryIt, type PlaygroundState } from "./admin-actions";
 import type { PlaygroundTarget } from "./admin";
+import { seconds } from "./admin-filters";
 
 /**
  * "Try it" (design v3 "MCP tools"): run the tool as a test brand's owner, through the same code
@@ -35,11 +36,7 @@ export function TryIt({
         <Chip tone="blue">Logged as a playground run</Chip>
       </span>
       {!targets.length ? (
-        <p className="text-ink-2 text-sm">
-          No test brands yet. Mark one with{" "}
-          <code className="font-mono text-xs">update tenants set is_test = true</code> in the SQL
-          editor (locally, <code className="font-mono text-xs">pnpm demo:seed</code> does it).
-        </p>
+        <p className="meta">No test business yet. Mark one as a test business in Brands.</p>
       ) : (
         <form action={action} className="flex flex-col gap-3.5">
           <input type="hidden" name="tool" value={tool} />
@@ -67,7 +64,7 @@ export function TryIt({
           </span>
           <span className="flex flex-col gap-1.5">
             <label htmlFor="try-brand" className="text-[13px] font-semibold">
-              Brand
+              Business
             </label>
             <select
               id="try-brand"
@@ -84,7 +81,7 @@ export function TryIt({
             </select>
             {brand && !brand.on && (
               <span className="text-honey-text text-xs">
-                AI assistants are off for this brand, so tools will refuse it. Turn it on in
+                AI assistants are off for this business, so tools will refuse it. Turn it on in
                 Switches.
               </span>
             )}
@@ -101,14 +98,14 @@ export function TryIt({
               spellCheck={false}
               className="field resize-y font-mono text-xs"
             />
-            <span className="meta text-xs">JSON. brand_id is set to the brand above.</span>
+            <span className="meta text-xs">JSON. brand_id is set to the business above.</span>
           </span>
           <span className="flex flex-wrap items-center gap-2.5">
             <Button type="submit" variant="primary" disabled={pending}>
               {pending ? "Running…" : "Run"}
             </Button>
             <span className="meta text-xs">
-              Same code path as a real AI assistant. Test brands only.
+              Same code path as a real AI assistant. Test businesses only.
             </span>
           </span>
           {state.error && (
@@ -121,7 +118,7 @@ export function TryIt({
               <span className="flex items-center gap-2 text-[13px]">
                 <b className="font-semibold">Response</b>
                 {result.ok ? <Chip tone="green">ok</Chip> : <Chip tone="red">{result.code}</Chip>}
-                <span className="meta">{result.ms} ms</span>
+                <span className="meta">{seconds(result.ms)}</span>
               </span>
               <pre className="bg-ink text-surface max-h-96 overflow-auto rounded-[10px] px-3.5 py-3 font-mono text-xs leading-relaxed whitespace-pre-wrap">
                 {result.body}
