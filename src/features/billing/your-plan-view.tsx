@@ -10,7 +10,14 @@ import {
   openBillingPortal,
   setAutoTopUp,
 } from "./plan-actions";
-import { PlanButton, PlanCards, TopUpButton, type PlanCardData } from "./plan-forms";
+import {
+  PlanButton,
+  PlanCards,
+  TopUpButton,
+  type FoundingOffer,
+  type PlanCardData,
+} from "./plan-forms";
+import { foundingSpotsLeft } from "./founding";
 import { cardLabel } from "./auto-top-up";
 import {
   accountAllowance,
@@ -178,9 +185,17 @@ export async function YourPlanSection({
     bullets: planBullets(plans[id]),
   }));
   const firstTime = !bill?.trial_ends_at && !bill?.stripe_subscription_id;
-  const foundingNote = firstTime
-    ? `The first ${FOUNDING.spots} businesses get ${PLANS[FOUNDING.plan].name} at $${FOUNDING.monthlyUsd} a month for ${FOUNDING.months} months, then $${PLANS[FOUNDING.plan].monthlyUsd}.`
-    : null;
+  // Founding offer, highlighted (approved 20 Nov): a banner and the Team card, while spots last.
+  const stripe = getStripe();
+  const founding: FoundingOffer | null =
+    firstTime && stripe && (await foundingSpotsLeft(stripe))
+      ? {
+          plan: FOUNDING.plan,
+          monthlyUsd: FOUNDING.monthlyUsd,
+          months: FOUNDING.months,
+          spots: FOUNDING.spots,
+        }
+      : null;
 
   const intro = (
     <div className="flex flex-col gap-1">
@@ -280,7 +295,8 @@ export async function YourPlanSection({
               currentInterval={null}
               live={false}
               mayChange={org.isOwner}
-              foundingNote={foundingNote}
+              foundingNote={null}
+              founding={founding}
               action={choosePlan}
             />
             <span className="meta">

@@ -21,6 +21,7 @@ import { loadPlans } from "./usage";
 import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
+import { foundingSpotsLeft } from "./founding";
 import {
   billingFromSubscription,
   isExtraAccountKey,
@@ -83,15 +84,6 @@ async function ensureCustomer(
     throw new Error(error.message);
   }
   return customer.id;
-}
-
-async function foundingSpotsLeft(stripe: Stripe): Promise<boolean> {
-  try {
-    const c = await stripe.coupons.retrieve(FOUNDING_COUPON);
-    return c.valid && (c.max_redemptions ?? FOUNDING.spots) > c.times_redeemed;
-  } catch {
-    return false;
-  }
 }
 
 /** Stores the subscription now, so the page is right before the webhook lands. */
