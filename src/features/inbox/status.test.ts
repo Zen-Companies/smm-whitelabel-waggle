@@ -21,6 +21,9 @@ describe("nextStatus", () => {
     ["escalated", "await_approval", "awaiting_approval"],
     // MCP Q1: the owner's own reply to a handed-over message.
     ["escalated", "send", "sending"],
+    // Setup (20 Nov): the owner gave the missing facts, so it's drafted again.
+    ["escalated", "redraft", "classified"],
+    ["awaiting_approval", "redraft", "classified"],
     ["failed", "handle", "handled"],
     ["paused", "resume", "new"],
   ])("%s --%s--> %s (TDD §6)", (from, event, to) => {
@@ -132,7 +135,7 @@ describe("first connect: drafts past the reveal's 20 (20 Nov)", () => {
   });
   it("a draft waiting for approval is rewritten after the owner changes an answer", () => {
     expect(nextStatus("awaiting_approval", "redraft")).toBe("classified");
-    for (const from of ["sending", "sent", "drafted", "escalated"] as const) {
+    for (const from of ["sending", "sent", "drafted", "handled"] as const) {
       expect(nextStatus(from, "redraft")).toBeNull();
     }
   });
