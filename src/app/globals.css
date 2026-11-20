@@ -752,6 +752,58 @@ label:not(:has(:checked)) .choice-bee {
   }
 }
 
+/* The plan bees (approved 20 Nov): Free waits for your OK, the others fill their comb. */
+@keyframes bee-cell-fill {
+  0%,
+  15% {
+    fill: var(--surface);
+  }
+  30%,
+  85% {
+    fill: var(--honey);
+  }
+  100% {
+    fill: var(--surface);
+  }
+}
+.bee-cell-fill {
+  animation: bee-cell-fill 3.4s linear infinite;
+}
+@keyframes bee-wait {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-3px) rotate(4deg);
+  }
+}
+.bee-wait {
+  animation: bee-wait 2.6s ease-in-out infinite;
+}
+@keyframes bee-ok {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+  }
+  70%,
+  90% {
+    opacity: 1;
+  }
+}
+.bee-ok {
+  animation: bee-ok 3.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bee-cell-fill {
+    fill: var(--honey);
+  }
+  .bee-ok {
+    opacity: 1;
+  }
+}
+
 /* Help & feedback (design v3 "Beta access and feedback"): the bee flies a small figure-8 around
    the Feedback button twice, then rests on it; hovering the button sends it round again. */
 .feedback-bee {

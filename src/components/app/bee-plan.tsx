@@ -138,10 +138,92 @@ export function TrialCells({ day, of }: { day: number; of: number }) {
   );
 }
 
-const FIGURE_8 =
-  "M120,60 C138,30 204,24 204,60 C204,96 138,90 120,60 C102,30 36,24 36,60 C36,96 102,90 120,60Z";
+// The plan bees (approved 20 Nov, canvas "Plan pill peek + Free and Solo bees"). One story: cells
+// are accounts, bees are people, motion is how much Waggle does on its own. Free waits for your
+// OK, Solo works alone, Team works together, Business is the whole dance.
 
-/** Each plan's bees: Solo one bee, Business a little swarm on the figure-8, Team a hive. */
+/** A bee flying `path` (in its box's own pixels), wings fluttering. */
+function Flyer({
+  path,
+  seconds,
+  delay = 0,
+  w = 22,
+}: {
+  path: string;
+  seconds: number;
+  delay?: number;
+  w?: number;
+}) {
+  const h = Math.round((w * 16) / 24);
+  return (
+    <span
+      className="bee-fly"
+      style={{
+        width: w,
+        height: h,
+        margin: `-${h / 2}px 0 0 -${w / 2}px`,
+        offsetPath: `path("${path}")`,
+        animationDuration: `${seconds}s`,
+        animationDelay: `-${delay}s`,
+      }}
+    >
+      <svg width={w} height={h} viewBox="0 0 24 16">
+        <BeeBody />
+      </svg>
+    </span>
+  );
+}
+
+/** Comb cells that fill with honey in turn, round and round. */
+function FillingCells({
+  cells,
+  r,
+  seconds,
+}: {
+  cells: [number, number][];
+  r: number;
+  seconds: number;
+}) {
+  return (
+    <>
+      {cells.map(([x, y], i) => (
+        <polygon
+          key={i}
+          points={hexPoints(x, y, r)}
+          fill="var(--surface)"
+          stroke={INK}
+          strokeWidth="1.3"
+          strokeLinejoin="round"
+          className="bee-cell-fill"
+          style={{
+            animationDuration: `${seconds}s`,
+            animationDelay: `-${((seconds * i) / cells.length).toFixed(2)}s`,
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+const trail = {
+  fill: "none",
+  stroke: HONEY,
+  strokeWidth: 2.5,
+  strokeDasharray: "1.5 5",
+  strokeLinecap: "round",
+} as const;
+
+const SOLO_LOOP =
+  "M30,40 C30,10 80,10 80,40 C80,70 130,70 130,40 C130,10 80,10 80,40 C80,70 30,70 30,40Z";
+const TEAM_LOOPS = [
+  "M40,32 C40,8 75,8 75,32 C75,56 40,56 40,32Z",
+  "M70,40 C70,16 110,16 110,40 C110,64 70,64 70,40Z",
+  "M30,46 C30,70 90,74 90,46 C90,22 30,22 30,46Z",
+];
+const BUSINESS_EIGHT =
+  "M120,40 C135,14 196,12 196,40 C196,68 135,66 120,40 C105,14 44,12 44,40 C44,68 105,66 120,40Z";
+
+/** Each plan's bees. `business` is the plan shown as Team, `team` the one shown as Business. */
 export function PlanBees({
   plan,
   className,
@@ -149,89 +231,101 @@ export function PlanBees({
   plan: "free" | "solo" | "business" | "team";
   className?: string;
 }) {
-  // Free: one small bee, resting (no flight path).
+  // Free, "waits for your OK": one bee holds a drop of honey by one empty cell; a check glows.
   if (plan === "free") {
     return (
-      <span aria-hidden className={cn("relative block h-[70px] w-[70px] shrink-0", className)}>
-        <Bee w={26} style={{ left: 20, top: 26 }} />
-      </span>
-    );
-  }
-  if (plan === "solo") {
-    return (
-      <span aria-hidden className={cn("relative block h-[70px] w-[70px] shrink-0", className)}>
-        <Bee w={36} className="bee-bob" style={{ left: 14, top: 22 }} />
-      </span>
-    );
-  }
-  if (plan === "business") {
-    return (
-      <span aria-hidden className={cn("relative block h-[70px] w-[150px] shrink-0", className)}>
-        <svg width="150" height="70" viewBox="0 0 240 120" className="absolute inset-0">
+      <span aria-hidden className={cn("relative block h-[80px] w-[110px] shrink-0", className)}>
+        <svg width="110" height="80" viewBox="0 0 110 80" className="absolute inset-0">
+          <polygon
+            points={hexPoints(30, 48, 18)}
+            fill="var(--surface)"
+            stroke={INK}
+            strokeWidth="1.3"
+            strokeDasharray="3 3"
+          />
           <path
-            d={FIGURE_8}
+            d="M22 48l6 6 11-12"
             fill="none"
             stroke={HONEY}
-            strokeWidth="4"
-            strokeDasharray="2 7"
+            strokeWidth="3"
             strokeLinecap="round"
+            strokeLinejoin="round"
+            className="bee-ok"
           />
         </svg>
-        <Bee w={26} className="bee-bob" style={{ left: 4, top: 22 }} />
-        <Bee w={30} className="bee-bob" style={{ left: 62, top: 0, animationDelay: "0.4s" }} />
-        <Bee w={24} className="bee-bob" style={{ left: 112, top: 30, animationDelay: "0.8s" }} />
+        <span className="bee-wait absolute top-5 left-[58px] block h-10 w-10">
+          <Bee w={34} style={{ left: 0, top: 0, transform: "scaleX(-1)" }} />
+          <svg width="12" height="14" viewBox="0 0 12 14" className="absolute top-6 left-2">
+            <path
+              d="M6 1C6 1 1 7 1 9.5a5 5 0 0 0 10 0C11 7 6 1 6 1z"
+              fill={HONEY}
+              stroke={INK}
+              strokeWidth="1.2"
+            />
+          </svg>
+        </span>
       </span>
     );
   }
+  // Solo, "works on its own": one bee loops over 3 cells (3 accounts), filling each.
+  if (plan === "solo") {
+    return (
+      <span aria-hidden className={cn("relative block h-[80px] w-[160px] shrink-0", className)}>
+        <svg width="160" height="80" viewBox="0 0 160 80" className="absolute inset-0">
+          <path d={SOLO_LOOP} {...trail} />
+          <FillingCells
+            cells={[
+              [30, 40],
+              [80, 40],
+              [130, 40],
+            ]}
+            r={11}
+            seconds={3.4}
+          />
+        </svg>
+        <Flyer path={SOLO_LOOP} seconds={3.4} w={26} />
+      </span>
+    );
+  }
+  // Team, "a team at work": 6 cells as a small comb, 3 bees each on their own loop.
+  if (plan === "business") {
+    const r = 10;
+    const dx = r * 1.732;
+    const cells: [number, number][] = [
+      ...[0, 1, 2].map((i): [number, number] => [50 + i * dx, 30]),
+      ...[0, 1, 2].map((i): [number, number] => [50 - dx / 2 + i * dx, 45]),
+    ];
+    return (
+      <span aria-hidden className={cn("relative block h-[80px] w-[160px] shrink-0", className)}>
+        <svg width="160" height="80" viewBox="0 0 160 80" className="absolute inset-0">
+          {TEAM_LOOPS.map((d) => (
+            <path key={d} d={d} {...trail} strokeWidth={2} opacity={0.7} />
+          ))}
+          <FillingCells cells={cells} r={r} seconds={3.6} />
+        </svg>
+        <Flyer path={TEAM_LOOPS[0]} seconds={3} />
+        <Flyer path={TEAM_LOOPS[1]} seconds={3.4} delay={1.2} />
+        <Flyer path={TEAM_LOOPS[2]} seconds={3.8} delay={2.4} />
+      </span>
+    );
+  }
+  // Business, "the whole hive": a full comb of 10 cells in the waggle dance, 5 bees on the 8.
+  const r = 8;
+  const dx = r * 1.732;
+  const cells: [number, number][] = [
+    ...[0, 1, 2, 3, 4].map((i): [number, number] => [120 - 2 * dx + i * dx, 33]),
+    ...[0, 1, 2, 3].map((i): [number, number] => [120 - 1.5 * dx + i * dx, 45]),
+    [120, 21],
+  ];
   return (
-    <span aria-hidden className={cn("relative block h-[70px] w-[150px] shrink-0", className)}>
-      <svg width="70" height="70" viewBox="0 0 70 70" className="absolute top-0 left-0">
-        <path d="M35 6c-8 0-12 6-12 6h24s-4-6-12-6z" fill={HONEY} stroke={INK} strokeWidth="1.3" />
-        <rect
-          x="16"
-          y="12"
-          width="38"
-          height="12"
-          rx="6"
-          fill={HONEY}
-          stroke={INK}
-          strokeWidth="1.3"
-        />
-        <rect
-          x="11"
-          y="24"
-          width="48"
-          height="13"
-          rx="6.5"
-          fill={HONEY}
-          stroke={INK}
-          strokeWidth="1.3"
-        />
-        <rect
-          x="13"
-          y="37"
-          width="44"
-          height="13"
-          rx="6.5"
-          fill={HONEY}
-          stroke={INK}
-          strokeWidth="1.3"
-        />
-        <rect
-          x="19"
-          y="50"
-          width="32"
-          height="12"
-          rx="6"
-          fill={HONEY}
-          stroke={INK}
-          strokeWidth="1.3"
-        />
-        <ellipse cx="35" cy="56" rx="5" ry="4" fill={INK} />
+    <span aria-hidden className={cn("relative block h-[80px] w-[240px] shrink-0", className)}>
+      <svg width="240" height="80" viewBox="0 0 240 80" className="absolute inset-0">
+        <path d={BUSINESS_EIGHT} {...trail} />
+        <FillingCells cells={cells} r={r} seconds={2.5} />
       </svg>
-      <Bee w={22} className="bee-bob" style={{ left: 76, top: 4 }} />
-      <Bee w={22} className="bee-bob" style={{ left: 96, top: 34, animationDelay: "0.5s" }} />
-      <Bee w={20} className="bee-bob" style={{ left: 120, top: 14, animationDelay: "1s" }} />
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Flyer key={i} path={BUSINESS_EIGHT} seconds={5} delay={i} w={20} />
+      ))}
     </span>
   );
 }
