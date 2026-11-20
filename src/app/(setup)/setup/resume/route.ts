@@ -1,16 +1,9 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { loadSetupResume } from "@/features/setup";
+import { NextResponse } from "next/server";
 
 /**
- * Setup first, then free (approved 20 Nov): where the gate sends an owner whose brand hasn't been
- * through setup. Remembers the page they asked for (same-site, checked), for this brand only,
- * then opens setup at the first step not done with "Welcome back".
+ * Retired with the setup gate (Walter's flow, 20 Nov): old links land on setup, which opens the
+ * screen the owner left (or Connect when nothing is connected).
  */
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const { href, cookie } = await loadSetupResume(searchParams.get("next"));
-  const store = await cookies();
-  if (cookie) store.set(cookie.name, cookie.value, cookie.options);
-  redirect(href);
+export function GET(request: Request) {
+  return NextResponse.redirect(new URL("/setup", request.url));
 }

@@ -97,9 +97,9 @@ describe("conversationResponse", () => {
   });
 
   it("counts an old message with no reply as missed", () => {
-    expect(
-      conversationResponse([{ direction: "incoming", createdAt: h(30) }], since, now),
-    ).toEqual({ messages: 1, answered: 0 });
+    expect(conversationResponse([{ direction: "incoming", createdAt: h(30) }], since, now)).toEqual(
+      { messages: 1, answered: 0 },
+    );
   });
 
   it("skips messages before the window, in any order", () => {

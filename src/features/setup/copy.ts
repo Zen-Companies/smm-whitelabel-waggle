@@ -55,7 +55,10 @@ export function progressLine(p: BatchProgress, spacingMs: number, platform: stri
 }
 
 /** "Can answer on its own: X of Y": replies the owner sent of those Waggle wrote. */
-export function answerMeter(approved: number, total: number): {
+export function answerMeter(
+  approved: number,
+  total: number,
+): {
   x: number;
   y: number;
   pct: number;

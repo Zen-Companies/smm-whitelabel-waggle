@@ -163,6 +163,9 @@ export function currentStep(done: [boolean, boolean, boolean]): SetupStep | null
  * right now (the sign-in came back, it shows up in a moment). Old links (the 5-step setup's
  * `?step=`, the reveal, the gate's resume) land here too, so they all reach the new flow.
  */
-export function setupEntry(input: { connected: boolean; connecting: boolean }): "welcome" | "setup" {
+export function setupEntry(input: {
+  connected: boolean;
+  connecting: boolean;
+}): "welcome" | "setup" {
   return input.connected || input.connecting ? "setup" : "welcome";
 }

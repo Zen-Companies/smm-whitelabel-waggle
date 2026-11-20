@@ -61,11 +61,14 @@ export async function CatchUpCard() {
         </div>
         <p className="text-ink-2 mt-2 text-[15px]">{copy.line}</p>
         {progress.phase === "ready" ? (
-          <Link href="/reveal" className={`${buttonVariants({ variant: "primary" })} mt-4`}>
+          <Link
+            href="/setup?screen=missed"
+            className={`${buttonVariants({ variant: "primary" })} mt-4`}
+          >
             {copy.link}
           </Link>
         ) : (
-          <ActionLink href="/reveal" className="mt-3 inline-flex">
+          <ActionLink href="/setup?screen=missed" className="mt-3 inline-flex">
             {copy.link}
           </ActionLink>
         )}

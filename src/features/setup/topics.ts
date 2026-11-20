@@ -122,7 +122,9 @@ export function batchReplies(
 /** The rest batch's title: "6 quick questions" when all are quick, else "6 more questions". */
 export function restTitle(rest: readonly { topic: SetupTopic }[]): string {
   const n = rest.length;
-  const quick = rest.every((r) => r.topic === "delivery" || r.topic === "hours" || r.topic === "location");
+  const quick = rest.every(
+    (r) => r.topic === "delivery" || r.topic === "hours" || r.topic === "location",
+  );
   return `${n} ${quick ? "quick" : "more"} ${n === 1 ? "question" : "questions"}`;
 }
 

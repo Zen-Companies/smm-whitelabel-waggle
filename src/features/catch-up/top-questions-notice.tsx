@@ -29,7 +29,7 @@ export async function TopQuestionsNotice() {
       <span aria-hidden className="text-ink-3">
         ·
       </span>
-      <ActionLink href="/setup?step=3">Answer them</ActionLink>
+      <ActionLink href="/teach">Answer them</ActionLink>
       <form action={dismissTopQuestionsNotice} className="absolute top-1.5 right-1.5">
         <input type="hidden" name="id" value={notice.catchUpId} />
         <button

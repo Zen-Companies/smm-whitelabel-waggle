@@ -29,7 +29,4 @@ export type {
 } from "./reveal-data";
 // First connect screens (board approved 20 Nov).
 export { ReadingInbox } from "./reading-inbox";
-export { RevealView } from "./reveal-view";
-// Busy accounts (decided 20 Nov): setup waits for the customers' own questions in place.
-export { PracticeWait, TopQuestionsWait } from "./top-questions-wait";
 export { TopQuestionsNotice } from "./top-questions-notice";
