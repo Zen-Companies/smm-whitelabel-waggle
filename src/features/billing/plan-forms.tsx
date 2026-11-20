@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { cn } from "cn";
 import { PlanBees } from "@/components/app/bee-plan";
 import { BeeDance } from "@/components/app/bee-setup";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import type { PlanActionState } from "./plan-actions";
 import { BUSINESS_CALL_URL, PROMOTED_PLAN, type PlanId } from "./plans";
 
@@ -181,7 +181,7 @@ export function PlanCards({
                     href={BUSINESS_CALL_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="border-ink text-ink hover:bg-subtle inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-semibold"
+                    className={buttonVariants({ variant: "secondary" })}
                   >
                     Book a call
                   </a>
