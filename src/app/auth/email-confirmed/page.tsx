@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import Link from "next/link";
+import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
 import { confirmEmailToken } from "@/features/tenants";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -10,13 +11,12 @@ type Props = { searchParams: Promise<Record<string, string | string[] | undefine
 
 // The confirm link (hotfix 21 Nov, canvas "Sign up without waiting for the email", screen 4).
 // It opens wherever the phone opens mail links, so it works without being signed in there.
-export default async function EmailConfirmedPage({ searchParams }: Props) {
+async function Confirm({ searchParams }: Props) {
   const { token } = await searchParams;
   const result = await confirmEmailToken(getServiceClient(), typeof token === "string" ? token : "");
   const ok = result !== "invalid";
   return (
-    <main className="bg-page flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
-      <Brand />
+    <>
       {ok ? (
         <span className="bg-success-soft text-success inline-flex size-12 items-center justify-center rounded-full">
           <Check className="size-6" strokeWidth={2} aria-hidden />
@@ -34,6 +34,17 @@ export default async function EmailConfirmedPage({ searchParams }: Props) {
       >
         Back to Waggle
       </Link>
+    </>
+  );
+}
+
+export default function EmailConfirmedPage({ searchParams }: Props) {
+  return (
+    <main className="bg-page flex min-h-dvh flex-col items-center justify-center gap-4 px-4 text-center">
+      <Brand />
+      <Suspense fallback={<div className="skeleton h-40 w-full max-w-sm rounded-xl" />}>
+        <Confirm searchParams={searchParams} />
+      </Suspense>
     </main>
   );
 }
