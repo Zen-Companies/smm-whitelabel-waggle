@@ -258,7 +258,7 @@ export async function TodayView() {
               </Link>
 
               {/* Into setup's Connect step, so the first connect reads the inbox (20 Nov). */}
-              <Link href="/setup?step=2" className={buttonVariants({ variant: "secondary" })}>
+              <Link href="/welcome" className={buttonVariants({ variant: "secondary" })}>
                 Just connect an account
               </Link>
             </div>

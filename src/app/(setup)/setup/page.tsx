@@ -1,25 +1,26 @@
-import { headers } from "next/headers";
 import { Suspense } from "react";
-import { connectBanner, FirstConnectTag } from "@/features/accounts";
-import { connectProblem, isInAppBrowser, parseStep, SetupView } from "@/features/setup";
+import { FirstConnectTag } from "@/features/accounts";
+import { SetupView } from "@/features/setup";
 import { getOpenOrg } from "@/features/tenants";
 
 export const metadata = { title: "Set up Waggle" };
 
 type Props = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
+const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
+
+/**
+ * Setup steps 2 and 3 (Walter's flow, one screen at a time, approved 20 Nov): `?screen=` opens a
+ * screen, else the one left. Old links (`?step=` of the 5-step setup, `/setup/resume`, `/reveal`)
+ * land here and open where the owner left off; with nothing connected it's step 1, /welcome.
+ */
 async function Setup({ searchParams }: Props) {
-  const [params, h] = await Promise.all([searchParams, headers()]);
-  const connecting = typeof params.connecting === "string" ? params.connecting : undefined;
-  const banner = connectBanner(params);
+  const params = await searchParams;
   return (
     <SetupView
-      step={parseStep(params.step)}
-      connecting={connecting}
-      more={params.more === "1"}
-      inApp={isInAppBrowser(h.get("user-agent"))}
-      problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
-      resume={params.resume === "1"}
+      requested={one(params.screen) ?? null}
+      connecting={one(params.connecting)}
+      go={params.go === "1"}
     />
   );
 }
@@ -34,7 +35,7 @@ export default function SetupPage({ searchParams }: Props) {
   return (
     <>
       <Suspense
-        fallback={<div className="skeleton mx-auto mt-12 h-96 w-full max-w-[760px] rounded-xl" />}
+        fallback={<div className="skeleton mx-auto mt-12 h-96 w-full max-w-[640px] rounded-xl" />}
       >
         <Setup searchParams={searchParams} />
       </Suspense>

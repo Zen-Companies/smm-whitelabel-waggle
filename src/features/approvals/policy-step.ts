@@ -1,3 +1,4 @@
+import { askFirstMatch } from "@/lib/ask-first";
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { uncheckedFactIds } from "@/lib/facts";
@@ -31,8 +32,8 @@ export async function loadPolicyInput(
   const { data: item, error } = await db
     .from("inbound_items")
     .select(
-      "id, tenant_id, kind, category, confidence, conversation_id, " +
-        "social_accounts!inner (status, platform), tenants!inner (subscription_status, confidence_threshold, replies_paused, auto_hide_spam)",
+      "id, tenant_id, kind, category, confidence, conversation_id, text, " +
+        "social_accounts!inner (status, platform), tenants!inner (subscription_status, confidence_threshold, replies_paused, auto_hide_spam, ask_first_topics)",
     )
     .eq("id", itemId)
     .single();
@@ -43,12 +44,14 @@ export async function loadPolicyInput(
     category: Category | null;
     confidence: number | null;
     conversation_id: string | null;
+    text: string | null;
     social_accounts: { status: PolicyInput["account"]["status"]; platform: string };
     tenants: {
       subscription_status: SubscriptionStatus;
       confidence_threshold: number;
       replies_paused: boolean;
       auto_hide_spam: boolean;
+      ask_first_topics: string[] | null;
     };
   };
   if (!row.category || row.confidence === null) throw new Error("policy: item is not classified");
@@ -108,6 +111,7 @@ export async function loadPolicyInput(
       autonomyMode,
       lastCustomerMessageAt: last ? new Date(last) : null,
       dmRepliesSinceCustomer,
+      askFirst: askFirstMatch(row.text ?? "", row.tenants.ask_first_topics ?? []) !== null,
       now,
     },
   };

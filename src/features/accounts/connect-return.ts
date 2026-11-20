@@ -13,6 +13,7 @@ const RETURN_PAGES = [
   "/settings/accounts",
   "/settings",
   "/setup",
+  "/welcome",
   "/today",
   "/inbox",
   "/posts",
@@ -65,7 +66,7 @@ export function safeReturnPath(raw: unknown): string | null {
  * its Connect step. Anything not allowed falls back to Settings → Connected accounts.
  */
 export function connectOrigin(raw: unknown): string {
-  if (raw === "setup") return "/setup?step=2";
+  if (raw === "setup") return "/welcome";
   return safeReturnPath(raw) ?? DEFAULT_RETURN;
 }
 
@@ -79,9 +80,9 @@ export function withParams(path: string, params: Record<string, string | null | 
   return `${url.pathname}${query ? `?${query}` : ""}${url.hash}`;
 }
 
-/** Pure: setup step 2, watching this platform connect (the first account's landing). */
+/** Pure: setup's step 2, watching this platform connect (the first account's landing). */
 export function firstConnectHref(platform: string): string {
-  return withParams("/setup", { step: "2", connecting: platform });
+  return withParams("/setup", { connecting: platform });
 }
 
 /**

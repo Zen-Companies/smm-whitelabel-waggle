@@ -406,6 +406,17 @@ const commentedPostsPageSchema = z.object({
     .optional(),
   pagination: z.object({ nextCursor: z.string().nullish() }).nullish(),
 });
+/** The earliest of the account's own inline replies (response score, 20 Nov); null if unknown. */
+function firstOwnerReplyAt(
+  replies: { from?: { isOwner?: boolean } | null; createdTime?: string | null }[],
+): string | null {
+  const times = replies
+    .filter((r) => r.from?.isOwner === true && r.createdTime)
+    .map((r) => r.createdTime as string)
+    .filter((t) => Number.isFinite(Date.parse(t)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b));
+  return times[0] ?? null;
+}
 const postCommentsPageSchema = z.object({
   comments: z
     .array(
@@ -422,7 +433,12 @@ const postCommentsPageSchema = z.object({
           .nullish(),
         // Up to a few inline replies; the docs give them the comment's shape.
         replies: z
-          .array(z.object({ from: z.object({ isOwner: z.boolean().optional() }).nullish() }))
+          .array(
+            z.object({
+              from: z.object({ isOwner: z.boolean().optional() }).nullish(),
+              createdTime: z.string().nullish(),
+            }),
+          )
           .nullish(),
       }),
     )
@@ -4241,6 +4257,7 @@ export class ZernioSocialProvider implements SocialProvider {
           fromOwner: c.from?.isOwner ?? false,
           createdAt: c.createdTime ?? null,
           ownerReplied: (c.replies ?? []).some((r) => r.from?.isOwner === true),
+          ownerRepliedAt: firstOwnerReplyAt(c.replies ?? []),
         })),
         nextCursor: page.pagination?.hasMore ? (page.pagination.cursor ?? null) : null,
       };

@@ -1,9 +1,5 @@
 import { TimeZoneCookie } from "@/components/app/time-zone-cookie";
 
-import { headers } from "next/headers";
-
-import { redirect } from "next/navigation";
-
 import { Suspense } from "react";
 
 import { AccountBanner, ConnectResult, FirstConnectTag } from "@/features/accounts";
@@ -20,11 +16,7 @@ import { Feedback } from "@/features/feedback";
 
 import { can, listMyOrgs } from "@/features/orgs";
 
-import { SetupGateWatch, setupGateFor } from "@/features/setup";
-
 import { AppHeader, getCurrentTenant } from "@/features/tenants";
-
-import { PATH_HEADER } from "@/lib/routes";
 
 import { getServiceClient } from "@/lib/supabase/service";
 
@@ -69,23 +61,6 @@ async function ConnectTag() {
       <FirstReplyTag orgId={tenant.organizationId} isOwner={isOwner} />
     </>
   );
-}
-
-/**
- * Setup first, then free (approved 20 Nov): a brand owner whose setup isn't passed goes to setup
- * from every app page (not Your plan, account settings or staff pages). Shows nothing otherwise.
- */
-async function SetupGate() {
-  const [tenant, orgs, h] = await Promise.all([getCurrentTenant(), listMyOrgs(), headers()]);
-  const org = orgs.find((o) => o.id === tenant.organizationId);
-  const gate = await setupGateFor({
-    tenantId: tenant.id,
-    userId: tenant.userId,
-    role: org?.role ?? null,
-    path: h.get(PATH_HEADER) ?? "",
-  });
-  if (gate.decision !== "open") redirect(gate.decision.redirect);
-  return gate.watch ? <SetupGateWatch /> : null;
 }
 
 /**
@@ -158,10 +133,6 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
 
       <Suspense fallback={null}>
         <ConnectTag />
-      </Suspense>
-
-      <Suspense fallback={null}>
-        <SetupGate />
       </Suspense>
     </div>
   );

@@ -1,7 +1,8 @@
+// Setup, Walter's flow (approved 20 Nov): 1 Connect (/welcome) · 2 See what you missed · 3 Check
+// Waggle's answers (/setup, one screen at a time).
 export { SetupView } from "./setup-view";
-export { parseStep } from "./starter";
 export { ReadyLine } from "./ready-line";
-export { StepsAhead } from "./stepper";
+export { WelcomeConnect } from "./welcome-connect";
+export { SetupStepper } from "./setup-frame";
 export { connectProblem, isInAppBrowser } from "./first-connect";
-export { loadSetupResume, setupGateFor } from "./gate-server";
-export { SetupGateWatch } from "./gate-watch";
+export { setupEntry } from "./flow";

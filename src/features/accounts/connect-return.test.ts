@@ -55,7 +55,8 @@ describe("safeReturnPath", () => {
 
 describe("connectOrigin", () => {
   it("reads the older setup value", () => {
-    expect(connectOrigin("setup")).toBe("/setup?step=2");
+    expect(connectOrigin("setup")).toBe("/welcome");
+    expect(safeReturnPath("/welcome?all=1")).toBe("/welcome?all=1");
   });
   it("falls back to Connected accounts", () => {
     expect(connectOrigin(null)).toBe(DEFAULT_RETURN);
@@ -69,9 +70,9 @@ describe("connectOrigin", () => {
 describe("where a connect lands", () => {
   it("sends the first account to setup step 2, wherever it started", () => {
     expect(connectReturnHref({ origin: "/inbox", platform: "instagram", firstAccount: true })).toBe(
-      "/setup?step=2&connecting=instagram",
+      "/setup?connecting=instagram",
     );
-    expect(firstConnectHref("facebook")).toBe("/setup?step=2&connecting=facebook");
+    expect(firstConnectHref("facebook")).toBe("/setup?connecting=facebook");
   });
 
   it("sends later accounts back to where they started", () => {
