@@ -6,7 +6,7 @@ import { Brand } from "@/components/app/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
-import { GoogleButton, OrDivider } from "@/features/auth";
+import { GoogleButton, InAppGoogleGate, OrDivider } from "@/features/auth";
 import { PASSWORD_MIN } from "./password";
 
 /** Messages for `?error=` on the sign-in page (Google and email links come back with these). */
@@ -54,11 +54,14 @@ export function AuthForm({
         </p>
       )}
       <div className="mb-4 flex flex-col gap-4">
-        <GoogleButton
-          label={isSignup ? "Sign up with Google" : "Continue with Google"}
-          next={next}
-        />
-        <OrDivider />
+        {/* Inside TikTok's or Instagram's own browser Google blocks sign-in: say so instead (20 Nov). */}
+        <InAppGoogleGate>
+          <GoogleButton
+            label={isSignup ? "Sign up with Google" : "Continue with Google"}
+            next={next}
+          />
+          <OrDivider />
+        </InAppGoogleGate>
       </div>
       <form action={formAction} className="flex flex-col gap-4">
         {next && <input type="hidden" name="next" value={next} />}
