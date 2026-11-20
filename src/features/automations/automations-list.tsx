@@ -62,7 +62,7 @@ function Row({ a, canEdit, onEdit }: { a: CommentAutomation; canEdit: boolean; o
   return (
     <li className="flex flex-wrap items-start gap-3 px-4 py-3.5">
       <PlatformMark platform={a.platform} size={30} />
-      <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex min-w-[200px] flex-1 flex-col">
         <b className="font-semibold">{a.name}</b>
         <span className="meta">
           {words} · {a.postTitle ? `Post: ${a.postTitle}` : "Any post"} · {a.stats.dmsSent || a.stats.triggered} sent

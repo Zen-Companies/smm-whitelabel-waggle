@@ -82,7 +82,7 @@ export async function KbList({
     <>
       <TeachHeader>{top}</TeachHeader>
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        <div className="flex flex-1 flex-col gap-1">
+        <div className="flex min-w-[200px] flex-1 flex-col gap-1">
           <h2 className="section-title">Business info</h2>
           <p className="text-ink-2">
             The only facts Waggle uses in replies. If it isn&apos;t here, it asks you.

@@ -115,7 +115,7 @@ export async function AccountsCard({
                 key={account.id}
                 className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"
               >
-                <span className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="flex min-w-[200px] flex-1 items-center gap-3">
                   <PlatformMark platform={account.platform} size={36} />
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">
