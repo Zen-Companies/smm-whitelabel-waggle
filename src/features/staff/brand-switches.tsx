@@ -2,7 +2,7 @@ import { BRAND_SWITCHES, switchedOnBrands, type BrandSwitchKey } from "@/lib/fla
 import { getServiceClient } from "@/lib/supabase/service";
 import { SwitchOffForm, SwitchOnForm } from "./switch-forms";
 
-/** Staff → Feature switches: a paid channel, switched on brand by brand until billing is built. */
+/** Staff → Switches: a paid channel, switched on business by business. */
 export async function BrandSwitches({ switchKey }: { switchKey: BrandSwitchKey }) {
   const { title, note } = BRAND_SWITCHES[switchKey];
   const db = getServiceClient();
@@ -28,13 +28,9 @@ export async function BrandSwitches({ switchKey }: { switchKey: BrandSwitchKey }
           ))}
         </ul>
       ) : (
-        <p className="meta">No brand has {title} yet.</p>
+        <p className="meta">No business has {title} yet.</p>
       )}
-      <SwitchOnForm
-        switchKey={switchKey}
-        title={title}
-        brands={(brands ?? []).filter((b) => !onIds.has(b.id))}
-      />
+      <SwitchOnForm switchKey={switchKey} brands={(brands ?? []).filter((b) => !onIds.has(b.id))} />
     </section>
   );
 }

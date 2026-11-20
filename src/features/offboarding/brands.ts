@@ -18,6 +18,8 @@ export interface BrandRow {
   daysLeft: number | null;
   issue: string | null;
   accounts: string[];
+  /** A test business (Staff → Brands → Test): MCP Try it runs on it. */
+  isTest: boolean;
 }
 
 /** The filter methods both tenant queries share (the row list and the counts). */
@@ -59,7 +61,7 @@ export async function loadBrandRows(
       db
         .from("tenants")
         .select(
-          "id, name, created_at, offboarded_at, offboarded_by, purge_after, offboard_issue, social_accounts(platform, status, released_at)",
+          "id, name, is_test, created_at, offboarded_at, offboarded_by, purge_after, offboard_issue, social_accounts(platform, status, released_at)",
         ),
       input.filter,
       term,
@@ -107,6 +109,7 @@ export async function loadBrandRows(
       purgeAfter: t.purge_after,
       daysLeft: t.purge_after ? daysLeft(t.purge_after, now) : null,
       issue: t.offboard_issue,
+      isTest: t.is_test,
       accounts: accountsSummary(
         state,
         [...(t.social_accounts ?? [])].sort((a, b) => a.platform.localeCompare(b.platform)),

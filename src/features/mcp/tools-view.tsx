@@ -114,9 +114,8 @@ export async function McpToolsView({
           </span>
           <span className="text-ink-2 text-sm">
             Title shown in Claude and ChatGPT: <b className="text-ink font-semibold">{doc.title}</b>{" "}
-            · Needs: <span className="font-mono text-xs">{doc.access}</span> on the brand
-            {doc.kind === "send" && " · counts toward the send limits"} · Wraps{" "}
-            <span className="font-mono text-xs">{doc.wraps}</span>
+            · Needs: <span className="font-mono text-xs">{doc.access}</span> on the business
+            {doc.kind === "send" && " · counts toward the send limits"}
           </span>
         </div>
         <section className="flex flex-col gap-1.5" aria-labelledby="desc">

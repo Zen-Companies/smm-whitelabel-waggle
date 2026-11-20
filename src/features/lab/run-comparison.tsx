@@ -19,7 +19,7 @@ function setupText(run: VariantRun, classifierLabels: Record<string, string>) {
         : "Saved profile (name if none)";
   return [
     classifierLabels[v.classifier] ?? v.classifier,
-    `questions ${v.questionsVersion} · LLM prompt ${v.classifyPromptVersion}`,
+    `question set ${v.questionsVersion} · sorting prompt ${v.classifyPromptVersion}`,
     `draft prompt ${v.draftPromptVersion}`,
     v.classifyModel || v.draftModel
       ? `models: ${[v.classifyModel, v.draftModel].filter(Boolean).join(", ")}`
@@ -55,7 +55,7 @@ function Cell({ run, field }: { run: VariantRun; field: string }) {
             .join(" · ")}
         </span>
       ) : (
-        <span className="meta">{c ? "LLM: no per-question scores" : "–"}</span>
+        <span className="meta">{c ? "Sorting prompt: no per-question scores" : "–"}</span>
       );
     case "outcome": {
       const o = outcomeOf(r);
@@ -115,7 +115,7 @@ function Cell({ run, field }: { run: VariantRun; field: string }) {
 
 const ROWS: { field: string; label: string; compare?: CompareField }[] = [
   { field: "category", label: "Category", compare: "category" },
-  { field: "scores", label: "Jev answers" },
+  { field: "scores", label: "Question set answers" },
   { field: "outcome", label: "What happens", compare: "outcome" },
   { field: "facts", label: "Business info found", compare: "facts" },
   { field: "reply", label: "Draft", compare: "reply" },

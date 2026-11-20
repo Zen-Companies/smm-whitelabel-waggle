@@ -73,15 +73,15 @@ export const SWITCHABLE: readonly SwitchablePlatform[] = [
   social("twitter", "X", { ...namesZernio, usageAtCost: true }),
   social("reddit", "Reddit", {
     ...later,
-    blocked: "Reddit has blocked every app from its API since 19 Oct (Zernio's Reddit docs).",
+    blocked: "Reddit has blocked every app from its API since 19 Oct (our provider's Reddit docs).",
   }),
   social("discord", "Discord", {
     ...later,
-    blocked: "Waiting on Zernio: how Waggle learns the server after the bot is added.",
+    blocked: "Waiting on our provider: how Waggle learns the server after the bot is added.",
   }),
   social("snapchat", "Snapchat", {
     ...later,
-    blocked: "Snap hasn't approved Zernio's app; every connect is refused.",
+    blocked: "Snap hasn't approved our provider's app; every connect is refused.",
   }),
   item("slack", "Slack", "Messaging", namesZernio),
   // The server address the owner pastes into WeChat is on zernio.com.

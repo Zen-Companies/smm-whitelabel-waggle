@@ -117,7 +117,7 @@ describe("offboard", () => {
     const out = await offboardBrand(deps, { tenantId: brand, actorId: adminId });
     expect(out).toMatchObject({
       ok: true,
-      issue: "Facebook didn't disconnect: Zernio didn't answer.",
+      issue: "Facebook didn't disconnect: our provider didn't answer.",
     });
 
     const t = await tenant(brand);
@@ -268,7 +268,7 @@ describe("the hard delete after 3 months", () => {
     expect(await purgeDueBrands(run)).toEqual({ purged: 0, failed: 1 });
     expect(await tenant(second)).toMatchObject({
       purged_at: null,
-      offboard_issue: "The Zernio profile wasn't deleted: Zernio didn't answer.",
+      offboard_issue: "The provider profile wasn't deleted: our provider didn't answer.",
     });
     expect(await purgeDueBrands(run)).toEqual({ purged: 0, failed: 0 });
     // Try again makes it due for the next run.

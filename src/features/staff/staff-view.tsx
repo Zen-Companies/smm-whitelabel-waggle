@@ -7,7 +7,7 @@ import { requirePermission } from "./staff";
 import { AddStaffForm, RemoveStaff, RoleSelect } from "./staff-forms";
 
 const added = (iso: string) =>
-  new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 /** Staff page (design v3 "Staff"): who has a role, add by email, and what each role can do. */
 export async function StaffView() {
@@ -38,6 +38,13 @@ export async function StaffView() {
               </tr>
             </thead>
             <tbody>
+              {staff.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="meta px-2.5 py-2">
+                    No staff yet.
+                  </td>
+                </tr>
+              )}
               {staff.map((m) => {
                 const me = m.userId === access.userId;
                 return (
@@ -107,9 +114,7 @@ export async function StaffView() {
             </tbody>
           </table>
         </div>
-        <p className="meta text-xs">
-          Changing what a role can do is a database change (migration).
-        </p>
+        <p className="meta text-xs">Ask a developer to change what a role can do.</p>
       </section>
     </div>
   );

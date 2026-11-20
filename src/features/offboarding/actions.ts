@@ -7,6 +7,7 @@ import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 import { offboardBrand, restoreBrand, retryOffboarding } from "./offboard";
 import { nameMatches } from "./rows";
+import { setTestBusiness } from "./test-business";
 
 // Staff Brands page (T21). `brands.manage` (admins) is checked here too: a Server Action is
 // reachable without the page.
@@ -32,7 +33,7 @@ export async function offboardAction(
   if (!tenantId.success) return { error: "Not available." };
   const db = getServiceClient();
   const { data: t } = await db.from("tenants").select("name").eq("id", tenantId.data).maybeSingle();
-  if (!t) return { error: "That brand doesn't exist any more." };
+  if (!t) return { error: "That business doesn't exist any more." };
   if (!nameMatches(String(formData.get("confirm") ?? ""), t.name)) {
     return { error: `Type ${t.name} exactly to confirm.` };
   }
@@ -65,4 +66,31 @@ export async function retryAction(
   const out = await retryOffboarding(deps(), { tenantId: tenantId.data, actorId: actor });
   revalidatePath("/admin/brands");
   return "error" in out ? { error: out.error } : { done: true, issue: out.issue };
+}
+
+export type TestSwitchState = { error?: string };
+
+const testSwitch = z.object({ tenantId: z.uuid(), on: z.enum(["true", "false"]) });
+
+/** The Test switch in a Brands row: marks a business as a test business, or not. */
+export async function setTestBusinessAction(
+  _prev: TestSwitchState,
+  formData: FormData,
+): Promise<TestSwitchState> {
+  const actor = await admin();
+  if (!actor) return { error: "Not available." };
+  const input = testSwitch.safeParse({
+    tenantId: formData.get("tenantId"),
+    on: formData.get("on"),
+  });
+  if (!input.success) return { error: "Not available." };
+  const ok = await setTestBusiness(getServiceClient(), {
+    tenantId: input.data.tenantId,
+    actorId: actor,
+    on: input.data.on === "true",
+  });
+  if (!ok) return { error: "That business doesn't exist any more." };
+  revalidatePath("/admin/brands");
+  revalidatePath("/admin/mcp-tools");
+  return {};
 }

@@ -4,13 +4,22 @@ import { setBetaCodeActive, setBetaRequired } from "./actions";
 import { betaRequired } from "./server";
 import { EditCodeForm, NewCodeForm } from "./staff-forms";
 
+/** "20 Nov 2026, 14:05", like the other staff pages. */
 const when = (iso: string) =>
-  new Date(iso).toLocaleString("en-PH", {
-    timeZone: "Asia/Manila",
-    month: "short",
+  new Date(iso).toLocaleString("en-GB", {
     day: "numeric",
-    hour: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+  });
+/** "20 Nov 2026", the date part only (in UTC, so the day picked in the form shows). */
+const day = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
   });
 
 /**
@@ -45,20 +54,16 @@ export async function BetaCodesView() {
   const rows = access ?? [];
   const count = (via: string) => rows.filter((r) => r.via === via).length;
   const now = new Date().getTime();
-  const TH =
-    "text-ink-3 bg-subtle/60 border-line border-b px-3.5 py-2.5 text-left text-xs font-semibold";
+  const TH = "meta border-line border-b px-3.5 py-2.5 text-left text-xs font-medium";
   const TD = "border-line border-b px-3.5 py-3 align-top";
 
   return (
-    <main className="mx-auto grid w-full max-w-[1320px] items-start gap-8 px-4 py-6 md:px-8 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid w-full items-start gap-8 xl:grid-cols-[minmax(0,1fr)_360px]">
       <section className="flex min-w-0 flex-col gap-4">
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <h1 className="page-title">Beta codes</h1>
-          <span className="meta">
-            {rows.length} beta logins · {count("code")} by code · {count("invite")} by invite ·{" "}
-            {count("existing")} existing
-          </span>
-        </div>
+        <p className="meta">
+          {rows.length} beta logins · {count("code")} by code · {count("invite")} by invite ·{" "}
+          {count("existing")} existing
+        </p>
 
         <div className="card overflow-x-auto">
           <table className="w-full border-collapse text-sm">
@@ -87,7 +92,7 @@ export async function BetaCodesView() {
             <tbody>
               {(codes ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={6} className={`${TD} text-ink-2`}>
+                  <td colSpan={6} className={`${TD} meta`}>
                     No codes yet. Create the first one on the right.
                   </td>
                 </tr>
@@ -121,15 +126,7 @@ export async function BetaCodesView() {
                     <td className={TD}>
                       {c.uses} of {c.max_uses ?? "—"}
                     </td>
-                    <td className={`${TD} text-ink-2`}>
-                      {c.expires_at
-                        ? new Date(c.expires_at).toLocaleDateString("en-PH", {
-                            timeZone: "Asia/Manila",
-                            month: "short",
-                            day: "numeric",
-                          })
-                        : "—"}
-                    </td>
+                    <td className={`${TD} text-ink-2`}>{c.expires_at ? day(c.expires_at) : "—"}</td>
                     <td
                       className={`${TD} font-medium ${status === "On" ? "text-success" : status === "Off" ? "text-ink-3" : "text-honey-text"}`}
                     >
@@ -206,6 +203,6 @@ export async function BetaCodesView() {
         </form>
       </section>
       <NewCodeForm />
-    </main>
+    </div>
   );
 }

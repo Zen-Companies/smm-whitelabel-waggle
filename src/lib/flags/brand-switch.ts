@@ -2,17 +2,17 @@ import { writeAudit } from "@/lib/audit";
 import type { ServiceClient } from "@/lib/supabase/service";
 
 /**
- * Paid channels staff switch on brand by brand until billing is built (T82a Phone, T83
- * Messaging): their monthly and per-message costs bill our account, so they're off by default.
+ * Paid channels staff switch on business by business (T82a Phone, T83 Messaging): their monthly
+ * and per-message costs bill our account, so they're off by default.
  */
 export const BRAND_SWITCHES = {
   phone: {
     title: "Phone",
-    note: "Numbers, calls and texts are billed to our account until billing is built, so Phone is on only for the brands listed here.",
+    note: "Numbers, calls and texts are billed to our account, so Phone is on only for the businesses listed here.",
   },
   messaging: {
     title: "Branded texts and iMessage",
-    note: "RCS agents ($150 to file, $750 on US approval, $160 a month) and iMessage numbers ($200 a month) bill our account until billing is built, so they're on only for the brands listed here.",
+    note: "iMessage numbers cost $200 a month; RCS agents $160 a month, plus setup. On only for the businesses listed here.",
   },
 } as const;
 export type BrandSwitchKey = keyof typeof BRAND_SWITCHES;

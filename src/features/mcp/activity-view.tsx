@@ -2,7 +2,13 @@ import Link from "next/link";
 import { requirePermission } from "@/features/staff";
 import { getServiceClient } from "@/lib/supabase/service";
 import { activityBrandOptions, loadActivity } from "./admin";
-import { activityHref, changeVsBefore, parseActivityFilters, WINDOWS } from "./admin-filters";
+import {
+  activityHref,
+  changeVsBefore,
+  parseActivityFilters,
+  seconds,
+  WINDOWS,
+} from "./admin-filters";
 import { ActivityFilterBar } from "./activity-filters";
 import { ActivityRows } from "./activity-rows";
 import { TOOLS } from "./tools/registry";
@@ -41,10 +47,14 @@ export async function McpActivityView({
     },
     {
       label: "Median time",
-      value: s.medianMs === null ? "–" : `${n(s.medianMs)} ms`,
-      note: s.p95Ms === null ? period : `p95 ${n(s.p95Ms)} ms`,
+      value: s.medianMs === null ? "–" : seconds(s.medianMs),
+      note: s.p95Ms === null ? period : `Slowest 5%: ${seconds(s.p95Ms)}`,
     },
-    { label: "Sent by AI assistants", value: n(s.sends), note: "replies and posts, all brands" },
+    {
+      label: "Sent by AI assistants",
+      value: n(s.sends),
+      note: "replies and posts, all businesses",
+    },
   ];
 
   return (
@@ -64,7 +74,7 @@ export async function McpActivityView({
       {rows.length ? (
         <ActivityRows rows={rows} />
       ) : (
-        <p className="text-ink-2 py-8 text-center">No calls match these filters.</p>
+        <p className="meta">No calls match these filters.</p>
       )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <span className="meta">
