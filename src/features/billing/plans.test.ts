@@ -159,7 +159,10 @@ describe("the AI reply limit", () => {
       offers: [],
     });
     const solo = replyLimitNote(replyLimit(200, 200, now), "solo")!;
-    expect(solo.body).toContain(NEVER_DARK);
+    expect(NEVER_DARK).toContain("never go dark");
+    expect(solo.body).toBe(
+      "Waggle has stopped writing replies until December 1. New messages still arrive in your Inbox, and you can answer them yourself. Posting keeps working too.",
+    );
     expect(solo.offers).toEqual(["+200 replies for $15", "Upgrade to Team"]);
     expect(replyLimitNote(replyLimit(750, 750, now), "business")!.offers).toEqual([
       "+200 replies for $15",

@@ -1,6 +1,7 @@
 import { AI_CAP_WARN_RATIO, nextMonthStart } from "@/lib/llm/spend";
 import { EXTRAS, PLANS, type PlanId } from "./plans";
 import { upgradeLabel, upgradeLine } from "./upgrade";
+import { outLine } from "./upgrade-offer";
 
 // The AI reply limit (Pricing Bible, "When the AI reply limit runs out"). Pure. Only AI drafting
 // pauses at the limit: posting, the inbox, replying by hand and lead and review alerts go on.
@@ -54,16 +55,18 @@ export function replyLimitNote(
       offers: [],
     };
   }
+  // The honest line (decision 9, 20 Nov): drafting stops, messages still arrive.
+  const out = outLine(day(limit.resetsAt));
   if (plan === "free") {
     return {
-      title: "Waggle has stopped writing replies for this month.",
-      body: `${NEVER_DARK} Messages still come into your Inbox, and you can answer them yourself. ${resets} ${upgradeLine("replies")}`,
+      title: "You’re out of AI replies.",
+      body: `${out} ${upgradeLine("replies")}`,
       offers: [upgradeLabel("replies")],
     };
   }
   return {
-    title: "Waggle has stopped writing replies for this month.",
-    body: `${NEVER_DARK} Posting, the inbox and replying yourself keep working. ${resets}`,
+    title: "You’re out of AI replies.",
+    body: `${out} Posting keeps working too.`,
     offers: plan === "solo" ? [topUp, `Upgrade to ${PLANS.business.name}`] : [topUp],
   };
 }

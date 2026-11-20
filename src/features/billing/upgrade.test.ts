@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  isOfferReason,
+  upgradeCopy,
+  WELCOME_HREF,
   isUpgradeReason,
   UPGRADE,
   UPGRADE_REASONS,
@@ -7,6 +10,7 @@ import {
   upgradeLabel,
   upgradeLine,
 } from "./upgrade";
+import { PLANS } from "./plans";
 
 describe("every Free limit says how to lift it", () => {
   it("names the cheapest plan that lifts it, Solo or Team", () => {
@@ -36,5 +40,36 @@ describe("every Free limit says how to lift it", () => {
     expect(upgradeHref("accounts")).toBe("/plan?upgrade=accounts#upgrade");
     expect(isUpgradeReason("idle")).toBe(true);
     expect(isUpgradeReason("nope")).toBe(false);
+  });
+});
+
+describe("limits say the numbers staff set (decision 10)", () => {
+  it("reads accounts and replies from the plans, never typed in", () => {
+    const plans = structuredClone(PLANS);
+    plans.solo.accounts = 4;
+    plans.solo.replies = 350;
+    expect(upgradeCopy("accounts", plans).why).toBe(
+      "Your account is connected. Solo connects 4, Team 6.",
+    );
+    expect(upgradeCopy("top_up", plans).why).toContain("350 replies a month");
+    expect(upgradeCopy("extra_account", plans).why).toContain("already connects 4");
+  });
+});
+
+describe("the upgrade pop-up opens over any page (contract for setup)", () => {
+  it("adds ?upgrade= to the page, keeping its own query", () => {
+    expect(upgradeHref("auto_reply", "/setup")).toBe("/setup?upgrade=auto_reply");
+    expect(upgradeHref("accounts", "/setup?step=2&screen=3")).toBe(
+      "/setup?step=2&screen=3&upgrade=accounts",
+    );
+    expect(upgradeHref("nudge", "/today?upgrade=old")).toBe("/today?upgrade=nudge");
+  });
+
+  it("knows the pop-up's own reasons", () => {
+    expect(isOfferReason("out")).toBe(true);
+    expect(isOfferReason("nudge")).toBe(true);
+    expect(isOfferReason("auto_reply")).toBe(true);
+    expect(isOfferReason("free")).toBe(false);
+    expect(WELCOME_HREF).toBe("/inbox?welcome=1");
   });
 });
