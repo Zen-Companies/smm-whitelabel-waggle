@@ -58,6 +58,11 @@ export interface PolicyInput {
   lastCustomerMessageAt: Date | null;
   /** DMs on a platform with a reply cap (TikTok): replies sent since that message. */
   dmRepliesSinceCustomer?: number;
+  /**
+   * The message is about a topic the owner chose "Always ask me" for (setup, 20 Nov): in auto
+   * mode it waits for the owner's OK.
+   */
+  askFirst?: boolean;
   now: Date;
 }
 
@@ -73,6 +78,7 @@ export type PolicyReason =
   | "dm_window_closed"
   | "dm_reply_limit"
   | "approval_required"
+  | "ask_first_topic"
   | "auto_send"
   | "owner_approved"
   | "replies_paused"
@@ -97,7 +103,10 @@ export type PolicyDecision =
         | "dm_reply_limit"
         | "ai_cap_reached";
     }
-  | { decision: "approve"; reason: "approval_required" | "replies_paused" | "review_public" }
+  | {
+      decision: "approve";
+      reason: "approval_required" | "replies_paused" | "review_public" | "ask_first_topic";
+    }
   | { decision: "send"; reason: "auto_send" | "owner_approved" };
 
 const PAYING: readonly SubscriptionStatus[] = ["active", "trialing"];
@@ -197,6 +206,12 @@ export function policy(input: PolicyInput): PolicyDecision {
   // 6-7. In approve mode, the owner's approval is what allows the send. While the owner has paused
   // replies, auto mode waits for them too (an approved reply is held by the send step).
   if (input.autonomyMode === "auto") {
+    // An "Always ask me" topic: the owner's OK first (an approved one goes as approved).
+    if (input.askFirst) {
+      return input.draft.approvedByOwner
+        ? { decision: "send", reason: "owner_approved" }
+        : { decision: "approve", reason: "ask_first_topic" };
+    }
     return input.tenant.repliesPaused
       ? { decision: "approve", reason: "replies_paused" }
       : { decision: "send", reason: "auto_send" };

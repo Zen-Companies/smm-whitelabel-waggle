@@ -423,3 +423,28 @@ describe("WhatsApp templates (T67)", () => {
     ).toBe("pause");
   });
 });
+
+describe("always ask me topics (setup, 20 Nov)", () => {
+  it("auto mode waits for the owner on a chosen topic", () => {
+    expect(run({ autonomyMode: "auto", askFirst: true })).toEqual({
+      decision: "approve",
+      reason: "ask_first_topic",
+    });
+  });
+  it("the owner's approval sends it", () => {
+    expect(
+      run({
+        autonomyMode: "auto",
+        askFirst: true,
+        draft: { needsHuman: false, approvedByOwner: true },
+      }),
+    ).toEqual({ decision: "send", reason: "owner_approved" });
+  });
+  it("approve mode is unchanged, and the hard limits still come first", () => {
+    expect(run({ askFirst: true })).toEqual({ decision: "approve", reason: "approval_required" });
+    expect(run({ autonomyMode: "auto", askFirst: true, ...dm(DM_REPLY_WINDOW_MS + 1) })).toEqual({
+      decision: "escalate",
+      reason: "dm_window_closed",
+    });
+  });
+});
