@@ -39,7 +39,11 @@ export function PlanSettingsForm({ plans }: { plans: Record<PlanId, Plan> }) {
   return (
     <form action={action} className="flex flex-col gap-4">
       <div className="card overflow-x-auto">
-        <div className="grid min-w-[720px] grid-cols-[1.4fr_1fr_1fr_1fr] text-sm">
+        {/* One label column, then one per plan (Free made it four plans, 20 Nov). */}
+        <div
+          className="grid min-w-[880px] text-sm"
+          style={{ gridTemplateColumns: `1.4fr repeat(${IDS.length}, 1fr)` }}
+        >
           <div className="px-4 py-3" />
           {IDS.map((id) => (
             <b key={id} className="px-4 py-3 font-semibold">
@@ -50,7 +54,7 @@ export function PlanSettingsForm({ plans }: { plans: Record<PlanId, Plan> }) {
           <span className={head}>Price</span>
           {IDS.map((id) => (
             <span key={id} className={`${cell} text-ink-3`}>
-              ${plans[id].monthlyUsd} a month (Stripe)
+              {id === "free" ? "Free, no card" : `$${plans[id].monthlyUsd} a month (Stripe)`}
             </span>
           ))}
 
