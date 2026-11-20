@@ -1,9 +1,5 @@
 import { TimeZoneCookie } from "@/components/app/time-zone-cookie";
 
-import { headers } from "next/headers";
-
-import { redirect } from "next/navigation";
-
 import { Suspense } from "react";
 
 import { AccountBanner, ConnectResult, FirstConnectTag } from "@/features/accounts";
@@ -12,7 +8,7 @@ import { Bell } from "@/features/alerts";
 
 import { FirstReplyTag, NEEDS_OWNER } from "@/features/approvals";
 
-import { PlanChip, PlanMenuRow } from "@/features/billing";
+import { BillingHost, PlanChip, PlanMenuRow } from "@/features/billing";
 
 import { touchActivity } from "@/features/crm";
 
@@ -20,11 +16,7 @@ import { Feedback } from "@/features/feedback";
 
 import { can, listMyOrgs } from "@/features/orgs";
 
-import { SetupGateWatch, setupGateFor } from "@/features/setup";
-
 import { AppHeader, getCurrentTenant } from "@/features/tenants";
-
-import { PATH_HEADER } from "@/lib/routes";
 
 import { getServiceClient } from "@/lib/supabase/service";
 
@@ -72,20 +64,21 @@ async function ConnectTag() {
 }
 
 /**
- * Setup first, then free (approved 20 Nov): a brand owner whose setup isn't passed goes to setup
- * from every app page (not Your plan, account settings or staff pages). Shows nothing otherwise.
+ * The plan banner on every page (Try Solo free on Free, or out of replies) and the plan pop-ups:
+ * `?upgrade=<reason>` on any page, `/inbox?welcome=1` after setup (Walter's flow, 20 Nov).
  */
-async function SetupGate() {
-  const [tenant, orgs, h] = await Promise.all([getCurrentTenant(), listMyOrgs(), headers()]);
+async function PlanBanner() {
+  const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
   const org = orgs.find((o) => o.id === tenant.organizationId);
-  const gate = await setupGateFor({
-    tenantId: tenant.id,
-    userId: tenant.userId,
-    role: org?.role ?? null,
-    path: h.get(PATH_HEADER) ?? "",
-  });
-  if (gate.decision !== "open") redirect(gate.decision.redirect);
-  return gate.watch ? <SetupGateWatch /> : null;
+  return (
+    <BillingHost
+      orgId={tenant.organizationId}
+      isOwner={!!org && can(org.role, "billing.view")}
+      canInvite={!!org && can(org.role, "team.manage")}
+      tenantId={tenant.id}
+      needsYouStatuses={NEEDS_OWNER}
+    />
+  );
 }
 
 async function DashboardFeedback() {
@@ -117,6 +110,12 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
         </div>
       </Suspense>
 
+      <Suspense fallback={null}>
+        <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">
+          <PlanBanner />
+        </div>
+      </Suspense>
+
       {/* What happened to a connect started on this page, said here (20 Nov). */}
       <Suspense fallback={null}>
         <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">
@@ -134,10 +133,6 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
 
       <Suspense fallback={null}>
         <ConnectTag />
-      </Suspense>
-
-      <Suspense fallback={null}>
-        <SetupGate />
       </Suspense>
     </div>
   );

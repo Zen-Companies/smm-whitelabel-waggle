@@ -11,6 +11,7 @@ import type {
   ProviderConversation,
   ProviderMessage,
   ProviderReview,
+  BusinessProfile,
   ProviderPostStatus,
   MediaCheck,
   PostValidation,
@@ -1770,6 +1771,15 @@ export class MockSocialProvider implements SocialProvider {
   async getPostTimeline(input: { postId: string }) {
     this.analyticsCalls++;
     return mockTimeline(input.postId);
+  }
+
+  /** Found facts (decision 7): a test or the demo sets an account's profile. */
+  readonly businessProfiles = new Map<string, BusinessProfile>();
+  businessProfileCalls = 0;
+
+  async getBusinessProfile(input: { accountId: string }): Promise<BusinessProfile | null> {
+    this.businessProfileCalls++;
+    return this.businessProfiles.get(input.accountId) ?? null;
   }
 
   readonly reviews = new Map<string, ProviderReview[]>();

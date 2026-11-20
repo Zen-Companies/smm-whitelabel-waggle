@@ -118,4 +118,9 @@ The bee (black outline, honey body, white wing) stays for loading (a page waitin
 - Content up to 1320px with 24px gutters (16 on phones).
 - Desktop pages: title row (title + one line + actions on the right), then cards in a grid. Inbox: list | conversation | customer panel.
 - Phone: 390px screens, bottom tabs, sticky primary action.
+- **Text never gets squeezed or cut on a phone** (Walter, 20 Nov). Check every screen at 390px.
+  - Text sharing a row with a button or link gets a minimum width (`min-w-[200px]`), so the button drops below it. Plain `flex-1` (or `min-w-0`) lets the button squeeze the text to one word per line, even in a wrapping row.
+  - No `line-clamp` on an element with top or bottom padding: the padding shows half of the hidden line. Clamp an inner span, or show the text in full.
+  - A customer's message or Waggle's reply is never cut to a few words to make room for a label. Put the label on the name's line and the text on its own line.
+- **Plan pop-ups and banners** (Walter, 20 Nov): the price a day ("about $1.61 a day") sits on a dark strip with a honey glow (`DayBanner`) on the pop-ups and as a small dark pill (`DayPill`) on Your plan's cards, never on Business. "Try Solo free" is the same dark family, on Free only, × hides it 3 days. Out of replies is a honey banner with the honest line; its numbers are plain ink tiles, never alarm red. On a phone the pop-ups open as a sheet from the bottom.
 - Page titles "… · Waggle".

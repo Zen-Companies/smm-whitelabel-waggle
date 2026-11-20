@@ -9,9 +9,12 @@ import {
   matchKeys,
 } from "@/features/ad-tracking";
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
-import { TrialConversionTag } from "@/features/billing";
-import { StepsAhead } from "@/features/setup";
-import { AddBrandForm, getOpenOrg } from "@/features/tenants";
+import { headers } from "next/headers";
+import { connectBanner } from "@/features/accounts";
+import { loadOrgPlan, orgOnFree, TrialConversionTag } from "@/features/billing";
+import { loadPlatformStatuses } from "@/features/platforms";
+import { connectProblem, isInAppBrowser, WelcomeConnect } from "@/features/setup";
+import { AddBrandForm, getCurrentTenant, getOpenOrg } from "@/features/tenants";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 
@@ -102,16 +105,36 @@ function InviteList({ invites, email }: { invites: Invite[]; email: string | und
   );
 }
 
-async function Content({ beta }: { beta: boolean }) {
+async function Content({
+  beta,
+  params,
+}: {
+  beta: boolean;
+  params: Record<string, string | string[] | undefined>;
+}) {
   const [user, org] = await Promise.all([getCurrentUser(), getOpenOrg()]);
   if (!org) redirect("/login");
-  // An organization with a brand of the user's opens on that brand.
   const supabase = await createServerSupabase();
   const { count } = await supabase
     .from("tenants")
     .select("id", { count: "exact", head: true })
     .eq("organization_id", org.id);
-  if ((count ?? 0) > 0) redirect("/today");
+  const hasBrand = (count ?? 0) > 0;
+  const db = getServiceClient();
+
+  // Setup step 1 (Walter's flow, 20 Nov): Connect. A business that already has an account goes
+  // on to setup (or Today once setup is finished); one that can't connect goes to Today.
+  let connected: string[] = [];
+  if (hasBrand) {
+    const tenant = await getCurrentTenant();
+    if (!can(tenant.role, "accounts.manage")) redirect("/today");
+    const [{ data: accounts }, { data: t }] = await Promise.all([
+      db.from("social_accounts").select("platform, status").eq("tenant_id", tenant.id),
+      db.from("tenants").select("setup_done_at").eq("id", tenant.id).single(),
+    ]);
+    connected = (accounts ?? []).filter((a) => a.status === "active").map((a) => a.platform);
+    if (connected.length) redirect(t?.setup_done_at ? "/today" : "/setup");
+  }
 
   const mayAdd = can(org.role, "brands.add");
   const invites = await loadInvites(user.id);
@@ -123,14 +146,16 @@ async function Content({ beta }: { beta: boolean }) {
     </p>
   );
 
-  // On your own (the organization made at sign-up): step 0 of Get Waggle ready, approved 17 Nov
-  // ("Before setup: name your business"). Next makes the brand and opens setup step 1.
-  if (org.personal && mayAdd) {
+  if (hasBrand || (org.personal && mayAdd)) {
     // A new owner's own signup, for the ads (17 Nov). Not someone who came to join a team.
     const keys =
-      invites.length === 0 && isNewRegistration(user.created_at, new Date())
+      !hasBrand && invites.length === 0 && isNewRegistration(user.created_at, new Date())
         ? matchKeys(user.id, user.email)
         : null;
+    const h = await headers();
+    const banner = connectBanner(params);
+    const [statuses, onFree] = await Promise.all([loadPlatformStatuses(db), orgOnFree(db, org.id)]);
+    const plan = onFree ? await loadOrgPlan(db, org.id) : null;
     return (
       <>
         {keys && (
@@ -142,35 +167,18 @@ async function Content({ beta }: { beta: boolean }) {
           />
         )}
         {betaBanner}
-        <InviteList invites={invites} email={user.email} />
-        {invites.length === 0 && (
-          <div className="flex flex-col gap-2">
-            <StepsAhead />
-            <span className="text-ink-3 text-sm">Before you start</span>
-          </div>
-        )}
-        <section aria-labelledby="first-brand" className="flex flex-col gap-5">
-          <div className="flex flex-col gap-1.5">
-            <h1 id="first-brand" className="page-title">
-              {invites.length > 0
-                ? "Or start your own: what\u2019s your business called?"
-                : `Welcome, ${name}. What\u2019s your business called?`}
-            </h1>
-            {invites.length === 0 && (
-              <p className="text-ink-2 text-[15px]">
-                Waggle answers your customers as this business. Then five short steps, and each one
-                can wait.
-              </p>
-            )}
-          </div>
-          <AddBrandForm orgId={org.id} orgName={org.name} submitLabel="Next" first />
-        </section>
-        {invites.length === 0 && (
-          <p className="border-line text-ink-2 border-t pt-4 text-sm">
-            Joining someone&apos;s team instead? Ask them to invite{" "}
-            <b className="text-ink font-semibold">{user.email}</b>. The invite shows up right here.
-          </p>
-        )}
+        <WelcomeConnect
+          firstName={name}
+          free={plan ? { accounts: plan.details.accounts } : null}
+          hasBrand={hasBrand}
+          connected={connected}
+          statuses={statuses}
+          all={params.all === "1"}
+          problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
+          inApp={isInAppBrowser(h.get("user-agent"))}
+          invites={<InviteList invites={invites} email={user.email} />}
+          email={user.email}
+        />
       </>
     );
   }
@@ -241,10 +249,11 @@ async function Content({ beta }: { beta: boolean }) {
 // T54 (design v3 "Organizations", OrgSignup): the first screen after sign-up, and the page for
 // an organization with no brands yet.
 async function WithParams({ searchParams }: PageProps<"/welcome">) {
-  const { beta, trial, session_id } = await searchParams;
+  const params = await searchParams;
+  const { beta, trial, session_id } = params;
   return (
     <>
-      <Content beta={beta === "1"} />
+      <Content beta={beta === "1"} params={params} />
       {trial === "started" && typeof session_id === "string" && (
         <Suspense fallback={null}>
           <TrialTag sessionId={session_id} />

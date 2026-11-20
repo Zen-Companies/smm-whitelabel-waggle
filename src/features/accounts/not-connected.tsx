@@ -20,7 +20,7 @@ export function NotConnectedYet({
       <EmptySpot
         action={
           canConnect ? (
-            <Link href="/setup?step=2" className={buttonVariants({ variant: "primary" })}>
+            <Link href="/welcome" className={buttonVariants({ variant: "primary" })}>
               Connect an account
             </Link>
           ) : undefined

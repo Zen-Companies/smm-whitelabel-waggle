@@ -44,7 +44,7 @@ export async function AppHeader({
     .from("inbound_items")
     .select("*", { count: "exact", head: true })
     .eq("tenant_id", tenant.id)
-    .eq("status", "awaiting_approval");
+    .in("status", [...needsYouStatuses]);
 
   return (
     <header className="border-line bg-surface sticky top-0 z-40 border-b">

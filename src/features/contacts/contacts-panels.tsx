@@ -145,7 +145,7 @@ export function ContactRow({ c, canEdit }: { c: Contact; canEdit: boolean }) {
       ) : (
         <span aria-hidden className="bg-subtle size-[26px] rounded-full" />
       )}
-      <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex min-w-[200px] flex-1 flex-col">
         <b className="font-semibold">{c.name || "No name"}</b>
         <span className="meta truncate">
           {[c.identifier, c.email].filter(Boolean).join(" · ") || "No way to message yet"}

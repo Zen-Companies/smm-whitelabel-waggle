@@ -76,7 +76,10 @@ export type StatusEvent =
   | "hold"
   /** ...until the owner opens it, or it is one of the reveal's first drafts */
   | "request_draft"
-  /** The owner changed an answer: a pulled draft not yet decided is written again */
+  /**
+   * The owner changed an answer: a pulled draft not yet decided is written again; or (setup) the
+   * owner gave the facts for a message handed over because Waggle had no answer
+   */
   | "redraft";
 
 const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> = {
@@ -124,11 +127,14 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
   ignored: {},
   // T41: "Reply publicly" after a comment's DM couldn't go out: the draft waits for approval again.
   // MCP Q1: the owner answers a handed-over message with their own words (`send`).
+  // Setup's "customers still waiting" (20 Nov): the owner typed the facts Waggle was missing, so
+  // a message handed over for want of an answer is drafted again (`redraft`).
   escalated: {
     handle: "handled",
     await_approval: "awaiting_approval",
     send: "sending",
     answered_elsewhere: "handled",
+    redraft: "classified",
   },
   failed: { handle: "handled", answered_elsewhere: "handled" },
   handled: {},

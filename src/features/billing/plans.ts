@@ -112,11 +112,35 @@ export function isPaidPlanId(v: unknown): v is PaidPlanId {
 export const BUSINESS_CALL_URL = "https://ro.am/jason-kulha/";
 
 /**
- * 19 Nov: Free replaces the card-up-front trial, so no card is needed to start using Waggle.
- * Moving from Free to a paid plan pays at checkout, with no trial (Febron, 20 Nov). `days` stays
- * for subscriptions that started with the old 7-day trial.
+ * 20 Nov (Febron, Walter's flow): the trial is back. Free needs no card; the first paid plan
+ * (Solo or Team) starts with 7 days free, with a card. Only an organization that never had a paid
+ * subscription gets it (checkoutTrialDays).
  */
-export const TRIAL = { days: 7, cardRequired: false } as const;
+export const TRIAL = { days: 7, cardRequired: true } as const;
+
+/**
+ * Pure: the trial days a plan checkout adds, or null. Only the organization's first paid plan
+ * gets them: never when it already had a subscription or a trial.
+ */
+export function checkoutTrialDays(
+  bill: { trial_ends_at: string | null; stripe_subscription_id: string | null } | null,
+): number | null {
+  return !bill?.trial_ends_at && !bill?.stripe_subscription_id ? TRIAL.days : null;
+}
+
+/**
+ * Pure: a price as what it costs a day (Walter, 20 Nov): a month is a twelfth of a year, so $49 a
+ * month is 49 × 12 ÷ 365 ≈ $1.61 a day; a yearly price is ÷ 365. "about $1.61 a day".
+ */
+export function perDay(usd: number, per: "month" | "year" = "month"): string {
+  return `about ${dailyAmount(usd, per)} a day`;
+}
+
+/** Pure: just the daily figure, "$1.61", for the price banner and pills. */
+export function dailyAmount(usd: number, per: "month" | "year" = "month"): string {
+  const day = per === "month" ? (usd * 12) / 365 : usd / 365;
+  return `$${day.toFixed(2)}`;
+}
 
 /** Extras, all self-serve. */
 export const EXTRAS = {

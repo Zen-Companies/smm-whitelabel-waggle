@@ -68,7 +68,7 @@ export function CampaignRow({
   const next = c.status === "active" ? "paused" : c.status === "paused" ? "active" : null;
   return (
     <li className="flex flex-wrap items-center gap-3 px-4 py-3.5">
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-[200px] flex-1 flex-col">
         <b className="truncate font-semibold">
           {(network && network !== "meta") || c.platform === "openai" ? `${reviewer} · ` : ""}
           {c.name}

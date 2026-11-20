@@ -4,12 +4,15 @@ import {
   applyPlanSettings,
   canAddBrand,
   canConnectAnother,
+  checkoutTrialDays,
+  dailyAmount,
   EXTRAS,
   FOUNDING,
   monthlyPrice,
   parsePlanSettings,
   planBullets,
   parseBrandsLimit,
+  perDay,
   PLANS,
   PROMOTED_PLAN,
   replyAllowance,
@@ -17,6 +20,35 @@ import {
   trialEndsAt,
 } from "./plans";
 import { limitEmailDue, NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
+
+describe("the first paid plan starts with 7 days free (20 Nov)", () => {
+  it("only for an organization that never had a subscription or a trial", () => {
+    expect(checkoutTrialDays(null)).toBe(7);
+    expect(checkoutTrialDays({ trial_ends_at: null, stripe_subscription_id: null })).toBe(7);
+    expect(checkoutTrialDays({ trial_ends_at: null, stripe_subscription_id: "sub_1" })).toBeNull();
+    expect(
+      checkoutTrialDays({ trial_ends_at: "2026-11-01T00:00:00Z", stripe_subscription_id: null }),
+    ).toBeNull();
+  });
+});
+
+describe("price a day (Walter, 20 Nov)", () => {
+  it("a month is a twelfth of a year: price × 12 ÷ 365", () => {
+    expect(perDay(PLANS.solo.monthlyUsd)).toBe("about $1.61 a day");
+    expect(perDay(PLANS.business.monthlyUsd)).toBe("about $3.25 a day");
+    expect(perDay(FOUNDING.monthlyUsd)).toBe("about $2.60 a day");
+  });
+
+  it("a yearly price is ÷ 365", () => {
+    expect(perDay(490, "year")).toBe("about $1.34 a day");
+    expect(perDay(990, "year")).toBe("about $2.71 a day");
+  });
+
+  it("the figure alone, for the banner and pills", () => {
+    expect(dailyAmount(49)).toBe("$1.61");
+    expect(dailyAmount(99)).toBe("$3.25");
+  });
+});
 
 describe("plans match the Pricing Bible (Free plan, 19 Nov 2026)", () => {
   it("prices, accounts and replies", () => {
@@ -72,7 +104,8 @@ describe("plans match the Pricing Bible (Free plan, 19 Nov 2026)", () => {
   });
 
   it("trial, extras and the founding offer", () => {
-    expect(TRIAL).toEqual({ days: 7, cardRequired: false });
+    // The trial is back, with a card (Febron, 20 Nov).
+    expect(TRIAL).toEqual({ days: 7, cardRequired: true });
     expect(trialEndsAt(new Date("2026-11-18T10:00:00Z")).toISOString()).toBe(
       "2026-11-25T10:00:00.000Z",
     );
@@ -126,7 +159,10 @@ describe("the AI reply limit", () => {
       offers: [],
     });
     const solo = replyLimitNote(replyLimit(200, 200, now), "solo")!;
-    expect(solo.body).toContain(NEVER_DARK);
+    expect(NEVER_DARK).toContain("never go dark");
+    expect(solo.body).toBe(
+      "Waggle has stopped writing replies until December 1. New messages still arrive in your Inbox, and you can answer them yourself. Posting keeps working too.",
+    );
     expect(solo.offers).toEqual(["+200 replies for $15", "Upgrade to Team"]);
     expect(replyLimitNote(replyLimit(750, 750, now), "business")!.offers).toEqual([
       "+200 replies for $15",

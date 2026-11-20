@@ -38,7 +38,10 @@ export function BottomTabs({ inboxCount }: { inboxCount: number }) {
             <Icon className="size-[22px]" strokeWidth={active ? 2.2 : 1.8} aria-hidden />
             {item.label}
             {item.href === "/inbox" && inboxCount > 0 && (
-              <span className="bg-honey absolute top-1.5 left-[calc(50%+6px)] rounded-full px-1.5 text-[10px] leading-4 font-bold text-[#17140f]">
+              <span
+                aria-label={`${inboxCount} need you`}
+                className="bg-honey absolute top-1.5 left-[calc(50%+6px)] rounded-full px-1.5 text-[10px] leading-4 font-bold text-[#17140f]"
+              >
                 {inboxCount}
               </span>
             )}

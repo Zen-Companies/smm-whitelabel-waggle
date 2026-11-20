@@ -13,6 +13,13 @@ import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { SORT_CAP } from "./reveal-data";
 import {
+  addTally,
+  commentResponse,
+  conversationResponse,
+  emptyTally,
+  type ResponseTally,
+} from "./response-score";
+import {
   catchUpAccountKeys,
   isGiveawayPost,
   needsReply,
@@ -147,10 +154,12 @@ type CatchUpRow = {
   praise_and_tags: number;
   over_cap: number;
   capped: boolean;
+  response_messages: number;
+  response_answered: number;
 };
 
 const ROW_COLUMNS =
-  "id, tenant_id, social_account_id, created_at, stage, attempts, posts_cursor, post_offset, dm_offset, comments_created, dms_created, posts_read, comments_read, comments_found, praise_and_tags, over_cap, capped";
+  "id, tenant_id, social_account_id, created_at, stage, attempts, posts_cursor, post_offset, dm_offset, comments_created, dms_created, posts_read, comments_read, comments_found, praise_and_tags, over_cap, capped, response_messages, response_answered";
 
 type Account = {
   id: string;
@@ -340,6 +349,8 @@ async function pullComments(
       row.over_cap += post.overCap;
       row.comments_created += post.created;
       row.capped = row.capped || post.capped;
+      row.response_messages += post.response.messages;
+      row.response_answered += post.response.answered;
       summary.comments += post.created;
       await save(
         db,
@@ -353,6 +364,8 @@ async function pullComments(
           over_cap: row.over_cap,
           comments_created: row.comments_created,
           capped: row.capped,
+          response_messages: row.response_messages,
+          response_answered: row.response_answered,
         },
         { keepLock: true },
       );
@@ -382,6 +395,8 @@ async function pullPost(
   overCap: number;
   created: number;
   capped: boolean;
+  /** Response score: customer comments judged, and answered within 24 hours. */
+  response: ResponseTally;
 }> {
   const all: ProviderComment[] = [];
   let cursor: string | null = null;
@@ -406,8 +421,25 @@ async function pullPost(
   }
 
   const giveaway = isGiveawayPost(all.filter((c) => !c.fromOwner).map((c) => c.text));
-  const result = { read: all.length, found: 0, praise: 0, overCap: 0, created: 0, capped };
+  const result = {
+    read: all.length,
+    found: 0,
+    praise: 0,
+    overCap: 0,
+    created: 0,
+    capped,
+    response: emptyTally(),
+  };
+  const now = deps.now ?? new Date();
   for (const c of all) {
+    // Response score: comments that needed a reply, answered by the business or not.
+    if (!giveaway && needsReply(c.text)) {
+      const judged = commentResponse(c, input.since, now);
+      if (judged) {
+        result.response.messages += 1;
+        if (judged === "answered") result.response.answered += 1;
+      }
+    }
     if (!commentToDraft(c, input.since)) continue;
     result.found += 1;
     if (giveaway || !needsReply(c.text)) {
@@ -468,9 +500,11 @@ async function pullDms(
     (c) => !c.updatedTime || Date.parse(c.updatedTime) >= since.getTime(),
   );
 
+  // Response score: DMs are judged on the first sweep only (the re-sweep reads them again).
+  const judge = row.stage === "dms";
   for (let i = row.dm_offset; i < conversations.length; i += 1) {
     if (!more()) return false;
-    const { created, missed } = await pullConversation(
+    const { created, missed, response } = await pullConversation(
       deps,
       row,
       account,
@@ -480,12 +514,29 @@ async function pullDms(
     );
     row.dm_offset = i + 1;
     row.dms_created += created;
+    if (judge) {
+      const total = addTally(
+        { messages: row.response_messages, answered: row.response_answered },
+        response,
+      );
+      row.response_messages = total.messages;
+      row.response_answered = total.answered;
+    }
     summary.dms += created;
     summary.missed += missed;
     await save(
       db,
       row.id,
-      { dm_offset: row.dm_offset, dms_created: row.dms_created },
+      {
+        dm_offset: row.dm_offset,
+        dms_created: row.dms_created,
+        ...(judge
+          ? {
+              response_messages: row.response_messages,
+              response_answered: row.response_answered,
+            }
+          : {}),
+      },
       { keepLock: true },
     );
   }
@@ -499,7 +550,7 @@ async function pullConversation(
   conversation: ProviderConversation,
   now: Date,
   since: Date,
-): Promise<{ created: number; missed: number }> {
+): Promise<{ created: number; missed: number; response: ResponseTally }> {
   const { db } = deps;
   const messages = await deps.social().listConversationMessages({
     conversationId: conversation.id,
@@ -507,6 +558,7 @@ async function pullConversation(
     limit: MESSAGES_PER_CONVERSATION,
   });
   const { draft, missed } = sortConversation(messages, now, since);
+  const response = conversationResponse(messages, since, now);
 
   let created = 0;
   if (draft.length > 0) {
@@ -520,7 +572,7 @@ async function pullConversation(
       participantExternalId: conversation.participantId,
       customerMessageAt: draft[0].createdAt,
     });
-    if ("foreign" in recorded) return { created: 0, missed: 0 };
+    if ("foreign" in recorded) return { created: 0, missed: 0, response: emptyTally() };
     // Oldest first, the order webhooks would have brought them in. DMs inside the 24-hour window
     // are always sorted (few, and the ones about to expire): the sort cap is for comments.
     for (const m of [...draft].reverse()) {
@@ -575,7 +627,7 @@ async function pullConversation(
       added = data.length;
     }
   }
-  return { created, missed: added };
+  return { created, missed: added, response };
 }
 
 async function finish(
@@ -635,6 +687,8 @@ async function save(
     capped?: boolean;
     dm_access_missing?: boolean;
     read_at?: string;
+    response_messages?: number;
+    response_answered?: number;
   },
   opts: { keepLock?: boolean } = {},
 ): Promise<void> {

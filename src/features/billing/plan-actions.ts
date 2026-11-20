@@ -9,6 +9,7 @@ import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
 import { FOUNDING_COUPON, PRICE_KEYS, type Interval } from "./catalog";
 import {
+  checkoutTrialDays,
   EXTRAS,
   FOUNDING,
   PLANS,
@@ -108,9 +109,9 @@ function readChoice(
 }
 
 /**
- * Choose a plan. From Free: Stripe Checkout, paid right away (no trial since Free, 19-20 Nov),
- * with the founding price on Team monthly while spots last. With a paid plan: switch it in
- * place, prorated.
+ * Choose a plan. From Free: Stripe Checkout with a card; the organization's first paid plan
+ * starts with 7 days free (trial back, 20 Nov), with the founding price on Team monthly while
+ * spots last. With a paid plan: switch it in place, prorated.
  */
 export async function choosePlan(
   _prev: PlanActionState,
@@ -163,7 +164,9 @@ export async function choosePlan(
     }
 
     const customer = await ensureCustomer(stripe, db, orgId, user.email, bill);
-    const firstTime = !bill?.trial_ends_at && !bill?.stripe_subscription_id;
+    // The first paid plan starts with 7 days free, with a card (trial back, 20 Nov).
+    const trialDays = checkoutTrialDays(bill);
+    const firstTime = trialDays !== null;
     const founding =
       choice.plan === FOUNDING.plan &&
       choice.interval === "month" &&
@@ -182,6 +185,7 @@ export async function choosePlan(
       subscription_data: {
         // Stripe's subscription events list discounts by id only, so founding is marked here too.
         metadata: { organization_id: orgId, ...(founding ? { founding: "1" } : {}) },
+        ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
       ...(founding
         ? { discounts: [{ coupon: FOUNDING_COUPON }] }
@@ -203,6 +207,7 @@ export async function choosePlan(
       plan: choice.plan,
       interval: choice.interval,
       founding,
+      trialDays,
     });
     url = session.url;
   } catch (e) {

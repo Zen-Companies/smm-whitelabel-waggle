@@ -248,7 +248,7 @@ export async function PostsView({
                 strokeWidth={1.75}
                 aria-hidden
               />
-              <span className="flex-1">
+              <span className="min-w-[200px] flex-1">
                 <strong className="font-semibold">
                   {attention.length === 1
                     ? "1 post needs a new time."

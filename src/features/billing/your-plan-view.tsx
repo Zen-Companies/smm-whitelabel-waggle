@@ -23,7 +23,9 @@ import {
   accountAllowance,
   EXTRAS,
   FOUNDING,
+  checkoutTrialDays,
   isPaidPlanId,
+  perDay,
   planBullets,
   PLAN_IDS,
   PLANS,
@@ -32,7 +34,7 @@ import {
   type Plan,
   type PlanId,
 } from "./plans";
-import { UPGRADE, upgradeLabel, upgradeLine, type UpgradeReason } from "./upgrade";
+import { UPGRADE, upgradeCopy, upgradeLabel, upgradeLine, type UpgradeReason } from "./upgrade";
 import { NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 import { getStripe } from "./stripe-client";
 import { planIsLive } from "./subscription";
@@ -184,7 +186,8 @@ export async function YourPlanSection({
     forSale: plans[id].forSale,
     bullets: planBullets(plans[id]),
   }));
-  const firstTime = !bill?.trial_ends_at && !bill?.stripe_subscription_id;
+  // The first paid plan starts with 7 days free, with a card (trial back, 20 Nov).
+  const firstTime = checkoutTrialDays(bill) !== null;
   // Founding offer, highlighted (approved 20 Nov): a banner and the Team card, while spots last.
   const stripe = getStripe();
   const founding: FoundingOffer | null =
@@ -238,6 +241,7 @@ export async function YourPlanSection({
             owners={owners}
             plans={plans}
             live={false}
+            trial={firstTime}
           />
         )}
         <section className="card hexbg border-honey-border flex flex-col gap-4 border p-6">
@@ -257,11 +261,22 @@ export async function YourPlanSection({
               <PlanButton
                 action={choosePlan}
                 fields={{ ...fields, plan: "solo", interval: "month" }}
-                label={`Upgrade to ${plans.solo.name}`}
+                label={
+                  firstTime
+                    ? `Try ${plans.solo.name}: ${TRIAL.days} days free`
+                    : `Upgrade to ${plans.solo.name}`
+                }
+                pendingLabel="Starting…"
                 honey
               />
             )}
           </div>
+          {org.isOwner && getStripe() && firstTime && (
+            <span className="meta">
+              {TRIAL.days} days free, then ${plans.solo.monthlyUsd} a month (
+              {perDay(plans.solo.monthlyUsd)}). Cancel before day {TRIAL.days} and you pay nothing.
+            </span>
+          )}
           <div className="text-ink-2 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
             <span className="flex items-center gap-3">
               <CombMeter used={limit.used} allowance={limit.allowance} size={11} />
@@ -297,10 +312,14 @@ export async function YourPlanSection({
               mayChange={org.isOwner}
               foundingNote={null}
               founding={founding}
+              trial={firstTime}
+              freeLine={`${limit.used} of ${limit.allowance} AI replies used this month`}
               action={choosePlan}
             />
             <span className="meta">
-              Paid plans are charged at checkout. Cancel any time and you go back to Free.
+              {firstTime
+                ? "Cancel any time and you go back to Free."
+                : "Paid plans are charged at checkout. Cancel any time and you go back to Free."}
             </span>
           </section>
         ) : (
@@ -649,6 +668,7 @@ function UpgradePanel({
   plans,
   live,
   interval = "month",
+  trial = false,
 }: {
   reason: UpgradeReason;
   orgId: string;
@@ -657,8 +677,11 @@ function UpgradePanel({
   plans: Record<PlanId, Plan>;
   live: boolean;
   interval?: "month" | "year";
+  /** The first paid plan starts with 7 days free. */
+  trial?: boolean;
 }) {
-  const copy = UPGRADE[reason];
+  // Numbers from the plans as staff set them (decision 10).
+  const copy = upgradeCopy(reason, plans);
   const target = plans[copy.plan];
   return (
     <section
@@ -679,6 +702,7 @@ function UpgradePanel({
           <b className="font-display text-lg font-semibold">{target.name}</b>
           <b>${target.monthlyUsd}/mo</b>
         </span>
+        <span className="meta">{perDay(target.monthlyUsd)}</span>
         {planBullets(target)
           .slice(1, 4)
           .map((b) => (
@@ -693,7 +717,8 @@ function UpgradePanel({
             <PlanButton
               action={choosePlan}
               fields={{ orgId, plan: copy.plan, interval }}
-              label={upgradeLabel(reason)}
+              label={trial ? `Start ${TRIAL.days} days free` : upgradeLabel(reason)}
+              pendingLabel="Starting…"
               honey
               className="items-start"
             />
@@ -708,7 +733,11 @@ function UpgradePanel({
         <p className="text-ink-2 text-sm">Ask {owners} (Owner) to upgrade the plan.</p>
       )}
       {!live && (
-        <span className="meta">Card at checkout. Cancel any time and you go back to Free.</span>
+        <span className="meta">
+          {trial
+            ? `A card starts your trial: ${TRIAL.days} days free, then $${target.monthlyUsd} a month. Cancel before day ${TRIAL.days} and you pay nothing.`
+            : "Card at checkout. Cancel any time and you go back to Free."}
+        </span>
       )}
     </section>
   );

@@ -1,236 +1,252 @@
-import { getServiceClient } from "@/lib/supabase/service";
-import { loadPlatformStatuses, statusOf } from "@/features/platforms";
-import { Check } from "lucide-react";
 import Link from "next/link";
-import { Suspense, type ReactNode } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { BeeBySend, BeeDance, BeeOnItsOwn } from "@/components/app/bee-setup";
-import { PlatformMark } from "@/components/app/platform-mark";
-import { StateMark } from "@/components/app/state-mark";
+import { redirect } from "next/navigation";
 import { connectAccount } from "@/features/accounts";
-import { orgOnFree, planAllowsAutoReply, upgradeHref, upgradeLabel } from "@/features/billing";
-import {
-  loadCatchUpProgress,
-  loadTopQuestionsStatus,
-  PracticeWait,
-  ReadingInbox,
-  TopQuestionsNotice,
-  TopQuestionsWait,
-} from "@/features/catch-up";
-import { HelpButton } from "@/features/feedback";
-import { TryIt } from "@/features/lab";
+import { SEND_SPACING_MS } from "@/features/approvals";
+import { ReadingInbox } from "@/features/catch-up";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
+import { getSocialProvider } from "@/lib/social";
+import { platformLabel } from "@/lib/social/platforms";
+import { getCurrentUser } from "@/lib/supabase/server";
+import { getServiceClient } from "@/lib/supabase/service";
+import { BatchScreen } from "./batch-screen";
+import { nameBrandFromProfile } from "./brand-name-server";
+import { ageLabel, batchProgress, firstNameOf, plural, replyMeta } from "./copy";
 import {
-  hasSetupCard,
-  isConnectable,
-  PLATFORM_IDS,
-  PLATFORMS,
-  platformLabel,
-} from "@/lib/social/platforms";
-import { createServerSupabase } from "@/lib/supabase/server";
-import { passSetup, saveAnswersStep, saveBusinessStep, saveRepliesStep } from "./actions";
-import { nextReadyStep, PRACTICE_GOAL } from "./checklist";
-import { showWelcomeBack } from "./gate";
-import {
-  commonForLabel,
-  questionSeeds,
-  type ConnectProblem,
-  type QuestionSeed,
-} from "./first-connect";
-import { InAppGate } from "./in-app-gate";
-import { KindPicker } from "./kind-picker";
-import { QuestionsEditor } from "./questions-editor";
-import { loadReadySteps } from "./ready-data";
-import {
-  BUSINESS_KINDS,
-  customKindFromProfile,
-  doneLine,
-  kindFromProfile,
-  NEXT_ACTION,
-  stepDetail,
-  SETUP_LAST,
-  type SetupStepNumber,
-} from "./starter";
-import { StepForm } from "./step-form";
-import { Stepper } from "./stepper";
-import { suggestedQuestions } from "./suggest";
+  nextScreen,
+  openScreen,
+  previousScreen,
+  setupEntry,
+  stepPosition,
+  stepsDone,
+  type SetupScreen,
+} from "./flow";
+import { HowScreen } from "./how-screen";
+import { NameScreen } from "./name-screen";
+import { flowFactsOf, loadSetupData, loadSetupSending, type SetupData } from "./setup-data";
+import { PRIMARY, ScreenButton, ScreenFooter, ScreenTitle } from "./setup-frame";
+import { SetupFrame } from "./setup-shell";
+import { Exchange, PagedList, SendingCard } from "./setup-parts";
+import { restTitle, TOPIC_LABEL, topicsLine } from "./topics";
+import { WaitingScreen } from "./waiting-screen";
 
-const FIRST_ACCOUNTS = [
-  { platform: "instagram", does: "Comments and DMs" },
-  { platform: "facebook", does: "Comments, DMs and reviews" },
-] as const;
+// Setup steps 2 and 3 (Walter's flow, one screen at a time; boards approved 20 Nov), on the
+// first-connect engine. Step 1 (Connect) is /welcome.
 
-/**
- * "More" in step 2, opened in place (approved 17 Nov): every platform that connects through a
- * sign-in and comes back to this step. Ones that need a form in Settings (Bluesky, Telegram,
- * WhatsApp) wait until after setup.
- */
-const MORE_ACCOUNTS = PLATFORM_IDS.filter(
-  (id) =>
-    id !== "instagram" &&
-    id !== "facebook" &&
-    isConnectable(id) &&
-    !hasSetupCard(id) &&
-    PLATFORMS[id].connect === "oauth",
-);
-const LATER_ACCOUNTS = PLATFORM_IDS.filter((id) => hasSetupCard(id));
-
-/** Step 2's Connect buttons, behind the in-app browser note when there is one. */
-function ConnectGate({ inApp, children }: { inApp: string | null; children: ReactNode }) {
-  const list = <div className="flex flex-col gap-5">{children}</div>;
-  return inApp ? <InAppGate app={inApp}>{list}</InAppGate> : list;
-}
-
-/**
- * A way on that passes setup (Setup first, then free, 20 Nov): the first Skip for now or Finish
- * later lets the owner into the app, and back to the page they were going to, if any.
- */
-function PassButton({
-  how,
-  to,
-  className,
-  children,
-}: {
-  how: "skipped" | "finish_later";
-  to: string;
-  className: string;
-  children: ReactNode;
-}) {
+function Tile({ value, label, plain }: { value: string; label: string; plain?: boolean }) {
   return (
-    <form action={passSetup} className="contents">
-      <input type="hidden" name="how" value={how} />
-      <input type="hidden" name="to" value={to} />
-      <button type="submit" className={className}>
-        {children}
-      </button>
-    </form>
+    <div className="card flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-2.5">
+      <b
+        className={`font-display text-[24px] leading-none font-semibold tabular-nums ${plain ? "" : "text-danger"}`}
+      >
+        {value}
+      </b>
+      <span className="text-ink-2 text-[12.5px] leading-snug">{label}</span>
+    </div>
   );
 }
 
-function SkipLink({ to }: { to: SetupStepNumber }) {
+function MissedScreen({ d, firstName }: { d: SetupData; firstName: string }) {
+  const m = d.missed;
+  const count = m.capped ? `${m.total}+` : String(m.total);
   return (
-    <PassButton how="skipped" to={`/setup?step=${to}`} className="action-link">
-      Skip for now
-    </PassButton>
+    <>
+      <ScreenTitle
+        title={`${firstName}, here’s your last 30 days`}
+        sub={
+          !d.progress
+            ? `Waggle reads the last 30 days on Instagram and Facebook. New ${d.platform} messages land in your Inbox from now on.`
+            : m.total === 0
+              ? `Every message on ${d.brandName}’s ${d.platform} got a reply. Nice.`
+              : `${count} ${m.total === 1 ? "message" : "messages"} got no reply on ${d.brandName}’s ${d.platform}.`
+        }
+      />
+      {d.progress && (
+        <div className="flex gap-2">
+          <Tile value={String(m.lostDms)} label="DMs you can’t answer anymore" />
+          <Tile value={String(m.closeToday)} label="DMs that close today" />
+          <Tile
+            value={m.capped ? `${m.commentsOpen}+` : String(m.commentsOpen)}
+            label="comments with no reply"
+          />
+        </div>
+      )}
+      {d.progress?.dmAccessMissing && (
+        <p className="text-ink-3 text-sm">
+          Waggle couldn’t read your {d.platform} messages, only comments.
+        </p>
+      )}
+      {m.score && (
+        <div className="card flex items-center gap-3 px-3 py-2.5">
+          <b
+            className={`font-display text-[26px] leading-none font-semibold tabular-nums ${m.score.word === "Needs work" ? "text-danger" : m.score.word === "Great" ? "text-success" : ""}`}
+          >
+            {m.score.score}
+            <span className="text-ink-3 text-sm">/100</span>
+          </b>
+          <span className="text-ink-2 text-[12.5px]">
+            <b className="text-ink font-semibold">Response score · {m.score.word}</b>
+            <br />
+            {m.score.score} of every 100 messages got a reply within 24 hours.
+          </span>
+        </div>
+      )}
+    </>
   );
 }
 
-/**
- * "Get Waggle ready" (T73b; 5 steps approved 17 Nov): your business, connect, top answers, try 3
- * messages, how replies go out. Every step can be skipped; opening /setup again lands on the first
- * step not done, and the same steps show on top of Teach Waggle and on Today until they are.
- */
+function WantedScreen({ d, now }: { d: SetupData; now: Date }) {
+  const w = d.wanted;
+  return (
+    <>
+      <ScreenTitle
+        title={
+          w.count > 0
+            ? `${plural(w.count, "person", "people")} wanted to buy or order`
+            : "What they wanted"
+        }
+        sub={w.count > 0 ? "and got no answer." : undefined}
+      />
+      {w.topics.length > 0 && (
+        <ul className="flex flex-wrap gap-1.5" aria-label="What they asked about">
+          {w.topics.map((t) => {
+            const hot = t.topic === "order" || t.topic === "price";
+            return (
+              <li
+                key={t.topic}
+                className={`bg-surface inline-flex gap-1.5 rounded-full border px-2.5 py-1 text-[12.5px] ${hot ? "border-danger-border text-danger" : "border-line text-ink-2"}`}
+              >
+                {t.label} <b className="font-semibold tabular-nums">{t.count}</b>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {w.lost.length > 0 && (
+        <PagedList
+          items={w.lost}
+          size={4}
+          label="The DMs you lost"
+          header={
+            <p className="border-line border-b px-3 py-2 text-[12.5px]">
+              <b className="font-semibold">The DMs you lost.</b>{" "}
+              <span className="text-ink-2">{d.platform} allows a reply within 24 hours only.</span>
+            </p>
+          }
+          render={(l) => (
+            <li
+              key={l.key}
+              className="flex flex-wrap justify-between gap-x-2 gap-y-0.5 px-3 py-2 text-[12.5px]"
+            >
+              <span className="min-w-0 flex-1 basis-48 break-words">
+                <b className="font-semibold">{l.name}</b>{" "}
+                <span className="text-ink-2">{l.text}</span>
+              </span>
+              <span className="text-ink-3 whitespace-nowrap">
+                {TOPIC_LABEL[l.topic]} · {ageLabel(l.receivedAt, now)}
+              </span>
+            </li>
+          )}
+        />
+      )}
+    </>
+  );
+}
+
+function RepliesScreen({ d }: { d: SetupData }) {
+  const r = d.replies;
+  const ex = r.example;
+  const parts = [
+    r.dmsToday ? plural(r.dmsToday, "DM that closes today", "DMs that close today") : null,
+    r.comments ? plural(r.comments, "comment", "comments") : null,
+  ].filter(Boolean);
+  return (
+    <>
+      <ScreenTitle
+        title={
+          r.drafted
+            ? `Waggle already wrote ${plural(r.drafted, "reply", "replies")}`
+            : "Waggle read every message"
+        }
+        sub={
+          r.drafted ? `For ${parts.join(" and ")}. Nothing is sent yet.` : "Nothing is sent yet."
+        }
+      />
+      {ex && (
+        <div className="card">
+          <Exchange
+            name={ex.author ?? "A customer"}
+            meta={replyMeta(ex)}
+            metaTone={ex.hoursLeft !== null ? "danger" : "muted"}
+            question={ex.text}
+            reply={ex.reply}
+          />
+        </div>
+      )}
+      {d.waiting.length > 0 && (
+        <p className="text-ink-2 text-[13px]">
+          <b className="text-danger font-semibold">{d.waiting.length} need you:</b> Waggle didn’t
+          have the answer. You’ll answer them next.
+        </p>
+      )}
+      {d.more.length > 0 && (
+        <div className="card flex flex-col gap-2 px-3 py-2.5 text-[12.5px]">
+          <span>
+            <b className="font-semibold">Waggle only checked {d.platform}.</b> Customers may be
+            waiting here too:
+          </span>
+          <span className="flex flex-wrap gap-1.5">
+            {d.more.map((p) =>
+              p.upgrade ? (
+                <Link
+                  key={p.platform}
+                  href="/setup?screen=replies&upgrade=accounts"
+                  scroll={false}
+                  className="border-line hover:border-honey text-ink rounded-full border px-2.5 py-1 no-underline"
+                >
+                  {p.label} +
+                </Link>
+              ) : (
+                <form key={p.platform} action={connectAccount}>
+                  <input type="hidden" name="platform" value={p.platform} />
+                  <input type="hidden" name="back" value="/setup?screen=replies" />
+                  <button
+                    type="submit"
+                    className="border-line hover:border-honey rounded-full border px-2.5 py-1"
+                  >
+                    {p.label} +
+                  </button>
+                </form>
+              ),
+            )}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+const NEXT_LABEL: Partial<Record<SetupScreen, string>> = {
+  wanted: "Next: what they wanted",
+  replies: "Next: Waggle’s replies",
+  money: "Check Waggle’s answers",
+  quick: "Check Waggle’s answers",
+  waiting: "Check Waggle’s answers",
+  how: "Next",
+};
+
 export async function SetupView({
-  step: requested,
+  requested,
   connecting,
-  more = false,
-  inApp = null,
-  problem = null,
-  resume = false,
+  go = false,
 }: {
-  step: SetupStepNumber | null;
+  requested: string | null;
   connecting?: string;
-  /** Step 2 with every place to connect open. */
-  more?: boolean;
-  /** Open inside Instagram's or Facebook's own browser (first connect, 20 Nov). */
-  inApp?: string | null;
-  /** The connect flow came back with an error. */
-  problem?: ConnectProblem | null;
-  /** Sent here by the setup gate (resume=1): "Welcome back" on top of the step. */
-  resume?: boolean;
+  /** Past the reading screen while Waggle still sorts (busy accounts). */
+  go?: boolean;
 }) {
-  // Staff → Platforms (18 Nov): only Available platforms are offered here.
-  const statuses = await loadPlatformStatuses(getServiceClient());
   const tenant = await getCurrentTenant();
-  const [steps, autoOk] = await Promise.all([
-    loadReadySteps(tenant.id),
-    // Free approves every reply (19 Nov): Reply on its own shows, locked, with the upgrade.
-    planAllowsAutoReply(getServiceClient(), tenant.id),
-  ]);
-  const step: SetupStepNumber = requested ?? nextReadyStep(steps)?.n ?? 6;
-  const left = steps.filter((s) => !s.done);
-  const tries = steps.find((s) => s.key === "practice");
-  const triesDone = tries?.done
-    ? PRACTICE_GOAL
-    : Number(/^\d+/.exec(tries?.status ?? "")?.[0] ?? 0);
-  const supabase = await createServerSupabase();
-  const [{ data: t }, { data: accounts }, { count: answers }, { data: faq }] = await Promise.all([
-    supabase.from("tenants").select("business_profile").eq("id", tenant.id).single(),
-    supabase
-      .from("social_accounts")
-      .select("platform, status")
-      .eq("tenant_id", tenant.id)
-      .eq("status", "active"),
-    supabase
-      .from("kb_entries")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenant.id),
-    supabase
-      .from("autonomy_settings")
-      .select("mode")
-      .eq("tenant_id", tenant.id)
-      .eq("category", "faq")
-      .maybeSingle(),
-  ]);
-  const profile = t?.business_profile ?? "";
-  const kind = kindFromProfile(profile);
-  const description = kind ? profile.split("\n").slice(1).join("\n") : profile;
-  const custom = customKindFromProfile(profile);
-  // First connect (approved 20 Nov): step 2 shows the live counters while Waggle reads, steps 3
-  // and 4 use what the customers really asked, step 6 leads to the reveal.
-  const service = getServiceClient();
-  const [progress, topStatus, onFree] = await Promise.all([
-    step === 2 || step === 6 ? loadCatchUpProgress(service, tenant.id) : null,
-    step === 3 || step === 4 ? loadTopQuestionsStatus(service, tenant.id) : null,
-    step === 2 ? orgOnFree(service, tenant.organizationId) : false,
-  ]);
-  const top = topStatus?.questions ?? [];
-  // Busy accounts (decided 20 Nov): Waggle is still reading and the customers' own questions
-  // aren't in yet, so steps 3 and 4 wait for them in place.
-  const waitingForTop = topStatus?.waiting ?? false;
-  // Step 3's suggestions: the kind's three, or for Something else, ones for what they typed
-  // (not asked for when the customers' own questions already fill the step).
-  const ai =
-    step === 3 && kind?.key === "other" && custom && top.length < 3
-      ? await suggestedQuestions(tenant.id, custom)
-      : null;
-  const questionKind = kind ?? BUSINESS_KINDS[BUSINESS_KINDS.length - 1];
-  const suggested = ai ? ai.slice(0, 3) : [...questionKind.questions];
-  const moreQuestions = ai ? ai.slice(3) : [...questionKind.more];
-  const suggestedFor = ai
-    ? custom.toLowerCase()
-    : kind && kind.key !== "other"
-      ? kind.label.toLowerCase()
-      : "";
-  const seeds: QuestionSeed[] = top.length
-    ? questionSeeds(top, suggested, commonForLabel(kind?.key ?? null, custom))
-    : suggested.map((question) => ({
-        question,
-        asked: null,
-        items: [],
-        unsure: 0,
-        tag: suggestedFor ? `Suggested for ${suggestedFor}` : "Suggested",
-      }));
-  const answersForm = (
-    <StepForm
-      action={saveAnswersStep}
-      submitLabel="Next"
-      backHref="/setup?step=2"
-      skipHref="/setup?step=4"
-      skipAction={passSetup}
-    >
-      <QuestionsEditor seeds={seeds} more={moreQuestions} />
-      <p className="text-ink-3 text-sm">
-        Prices, complaints and anything you didn&apos;t write always come to you.
-      </p>
-    </StepForm>
-  );
-  const reading = step === 2 && !!progress && progress.phase !== "ready" && !more && !problem;
-  const connected = new Set((accounts ?? []).map((a) => a.platform));
-  const allowed = can(tenant.role, "brand.settings");
-
-  if (!allowed) {
+  if (!can(tenant.role, "brand.settings")) {
     return (
       <main className="mx-auto w-full max-w-[640px] px-4 py-10">
         <h1 className="page-title">Setting up {tenant.name}</h1>
@@ -240,479 +256,152 @@ export async function SetupView({
       </main>
     );
   }
+  const db = getServiceClient();
+  const now = new Date();
+  const [user, firstLoad] = await Promise.all([
+    getCurrentUser(),
+    loadSetupData(db, { tenantId: tenant.id, organizationId: tenant.organizationId, now }),
+  ]);
+  let d = firstLoad;
+  if (setupEntry({ connected: d.connected, connecting: !!connecting }) === "welcome") {
+    redirect("/welcome");
+  }
+  if (
+    d.namePending &&
+    d.connected &&
+    (await nameBrandFromProfile({ db, social: getSocialProvider }, tenant.id))
+  ) {
+    d = await loadSetupData(db, {
+      tenantId: tenant.id,
+      organizationId: tenant.organizationId,
+      now,
+    });
+  }
+  const firstName = firstNameOf(user.user_metadata?.full_name, user.email);
+  const facts = flowFactsOf(d);
+  const done = stepsDone({ connected: d.connected, saved: d.savedScreen, finished: d.finished });
+
+  // Signed in, the account is on its way.
+  if (!d.connected) {
+    return (
+      <SetupFrame step={1} done={done} sublabel="Connect">
+        <ScreenTitle
+          title={`${platformLabel(connecting ?? "")} is connecting`}
+          sub="It shows up here in a moment."
+        />
+        <Link href="/setup" className={`${PRIMARY} self-start no-underline`}>
+          Check again
+        </Link>
+      </SetupFrame>
+    );
+  }
+
+  const screen = openScreen({ requested, saved: d.savedScreen, facts });
+  const pos = stepPosition(screen, facts);
+  const sublabel = `${pos.sublabel} · ${pos.index} of ${pos.count}`;
+  const after = nextScreen(screen, facts);
+  const back = previousScreen(screen, facts);
+
+  // Reading first (existing reading screen), unless the name is asked or the owner went on.
+  if (
+    screen !== "name" &&
+    STEP2.has(screen) &&
+    d.progress &&
+    d.progress.phase !== "ready" &&
+    !go &&
+    requested === null
+  ) {
+    return (
+      <SetupFrame step={2} done={done} sublabel="What you missed">
+        <ReadingInbox
+          initial={d.progress}
+          refreshWhenReady
+          next={{ href: "/setup?go=1", label: "Show what I missed so far" }}
+        />
+      </SetupFrame>
+    );
+  }
+
+  const listed = [...d.batches.money, ...d.batches.rest];
+  const meter = { approved: listed.filter((r) => r.approved).length, total: listed.length };
+  const sending = batchProgress(await loadSetupSending(db, tenant.id));
+  const sendingCard =
+    sending.total > 0 ? (
+      <SendingCard initial={sending} spacingMs={SEND_SPACING_MS} platform={d.platform} />
+    ) : null;
+  const nav = { back, index: pos.index, count: pos.count };
+  const step: 2 | 3 = pos.step;
+
+  let body: React.ReactNode;
+  if (screen === "name") {
+    body = <NameScreen platform={d.platform} count={pos.count} />;
+  } else if (screen === "money" || screen === "quick") {
+    const money = screen === "money";
+    const replies = money ? d.batches.money : d.batches.rest;
+    body = (
+      <BatchScreen
+        title={
+          money
+            ? `${plural(replies.length, "person wants", "people want")} to buy`
+            : restTitle(replies)
+        }
+        sub={money ? "Check my replies and send. Tap one to change it." : topicsLine(replies)}
+        replies={replies}
+        unchecked={d.unchecked}
+        platformWord={d.platform}
+        meter={meter}
+        top={money ? null : sendingCard}
+        next={after ?? "how"}
+        {...nav}
+        spacingMs={SEND_SPACING_MS}
+        canSend={can(tenant.role, "replies.approve")}
+      />
+    );
+  } else if (screen === "waiting") {
+    body = (
+      <WaitingScreen
+        messages={d.waiting}
+        meter={meter}
+        top={sendingCard}
+        next={after ?? "how"}
+        {...nav}
+      />
+    );
+  } else if (screen === "how") {
+    body = (
+      <HowScreen
+        topics={d.askFirst}
+        mode={d.replyMode}
+        autoAllowed={d.autoAllowed}
+        top={sendingCard}
+        {...nav}
+      />
+    );
+  } else {
+    body = (
+      <>
+        {screen === "missed" && <MissedScreen d={d} firstName={firstName} />}
+        {screen === "wanted" && <WantedScreen d={d} now={now} />}
+        {screen === "replies" && <RepliesScreen d={d} />}
+        <ScreenFooter
+          {...nav}
+          primary={
+            after ? (
+              <ScreenButton to={after} className={PRIMARY}>
+                {NEXT_LABEL[after] ?? "Next"}
+              </ScreenButton>
+            ) : null
+          }
+        />
+      </>
+    );
+  }
 
   return (
-    <main className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 py-8 md:py-12">
-      {/* The end keeps the same frame (approved 17 Nov): stepper and step line stay. */}
-      <Stepper step={step} steps={steps} />
-
-      {/* Setup first, then free (20 Nov): only when they come back through the gate. */}
-      {showWelcomeBack({ resume: resume ? "1" : null, step, done: steps.length - left.length }) && (
-        <p className="border-honey-border bg-honey-tint rounded-xl border px-4 py-3 text-sm">
-          <b className="font-semibold">Welcome back.</b> Pick up where you left off:{" "}
-          {steps.length - left.length} of {SETUP_LAST} done.
-        </p>
-      )}
-
-      {/* Five steps fill the row, so help and the way out sit on the step line. Nothing here
-          leaves setup by accident (approved 17 Nov): help opens in place, Finish later is the
-          one way out, and Today's Get Waggle ready line keeps the place. */}
-      <div className="text-ink-3 -mb-5 flex items-center justify-between gap-3 text-sm">
-        <span>
-          {step <= SETUP_LAST
-            ? `Step ${step} of ${SETUP_LAST}`
-            : `${steps.length - left.length} of ${SETUP_LAST} done`}
-        </span>
-        <span className="flex items-center gap-3">
-          <HelpButton className="text-ink-3 hover:text-ink text-sm">Need help?</HelpButton>
-          {(step <= SETUP_LAST || left.length > 0) && (
-            <>
-              <span aria-hidden>·</span>
-              <PassButton
-                how="finish_later"
-                to="/today"
-                className="text-ink-3 hover:text-ink cursor-pointer text-sm"
-              >
-                Finish later
-              </PassButton>
-            </>
-          )}
-        </span>
-      </div>
-
-      {step === 1 && (
-        <section className="flex flex-col gap-5">
-          <div>
-            <h1 className="page-title">Tell us about {tenant.name}</h1>
-            <p className="text-ink-2 mt-1">
-              Two lines is enough. This helps Waggle tell a question from someone ready to buy.
-            </p>
-          </div>
-          <StepForm
-            action={saveBusinessStep}
-            submitLabel="Next"
-            backHref={null}
-            skipHref="/setup?step=2"
-            skipAction={passSetup}
-          >
-            <KindPicker current={kind?.key ?? null} custom={custom} />
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              What you do, in your words
-              <textarea
-                name="description"
-                rows={3}
-                required
-                defaultValue={description}
-                placeholder="We're a family café in Cebu. Coffee, pastries and lunch, dine-in and pickup."
-                className="field font-normal"
-              />
-            </label>
-          </StepForm>
-        </section>
-      )}
-
-      {reading && progress && (
-        <ReadingInbox
-          initial={progress}
-          next={{ href: "/setup?step=3", label: "Next: your top answers" }}
-        />
-      )}
-
-      {step === 2 && !reading && (
-        <section className="flex flex-col gap-5">
-          <div>
-            <h1 className="page-title">
-              Connect Instagram or Facebook and we’ll show you who’s been waiting.
-            </h1>
-            <p className="text-ink-2 mt-1">
-              Waggle reads your last 30 days. Nothing is posted or sent until you tap approve.
-            </p>
-          </div>
-          {connecting && !connected.has(connecting) && !problem && (
-            <p role="status" className="card p-4 text-sm">
-              {platformLabel(connecting)} is connecting. It shows up here in a moment.{" "}
-              <Link href="/setup?step=2" className="link-inline">
-                Check again
-              </Link>
-            </p>
-          )}
-          {problem?.kind === "message" && (
-            <p
-              role="alert"
-              className="border-danger-border bg-danger-soft text-danger rounded-xl border p-4 text-sm"
-            >
-              {problem.text}
-            </p>
-          )}
-          {problem?.kind === "instagram-personal" ? (
-            <div className="border-danger-border bg-danger-soft rounded-xl border p-5">
-              <h2 className="section-title">This Instagram is a personal account</h2>
-              <p className="text-ink-2 mt-1 text-sm">
-                Instagram only lets apps read business inboxes. It takes about a minute to switch,
-                and you keep your posts and followers:
-              </p>
-              <ol className="text-ink-2 mt-2 list-decimal space-y-1 pl-5 text-sm">
-                <li>In Instagram, open Settings → Account type and tools.</li>
-                <li>Tap Switch to professional account, then Business.</li>
-                <li>Come back here and tap Connect again.</li>
-              </ol>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <form action={connectAccount}>
-                  <input type="hidden" name="platform" value="instagram" />
-                  <input type="hidden" name="back" value="/setup?step=2" />
-                  <Button type="submit" variant="primary">
-                    Connect again
-                  </Button>
-                </form>
-                {!connected.has("facebook") && (
-                  <form action={connectAccount}>
-                    <input type="hidden" name="platform" value="facebook" />
-                    <input type="hidden" name="back" value="/setup?step=2" />
-                    <Button type="submit" variant="secondary">
-                      Connect Facebook instead
-                    </Button>
-                  </form>
-                )}
-              </div>
-            </div>
-          ) : (
-            <ConnectGate inApp={connected.size ? null : inApp}>
-              {onFree && connected.size === 0 && (
-                <div>
-                  <h2 className="section-title">Pick the one where most customers message you</h2>
-                  <p className="text-ink-2 text-sm">
-                    Free connects 1 account. Solo connects 3, so you can add the other later.
-                  </p>
-                </div>
-              )}
-              <ul className="card divide-line flex flex-col divide-y">
-                {FIRST_ACCOUNTS.map((a) => (
-                  <li key={a.platform} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                    <PlatformMark platform={a.platform} size={32} />
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <b className="font-semibold">{platformLabel(a.platform)}</b>
-                      <span className="text-ink-3 text-sm">{a.does}</span>
-                    </span>
-                    {connected.has(a.platform) ? (
-                      <span className="text-success flex items-center gap-1.5 text-sm font-semibold">
-                        <Check className="size-4" strokeWidth={2.2} aria-hidden /> Connected
-                      </span>
-                    ) : (
-                      <form action={connectAccount}>
-                        <input type="hidden" name="platform" value={a.platform} />
-                        <input type="hidden" name="back" value="/setup?step=2" />
-                        <Button type="submit" variant="secondary">
-                          Connect
-                        </Button>
-                      </form>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              {more ? (
-                <>
-                  <ul className="card divide-line flex flex-col divide-y">
-                    {MORE_ACCOUNTS.filter((id) => statusOf(statuses, id) === "available").map(
-                      (id) => (
-                        <li key={id} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                          <PlatformMark platform={id} size={32} />
-                          <span className="flex min-w-0 flex-1 flex-col">
-                            <b className="font-semibold">{PLATFORMS[id].label}</b>
-                            <span className="text-ink-3 text-sm">{PLATFORMS[id].line}</span>
-                          </span>
-                          {connected.has(id) ? (
-                            <span className="text-success flex items-center gap-1.5 text-sm font-semibold">
-                              <Check className="size-4" strokeWidth={2.2} aria-hidden /> Connected
-                            </span>
-                          ) : (
-                            <form action={connectAccount}>
-                              <input type="hidden" name="platform" value={id} />
-                              <input type="hidden" name="back" value="/setup?step=2" />
-                              <Button
-                                type="submit"
-                                variant="secondary"
-                                aria-label={`Connect ${PLATFORMS[id].label}`}
-                              >
-                                Connect
-                              </Button>
-                            </form>
-                          )}
-                        </li>
-                      ),
-                    )}
-                  </ul>
-                  {LATER_ACCOUNTS.length > 0 && (
-                    <p className="text-ink-3 text-sm">
-                      {LATER_ACCOUNTS.map((id) => PLATFORMS[id].label).join(", ")} need a few more
-                      details, so they&apos;re in Settings → Connected accounts once setup is done.
-                    </p>
-                  )}
-                  <Link href="/setup?step=2" scroll={false} className="action-link self-start">
-                    Show fewer
-                  </Link>
-                </>
-              ) : (
-                <Link
-                  href="/setup?step=2&more=1"
-                  scroll={false}
-                  className="action-link with-arrow self-start"
-                >
-                  More: TikTok, YouTube, LinkedIn and others
-                </Link>
-              )}
-            </ConnectGate>
-          )}
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/setup?step=1" className="text-ink-2 hover:text-ink text-sm font-medium">
-              Back
-            </Link>
-            {connected.size ? (
-              <Link href="/setup?step=3" className={buttonVariants({ variant: "primary" })}>
-                Next
-              </Link>
-            ) : (
-              <SkipLink to={3} />
-            )}
-          </div>
-        </section>
-      )}
-
-      {step === 3 && (
-        <section className="flex flex-col gap-5">
-          <Suspense fallback={null}>
-            <TopQuestionsNotice />
-          </Suspense>
-          {top.length || waitingForTop ? (
-            <div>
-              <h1 className="page-title">Answer what your customers ask most</h1>
-              <p className="text-ink-2 mt-1">
-                From your own comments and messages this month. Waggle replies only with what you
-                write here.
-              </p>
-            </div>
-          ) : (
-            <div>
-              <h1 className="page-title">Answer the 3 questions you get most</h1>
-              <p className="text-ink-2 mt-1">
-                Waggle only says what you write. Change any question to one your customers really
-                ask.
-              </p>
-            </div>
-          )}
-          {waitingForTop ? (
-            <TopQuestionsWait skip={<SkipLink to={4} />}>{answersForm}</TopQuestionsWait>
-          ) : (
-            answersForm
-          )}
-        </section>
-      )}
-
-      {step === 4 && (
-        <section className="flex flex-col gap-5">
-          <div>
-            <h1 className="page-title">Try {PRACTICE_GOAL} messages</h1>
-            <p className="text-ink-2 mt-1">
-              Type what a customer might say and watch Waggle answer from what you wrote. Nothing
-              gets posted.
-            </p>
-          </div>
-          {waitingForTop && <PracticeWait />}
-          <Suspense fallback={<div className="skeleton h-72 rounded-xl" />}>
-            <TryIt
-              goal={{ done: triesDone, of: PRACTICE_GOAL }}
-              examples={top.length ? top.map((q) => q.question) : undefined}
-            />
-          </Suspense>
-          <div className="flex items-center justify-between gap-3">
-            <Link href="/setup?step=3" className="text-ink-2 hover:text-ink text-sm font-medium">
-              Back
-            </Link>
-            {tries?.done ? (
-              <Link href="/setup?step=5" className={buttonVariants({ variant: "primary" })}>
-                Next
-              </Link>
-            ) : (
-              <SkipLink to={5} />
-            )}
-          </div>
-        </section>
-      )}
-
-      {step === 5 && (
-        <section className="flex flex-col gap-5">
-          <div>
-            <h1 className="page-title">How should replies go out?</h1>
-            <p className="text-ink-2 mt-1">
-              You can change this any time. Most owners start with Ask me first.
-            </p>
-          </div>
-          <StepForm
-            action={saveRepliesStep}
-            submitLabel="Finish"
-            backHref="/setup?step=4"
-            skipHref="/setup?step=6"
-            skipAction={passSetup}
-          >
-            <fieldset className="flex flex-col gap-3">
-              <legend className="sr-only">How replies go out</legend>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {[
-                  {
-                    mode: "approve",
-                    title: "Ask me first",
-                    desc: "Waggle writes the reply and waits by the Send button for your OK. One tap to send.",
-                    bee: <BeeBySend />,
-                  },
-                  {
-                    mode: "auto",
-                    title: "Reply on its own",
-                    desc: "When your answers cover the question, Waggle replies right away. Everything else still comes to you.",
-                    bee: <BeeOnItsOwn />,
-                  },
-                ].map((m) => {
-                  const locked = m.mode === "auto" && !autoOk;
-                  return (
-                    <label
-                      key={m.mode}
-                      className={
-                        locked
-                          ? "card flex flex-col gap-2 p-4"
-                          : "card has-[:checked]:border-honey has-[:checked]:ring-honey flex cursor-pointer flex-col gap-2 p-4 has-[:checked]:ring-1"
-                      }
-                    >
-                      {m.bee}
-                      <span className="flex items-start gap-3">
-                        <input
-                          type="radio"
-                          name="mode"
-                          value={m.mode}
-                          disabled={locked}
-                          defaultChecked={
-                            (faq?.mode === "auto" && autoOk ? "auto" : "approve") === m.mode
-                          }
-                          className="mt-1"
-                        />
-                        <span className="flex flex-col gap-1">
-                          <span className="flex flex-wrap items-center gap-2">
-                            <b className="font-semibold">{m.title}</b>
-                            {locked && (
-                              <span className="border-honey-border bg-honey-tint text-honey-text rounded-full border px-2 py-0.5 text-[11px] font-bold tracking-wide uppercase">
-                                Solo and up
-                              </span>
-                            )}
-                          </span>
-                          <span className="text-ink-2 text-sm">{m.desc}</span>
-                          {locked && (
-                            <Link
-                              href={upgradeHref("auto_reply")}
-                              className="action-link with-arrow mt-1 self-start text-sm"
-                            >
-                              {upgradeLabel("auto_reply")}
-                            </Link>
-                          )}
-                        </span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-          </StepForm>
-        </section>
-      )}
-
-      {step === 6 && (
-        <section className="flex flex-col gap-5">
-          {left.length === 0 && <BeeDance className="mx-auto" />}
-          <div className={left.length === 0 ? "text-center" : undefined}>
-            <h1 className="page-title">
-              {left.length === 0
-                ? "Waggle is ready"
-                : left.length === 1
-                  ? "Almost there: one step left"
-                  : `Almost there: ${left.length} steps left`}
-            </h1>
-            <p className="text-ink-2 mt-1 text-[15px]">
-              {left.length === 0
-                ? doneLine({
-                    accounts: [...connected].map(platformLabel),
-                    answers: answers ?? 0,
-                    replyOnItsOwn: faq?.mode === "auto",
-                  })
-                : left[0].key === "connect" && left.length === 1
-                  ? "Connect where customers message you, and Waggle starts answering."
-                  : "Finish these and Waggle starts answering. Each one takes a minute."}
-            </p>
-          </div>
-          {left.length > 0 && (
-            <ul className="card divide-line flex flex-col divide-y" aria-label="What Waggle knows">
-              {steps.map((s) => (
-                <li key={s.key} className="flex items-center gap-3 px-5 py-3.5">
-                  <StateMark state={s.done ? "working" : "off"} size={15} />
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <b className="font-semibold">{s.label}</b>
-                    <span className="text-ink-3 text-sm">
-                      {stepDetail(s.key, s.done, {
-                        kind: custom || kind?.label || "",
-                        description,
-                        accounts: [...connected].map(platformLabel),
-                        answers: answers ?? 0,
-                        triesStatus: s.status,
-                        replyOnItsOwn: faq?.mode === "auto",
-                      })}
-                    </span>
-                  </span>
-                  {!s.done && (
-                    <Link
-                      href={`/setup?step=${s.n}`}
-                      className={buttonVariants({ variant: "secondary" })}
-                    >
-                      Do it now
-                    </Link>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {progress && (
-            <Link
-              href="/reveal"
-              className={`${buttonVariants({ variant: left.length ? "secondary" : "primary" })} self-center`}
-            >
-              See what you’ve been missing
-            </Link>
-          )}
-          {left.length > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <PassButton
-                how="finish_later"
-                to="/today"
-                className="text-ink-2 hover:text-ink cursor-pointer text-sm font-medium"
-              >
-                Go to Today instead
-              </PassButton>
-              <Link
-                href={`/setup?step=${left[0].n}`}
-                className={buttonVariants({ variant: "primary" })}
-              >
-                {NEXT_ACTION[left[0].key]}
-              </Link>
-            </div>
-          ) : (
-            <div className="flex flex-wrap justify-center gap-2">
-              <Link
-                href="/today"
-                className={buttonVariants({ variant: progress ? "secondary" : "primary" })}
-              >
-                Go to Today
-              </Link>
-              <Link href="/teach" className={buttonVariants({ variant: "secondary" })}>
-                Teach Waggle more
-              </Link>
-            </div>
-          )}
-        </section>
-      )}
-    </main>
+    <SetupFrame step={step} done={done} sublabel={sublabel}>
+      {body}
+    </SetupFrame>
   );
 }
+
+const STEP2 = new Set<SetupScreen>(["missed", "wanted", "replies"]);

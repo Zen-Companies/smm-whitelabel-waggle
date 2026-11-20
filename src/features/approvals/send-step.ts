@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import type { Step, StepResult } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { markUsedFactsChecked, uncheckedFactIds } from "@/lib/facts";
 import { RetryLaterError } from "@/lib/jobs";
 import {
   getPlatformPause,
@@ -69,7 +70,11 @@ interface SendContext {
     status: string;
     needsHuman: boolean;
     approvedByOwner: boolean;
+    /** The person who approved it (null: auto mode). */
+    decidedBy: string | null;
     writtenByOwner: boolean;
+    /** The business info it was written with (decision 7: not-checked facts). */
+    kbEntryIds: string[];
     idempotencyKey: string;
     sendAttemptedAt: string | null;
     zernioReplyId: string | null;
@@ -131,7 +136,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
       .from("drafts")
       .select(
         "id, body, edited_body, status, needs_human, decided_by, idempotency_key, " +
-          "send_attempted_at, zernio_reply_id, reply_via, owner_written, template",
+          "send_attempted_at, zernio_reply_id, reply_via, owner_written, template, kb_entry_ids",
       )
       .eq("item_id", itemId)
       .in("status", ["approved", "sent"])
@@ -152,6 +157,7 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
     reply_via: string;
     owner_written: boolean;
     template: unknown;
+    kb_entry_ids: string[] | null;
   } | null;
 
   const last = row.conversations?.last_customer_message_at ?? null;
@@ -198,7 +204,9 @@ async function loadSendContext(db: ServiceClient, itemId: string): Promise<SendC
           status: d.status,
           needsHuman: d.needs_human,
           approvedByOwner: d.decided_by !== null,
+          decidedBy: d.decided_by,
           writtenByOwner: d.owner_written,
+          kbEntryIds: d.kb_entry_ids ?? [],
           idempotencyKey: d.idempotency_key,
           sendAttemptedAt: d.send_attempted_at,
           zernioReplyId: d.zernio_reply_id,
@@ -283,7 +291,12 @@ export function createSendStep(opts: {
     if (!draft) return { event: "escalate", details: { sendReason: "no_approved_draft" } };
 
     // Rule 6, at the moment of sending: the DM window may have closed or the account dropped
-    // while the draft waited.
+    // while the draft waited. Decision 7: an auto-approved draft whose facts are still not
+    // checked goes back to the owner (only auto mode looks at it).
+    const usesUncheckedFacts =
+      c.input.autonomyMode === "auto" && !draft.approvedByOwner
+        ? (await uncheckedFactIds(db, draft.kbEntryIds)).length > 0
+        : false;
     const decision = policy({
       ...c.input,
       draft: {
@@ -291,6 +304,7 @@ export function createSendStep(opts: {
         approvedByOwner: draft.approvedByOwner,
         writtenByOwner: draft.writtenByOwner,
         template: !!draft.template,
+        usesUncheckedFacts,
       },
       now,
     });
@@ -387,6 +401,24 @@ export function createSendStep(opts: {
           reconciled,
         },
       });
+      // Decision 7: a person approved this reply with the found facts highlighted, so the ones
+      // it used are checked now. The reply is already out: a failure here is reported, not
+      // retried (a retry would see the sent draft and stop).
+      if (draft.decidedBy && draft.kbEntryIds.length > 0) {
+        try {
+          await markUsedFactsChecked(db, {
+            tenantId: c.tenantId,
+            itemId: item.id,
+            draftId: draft.id,
+            kbEntryIds: draft.kbEntryIds,
+            message: draft.message,
+            userId: draft.decidedBy,
+            now,
+          });
+        } catch (error) {
+          Sentry.captureException(error, { extra: { itemId: item.id, draftId: draft.id } });
+        }
+      }
       return { event: "sent", details: { draftId: draft.id, providerId, reconciled } };
     };
 

@@ -64,7 +64,7 @@ There are three launch offers. Ads and posts may promote the founding offer; the
 |   |   |   |   |
 |---|---|---|---|
 |Offer|Terms|Who gets it|Where it can be said|
-|7-day free trial|7 days free, card required up front, starts at sign-up (Jason, 17 November)|Every new customer|Everywhere|
+|7-day free trial|7 days free with a card, on the first paid plan (Free → Solo or Team); Free itself needs no card (Febron, 20 November; earlier: starts at sign-up, Jason, 17 November)|Every organization that never had a paid plan|Everywhere|
 |Founding members|Team for $79 a month, locked for 6 months, then $99|The first 50 businesses to sign up|Everywhere: site, ads, captions (Jason, 16 November 2026)|
 |Destin seeds|90 days free|Up to 25 local Destin businesses, in exchange for a testimonial, a monthly 15-minute call and permission to share their results|Offered directly, not in ads|
 
@@ -168,6 +168,7 @@ Updated 18 November 2026. Billing is built but not switched on: no one is charge
 |   |   |   |
 |---|---|---|
 |Date|Change|Decided by|
+|20 November 2026 (Walter's flow)|The trial is back: 7 days free with a card when a Free organization picks its first paid plan (Solo or Team); never again after a paid plan or a trial. Prices also shown per day on Your plan and the upgrade pop-ups ("about $1.61 a day": monthly × 12 ÷ 365, yearly ÷ 365; none for Business, priced on a call)|Febron (from Walter's demo; per-day is marketing framing of the same prices, no Jason check needed)|
 |18 November 2026 (evening)|Usage at cost: pay-per-use on the owner's invoice at cost, no markup, no limit, same billing cycle; trial follows the chosen plan. Every Zernio platform can be offered (Staff → Platforms), naming Zernio before a sign-in that shows it; Creators stays held|Febron (Jason and Walter to confirm)|
 |18 November 2026 (later)|Names: the $99 plan is shown as Team and the $199 plan as Business (ids unchanged); Business on sale from launch, monthly only; founding $79 stays on the $99 plan (Team); the trial starts at sign-up; ads say "Try it free for 7 days at gowaggle.ai". Jason's own copy of this bible was updated the same day and is the final word if they differ|Jason (via Atlas and Febron)|
 |18 November 2026|Solo: 1 business, just you, more accounts at $10 each with no limit; Business ($99, now called Team): unlimited businesses and team members; follow-ups for quiet leads included on Business and Team (the owner's own message on Zernio Sequences, not AI-written); one-click top-up charged right away, also during the trial; plan settings to be changeable on Staff → Plans|Jason (via Febron)|
