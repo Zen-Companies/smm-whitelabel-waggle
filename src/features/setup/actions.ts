@@ -57,6 +57,13 @@ export async function goToSetupScreen(formData: FormData): Promise<void> {
   redirect(`/setup?screen=${screen}`);
 }
 
+/** Step 2's in-place Next and Back: remember the screen, nothing else (the page already moved). */
+export async function saveSetupScreen(screen: unknown): Promise<void> {
+  if (!isSetupScreen(screen)) return;
+  const tenant = await getTenantFor("brand.settings");
+  if (tenant) await saveScreen(tenant.id, tenant.userId, screen);
+}
+
 export type NameState = { error?: string; name?: string };
 
 const nameSchema = z
