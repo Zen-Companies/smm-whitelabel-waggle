@@ -1,5 +1,6 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { signInNext } from "@/features/auth";
@@ -8,13 +9,14 @@ import { z } from "zod";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { ORG_COOKIE } from "@/features/orgs";
 import { BRAND_COOKIE } from "./brand-pick";
 import { PASSWORD_MIN } from "./password";
 import { getTenantFor, NOT_ALLOWED } from "./current-tenant";
 import { setupTenantForUser } from "./server";
+import { emailConfirmState, RESEND_AFTER_MS, sendEmailConfirmation } from "./email-confirm";
 
 export interface AuthFormState {
   error?: string;
@@ -26,6 +28,10 @@ const signUpSchema = z.object({
   fullName: z.string().trim().min(1, "Enter your name").max(100, "Keep it under 100 characters"),
   email: z.email("Enter a valid email"),
   password: z.string().min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`),
+  confirmPassword: z.string(),
+}).refine((v) => v.password === v.confirmPassword, {
+  message: "The passwords don't match",
+  path: ["confirmPassword"],
 });
 
 const signInSchema = z.object({
@@ -55,6 +61,15 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   if (data.user?.identities?.length) await setupTenantForUser(data.user);
 
   if (!data.session) return { message: "Check your email to confirm your account." };
+  // Confirm later (hotfix 21 Nov): Supabase's confirm is off, so this login works now; Waggle
+  // sends its own link. A failed send never blocks the signup ("Send again" is on every page).
+  if (data.user?.email) {
+    await sendEmailConfirmation(getServiceClient(), {
+      id: data.user.id,
+      email: data.user.email,
+      name: fullName,
+    }).catch((e: unknown) => Sentry.captureException(e));
+  }
   redirect("/welcome");
 }
 
@@ -120,4 +135,29 @@ export async function updateBusinessProfile(
   }
   revalidatePath("/settings", "layout");
   return { saved: true };
+}
+
+export type ResendState = { sent?: boolean; error?: string };
+
+/** "Send again" on the confirm line: a new link to the login's current email, once a minute. */
+export async function resendEmailConfirmation(): Promise<ResendState> {
+  const user = await getCurrentUser();
+  if (!user.email) return { error: "Your login has no email address." };
+  const db = getServiceClient();
+  const state = await emailConfirmState(db, user.id);
+  if (!state.pending) return { sent: true };
+  if (state.sentAt && Date.now() - Date.parse(state.sentAt) < RESEND_AFTER_MS) {
+    return { error: "We just sent it. Give it a minute, then try again." };
+  }
+  try {
+    await sendEmailConfirmation(db, {
+      id: user.id,
+      email: user.email,
+      name: (user.user_metadata?.full_name as string | undefined) ?? null,
+    });
+  } catch (e) {
+    Sentry.captureException(e);
+    return { error: "That didn't send. Try again in a moment." };
+  }
+  return { sent: true };
 }

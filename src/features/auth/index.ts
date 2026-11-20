@@ -4,3 +4,5 @@ export { continueWithGoogle } from "./google-actions";
 export { GoogleButton, OrDivider } from "./google-button";
 export { AuthWall } from "./auth-wall";
 export { AuthSplit } from "./auth-split";
+export { InAppGoogleGate } from "./in-app-google-gate";
+export { inAppName, isInAppBrowser } from "./in-app-browser";
