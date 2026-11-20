@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
 import { GoogleButton, InAppGoogleGate, OrDivider } from "@/features/auth";
 import { PASSWORD_MIN } from "./password";
+import { PasswordInput } from "./password-input";
 
 /** Messages for `?error=` on the sign-in page (Google and email links come back with these). */
 const LINK_ERRORS: Record<string, string> = {
@@ -90,10 +91,9 @@ export function AuthForm({
               </Link>
             )}
           </span>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete={isSignup ? "new-password" : "current-password"}
             minLength={isSignup ? PASSWORD_MIN : undefined}
             aria-invalid={state.error ? true : undefined}
@@ -104,6 +104,20 @@ export function AuthForm({
             <p id="password-hint" className="text-ink-3 text-xs">
               At least {PASSWORD_MIN} characters.
             </p>
+          )}
+          {isSignup && (
+            <>
+              <label htmlFor="confirmPassword" className="mt-2 text-sm font-medium">
+                Confirm your password
+              </label>
+              <PasswordInput
+                id="confirmPassword"
+                name="confirmPassword"
+                autoComplete="new-password"
+                aria-invalid={state.error ? true : undefined}
+                required
+              />
+            </>
           )}
           {state.error && (
             <p role="alert" className="text-danger text-sm">

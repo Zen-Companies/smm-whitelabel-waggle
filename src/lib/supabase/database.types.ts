@@ -708,6 +708,30 @@ export type Database = {
           },
         ]
       }
+      email_confirmations: {
+        Row: {
+          confirmed_at: string | null
+          email: string
+          sent_at: string
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          email: string
+          sent_at?: string
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          email?: string
+          sent_at?: string
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_opt_outs: {
         Row: {
           created_at: string

@@ -14,6 +14,7 @@ import {
   type Frequency,
 } from "./digest";
 import type { Mailer } from "@/lib/email/mailer";
+import { onlyConfirmed, unconfirmedUserIds } from "@/lib/email/confirmations";
 
 // Sends queued alerts (the `alerts` outbox, filled by DB triggers and the nudge sweep). Runs in
 // the job route; webhooks never send (rule 3). Each alert is one email to the tenant's owners.
@@ -212,7 +213,8 @@ async function recipients(
     const { data } = await db.auth.admin.getUserById(m.user_id);
     if (data.user?.email) out.push({ userId: m.user_id, email: data.user.email });
   }
-  return out;
+  // Confirm later (hotfix 21 Nov): nothing goes to an email that isn't confirmed yet.
+  return onlyConfirmed(out, await unconfirmedUserIds(db, out.map((p) => p.userId)));
 }
 
 /** Each person's choice, else the site default (design "Waggle emails", 18 Nov). */
@@ -420,7 +422,8 @@ export async function deliverDueDigests(deps: DeliverDeps): Promise<DigestSummar
         db.auth.admin.getUserById(userId),
         db.from("tenants").select("name, offboarded_at").eq("id", tenantId).single(),
       ]);
-      const email = user.user?.email;
+      const unconfirmed = (await unconfirmedUserIds(db, [userId])).size > 0;
+      const email = unconfirmed ? undefined : user.user?.email;
       const done = { sent_at: now.toISOString() };
       if (!email || tenant?.offboarded_at) {
         await db

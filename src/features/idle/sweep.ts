@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { pauseAccountItems } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import type { Mailer } from "@/lib/email/mailer";
+import { unconfirmedUserIds } from "@/lib/email/confirmations";
 import { JOB_EXTERNAL_TIMEOUT_MS } from "@/lib/jobs";
 import { getPlatformPause } from "@/lib/social/platform-pause";
 import { platformLabel } from "@/lib/social/platforms";
@@ -109,8 +110,10 @@ async function orgLastActive(
       ...(seen ?? []).map((s) => s.last_seen_at),
       ...(actions.data ?? []).map((a) => a.created_at),
     ]) ?? new Date(createdAt);
+  // Confirm later (hotfix 21 Nov): not to an email that isn't confirmed yet.
+  const unconfirmed = await unconfirmedUserIds(db, ids);
   const owners = members
-    .filter((m) => m.role === "owner" && m.email)
+    .filter((m) => m.role === "owner" && m.email && !unconfirmed.has(m.user_id))
     .map((m) => ({ email: m.email, name: m.full_name || null }));
   return { lastActive, owners };
 }

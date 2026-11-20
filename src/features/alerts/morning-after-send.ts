@@ -1,6 +1,7 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
 import type { Mailer } from "@/lib/email/mailer";
+import { unconfirmedUserIds } from "@/lib/email/confirmations";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { decideMorning, expiryLine, morningEmail, morningWindow } from "./morning-after";
 
@@ -177,7 +178,10 @@ async function handleOrg(
     db.from("social_accounts").select("username").eq("id", catchUp.social_account_id).maybeSingle(),
   ]);
   if (teamErr) throw new Error(`morning email: reading the team failed: ${teamErr.message}`);
-  const owners = (team ?? []).filter((m) => m.role === "owner" && m.email);
+  const allOwners = (team ?? []).filter((m) => m.role === "owner" && m.email);
+  // Confirm later (hotfix 21 Nov): not to an email that isn't confirmed yet.
+  const unconfirmed = await unconfirmedUserIds(db, allOwners.map((o) => o.user_id));
+  const owners = allOwners.filter((o) => !unconfirmed.has(o.user_id));
   const { data: optedOut } = owners.length
     ? await db
         .from("email_opt_outs")
