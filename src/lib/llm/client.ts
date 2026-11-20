@@ -19,6 +19,9 @@ export interface GenerateObjectInput<T> extends LlmCallContext {
 /** The most model calls one agent run may make (T33). The final answer counts as one. */
 export const AGENT_MAX_STEPS = 6;
 
+/** One embedding call, retries included, gives up after this long. */
+export const EMBED_TIMEOUT_MS = 15_000;
+
 export interface RunToolsInput<T> extends LlmCallContext {
   purpose: "agent";
   /** The final answer. */
@@ -106,10 +109,12 @@ export function createLlmClient(deps: { models: ResolvedModels; usage: UsageReco
 
     async embed(input) {
       const resolved = models.embedding;
+      // A hung embedding model must fail fast, not leave a try or a draft spinning.
+      const timeout = AbortSignal.timeout(EMBED_TIMEOUT_MS);
       const result = await embed({
         model: resolved.model,
         value: input.value,
-        abortSignal: input.signal,
+        abortSignal: input.signal ? AbortSignal.any([input.signal, timeout]) : timeout,
       });
       await usage.record({
         tenantId: input.tenantId,

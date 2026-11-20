@@ -521,7 +521,7 @@ As built (T7):
 
 As built (T8, `features/knowledge-base`):
 
-- **Model:** `openai/text-embedding-3-small` through OpenRouter, 1536 dimensions. `kb_entries.embedding` is `vector(1536)` with an HNSW index (`vector_cosine_ops`); `toVectorLiteral` rejects any other length, so changing `EMBEDDING_MODEL` to a model with another dimension fails loudly and needs a migration. Every embedding request sends `dimensions: 1536` (`EMBEDDING_DIMENSIONS`, `lib/llm/provider.ts`), so a model that can shorten its output also fits: for free local testing `nvidia/nemotron-3.5-embed-1b:free` (2048 natively) returns 1536 at $0 (checked 2026-10-29). Embeddings from different models are not comparable: re-embed the KB (clear `embedding`) after switching models.
+- **Model:** `openai/text-embedding-3-small` through OpenRouter, 1536 dimensions. `kb_entries.embedding` is `vector(1536)` with an HNSW index (`vector_cosine_ops`); `toVectorLiteral` rejects any other length, so changing `EMBEDDING_MODEL` to a model with another dimension fails loudly and needs a migration. Every embedding request sends `dimensions: 1536` (`EMBEDDING_DIMENSIONS`, `lib/llm/provider.ts`), so a model that can shorten its output also fits: for free local testing `nvidia/nemotron-3.5-embed-1b:free` (2048 natively) returns 1536 at $0 (checked 2026-10-29). Embeddings from different models are not comparable: re-embed the KB (clear `embedding`) after switching models. An embedding call gives up after 15 seconds, retries included (`EMBED_TIMEOUT_MS`), so a hung model fails the try or draft instead of spinning (20 Nov: both free nvidia embedding models hung; staging and production use `openai/text-embedding-3-small`).
 - **Embedded text:** `title + "
 
 " + content`.
