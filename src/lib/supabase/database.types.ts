@@ -413,6 +413,8 @@ export type Database = {
           post_offset: number
           posts_read: number
           praise_and_tags: number
+          response_messages: number
+          response_answered: number
           sorted_at: string | null
           top_questions: Json | null
           top_questions_at: string | null
@@ -450,6 +452,8 @@ export type Database = {
           post_offset?: number
           posts_read?: number
           praise_and_tags?: number
+          response_messages?: number
+          response_answered?: number
           sorted_at?: string | null
           top_questions?: Json | null
           top_questions_at?: string | null
@@ -486,6 +490,8 @@ export type Database = {
           post_offset?: number
           posts_read?: number
           praise_and_tags?: number
+          response_messages?: number
+          response_answered?: number
           sorted_at?: string | null
           top_questions?: Json | null
           top_questions_at?: string | null
@@ -2454,6 +2460,10 @@ export type Database = {
           purged_at: string | null
           replies_paused: boolean
           setup_passed_at: string | null
+          setup_done_at: string | null
+          setup_screen: string | null
+          name_pending: boolean
+          ask_first_topics: string[]
           setup_passed_by: string | null
           setup_passed_how: string | null
           stripe_customer_id: string | null
@@ -2488,6 +2498,10 @@ export type Database = {
           purged_at?: string | null
           replies_paused?: boolean
           setup_passed_at?: string | null
+          setup_done_at?: string | null
+          setup_screen?: string | null
+          name_pending?: boolean
+          ask_first_topics?: string[]
           setup_passed_by?: string | null
           setup_passed_how?: string | null
           stripe_customer_id?: string | null
@@ -2521,6 +2535,10 @@ export type Database = {
           purged_at?: string | null
           replies_paused?: boolean
           setup_passed_at?: string | null
+          setup_done_at?: string | null
+          setup_screen?: string | null
+          name_pending?: boolean
+          ask_first_topics?: string[]
           setup_passed_by?: string | null
           setup_passed_how?: string | null
           stripe_customer_id?: string | null

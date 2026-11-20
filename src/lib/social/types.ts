@@ -163,6 +163,8 @@ export interface ProviderComment {
   createdAt: string | null;
   /** One of the replies Zernio carries inline is the account's own (first-connect catch-up). */
   ownerReplied?: boolean;
+  /** When the account's first own reply was written, when Zernio says (response score). */
+  ownerRepliedAt?: string | null;
 }
 
 /** A review (recommendation) on a connected Facebook Page (T42). Ids are Zernio's. */
