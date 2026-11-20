@@ -11,7 +11,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { BatchScreen } from "./batch-screen";
 import { nameBrandFromProfile } from "./brand-name-server";
-import { ageLabel, batchProgress, firstNameOf, plural, replyMeta } from "./copy";
+import { batchProgress, firstNameOf, plural, replyMeta } from "./copy";
 import {
   nextScreen,
   openScreen,
@@ -22,12 +22,13 @@ import {
   type SetupScreen,
 } from "./flow";
 import { HowScreen } from "./how-screen";
+import { LostDmList } from "./lost-list";
 import { NameScreen } from "./name-screen";
 import { flowFactsOf, loadSetupData, loadSetupSending, type SetupData } from "./setup-data";
 import { PRIMARY, ScreenButton, ScreenFooter, ScreenTitle } from "./setup-frame";
 import { SetupFrame } from "./setup-shell";
-import { Exchange, PagedList, SendingCard } from "./setup-parts";
-import { restTitle, TOPIC_LABEL, topicsLine } from "./topics";
+import { Exchange, SendingCard } from "./setup-parts";
+import { restTitle, topicsLine } from "./topics";
 import { WaitingScreen } from "./waiting-screen";
 
 // Setup steps 2 and 3 (Walter's flow, one screen at a time; boards approved 20 Nov), on the
@@ -123,31 +124,7 @@ function WantedScreen({ d, now }: { d: SetupData; now: Date }) {
         </ul>
       )}
       {w.lost.length > 0 && (
-        <PagedList
-          items={w.lost}
-          size={4}
-          label="The DMs you lost"
-          header={
-            <p className="border-line border-b px-3 py-2 text-[12.5px]">
-              <b className="font-semibold">The DMs you lost.</b>{" "}
-              <span className="text-ink-2">{d.platform} allows a reply within 24 hours only.</span>
-            </p>
-          }
-          render={(l) => (
-            <li
-              key={l.key}
-              className="flex flex-wrap justify-between gap-x-2 gap-y-0.5 px-3 py-2 text-[12.5px]"
-            >
-              <span className="min-w-0 flex-1 basis-48 break-words">
-                <b className="font-semibold">{l.name}</b>{" "}
-                <span className="text-ink-2">{l.text}</span>
-              </span>
-              <span className="text-ink-3 whitespace-nowrap">
-                {TOPIC_LABEL[l.topic]} · {ageLabel(l.receivedAt, now)}
-              </span>
-            </li>
-          )}
-        />
+        <LostDmList lost={w.lost} platform={d.platform} now={now.toISOString()} />
       )}
     </>
   );
