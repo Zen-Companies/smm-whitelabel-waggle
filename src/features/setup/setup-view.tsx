@@ -24,7 +24,8 @@ import {
 import { HowScreen } from "./how-screen";
 import { NameScreen } from "./name-screen";
 import { flowFactsOf, loadSetupData, loadSetupSending, type SetupData } from "./setup-data";
-import { PRIMARY, ScreenButton, ScreenFooter, ScreenTitle, SetupFrame } from "./setup-frame";
+import { PRIMARY, ScreenButton, ScreenFooter, ScreenTitle } from "./setup-frame";
+import { SetupFrame } from "./setup-shell";
 import { Exchange, PagedList, SendingCard } from "./setup-parts";
 import { restTitle, TOPIC_LABEL, topicsLine } from "./topics";
 import { WaitingScreen } from "./waiting-screen";

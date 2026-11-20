@@ -2,7 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
-import { decideDraft } from "@/features/approvals";
+// The server action file directly: the approvals index also exports server-only code, which a
+// client component must not pull in.
+import { decideDraft } from "@/features/approvals/actions";
 import { sendSetupReplies } from "./actions";
 import { plural, replyMeta, sendingLine } from "./copy";
 import type { SetupScreen } from "./flow";
