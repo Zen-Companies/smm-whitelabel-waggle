@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { cn } from "cn";
 import { PlanBees } from "@/components/app/bee-plan";
 import { BeeDance } from "@/components/app/bee-setup";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import type { PlanActionState } from "./plan-actions";
 import { BUSINESS_CALL_URL, PROMOTED_PLAN, type PlanId } from "./plans";
 
@@ -52,6 +52,13 @@ export function PlanButton({
   );
 }
 
+export interface FoundingOffer {
+  plan: PlanId;
+  monthlyUsd: number;
+  months: number;
+  spots: number;
+}
+
 export interface PlanCardData {
   id: PlanId;
   name: string;
@@ -74,6 +81,7 @@ export function PlanCards({
   live,
   mayChange,
   foundingNote,
+  founding = null,
   action,
 }: {
   orgId: string;
@@ -85,9 +93,12 @@ export function PlanCards({
   live: boolean;
   mayChange: boolean;
   foundingNote: string | null;
+  /** The founding offer, while spots are left, for owners who never had a paid plan. */
+  founding?: FoundingOffer | null;
   action: Action;
 }) {
   const [interval, setInterval] = useState<"month" | "year">(currentInterval ?? "month");
+  const offerPlan = founding ? plans.find((p) => p.id === founding.plan) : undefined;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -114,6 +125,42 @@ export function PlanCards({
         </div>
         {foundingNote && <span className="meta">{foundingNote}</span>}
       </div>
+      {founding && offerPlan && (
+        // Founding offer, highlighted (approved 20 Nov, canvas "Founding offer, highlighted").
+        <div className="border-honey bg-honey-tint flex flex-wrap items-center justify-between gap-4 rounded-2xl border-[1.5px] px-5 py-4">
+          <span className="flex flex-wrap items-center gap-3.5">
+            <span className="bg-honey text-ink rounded-full px-2.5 py-1 text-xs font-bold tracking-wide uppercase">
+              Founding offer
+            </span>
+            <span className="flex flex-col gap-0.5">
+              <b className="font-display text-lg font-semibold">
+                {offerPlan.name} for ${founding.monthlyUsd} a month, your first {founding.months}{" "}
+                months
+              </b>
+              <span className="text-ink-2 text-sm">
+                Then ${offerPlan.monthlyUsd}. Only for the first {founding.spots} businesses.
+              </span>
+            </span>
+          </span>
+          {interval === "year" ? (
+            <button
+              type="button"
+              onClick={() => setInterval("month")}
+              className="action-link with-arrow text-sm"
+            >
+              Monthly only. Switch to Monthly
+            </button>
+          ) : (
+            mayChange && (
+              <PlanButton
+                action={action}
+                fields={{ orgId, plan: offerPlan.id, interval: "month" }}
+                label={`Get ${offerPlan.name} at $${founding.monthlyUsd}`}
+              />
+            )
+          )}
+        </div>
+      )}
       <div className="grid gap-4 pt-3 md:grid-cols-2 xl:grid-cols-4">
         {plans.map((p) => {
           const free = p.id === "free";
@@ -128,12 +175,13 @@ export function PlanCards({
               : `$${p.monthlyUsd} a month`;
           const noYearly = !free && interval === "year" && p.yearlyUsd === null;
           const promoted = p.id === PROMOTED_PLAN && !live;
+          const offer = !!founding && founding.plan === p.id && interval === "month";
           return (
             <div
               key={p.id}
               className={cn(
                 "bg-surface relative flex flex-col gap-2.5 rounded-2xl border p-5",
-                isCurrent
+                isCurrent || offer
                   ? "border-honey border-2 shadow-[0_6px_24px_rgba(246,178,27,0.18)]"
                   : "border-line",
               )}
@@ -141,6 +189,10 @@ export function PlanCards({
               {isCurrent ? (
                 <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
                   Your plan
+                </span>
+              ) : offer ? (
+                <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                  Founding price
                 </span>
               ) : (
                 promoted && (
@@ -155,6 +207,16 @@ export function PlanCards({
                 <span className="flex flex-col">
                   <b className="text-lg font-semibold">Priced for you</b>
                   <span className="meta">10 or more accounts, after a short call</span>
+                </span>
+              ) : offer && founding ? (
+                <span className="flex flex-col gap-0.5">
+                  <span className="flex items-baseline gap-2">
+                    <b className="text-lg font-semibold">${founding.monthlyUsd} a month</b>
+                    <s className="text-ink-3 text-[15px]">${p.monthlyUsd}</s>
+                  </span>
+                  <span className="meta">
+                    First {founding.months} months, then ${p.monthlyUsd}
+                  </span>
                 </span>
               ) : (
                 <b className="text-lg font-semibold">
@@ -181,7 +243,7 @@ export function PlanCards({
                     href={BUSINESS_CALL_URL}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="border-ink text-ink hover:bg-subtle inline-flex min-h-11 items-center rounded-xl border px-4 text-sm font-semibold"
+                    className={buttonVariants({ variant: "secondary" })}
                   >
                     Book a call
                   </a>
