@@ -17,6 +17,7 @@ import {
   isVideoUrl,
   type WhatsAppTemplate,
   type AccountHealth,
+  type BusinessProfile,
   type AccountPicture,
   type CreatePostInput,
   type ProviderCommentReply,
@@ -3680,6 +3681,88 @@ export class ZernioSocialProvider implements SocialProvider {
         providerMessageId: parse(privateReplySchema, data, "sendPrivateReply").messageId,
       };
     });
+  }
+
+  async getBusinessProfile(input: {
+    accountId: string;
+    platform: string;
+    username?: string | null;
+    captions?: number;
+    signal?: AbortSignal;
+  }): Promise<BusinessProfile | null> {
+    const nullable = z
+      .string()
+      .nullish()
+      .transform((v) => v?.trim() || null);
+    if (input.platform === "facebook") {
+      return call("getBusinessProfile", async (withFetch) => {
+        // docs.zernio.com/account-settings/get-facebook-page-info
+        const { data } = await this.zernio.accountsettings.getFacebookPageInfo(
+          withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+        );
+        const page = parse(
+          z.object({
+            about: nullable,
+            description: nullable,
+            website: nullable,
+            phone: nullable,
+            emails: z.array(z.string()).nullish(),
+            hours: z.record(z.string(), z.string()).nullish(),
+          }),
+          data,
+          "getBusinessProfile",
+        );
+        const about = [page.about, page.description].filter(Boolean).join("\n\n") || null;
+        return {
+          source: "facebook_page" as const,
+          name: null,
+          about,
+          website: page.website,
+          phone: page.phone,
+          emails: page.emails ?? [],
+          hours: page.hours ?? {},
+          captions: [],
+        };
+      });
+    }
+    if (input.platform !== "instagram" || !input.username) return null;
+    const username = input.username;
+    try {
+      return await call("getBusinessProfile", async (withFetch) => {
+        // docs.zernio.com/instagram/get-instagram-business-discovery: our own handle, looked up
+        // through our own account.
+        const { data } = await this.zernio.instagram.getInstagramBusinessDiscovery(
+          withFetch({
+            signal: input.signal,
+            path: { accountId: input.accountId },
+            query: { username, limit: input.captions ?? 25 },
+          }),
+        );
+        const found = parse(
+          z.object({
+            profile: z.object({ name: nullable, biography: nullable, website: nullable }),
+            media: z.array(z.object({ caption: nullable })).nullish(),
+          }),
+          data,
+          "getBusinessProfile",
+        );
+        return {
+          source: "instagram_profile" as const,
+          name: found.profile.name,
+          about: found.profile.biography,
+          website: found.profile.website,
+          phone: null,
+          emails: [],
+          hours: {},
+          captions: (found.media ?? []).flatMap((m) => (m.caption ? [m.caption] : [])),
+        };
+      });
+    } catch (error) {
+      // Connected with Instagram Login (instagram_business_discovery_requires_facebook_login), or
+      // a personal account: nothing we can read.
+      if (error instanceof SocialProviderError && error.details.status === 400) return null;
+      throw error;
+    }
   }
 
   async listReviews(input: {

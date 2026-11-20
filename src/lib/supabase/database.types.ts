@@ -425,6 +425,8 @@ export type Database = {
           created_at: string
           dismissed_at: string | null
           dismissed_by: string | null
+          facts_found: number
+          facts_found_at: string | null
           dm_offset: number
           dms_created: number
           finished_at: string | null
@@ -462,6 +464,8 @@ export type Database = {
           created_at?: string
           dismissed_at?: string | null
           dismissed_by?: string | null
+          facts_found?: number
+          facts_found_at?: string | null
           dm_offset?: number
           dms_created?: number
           finished_at?: string | null
@@ -498,6 +502,8 @@ export type Database = {
           created_at?: string
           dismissed_at?: string | null
           dismissed_by?: string | null
+          facts_found?: number
+          facts_found_at?: string | null
           dm_offset?: number
           dms_created?: number
           finished_at?: string | null
@@ -1117,34 +1123,59 @@ export type Database = {
       }
       kb_entries: {
         Row: {
+          checked_at: string | null
+          checked_by: string | null
           content: string
           created_at: string
           embedding: string | null
+          found_catch_up_id: string | null
+          found_kind: string | null
+          found_source: string | null
           id: string
+          needs_check: boolean
           tenant_id: string
           title: string
           updated_at: string
         }
         ComputedFields: never
         Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
           content: string
           created_at?: string
           embedding?: string | null
+          found_catch_up_id?: string | null
+          found_kind?: string | null
+          found_source?: string | null
           id?: string
+          needs_check?: boolean
           tenant_id: string
           title: string
           updated_at?: string
         }
         Update: {
+          checked_at?: string | null
+          checked_by?: string | null
           content?: string
           created_at?: string
           embedding?: string | null
+          found_catch_up_id?: string | null
+          found_kind?: string | null
+          found_source?: string | null
           id?: string
+          needs_check?: boolean
           tenant_id?: string
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "kb_entries_found_catch_up_id_fkey"
+            columns: ["found_catch_up_id"]
+            isOneToOne: false
+            referencedRelation: "catch_ups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "kb_entries_tenant_id_fkey"
             columns: ["tenant_id"]

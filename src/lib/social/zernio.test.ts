@@ -147,6 +147,83 @@ describe("ZernioSocialProvider", () => {
     expect(captured.filter((r) => r.url.pathname === "/api/v1/users")).toHaveLength(1);
   });
 
+  it("getBusinessProfile reads a Facebook Page's info (found facts, decision 7)", async () => {
+    respond = () =>
+      json({
+        about: "Specialty coffee in Makati.",
+        description: null,
+        website: "https://harbourbean.ph",
+        phone: "+63 917 555 0142",
+        emails: ["hi@harbourbean.ph"],
+        hours: { mon_1_open: "08:00", mon_1_close: "17:00" },
+      });
+    await expect(
+      provider.getBusinessProfile({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual({
+      source: "facebook_page",
+      name: null,
+      about: "Specialty coffee in Makati.",
+      website: "https://harbourbean.ph",
+      phone: "+63 917 555 0142",
+      emails: ["hi@harbourbean.ph"],
+      hours: { mon_1_open: "08:00", mon_1_close: "17:00" },
+      captions: [],
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_fb/facebook-page-info");
+  });
+
+  it("getBusinessProfile looks up an Instagram account's own handle, with recent captions", async () => {
+    respond = () =>
+      json({
+        profile: {
+          id: "1789",
+          username: "harbourbean",
+          name: "Harbour Bean Café",
+          biography: "Open daily 8–5 · Legaspi Village",
+          website: null,
+        },
+        media: [
+          { id: "m1", caption: "Iced latte ₱180 this week" },
+          { id: "m2", caption: null },
+        ],
+      });
+    const profile = await provider.getBusinessProfile({
+      accountId: "acc_ig",
+      platform: "instagram",
+      username: "harbourbean",
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_ig/instagram/business-discovery");
+    expect(captured[0].url.searchParams.get("username")).toBe("harbourbean");
+    expect(profile).toMatchObject({
+      source: "instagram_profile",
+      name: "Harbour Bean Café",
+      about: "Open daily 8–5 · Legaspi Village",
+      website: null,
+      captions: ["Iced latte ₱180 this week"],
+    });
+  });
+
+  it("getBusinessProfile: Instagram connected without Facebook Login has nothing to read", async () => {
+    respond = () =>
+      json(
+        {
+          error: "Business discovery requires Facebook Login",
+          code: "instagram_business_discovery_requires_facebook_login",
+        },
+        400,
+      );
+    await expect(
+      provider.getBusinessProfile({ accountId: "acc_ig", platform: "instagram", username: "x" }),
+    ).resolves.toBeNull();
+  });
+
+  it("getBusinessProfile: other platforms have none", async () => {
+    await expect(
+      provider.getBusinessProfile({ accountId: "acc_t", platform: "tiktok", username: "x" }),
+    ).resolves.toBeNull();
+    expect(captured).toHaveLength(0);
+  });
+
   it("listReviews asks for Google reviews and keeps their stars (T61)", async () => {
     respond = () =>
       json({

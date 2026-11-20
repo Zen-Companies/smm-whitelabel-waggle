@@ -1,4 +1,7 @@
-export { createKbEntry, deleteKbEntry, updateKbEntry } from "./actions";
+export { checkFoundFact, createKbEntry, deleteKbEntry, updateKbEntry } from "./actions";
+export { uncheckedFactsForDraft, uncheckedFactsForText } from "./unchecked-facts";
+export { factSpans, factUsed } from "@/lib/facts";
+export type { FactSpan, FoundKind, FoundSource, UncheckedFact } from "@/lib/facts";
 export type { KbFormState } from "./actions";
 export {
   EMBEDDING_DIMENSIONS,
@@ -25,4 +28,7 @@ export {
 } from "./retrieval";
 export type { KbMatch } from "./retrieval";
 export { saveAnswer } from "./answers";
+export { findFactsAfterConnect } from "./found-facts-run";
+export { FOUND_FACTS_PROMPT_VERSION } from "./found-facts";
+export type { FoundEntry } from "./found-facts";
 export type { SaveAnswerResult } from "./answers";

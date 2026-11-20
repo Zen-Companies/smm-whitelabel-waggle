@@ -357,6 +357,11 @@ Shell first, then the feature areas. Each task: tests first for pure logic, mock
 
 Questions for Zernio (open): whether a sequence step's delay counts from the previous step or from enrolment; Telegram DMs to the bot; HubSpot, Wix and Slack branding; creator pages and emails; the Google Drive picker on zernio.com; media and email-tracking domains.
 
+## Walter's flow (approved 20 Nov; spec walter-build-spec.md)
+
+- [x] **Build C. Found facts and the not-checked rule** (decision 7, branch `walter-facts`): facts Waggle finds on a newly connected Instagram/Facebook account are saved as business info marked not checked; auto-reply never sends a draft that used one; sending a reply that uses one checks it.
+      _Built 2026-11-20:_ migration `20261120213000_found_facts` (`kb_entries.needs_check`, `checked_at`, `checked_by`, `found_kind`, `found_source`, `found_catch_up_id`; `catch_ups.facts_found_at`, `facts_found`); `SocialProvider.getBusinessProfile` (Facebook Page info, Instagram business discovery on the account's own handle); `findFactsAfterConnect` (knowledge-base, from both job routes, one AI call per first connect, quotes checked against their source); policy reason `facts_unchecked`; sent replies check the facts they used (`found_fact_checked`); Business info shows **Not checked** with **Mark as checked**; `uncheckedFactsForDraft` for build B's highlights. See tdd.md "Found facts and the not-checked rule". Not run yet: `pnpm test:integration` / `test:db` (local Supabase was down; types hand-edited, `pnpm gen:types` to confirm), and a live run on a real connected account (needs an OK for real Zernio/AI calls).
+
 ## Next (held, after Phase 6)
 
 From the same review, agreed 2026-11-05 to hold until Phase 6 is done:

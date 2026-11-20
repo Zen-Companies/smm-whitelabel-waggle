@@ -165,6 +165,30 @@ export interface ProviderComment {
   ownerReplied?: boolean;
 }
 
+/**
+ * A connected account's public business info (found facts, decision 7, 20 Nov). Facebook:
+ * `GET /v1/accounts/{accountId}/facebook-page-info` (docs.zernio.com/account-settings/get-facebook-page-info).
+ * Instagram: `GET /v1/accounts/{accountId}/instagram/business-discovery?username=` on the
+ * account's own handle (docs.zernio.com/instagram/get-instagram-business-discovery), which only
+ * works for an account connected through Facebook Login. Neither gives an address or a category.
+ */
+export interface BusinessProfile {
+  source: "facebook_page" | "instagram_profile";
+  /** Instagram's display name; null on Facebook (the Page info has none). */
+  name: string | null;
+  /** Instagram biography, or the Page's About (short) and Additional information (long). */
+  about: string | null;
+  website: string | null;
+  /** Facebook only. */
+  phone: string | null;
+  /** Facebook only. */
+  emails: string[];
+  /** Facebook only: `{day}_{slot}_{open|close}` → "HH:MM", e.g. mon_1_open: "09:00". */
+  hours: Record<string, string>;
+  /** Instagram only: the newest posts' captions, newest first. */
+  captions: string[];
+}
+
 /** A review (recommendation) on a connected Facebook Page (T42). Ids are Zernio's. */
 export interface ProviderReview {
   id: string;
@@ -1226,6 +1250,21 @@ export interface SocialProvider {
       message: string;
     } & CallOptions,
   ): Promise<{ providerMessageId: string }>;
+  /**
+   * The account's public business info (decision 7). null when the platform has none we can
+   * read: not Facebook or Instagram, or an Instagram account connected with Instagram Login
+   * (business discovery needs Facebook Login; Zernio answers 400).
+   */
+  getBusinessProfile(
+    input: {
+      accountId: string;
+      platform: string;
+      /** Instagram: the account's own handle (business discovery looks up by username). */
+      username?: string | null;
+      /** Instagram: how many recent captions to read. */
+      captions?: number;
+    } & CallOptions,
+  ): Promise<BusinessProfile | null>;
   /**
    * An account's reviews, newest first (`GET /v1/inbox/reviews?platform=…&accountId=…`).
    * Facebook (T42) sends no review webhooks, so the job polls this; Google (T61) uses it to check

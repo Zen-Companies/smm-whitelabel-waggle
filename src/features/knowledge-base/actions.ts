@@ -8,6 +8,7 @@ import { z } from "zod";
 import { redraftAfterAnswerChange } from "@/features/catch-up";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
+import { markFactChecked } from "@/lib/facts";
 import { getLlmClientOrNull } from "@/lib/llm";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -279,6 +280,13 @@ export async function updateKbEntry(_prev: KbFormState, formData: FormData): Pro
     actor: tenant.userId,
     details: { kbEntryId: id },
   });
+  // Decision 7: saving a topic Waggle found on the account is the owner checking it.
+  await markFactChecked(getServiceClient(), {
+    tenantId: tenant.id,
+    kbEntryId: id,
+    userId: tenant.userId,
+    via: "edited",
+  });
   // Unchanged text keeps its embedding; changed text was cleared by the T1 trigger.
   if (data[0].embedding === null) embedLater(id);
   redraftLater(tenant.id, id, tenant.userId);
@@ -310,4 +318,25 @@ export async function deleteKbEntry(formData: FormData): Promise<void> {
   revalidatePath("/teach/business-info");
   revalidatePath("/teach");
   redirect("/teach/business-info");
+}
+
+/**
+ * Walter's flow (decision 7): the owner says a fact Waggle found on their account is right
+ * ("Mark as checked" in Business info). From then on auto-reply may use it. Audited
+ * `found_fact_checked` (via check_button); the service role writes it after the role check,
+ * since owners can only write a topic's title and text.
+ */
+export async function checkFoundFact(formData: FormData): Promise<void> {
+  const parsed = idSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return;
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) return;
+  await markFactChecked(getServiceClient(), {
+    tenantId: tenant.id,
+    kbEntryId: parsed.data.id,
+    userId: tenant.userId,
+    via: "check_button",
+  });
+  revalidatePath("/teach/business-info");
+  revalidatePath("/teach");
 }

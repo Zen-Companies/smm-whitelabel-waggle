@@ -20,7 +20,7 @@ import { sweepIdleOrgs } from "@/features/idle";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
-import { embedPendingEntries } from "@/features/knowledge-base";
+import { embedPendingEntries, findFactsAfterConnect } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
 import { getSocialProvider, resolveSocialProviderMode } from "@/lib/social";
@@ -88,6 +88,17 @@ export async function POST(request: Request): Promise<Response> {
       db,
       social: getSocialProvider,
       shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+    // Walter's flow (decision 7): once a catch-up has read the account, the business info found
+    // on it (profile, captions) is saved not checked. One AI call per first connect at most.
+    const foundFacts = await findFactsAfterConnect({
+      db,
+      llm,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 20_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
     });
     // First connect (20 Nov): catch-ups read and sorted get the reveal's drafts picked and their
     // top questions (one AI call each, cached).
@@ -225,6 +236,7 @@ export async function POST(request: Request): Promise<Response> {
       backfill,
       catchUp,
       catchUpFinish,
+      foundFacts,
       reviews,
       analytics,
       mcpCallsPruned,

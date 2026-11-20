@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { shortTime } from "@/components/app/time";
-import { buttonVariants } from "@/components/ui/button";
+import { StateLabel } from "@/components/app/state-mark";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { can } from "@/features/orgs";
 import { getCurrentTenant, RoleGate } from "@/features/tenants";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { cn } from "cn";
+import { checkFoundFact } from "./actions";
 import { dismissSuggestion } from "./gap-actions";
 import { GAP_HELPER_MIN_QUESTIONS } from "./gap-helper";
 import { loadGaps, loadPendingSuggestions } from "./gaps";
@@ -17,6 +19,13 @@ import { TeachHeader } from "@/components/app/teach-header";
 // Business info (design v2): topics with search and how often each was used | the one topic being
 // edited | questions customers asked that the info didn't answer, with "Add an answer" and the gap
 // helper's suggested topics (T33).
+
+/** Where Waggle found a not-checked topic (decision 7), in the owner's words. */
+const FOUND_ON: Record<string, string> = {
+  facebook_page: "your Facebook Page",
+  instagram_profile: "your Instagram profile",
+  post_caption: "your posts",
+};
 
 const weekAgo = () => new Date(Date.now() - 7 * 24 * 3_600_000).toISOString();
 
@@ -54,7 +63,7 @@ export async function KbList({
   const [{ data: entryRows }, { data: drafts }, gaps, suggestions] = await Promise.all([
     supabase
       .from("kb_entries")
-      .select("id, title, content, embedding, updated_at")
+      .select("id, title, content, embedding, updated_at, needs_check, found_source")
       .eq("tenant_id", tenant.id)
       .order("created_at"),
     supabase
@@ -128,7 +137,13 @@ export async function KbList({
                       <span className={e.id === selected?.id ? "font-semibold" : "font-medium"}>
                         {e.title}
                       </span>
-                      <span className="meta">{usageText(usage.get(e.id) ?? 0)}</span>
+                      {e.needs_check ? (
+                        <StateLabel state="waiting" className="meta">
+                          Not checked
+                        </StateLabel>
+                      ) : (
+                        <span className="meta">{usageText(usage.get(e.id) ?? 0)}</span>
+                      )}
                     </Link>
                   </li>
                 ))}
@@ -152,6 +167,27 @@ export async function KbList({
 
         <div className="min-h-0 overflow-y-auto">
           <RoleGate allowed={mayEdit} role={tenant.role} what="the business info">
+            {selected?.needs_check && (
+              <section
+                aria-label="Not checked"
+                className="card mb-4 flex flex-wrap items-center gap-x-4 gap-y-3 p-4"
+              >
+                <div className="flex min-w-0 flex-1 basis-60 flex-col gap-1">
+                  <StateLabel state="waiting">Not checked</StateLabel>
+                  <p className="text-ink-2 text-sm">
+                    Waggle found this on {FOUND_ON[selected.found_source ?? ""] ?? "your account"}.
+                    It won&apos;t use it in a reply on its own until you check it&apos;s right. Fix
+                    anything below and save, or:
+                  </p>
+                </div>
+                <form action={checkFoundFact}>
+                  <input type="hidden" name="id" value={selected.id} />
+                  <Button type="submit" variant="secondary">
+                    Mark as checked
+                  </Button>
+                </form>
+              </section>
+            )}
             {selected ? (
               <KbEntryForm
                 key={selected.id}

@@ -1,5 +1,6 @@
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { uncheckedFactIds } from "@/lib/facts";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { dmRepliesSince } from "./dm-replies";
 import {
@@ -61,7 +62,7 @@ export async function loadPolicyInput(
       .maybeSingle(),
     db
       .from("drafts")
-      .select("id, needs_human")
+      .select("id, needs_human, kb_entry_ids")
       .eq("item_id", itemId)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
@@ -78,6 +79,12 @@ export async function loadPolicyInput(
   ]);
 
   const last = conversation?.last_customer_message_at ?? null;
+  const autonomyMode = (setting?.mode as AutonomyMode | undefined) ?? "off";
+  // Decision 7: only auto mode looks at it (approve mode waits for the owner anyway).
+  const usesUncheckedFacts =
+    draft && autonomyMode === "auto"
+      ? (await uncheckedFactIds(db, draft.kb_entry_ids ?? [])).length > 0
+      : false;
   const dmRepliesSinceCustomer = await dmRepliesSince(db, {
     platform: row.social_accounts.platform,
     conversationId: row.conversation_id,
@@ -89,7 +96,7 @@ export async function loadPolicyInput(
     input: {
       item: { kind: row.kind },
       classification: { category: row.category, confidence: Number(row.confidence) },
-      draft: draft ? { needsHuman: draft.needs_human } : null,
+      draft: draft ? { needsHuman: draft.needs_human, usesUncheckedFacts } : null,
       tenant: {
         subscriptionStatus: row.tenants.subscription_status,
         confidenceThreshold: Number(row.tenants.confidence_threshold),
@@ -98,7 +105,7 @@ export async function loadPolicyInput(
       },
       account: row.social_accounts,
       // A missing row means the default for a new category: the safest mode.
-      autonomyMode: (setting?.mode as AutonomyMode | undefined) ?? "off",
+      autonomyMode,
       lastCustomerMessageAt: last ? new Date(last) : null,
       dmRepliesSinceCustomer,
       now,
