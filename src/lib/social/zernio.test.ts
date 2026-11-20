@@ -182,7 +182,10 @@ describe("ZernioSocialProvider", () => {
           biography: "Open daily 8–5 · Legaspi Village",
           website: null,
         },
-        media: [{ id: "m1", caption: "Iced latte ₱180 this week" }, { id: "m2", caption: null }],
+        media: [
+          { id: "m1", caption: "Iced latte ₱180 this week" },
+          { id: "m2", caption: null },
+        ],
       });
     const profile = await provider.getBusinessProfile({
       accountId: "acc_ig",

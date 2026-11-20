@@ -31,7 +31,8 @@ export interface FactText {
 }
 
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
-const LINK = /\b(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/[\w\-./?=&#%]*)?/gi;
+const LINK =
+  /\b(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}(?:\/[\w\-./?=&#%]*)?/gi;
 const PHONE = /\+?\d[\d\s().-]{5,}\d/g;
 const NUMBER = /(?<![\d.,:])(?:\d{1,3}(?:,\d{3})+|\d+)(?:[.:]\d+)?(?:\s?(?:am|pm)\b)?(?!\d)/gi;
 
@@ -119,9 +120,7 @@ const STOPWORDS = new Set(
 );
 
 function keyWords(text: string): Set<string> {
-  return new Set(
-    (text.toLowerCase().match(/\p{L}{4,}/gu) ?? []).filter((w) => !STOPWORDS.has(w)),
-  );
+  return new Set((text.toLowerCase().match(/\p{L}{4,}/gu) ?? []).filter((w) => !STOPWORDS.has(w)));
 }
 
 /**

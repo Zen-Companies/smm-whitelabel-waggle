@@ -4,6 +4,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { kickCatchUp, MAX_KICK_HOPS, runCatchUpSlice } from "@/features/catch-up";
 import { getProductionSteps } from "@/features/inbox";
+import { findFactsAfterConnect } from "@/features/knowledge-base";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
 import { getSocialProvider } from "@/lib/social";
@@ -46,6 +47,16 @@ export async function POST(request: Request): Promise<Response> {
           llm: getLlmClientOrNull(),
           steps: getProductionSteps(),
           deadline,
+          findFacts: (id, shouldContinue) =>
+            findFactsAfterConnect(
+              {
+                db: getServiceClient(),
+                llm: getLlmClientOrNull(),
+                social: getSocialProvider,
+                shouldContinue,
+              },
+              { tenantId: id, limit: 1 },
+            ).catch((e: unknown) => Sentry.captureException(e, { extra: { tenantId: id } })),
         },
         tenantId,
       );

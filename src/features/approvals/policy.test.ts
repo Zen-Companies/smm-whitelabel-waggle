@@ -463,9 +463,9 @@ describe("facts Waggle found but the owner hasn't checked (decision 7, 20 Nov)",
       decision: "escalate",
       reason: "dm_window_closed",
     });
-    expect(
-      run({ draft: { ...unchecked, needsHuman: true }, autonomyMode: "auto" }).decision,
-    ).toBe("escalate");
+    expect(run({ draft: { ...unchecked, needsHuman: true }, autonomyMode: "auto" }).decision).toBe(
+      "escalate",
+    );
   });
 
   it("checked facts send on their own as before", () => {

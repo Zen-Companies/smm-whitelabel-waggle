@@ -161,7 +161,12 @@ export async function previewMessage(
   // Decision 7: facts found on the account and not checked yet keep auto mode from sending.
   const usesUncheckedFacts =
     policyBase.autonomyMode === "auto"
-      ? (await uncheckedFactIds(deps.db, result.facts.map((f) => f.id))).length > 0
+      ? (
+          await uncheckedFactIds(
+            deps.db,
+            result.facts.map((f) => f.id),
+          )
+        ).length > 0
       : false;
   // A fresh message: a DM's 24-hour window has just opened.
   result.policy = policy({

@@ -3690,7 +3690,10 @@ export class ZernioSocialProvider implements SocialProvider {
     captions?: number;
     signal?: AbortSignal;
   }): Promise<BusinessProfile | null> {
-    const nullable = z.string().nullish().transform((v) => v?.trim() || null);
+    const nullable = z
+      .string()
+      .nullish()
+      .transform((v) => v?.trim() || null);
     if (input.platform === "facebook") {
       return call("getBusinessProfile", async (withFetch) => {
         // docs.zernio.com/account-settings/get-facebook-page-info
