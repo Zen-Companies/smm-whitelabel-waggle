@@ -31,10 +31,7 @@ export function billingBanner(input: {
 }
 
 export type Popup =
-  | { kind: "upgrade"; reason: OfferReason }
-  | { kind: "welcome" }
-  | { kind: "out" }
-  | null;
+  { kind: "upgrade"; reason: OfferReason } | { kind: "welcome" } | { kind: "out" } | null;
 
 /**
  * Pure: the pop-up to open on this page. A link's `?upgrade=<reason>` first (not on Your plan,

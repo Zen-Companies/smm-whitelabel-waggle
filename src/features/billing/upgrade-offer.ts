@@ -1,4 +1,13 @@
-import { dailyAmount, EXTRAS, PLAN_IDS, PLANS, TRIAL, type PaidPlanId, type Plan, type PlanId } from "./plans";
+import {
+  dailyAmount,
+  EXTRAS,
+  PLAN_IDS,
+  PLANS,
+  TRIAL,
+  type PaidPlanId,
+  type Plan,
+  type PlanId,
+} from "./plans";
 import { upgradeCopy, type OfferReason } from "./upgrade";
 
 // What the upgrade pop-up offers, by the plan the organization is on (Walter's flow, 20 Nov; the
@@ -155,7 +164,9 @@ export function upgradeOffer(
           ...base,
           extra: null,
           title:
-            via === "trial" ? `Try ${to.name} free for ${TRIAL.days} days.` : `Upgrade to ${to.name}.`,
+            via === "trial"
+              ? `Try ${to.name} free for ${TRIAL.days} days.`
+              : `Upgrade to ${to.name}.`,
           body: `${auto ? "Waggle answers the regular questions on its own" : "More room for Waggle"}: ${n(to.accounts)} accounts and ${n(to.replies)} AI replies a month.`,
         };
       default: {

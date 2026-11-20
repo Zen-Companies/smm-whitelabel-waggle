@@ -8,14 +8,7 @@ import { upgradeOffer, type UpgradeOffer } from "./upgrade-offer";
 // Numbers come from the plans as staff set them. Never sells what the plan already has. Pure.
 
 export type PerkKey =
-  | "autoReply"
-  | "leads"
-  | "followUps"
-  | "team"
-  | "room"
-  | "accounts"
-  | "clients"
-  | "setup";
+  "autoReply" | "leads" | "followUps" | "team" | "room" | "accounts" | "clients" | "setup";
 
 export interface WelcomePerk {
   key: PerkKey;
@@ -208,7 +201,8 @@ export function welcomeFor(
     return {
       eyebrow: `You’re on ${plans.team.name}`,
       title: "Everything Waggle can do",
-      pitch: "Your whole plan is on. Here’s what Waggle does for you, and who you can bring in to help.",
+      pitch:
+        "Your whole plan is on. Here’s what Waggle does for you, and who you can bring in to help.",
       perks: businessPerks(plans.team),
       now: null,
       offer: null,

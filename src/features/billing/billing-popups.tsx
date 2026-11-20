@@ -60,9 +60,11 @@ export function BillingPopups({
   const params = useSearchParams();
   const router = useRouter();
   // Storage reads happen after the page is on screen (server and first render agree).
-  const [stored, setStored] = useState<{ welcomeSeen: boolean; outDue: boolean; nudge: boolean }>(
-    { welcomeSeen: true, outDue: false, nudge: false },
-  );
+  const [stored, setStored] = useState<{ welcomeSeen: boolean; outDue: boolean; nudge: boolean }>({
+    welcomeSeen: true,
+    outDue: false,
+    nudge: false,
+  });
   const [local, setLocal] = useState<Popup>(null);
   const [closed, setClosed] = useState<string | null>(null);
   useEffect(() => {
@@ -71,7 +73,12 @@ export function BillingPopups({
     setStored({
       welcomeSeen: read(() => localStorage, STORAGE.welcomeSeen(org.orgId)) === "1",
       outDue: banner === "out" && !!outKey && !read(() => sessionStorage, outKey),
-      nudge: banner === "nudge" && nudgeDue(read(() => localStorage, STORAGE.nudgeHiddenAt), Date.now()),
+      nudge:
+        banner === "nudge" &&
+        nudgeDue(
+          read(() => localStorage, STORAGE.nudgeHiddenAt),
+          Date.now(),
+        ),
     });
   }, [org.orgId, banner, out]);
 
@@ -166,15 +173,7 @@ export function BillingPopups({
 }
 
 /** Out of replies, on every page until replies come back (decision 9): the honest line. */
-function OutBanner({
-  org,
-  out,
-  onOpen,
-}: {
-  org: OfferOrg;
-  out: OutOfReplies;
-  onOpen: () => void;
-}) {
+function OutBanner({ org, out, onOpen }: { org: OfferOrg; out: OutOfReplies; onOpen: () => void }) {
   const offer = upgradeOffer(org.current, "out", org.plans, {
     trial: org.trial,
     resetsOn: out.resetsOn,

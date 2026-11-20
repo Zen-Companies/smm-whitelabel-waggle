@@ -6,7 +6,8 @@ import { PlanBees } from "@/components/app/bee-plan";
 import { BeeDance } from "@/components/app/bee-setup";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { PlanActionState } from "./plan-actions";
-import { BUSINESS_CALL_URL, PROMOTED_PLAN, type PlanId } from "./plans";
+import { DayPill } from "./day-price";
+import { BUSINESS_CALL_URL, dailyAmount, PROMOTED_PLAN, TRIAL, type PlanId } from "./plans";
 
 type Action = (prev: PlanActionState, formData: FormData) => Promise<PlanActionState>;
 
@@ -69,9 +70,11 @@ export interface PlanCardData {
 }
 
 /**
- * The plans side by side (Free plan, approved 20 Nov): Free first, then Solo (promoted), Team
- * and Business. Business is by call only: its button opens Jason's booking page. The current plan
- * is in honey. Monthly or yearly is picked once above the cards.
+ * The plans (Walter's flow, 20 Nov): Free as a wide row on top, then Solo ("Most popular",
+ * PROMOTED_PLAN), Team and Business, each with its price a day. Business is by call only: its
+ * button opens Jason's booking page. The founding offer stays highlighted (decision 3). The
+ * current plan is in honey. Monthly or yearly is picked once above the cards. `trial`: the first
+ * paid plan starts with 7 days free, with a card.
  */
 export function PlanCards({
   orgId,
@@ -82,6 +85,8 @@ export function PlanCards({
   mayChange,
   foundingNote,
   founding = null,
+  trial = false,
+  freeLine = null,
   action,
 }: {
   orgId: string;
@@ -95,12 +100,54 @@ export function PlanCards({
   foundingNote: string | null;
   /** The founding offer, while spots are left, for owners who never had a paid plan. */
   founding?: FoundingOffer | null;
+  /** The organization's first paid plan starts with 7 days free. */
+  trial?: boolean;
+  /** Free's row when it's the plan: "12 of 100 AI replies used this month". */
+  freeLine?: string | null;
   action: Action;
 }) {
   const [interval, setInterval] = useState<"month" | "year">(currentInterval ?? "month");
   const offerPlan = founding ? plans.find((p) => p.id === founding.plan) : undefined;
+  const free = plans.find((p) => p.id === "free");
+  const paid = plans.filter((p) => p.id !== "free");
   return (
     <div className="flex flex-col gap-4">
+      {free && (
+        <section
+          aria-label={`${free.name} plan`}
+          className={cn(
+            "bg-surface relative flex flex-wrap items-center gap-x-6 gap-y-3 rounded-2xl border p-5",
+            current === "free"
+              ? "border-honey border-2 shadow-[0_6px_24px_rgba(246,178,27,0.18)]"
+              : "border-line",
+          )}
+        >
+          {current === "free" && (
+            <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+              Your plan
+            </span>
+          )}
+          <span className="flex flex-col">
+            <b className="font-display text-[22px] font-semibold">{free.name}</b>
+            <b className="text-lg font-semibold">$0</b>
+          </span>
+          <ul className="flex min-w-[200px] flex-1 flex-wrap gap-x-5 gap-y-1.5 text-sm">
+            {free.bullets.map((b) => (
+              <li key={b} className="flex items-start gap-2">
+                <span aria-hidden className="text-honey">
+                  ⬢
+                </span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+          <span className="meta">
+            {current === "free"
+              ? (freeLine ?? "No card, no time limit.")
+              : "Cancel your plan in Stripe to go back to Free."}
+          </span>
+        </section>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div
           role="radiogroup"
@@ -128,17 +175,18 @@ export function PlanCards({
       {founding && offerPlan && (
         // Founding offer, highlighted (approved 20 Nov, canvas "Founding offer, highlighted").
         <div className="border-honey bg-honey-tint flex flex-wrap items-center justify-between gap-4 rounded-2xl border-[1.5px] px-5 py-4">
-          <span className="flex flex-wrap items-center gap-3.5">
+          <span className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3.5">
             <span className="bg-honey text-ink rounded-full px-2.5 py-1 text-xs font-bold tracking-wide uppercase">
               Founding offer
             </span>
-            <span className="flex flex-col gap-0.5">
+            <span className="flex min-w-[200px] flex-1 flex-col gap-0.5">
               <b className="font-display text-lg font-semibold">
                 {offerPlan.name} for ${founding.monthlyUsd} a month, your first {founding.months}{" "}
                 months
               </b>
               <span className="text-ink-2 text-sm">
                 Then ${offerPlan.monthlyUsd}. Only for the first {founding.spots} businesses.
+                {trial && ` Starts with ${TRIAL.days} days free.`}
               </span>
             </span>
           </span>
@@ -161,27 +209,24 @@ export function PlanCards({
           )}
         </div>
       )}
-      <div className="grid gap-4 pt-3 md:grid-cols-2 xl:grid-cols-4">
-        {plans.map((p) => {
-          const free = p.id === "free";
-          const byCall = p.id === "team" && !p.forSale;
-          const isCurrent = free
-            ? current === "free"
-            : live && current === p.id && currentInterval === interval;
-          const price = free
-            ? "$0 forever"
-            : interval === "year" && p.yearlyUsd !== null
-              ? `$${p.yearlyUsd} a year`
-              : `$${p.monthlyUsd} a month`;
-          const noYearly = !free && interval === "year" && p.yearlyUsd === null;
+      <div className="grid gap-4 pt-3 md:grid-cols-3">
+        {paid.map((p) => {
+          const byCall = !p.forSale && p.id === "team";
+          const isCurrent = live && current === p.id && currentInterval === interval;
+          const yearly = interval === "year" && p.yearlyUsd !== null;
+          const noYearly = interval === "year" && p.yearlyUsd === null;
           const promoted = p.id === PROMOTED_PLAN && !live;
           const offer = !!founding && founding.plan === p.id && interval === "month";
+          // What the card says it costs, and the same as a price a day (decision 4).
+          const shownUsd =
+            offer && founding ? founding.monthlyUsd : yearly ? p.yearlyUsd! : p.monthlyUsd;
+          const price = yearly ? `$${shownUsd} a year` : `$${shownUsd} a month`;
           return (
             <div
               key={p.id}
               className={cn(
                 "bg-surface relative flex flex-col gap-2.5 rounded-2xl border p-5",
-                isCurrent || offer
+                isCurrent || offer || promoted
                   ? "border-honey border-2 shadow-[0_6px_24px_rgba(246,178,27,0.18)]"
                   : "border-line",
               )}
@@ -196,8 +241,8 @@ export function PlanCards({
                 </span>
               ) : (
                 promoted && (
-                  <span className="bg-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white">
-                    Most picked
+                  <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                    Most popular
                   </span>
                 )
               )}
@@ -205,8 +250,8 @@ export function PlanCards({
               <b className="font-display text-[22px] font-semibold">{p.name}</b>
               {byCall ? (
                 <span className="flex flex-col">
-                  <b className="text-lg font-semibold">Priced for you</b>
-                  <span className="meta">10 or more accounts, after a short call</span>
+                  <b className="text-lg font-semibold">Custom</b>
+                  <span className="meta">10 or more accounts, priced after a short call</span>
                 </span>
               ) : offer && founding ? (
                 <span className="flex flex-col gap-0.5">
@@ -219,9 +264,13 @@ export function PlanCards({
                   </span>
                 </span>
               ) : (
-                <b className="text-lg font-semibold">
-                  {noYearly ? `$${p.monthlyUsd} a month` : price}
-                </b>
+                <b className="text-lg font-semibold">{price}</b>
+              )}
+              {!byCall && <DayPill amount={dailyAmount(shownUsd, yearly ? "year" : "month")} />}
+              {!byCall && trial && !live && p.forSale && !noYearly && (
+                <span className="meta">
+                  {TRIAL.days} days free, then {price}
+                </span>
               )}
               <ul className="flex flex-col gap-2 text-sm">
                 {p.bullets.map((b) => (
@@ -235,9 +284,7 @@ export function PlanCards({
               </ul>
               <div className="mt-auto pt-2">
                 {isCurrent ? (
-                  <span className="meta">
-                    {free ? "You’re on Free. No card, no time limit." : "You’re on this plan."}
-                  </span>
+                  <span className="meta">You’re on this plan.</span>
                 ) : byCall ? (
                   <a
                     href={BUSINESS_CALL_URL}
@@ -247,8 +294,6 @@ export function PlanCards({
                   >
                     Book a call
                   </a>
-                ) : free ? (
-                  <span className="meta">Cancel your plan in Stripe to go back to Free.</span>
                 ) : !p.forSale ? (
                   <span className="meta">Not for sale right now.</span>
                 ) : noYearly ? (
@@ -257,7 +302,14 @@ export function PlanCards({
                   <PlanButton
                     action={action}
                     fields={{ orgId, plan: p.id, interval }}
-                    label={live ? `Move to ${p.name}` : `Upgrade to ${p.name}`}
+                    label={
+                      live
+                        ? `Move to ${p.name}`
+                        : trial
+                          ? `Start ${TRIAL.days} days free`
+                          : `Upgrade to ${p.name}`
+                    }
+                    pendingLabel={live ? "Switching…" : "Starting…"}
                     honey={promoted}
                     className="items-start"
                   />
@@ -269,6 +321,12 @@ export function PlanCards({
           );
         })}
       </div>
+      {trial && !live && (
+        <p className="meta">
+          Paid plans start with {TRIAL.days} days free. A card starts your trial; cancel before day{" "}
+          {TRIAL.days} and you pay nothing.
+        </p>
+      )}
     </div>
   );
 }

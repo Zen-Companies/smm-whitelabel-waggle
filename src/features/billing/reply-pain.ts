@@ -25,7 +25,10 @@ export function painTiles(p: ReplyPain | null | undefined): PainTile[] {
   if (!p) return [];
   const tiles: PainTile[] = [];
   if (p.perDay >= 1) {
-    tiles.push({ n: `~${p.perDay.toLocaleString("en-US")}`, text: "messages a day from customers" });
+    tiles.push({
+      n: `~${p.perDay.toLocaleString("en-US")}`,
+      text: "messages a day from customers",
+    });
   }
   if (p.waiting > 0) {
     tiles.push({ n: p.waiting.toLocaleString("en-US"), text: "waiting for a reply right now" });
