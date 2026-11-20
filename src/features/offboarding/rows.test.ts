@@ -40,10 +40,10 @@ describe("failures", () => {
     new SocialProviderError("x", { status, ambiguous: status === undefined });
 
   it("describeFailure names who said what", () => {
-    expect(describeFailure(err())).toBe("Zernio didn't answer");
-    expect(describeFailure(err(503))).toBe("Zernio didn't answer");
-    expect(describeFailure(err(429))).toBe("Zernio asked us to slow down");
-    expect(describeFailure(err(400))).toBe("Zernio refused it (400)");
+    expect(describeFailure(err())).toBe("our provider didn't answer");
+    expect(describeFailure(err(503))).toBe("our provider didn't answer");
+    expect(describeFailure(err(429))).toBe("our provider asked us to slow down");
+    expect(describeFailure(err(400))).toBe("our provider refused it (400)");
     expect(describeFailure(new Error("db"))).toBe("something went wrong on our side");
   });
 
@@ -55,7 +55,7 @@ describe("failures", () => {
         { what: "profile", error: err(400) },
       ]),
     ).toBe(
-      "Facebook didn't disconnect: Zernio didn't answer. The Zernio profile wasn't deleted: Zernio refused it (400).",
+      "Facebook didn't disconnect: our provider didn't answer. The provider profile wasn't deleted: our provider refused it (400).",
     );
   });
 });

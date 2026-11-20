@@ -16,10 +16,10 @@ export const CLASSIFIER_CHOICES = ["production", "jev", "jev-openrouter", "llm"]
 export type ClassifierChoice = (typeof CLASSIFIER_CHOICES)[number];
 
 export const CLASSIFIER_LABELS: Record<ClassifierChoice, string> = {
-  production: "Jev, LLM as fallback (production)",
-  jev: "Jev only (JEV_API_URL)",
-  "jev-openrouter": "Jev 1.13 via OpenRouter",
-  llm: "LLM classifier only",
+  production: "Question set, sorting prompt as backup (live)",
+  jev: "Question set only",
+  "jev-openrouter": "Question set, hosted model",
+  llm: "Sorting prompt only",
 };
 
 export const CONTEXT_MAX = 1000;

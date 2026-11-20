@@ -40,9 +40,9 @@ export { platformLabel };
 export function describeFailure(error: unknown): string {
   if (error instanceof SocialProviderError) {
     const { status } = error.details;
-    if (status === undefined || status >= 500) return "Zernio didn't answer";
-    if (status === 429) return "Zernio asked us to slow down";
-    return `Zernio refused it (${status})`;
+    if (status === undefined || status >= 500) return "our provider didn't answer";
+    if (status === 429) return "our provider asked us to slow down";
+    return `our provider refused it (${status})`;
   }
   return "something went wrong on our side";
 }
@@ -59,7 +59,7 @@ export function issueText(failures: readonly Failure[]): string | null {
   return failures
     .map((f) =>
       f.what === "profile"
-        ? `The Zernio profile wasn't deleted: ${describeFailure(f.error)}.`
+        ? `The provider profile wasn't deleted: ${describeFailure(f.error)}.`
         : `${f.what} didn't disconnect: ${describeFailure(f.error)}.`,
     )
     .join(" ");

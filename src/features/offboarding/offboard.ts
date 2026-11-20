@@ -113,7 +113,7 @@ export async function offboardBrand(
     p_actor: input.actorId,
   });
   if (error) throw new Error(`offboard_tenant failed: ${error.message}`);
-  if (!purgeAfter) return { error: "That brand isn't active any more. Refresh the page." };
+  if (!purgeAfter) return { error: "That business isn't active any more. Refresh the page." };
   const failures = await releaseAccounts(deps, input.tenantId, input.actorId);
   const issue = await recordIssue(deps, input.tenantId, input.actorId, failures);
   return { ok: true, purgeAfter, issue };
@@ -129,7 +129,7 @@ export async function retryOffboarding(
     .select("offboarded_at, purged_at")
     .eq("id", input.tenantId)
     .maybeSingle();
-  if (!t?.offboarded_at || t.purged_at) return { error: "That brand isn't offboarded." };
+  if (!t?.offboarded_at || t.purged_at) return { error: "That business isn't offboarded." };
   const failures = await releaseAccounts(deps, input.tenantId, input.actorId);
   const issue = await recordIssue(deps, input.tenantId, input.actorId, failures);
   // A due hard delete that failed is picked up by the next job run.
@@ -146,7 +146,7 @@ export async function restoreBrand(
     p_actor: input.actorId,
   });
   if (error) throw new Error(`restore_tenant failed: ${error.message}`);
-  return data ? { ok: true } : { error: "That brand can't be restored any more." };
+  return data ? { ok: true } : { error: "That business can't be restored any more." };
 }
 
 /** Hard deletes tried at most this often per brand (a failing Zernio isn't hammered). */

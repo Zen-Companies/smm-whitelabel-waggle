@@ -143,7 +143,7 @@ export function BatchCompare({
                 </option>
               ))}
             </select>
-            <span className="meta">Repository sets use their own business name and profile.</span>
+            <span className="meta">Built-in sets use their own business name and profile.</span>
           </div>
         </div>
 
@@ -157,11 +157,11 @@ export function BatchCompare({
             {count} messages × 2 setups = {estimate.calls} classifier calls (classification only).
           </span>
           <span className="text-ink-2">
-            OpenRouter requests: {estimate.openRouterCalls}
+            AI requests from the free allowance: {estimate.openRouterCalls}
             {estimate.openRouterIfJevDown > estimate.openRouterCalls
-              ? `, up to ${estimate.openRouterIfJevDown} if Jev is down (production falls back to the LLM)`
+              ? `, up to ${estimate.openRouterIfJevDown} if the question set is down (live falls back to the sorting prompt)`
               : ""}
-            . Free without credits: about 50 a day. Jev on jevos is free.
+            . The allowance is about 50 a day; the question set itself is free.
           </span>
           {needsConfirm && (
             <label className="text-honey-text flex min-h-11 items-center gap-2 font-medium">
@@ -171,7 +171,7 @@ export function BatchCompare({
                 onChange={(e) => setConfirmed(e.target.checked)}
                 className="size-4"
               />
-              This can go over today&apos;s free OpenRouter requests. Run anyway.
+              This may use up today&apos;s free AI allowance. Run anyway.
             </label>
           )}
         </div>

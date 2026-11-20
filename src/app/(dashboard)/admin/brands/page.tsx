@@ -10,7 +10,7 @@ export default function Page(props: PageProps<"/admin/brands">) {
       <div className="flex flex-col gap-1">
         <h1 className="page-title">Brands</h1>
         <p className="text-ink-2">
-          Offboard a brand that is leaving Waggle, or bring one back within 3 months.
+          Offboard a business that is leaving Waggle, or bring one back within 3 months.
         </p>
       </div>
       <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>

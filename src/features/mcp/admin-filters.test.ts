@@ -5,7 +5,13 @@ import {
   parseActivityFilters,
   parseDailyCap,
   percentile,
+  seconds,
 } from "./admin-filters";
+
+it("seconds: one decimal", () => {
+  expect(seconds(812)).toBe("0.8 s");
+  expect(seconds(12_340)).toBe("12.3 s");
+});
 
 const TOOLS = ["list_inbox", "approve_reply"];
 const BRAND = "6f1c2a10-1111-4222-8333-444455556666";

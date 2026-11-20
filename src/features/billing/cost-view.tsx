@@ -3,6 +3,7 @@ import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
 import { CapForm } from "./cap-form";
 import { loadCostView } from "./costs";
+import { purposeLabel, statusLabel } from "./cost-labels";
 import { requirePermission } from "@/features/staff";
 
 const usd = (n: number | null, digits = 4) =>
@@ -28,7 +29,7 @@ export async function CostView() {
     loadAiSpend(db, new Date()),
   ]);
   const defaultCap = defaultAiCap();
-  const LEVEL = { ok: "", warn: "Over 80%", reached: "Cap reached: not drafting" } as const;
+  const LEVEL = { ok: "", warn: "Over 80%", reached: "Cap reached, not drafting" } as const;
 
   return (
     <div className="flex flex-col gap-8">
@@ -73,6 +74,13 @@ export async function CostView() {
               </tr>
             </thead>
             <tbody className="tabular-nums">
+              {view.tenants.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="meta p-3">
+                    No businesses yet.
+                  </td>
+                </tr>
+              )}
               {view.tenants.map((t) => (
                 <tr key={t.tenantId} className="border-b last:border-0">
                   <td className="p-3">{t.name}</td>
@@ -100,10 +108,10 @@ export async function CostView() {
           Monthly AI cap
         </h2>
         <p className="meta">
-          Live and practice calls this calendar month (UTC); lab calls don&apos;t count. At the cap,
-          messages are still sorted but no reply is drafted; they go to For you. Blank uses the
-          default (${defaultCap}, AI_MONTHLY_CAP_USD).
+          AI spend this calendar month, not counting the Lab. At the cap, messages are still sorted
+          but no reply is drafted; they go to For you.
         </p>
+        <p className="meta">Default cap: ${defaultCap} a month</p>
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="meta text-left">
@@ -115,6 +123,13 @@ export async function CostView() {
               </tr>
             </thead>
             <tbody className="tabular-nums">
+              {view.tenants.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="meta p-3">
+                    No businesses yet.
+                  </td>
+                </tr>
+              )}
               {view.tenants.map((t) => {
                 const s = spend.get(t.tenantId);
                 if (!s) return null;
@@ -164,6 +179,13 @@ export async function CostView() {
               </tr>
             </thead>
             <tbody className="tabular-nums">
+              {view.items.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="meta p-3">
+                    No messages in the last 30 days.
+                  </td>
+                </tr>
+              )}
               {view.items.map((i) => (
                 <tr key={i.itemId} className="border-b last:border-0">
                   <td className="p-3">{date(i.receivedAt)}</td>
@@ -172,9 +194,10 @@ export async function CostView() {
                     {i.kind === "dm" ? "DM" : i.kind === "review" ? "Review" : "Comment"}
                     {i.category ? ` · ${i.category}` : ""}
                   </td>
-                  <td className="p-3">{i.status.replace("_", " ")}</td>
+                  <td className="p-3">{statusLabel(i.status)}</td>
                   <td className="p-3">
-                    {i.aiCalls} {i.purposes.length ? `(${i.purposes.join(", ")})` : ""}
+                    {i.aiCalls}{" "}
+                    {i.purposes.length ? `(${i.purposes.map(purposeLabel).join(", ")})` : ""}
                   </td>
                   <td className="p-3 text-right">{usd(i.aiCostUsd, 5)}</td>
                 </tr>

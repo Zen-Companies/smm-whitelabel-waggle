@@ -72,6 +72,11 @@ export function changeVsBefore(now: number, before: number): string | null {
   return `${pct >= 0 ? "+" : ""}${pct}%`;
 }
 
+/** A duration in seconds with one decimal: 812 → "0.8 s". */
+export function seconds(ms: number): string {
+  return `${(ms / 1000).toFixed(1)} s`;
+}
+
 /** The daily-limit field on Switches: blank = the default; else a whole number 1–10,000. */
 export function parseDailyCap(
   raw: FormDataEntryValue | null,

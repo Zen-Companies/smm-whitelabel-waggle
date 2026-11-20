@@ -51,7 +51,7 @@ export function ActivityFilterBar({
       </span>
       <span className="flex flex-col gap-1">
         <label htmlFor="f-brand" className={label}>
-          Brand
+          Business
         </label>
         <select
           id="f-brand"
@@ -59,7 +59,7 @@ export function ActivityFilterBar({
           value={filters.brand ?? ""}
           onChange={(e) => go({ brand: e.target.value || null })}
         >
-          <option value="">All brands</option>
+          <option value="">All businesses</option>
           {brands.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name}

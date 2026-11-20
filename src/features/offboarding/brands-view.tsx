@@ -14,7 +14,7 @@ const FILTER_LABELS: Record<BrandFilter, string> = {
 
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
-/** Staff "Brands" (T21, design v3): offboard a brand, restore one within 3 months. */
+/** Staff "Brands" (T21, design v3): offboard a business, restore one within 3 months. */
 export async function BrandsView({
   searchParams,
 }: {
@@ -39,14 +39,14 @@ export async function BrandsView({
       <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
         <form className="flex flex-[0_1_320px] flex-col gap-1" role="search">
           <label htmlFor="brand-q" className="text-[13px] font-semibold">
-            Find a brand
+            Find a business
           </label>
           <input
             id="brand-q"
             name="q"
             type="search"
             defaultValue={q}
-            placeholder="Brand name"
+            placeholder="Business name"
             className="field"
           />
           {filter !== "all" && <input type="hidden" name="show" value={filter} />}
@@ -74,7 +74,7 @@ export async function BrandsView({
           <thead className="meta text-left text-xs">
             <tr className="border-line border-b">
               <th scope="col" className={th}>
-                Brand
+                Business
               </th>
               <th scope="col" className={th}>
                 Owner
@@ -86,6 +86,9 @@ export async function BrandsView({
                 Accounts
               </th>
               <th scope="col" className={th}>
+                Test
+              </th>
+              <th scope="col" className={th}>
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
@@ -93,15 +96,11 @@ export async function BrandsView({
           <BrandRows rows={rows} />
         </table>
       </div>
-      {!rows.length && <p className="text-ink-2 py-6 text-center">No brands match.</p>}
+      {!rows.length && <p className="meta">No businesses match.</p>}
       {more && (
         <p className="meta">Showing the first {BRANDS_PAGE} by name. Search to find others.</p>
       )}
-      <p className="meta">
-        Only admins can offboard or restore. Owners who want to leave email
-        help@zencompaniesinc.com. Every step is written to the audit log; the deletion after 3
-        months runs on its own.
-      </p>
+      <p className="meta">Owners who want to leave email help@zencompaniesinc.com.</p>
     </section>
   );
 }

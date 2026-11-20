@@ -3,6 +3,7 @@
 import { Fragment, useState } from "react";
 import { Chip } from "@/components/app/chip";
 import type { ActivityRow } from "./admin";
+import { seconds } from "./admin-filters";
 
 const time = (iso: string) =>
   new Date(iso).toLocaleString(undefined, {
@@ -31,13 +32,13 @@ export function ActivityRows({ rows }: { rows: ActivityRow[] }) {
         <thead className="meta text-left text-xs">
           <tr className="border-line border-b">
             <th scope="col" className={th}>
-              Time
+              When
             </th>
             <th scope="col" className={th}>
               Tool
             </th>
             <th scope="col" className={th}>
-              Brand
+              Business
             </th>
             <th scope="col" className={th}>
               User
@@ -49,7 +50,7 @@ export function ActivityRows({ rows }: { rows: ActivityRow[] }) {
               Result
             </th>
             <th scope="col" className={`${th} text-right`}>
-              ms
+              Time
             </th>
           </tr>
         </thead>
@@ -80,7 +81,9 @@ export function ActivityRows({ rows }: { rows: ActivityRow[] }) {
                   <td className={td}>
                     <Result row={r} />
                   </td>
-                  <td className={`${td} text-right tabular-nums`}>{r.latencyMs ?? "–"}</td>
+                  <td className={`${td} text-right tabular-nums`}>
+                    {r.latencyMs === null ? "–" : seconds(r.latencyMs)}
+                  </td>
                 </tr>
                 {expanded && (
                   <tr id={`args-${r.id}`} className="border-subtle border-b">

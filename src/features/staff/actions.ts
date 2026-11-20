@@ -69,7 +69,7 @@ export async function switchBrand(_prev: StaffFormState, f: FormData): Promise<S
   const key = f.get("key");
   if (!isBrandSwitchKey(key)) return { error: "Not available." };
   const tenantId = z.uuid().safeParse(f.get("tenantId"));
-  if (!tenantId.success) return { error: "That brand wasn't found." };
+  if (!tenantId.success) return { error: "That business wasn't found." };
   const done = await setBrandSwitch(
     getServiceClient(),
     access.userId,
@@ -77,7 +77,7 @@ export async function switchBrand(_prev: StaffFormState, f: FormData): Promise<S
     tenantId.data,
     f.get("on") === "true",
   );
-  if (!done) return { error: "That brand wasn't found." };
+  if (!done) return { error: "That business wasn't found." };
   revalidatePath("/admin/switches");
   return { saved: true };
 }
