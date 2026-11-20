@@ -19,6 +19,7 @@ import {
   setupEntry,
   stepPosition,
   stepsDone,
+  visibleScreens,
   type SetupScreen,
 } from "./flow";
 import { HowScreen } from "./how-screen";
@@ -26,6 +27,7 @@ import { LostDmList } from "./lost-list";
 import { NameScreen } from "./name-screen";
 import { flowFactsOf, loadSetupData, loadSetupSending, type SetupData } from "./setup-data";
 import { PRIMARY, ScreenButton, ScreenFooter, ScreenTitle } from "./setup-frame";
+import { ScreenPager } from "./screen-pager";
 import { SetupFrame } from "./setup-shell";
 import { Exchange, SendingCard } from "./setup-parts";
 import { restTitle, topicsLine } from "./topics";
@@ -235,6 +237,8 @@ export async function SetupView({
   }
   const db = getServiceClient();
   const now = new Date();
+  const sendingLoad = loadSetupSending(db, tenant.id);
+  sendingLoad.catch(() => undefined); // awaited below on step 3; not an unhandled rejection
   const [user, firstLoad] = await Promise.all([
     getCurrentUser(),
     loadSetupData(db, { tenantId: tenant.id, organizationId: tenant.organizationId, now }),
@@ -299,9 +303,43 @@ export async function SetupView({
     );
   }
 
+  // Step 2 (missed, wanted, replies): every screen at once, switched in place (no server trip).
+  if (STEP2.has(screen)) {
+    const step2Screen = (s: SetupScreen) => {
+      const p = stepPosition(s, facts);
+      const next = nextScreen(s, facts);
+      return (
+        <SetupFrame step={2} done={done} sublabel={`${p.sublabel} · ${p.index} of ${p.count}`}>
+          {s === "missed" && <MissedScreen d={d} firstName={firstName} />}
+          {s === "wanted" && <WantedScreen d={d} now={now} />}
+          {s === "replies" && <RepliesScreen d={d} />}
+          <ScreenFooter
+            back={previousScreen(s, facts)}
+            index={p.index}
+            count={p.count}
+            primary={
+              next ? (
+                <ScreenButton to={next} className={PRIMARY}>
+                  {NEXT_LABEL[next] ?? "Next"}
+                </ScreenButton>
+              ) : null
+            }
+          />
+        </SetupFrame>
+      );
+    };
+    const shown = visibleScreens(facts).filter((s) => STEP2.has(s));
+    return (
+      <ScreenPager
+        initial={screen}
+        panels={shown.map((s) => ({ screen: s, node: step2Screen(s) }))}
+      />
+    );
+  }
+
   const listed = [...d.batches.money, ...d.batches.rest];
   const meter = { approved: listed.filter((r) => r.approved).length, total: listed.length };
-  const sending = batchProgress(await loadSetupSending(db, tenant.id));
+  const sending = batchProgress(await sendingLoad);
   const sendingCard =
     sending.total > 0 ? (
       <SendingCard initial={sending} spacingMs={SEND_SPACING_MS} platform={d.platform} />
@@ -309,7 +347,7 @@ export async function SetupView({
   const nav = { back, index: pos.index, count: pos.count };
   const step: 2 | 3 = pos.step;
 
-  let body: React.ReactNode;
+  let body: React.ReactNode = null;
   if (screen === "name") {
     body = <NameScreen platform={d.platform} count={pos.count} />;
   } else if (screen === "money" || screen === "quick") {
@@ -353,24 +391,6 @@ export async function SetupView({
         top={sendingCard}
         {...nav}
       />
-    );
-  } else {
-    body = (
-      <>
-        {screen === "missed" && <MissedScreen d={d} firstName={firstName} />}
-        {screen === "wanted" && <WantedScreen d={d} now={now} />}
-        {screen === "replies" && <RepliesScreen d={d} />}
-        <ScreenFooter
-          {...nav}
-          primary={
-            after ? (
-              <ScreenButton to={after} className={PRIMARY}>
-                {NEXT_LABEL[after] ?? "Next"}
-              </ScreenButton>
-            ) : null
-          }
-        />
-      </>
     );
   }
 

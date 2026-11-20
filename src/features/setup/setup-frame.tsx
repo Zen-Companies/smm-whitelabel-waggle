@@ -1,8 +1,8 @@
 import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "cn";
-import { goToSetupScreen } from "./actions";
 import { SETUP_STEPS, type SetupScreen } from "./flow";
+import { ScreenButton } from "./screen-pager";
 
 // The frame every setup screen sits in (Walter's flow, paged; board approved 20 Nov): the 3 steps
 // on top, "What you missed · 2 of 3" under them, Need help? and Finish later as the way out, the
@@ -81,25 +81,7 @@ export function Dots({ index, count }: { index: number; count: number }) {
   );
 }
 
-/** A setup move as a form: remembers the screen, then opens it (no prefetch can move anyone). */
-export function ScreenButton({
-  to,
-  className,
-  children,
-}: {
-  to: SetupScreen;
-  className: string;
-  children: ReactNode;
-}) {
-  return (
-    <form action={goToSetupScreen} className="contents">
-      <input type="hidden" name="screen" value={to} />
-      <button type="submit" className={className}>
-        {children}
-      </button>
-    </form>
-  );
-}
+export { ScreenButton } from "./screen-pager";
 
 export const PRIMARY =
   "bg-honey hover:bg-honey-hover inline-flex min-h-11 items-center justify-center rounded-xl px-4 text-sm font-semibold text-[#17140F] disabled:opacity-60";
