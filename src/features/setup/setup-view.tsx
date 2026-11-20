@@ -603,7 +603,10 @@ export async function SetupView({
                           </span>
                           <span className="text-ink-2 text-sm">{m.desc}</span>
                           {locked && (
-                            <Link href={upgradeHref("auto_reply")} className="action-link text-sm">
+                            <Link
+                              href={upgradeHref("auto_reply")}
+                              className="action-link with-arrow mt-1 self-start text-sm"
+                            >
                               {upgradeLabel("auto_reply")}
                             </Link>
                           )}
