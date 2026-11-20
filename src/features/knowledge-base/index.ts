@@ -1,4 +1,7 @@
-export { createKbEntry, deleteKbEntry, updateKbEntry } from "./actions";
+export { checkFoundFact, createKbEntry, deleteKbEntry, updateKbEntry } from "./actions";
+export { uncheckedFactsForDraft, uncheckedFactsForText } from "./unchecked-facts";
+export { factSpans, factUsed } from "@/lib/facts";
+export type { FactSpan, FoundKind, FoundSource, UncheckedFact } from "@/lib/facts";
 export type { KbFormState } from "./actions";
 export {
   EMBEDDING_DIMENSIONS,
