@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import type { ServiceClient } from "@/lib/supabase/service";
 
-export type AiPurpose = "classify" | "draft" | "embed" | "agent";
+export type AiPurpose = "classify" | "draft" | "embed" | "agent" | "setup";
 
 /** live: the inbox pipeline. lab: operator experiments. practice: an owner trying a message. */
 export type AiUsageSource = "live" | "lab" | "practice";

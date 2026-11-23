@@ -145,7 +145,7 @@ async function buildOne(
   const kind = kindFromProfile(tenant?.business_profile ?? "");
   const result = await llm.generateObject({
     tenantId,
-    purpose: "classify",
+    purpose: "setup",
     schema: aiProfileSchema,
     system: profileSystemPrompt(),
     prompt: profileUserPrompt({
@@ -316,7 +316,7 @@ async function buildAtConnect(
   const bio = [info.bio, info.description].filter(Boolean).join("\n\n") || null;
   const result = await llm.generateObject({
     tenantId,
-    purpose: "classify",
+    purpose: "setup",
     schema: aiProfileSchema,
     system: profileSystemPrompt(),
     prompt: profileUserPrompt({
