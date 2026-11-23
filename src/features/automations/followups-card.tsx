@@ -1,10 +1,10 @@
 "use client";
 
 import { Check } from "lucide-react";
-import Link from "next/link";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UpgradeLink } from "@/features/billing/client";
 import { saveFollowupsAction, type AutomationFormState } from "./actions";
 import type { SequenceTemplate } from "./sequences-section";
 
@@ -47,12 +47,13 @@ export function FollowupsCard({
           </span>
         </div>
         <p className="text-ink-2 text-sm">
-          On Solo you follow up yourself. Team and Business send your follow-up on their own when a
-          lead goes quiet.
+          On your plan you follow up yourself. Team and Business send your follow-up on their own
+          when a lead goes quiet.
         </p>
-        <Link href="/plan" className="action-link w-fit text-sm">
-          See the plans
-        </Link>
+        {/* Opens the Team pop-up over this page (23 Nov), never a trip to the plans. */}
+        <UpgradeLink reason="follow_ups" className="action-link w-fit text-sm">
+          Follow up with Team
+        </UpgradeLink>
       </section>
     );
   }

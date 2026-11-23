@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  askFirstFloor,
   askFirstMatch,
+  withAskFirstFloor,
   askFirstTopicsFor,
   isAskFirstId,
   customLabel,
@@ -15,6 +17,7 @@ describe("askFirstTopicsFor", () => {
         id: "refunds",
         label: "Refunds and complaints",
         on: true,
+        locked: true,
       });
     }
   });
@@ -32,6 +35,38 @@ describe("askFirstTopicsFor", () => {
       "discounts",
       "big_orders",
     ]);
+  });
+});
+
+describe("the safety floor", () => {
+  it("is refunds for everyone, medical for health, safety and emergencies for trades", () => {
+    expect(askFirstFloor(null)).toEqual(["refunds"]);
+    expect(askFirstFloor("food")).toEqual(["refunds"]);
+    expect(askFirstFloor("health")).toEqual(["refunds", "health"]);
+    expect(askFirstFloor("services")).toEqual(["refunds", "safety", "emergency"]);
+  });
+
+  it("is offered on and locked, and can't be removed", () => {
+    const topics = askFirstTopicsFor("services");
+    expect(topics.filter((t) => t.locked).map((t) => t.id)).toEqual([
+      "refunds",
+      "safety",
+      "emergency",
+    ]);
+    expect(topics.find((t) => t.id === "discounts")?.locked).toBe(false);
+    expect(withAskFirstFloor([], "health")).toEqual(["refunds", "health"]);
+    expect(withAskFirstFloor(["discounts", "refunds"], "services")).toEqual([
+      "refunds",
+      "safety",
+      "emergency",
+      "discounts",
+    ]);
+  });
+
+  it("matches safety and emergency words", () => {
+    expect(askFirstMatch("I smell gas near the heater", ["safety"])).toBe("safety");
+    expect(askFirstMatch("Pipe burst, kitchen flooding!", ["emergency"])).toBe("emergency");
+    expect(askFirstMatch("Do you work Saturdays?", ["safety", "emergency"])).toBeNull();
   });
 });
 

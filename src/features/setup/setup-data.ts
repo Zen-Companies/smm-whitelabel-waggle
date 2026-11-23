@@ -19,21 +19,23 @@ import {
 } from "@/features/catch-up";
 import { askFirstTopicsFor, isCustomTopic } from "@/lib/ask-first";
 import { loadTenantAiSpend } from "@/lib/llm/spend";
-import { hasLiveComments, platformLabel } from "@/lib/social/platforms";
+import { CONNECTABLE, hasLiveComments, platformLabel } from "@/lib/social/platforms";
 import type { ServiceClient } from "@/lib/supabase/service";
 import type { FlowFacts } from "./flow";
-import { kindFromProfile } from "./starter";
+import { chatSavedOf, type ChatSaved } from "./chat";
+import { chatLogOf, type ChatLog } from "./chat-log";
+import { knownFacts, type FactField, type KbRow, type KnownFact } from "./chat-fields";
+import { effectiveProfile, storedProfile, wantedCounts, type WantedCount } from "./profile";
+import { customKindFromProfile, kindFromProfile } from "./starter";
 import {
   batchReplies,
   conversationTopic,
   isMoneyTopic,
   setupTopic,
   TOPIC_LABEL,
-  topicCounts,
   type BatchReply,
   type ReplyRow,
   type SetupTopic,
-  type TopicCount,
 } from "./topics";
 import { uncheckedFactsByDraft } from "./unchecked-facts";
 import { dayStrip, type StripDay, type StripItem } from "./day-strip";
@@ -46,10 +48,12 @@ import { readStateOf, type ReadState } from "./reading";
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Pulled items read for the screens (the sort cap is 500, plus DMs). */
 const ITEMS_MAX = 800;
+/** Business info read for step 3's facts. */
+const KB_MAX = 200;
 /** Lost DMs read for 2.2's list. */
 const LOST_MAX = 600;
-/** Platforms offered as "Customers may be waiting here too" on 2.3. */
-const MORE_PLACES = ["instagram", "facebook", "googlebusiness", "tiktok"] as const;
+/** Platforms offered first as "Customers may be waiting here too" (step 2's results). */
+const MORE_PLACES = ["tiktok", "facebook", "instagram", "googlebusiness"] as const;
 
 export interface LostDm {
   key: string;
@@ -89,19 +93,24 @@ export interface SetupData {
   /** The platform Waggle read ("Instagram"). */
   platform: string;
   missed: {
+    /** Every locked DM conversation, spam included (23 Nov). */
     lostDms: number;
+    /** Of those, the ones whose topic is spam: the red band's "looked like spam or a scam" line. */
+    lockedSpam: number;
     closeToday: number;
     /** Every open DM with no reply (on platforms without Meta's 24-hour rule, all of them count). */
     dmsOpen: number;
     commentsOpen: number;
+    /** Reviews with no reply (Google Business). */
+    reviewsOpen: number;
     capped: boolean;
     total: number;
     score: ResponseScore | null;
   };
   wanted: {
     count: number;
-    /** "What they wanted", from Jev's categories (spam last, grey). */
-    topics: TopicCount[];
+    /** "What they wanted": Jev's categories, then the profile's words (spam last, grey). */
+    topics: WantedCount[];
     lost: LostDm[];
   };
   replies: {
@@ -120,12 +129,39 @@ export interface SetupData {
   strip: StripDay[];
   /** Facts in a draft that were found, not checked yet (build C), by draft id. */
   unchecked: Record<string, string[]>;
+  /** Places Waggle didn't check that connect today, the usual ones first. */
   more: { platform: string; label: string; upgrade: boolean }[];
-  askFirst: { id: string; label: string; on: boolean }[];
+  askFirst: { id: string; label: string; on: boolean; locked: boolean }[];
   /** The owner's own Always ask me topics ("custom:…"). */
   askFirstCustom: string[];
   replyMode: "approve" | "auto";
   autoAllowed: boolean;
+  /** Step 3's thread (board "Step 3 is a conversation with Waggle", 23 Nov). */
+  chat: {
+    saved: ChatSaved;
+    /** Everything else said in the thread (restored on coming back; chat-log.ts). */
+    log: ChatLog;
+    /** The kind saved in the business description, else the profile's guess. */
+    kind: string | null;
+    /** Saved by the owner (not a guess). */
+    kindKnown: boolean;
+    kindWords: string;
+    /** One line per fact to confirm: its value, or null when not set yet. */
+    facts: {
+      field: FactField;
+      label: string;
+      entryId: string | null;
+      value: string | null;
+      /** Found on the account, not checked yet: "from Instagram". */
+      from: string | null;
+    }[];
+    /** Every fact the typing box can change (and the AI sees). */
+    known: KnownFact[];
+    answers: number;
+    /** Ask-first suggestions from the profile ("custom:…") and its urgent words. */
+    suggested: string[];
+    urgent: string[];
+  };
 }
 
 type ItemRow = {
@@ -178,7 +214,7 @@ export async function loadSetupData(
       db
         .from("tenants")
         .select(
-          "name, name_pending, setup_screen, setup_done_at, ask_first_topics, business_profile",
+          "name, name_pending, setup_screen, setup_done_at, ask_first_topics, business_profile, setup_chat, setup_chat_log, ai_profile",
         )
         .eq("id", tenantId)
         .single(),
@@ -217,7 +253,7 @@ export async function loadSetupData(
         .single()
     : { data: null };
 
-  const [{ data: items }, { data: drafts }, { data: lost }] = await Promise.all([
+  const [{ data: items }, { data: drafts }, { data: lost }, { data: kb }] = await Promise.all([
     cu
       ? db
           .from("inbound_items")
@@ -246,6 +282,12 @@ export async function loadSetupData(
           .order("received_at", { ascending: false })
           .limit(LOST_MAX)
       : Promise.resolve({ data: [] }),
+    db
+      .from("kb_entries")
+      .select("id, title, content, found_kind, found_source, needs_check")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: true })
+      .limit(KB_MAX),
   ]);
 
   const pulled = (items ?? []) as ItemRow[];
@@ -291,12 +333,15 @@ export async function loadSetupData(
       i.category === "spam" ||
       ((waitingCategory(i.category) || i.category === "unclear") && isOpen(i.status)),
   );
-  const askers = [
-    ...wantedPulled.map((i) => setupTopic(i.text, i.category)),
-    ...lostDms.map((l) => l.topic),
+  const asks = [
+    ...wantedPulled.map((i) => ({ text: i.text, category: i.category })),
+    ...lostDms.map((l) => ({
+      text: (textsByConversation.get(l.key) ?? [l.text]).join(" "),
+      category: categoryByConversation.get(l.key) ?? null,
+    })),
   ];
   const lostMoney = lostDms.filter((l) => isMoneyTopic(l.topic)).length;
-  const lockedCustomers = lostDms.filter((l) => l.topic !== "spam").length;
+  const lockedSpam = lostDms.filter((l) => l.topic === "spam").length;
   const pulledMoney = waitingPulled.filter((i) =>
     isMoneyTopic(setupTopic(i.text, i.category)),
   ).length;
@@ -306,6 +351,9 @@ export async function loadSetupData(
   ).length;
   const commentsOpen = waitingPulled.filter((i) => i.kind === "comment").length;
   const dmsOpen = waitingPulled.filter((i) => i.kind === "dm").length;
+  const reviewsOpen = pulled.filter(
+    (i) => i.kind === "review" && i.category !== "spam" && isOpen(i.status),
+  ).length;
 
   // Waggle's replies: drafts that answer (not "needs you"), waiting or already approved.
   const rows: ReplyRow[] = [];
@@ -379,17 +427,27 @@ export async function loadSetupData(
     ),
     outOfAiReplies(db, { tenantId, organizationId: input.organizationId, now }),
   ]);
-  const more = MORE_PLACES.filter(
-    (p) => !connectedPlatforms.has(p) && statusOf(statuses, p) === "available",
-  ).map((p) => ({ platform: p, label: platformLabel(p), upgrade: onFree && !room }));
+  const places = [
+    ...MORE_PLACES,
+    ...CONNECTABLE.filter((p) => !(MORE_PLACES as readonly string[]).includes(p)),
+  ];
+  const more = places
+    .filter((p) => !connectedPlatforms.has(p) && statusOf(statuses, p) === "available")
+    .map((p) => ({ platform: p, label: platformLabel(p), upgrade: onFree && !room }));
 
-  const kind = kindFromProfile(tenant.business_profile ?? "")?.key ?? null;
+  const savedKind = kindFromProfile(tenant.business_profile ?? "")?.key ?? null;
+  const aiProfile = storedProfile(tenant.ai_profile);
+  const kind = savedKind ?? aiProfile?.kind ?? null;
+  const profile = effectiveProfile(kind, aiProfile);
+  const kbRows = (kb ?? []) as KbRow[];
+  const known = knownFacts(kbRows);
   const saved = new Set(tenant.ask_first_topics ?? []);
   const chosenBefore = tenant.setup_screen === "how" || tenant.setup_done_at !== null;
   const askFirst = askFirstTopicsFor(kind).map((t) => ({
     id: t.id,
     label: t.label,
-    on: chosenBefore ? saved.has(t.id) : t.on || saved.has(t.id),
+    on: t.locked || (chosenBefore ? saved.has(t.id) : t.on || saved.has(t.id)),
+    locked: t.locked,
   }));
 
   const score = cu
@@ -409,16 +467,23 @@ export async function loadSetupData(
     startingRead: read.state === "starting",
     platform: platformLabel(progress?.platform ?? [...connectedPlatforms][0] ?? "instagram"),
     missed: {
-      // Spam isn't a customer lost: it stays out of "DMs you can't answer any more".
-      lostDms: lockedCustomers,
+      // Every locked DM counts, spam too (23 Nov: no card that shows then vanishes once Jev
+      // labels a DM spam); the red band says how many looked like spam.
+      lostDms: lostDms.length,
+      lockedSpam,
       closeToday,
       dmsOpen,
       commentsOpen,
+      reviewsOpen,
       capped: cu?.capped ?? false,
-      total: lockedCustomers + closeToday + commentsOpen,
+      total: lostDms.length + closeToday + commentsOpen + reviewsOpen,
       score,
     },
-    wanted: { count: pulledMoney + lostMoney, topics: topicCounts(askers), lost: lostDms },
+    wanted: {
+      count: pulledMoney + lostMoney,
+      topics: wantedCounts(asks, profile.wanted),
+      lost: lostDms,
+    },
     replies: {
       drafted: listed.length,
       dmsToday: listed.filter((r) => r.kind === "dm").length,
@@ -436,7 +501,34 @@ export async function loadSetupData(
     askFirstCustom: (tenant.ask_first_topics ?? []).filter(isCustomTopic),
     replyMode: faq?.mode === "auto" && autoAllowed ? "auto" : "approve",
     autoAllowed,
+    chat: {
+      saved: chatSavedOf(tenant.setup_chat),
+      log: chatLogOf(tenant.setup_chat_log, { doneAt: tenant.setup_done_at, now }),
+      kind,
+      kindKnown: savedKind !== null,
+      kindWords: customKindFromProfile(tenant.business_profile ?? ""),
+      facts: profile.facts.map((f) => {
+        const id = known.find((k) => k.field === f.field)?.id;
+        const entry = kbRows.find((e) => e.id === id);
+        return {
+          field: f.field,
+          label: f.label,
+          entryId: entry?.id ?? null,
+          value: entry?.content ?? null,
+          from: entry?.needs_check ? sourceWord(entry.found_source) : null,
+        };
+      }),
+      known,
+      answers: known.filter((k) => k.field === "answer").length,
+      suggested: profile.suggested,
+      urgent: profile.urgent,
+    },
   };
+}
+
+/** "from Instagram" / "from Facebook" for a fact found on the account. */
+function sourceWord(source: string | null): string {
+  return source === "facebook_page" ? "from Facebook" : "from Instagram";
 }
 
 type AccountRow = {

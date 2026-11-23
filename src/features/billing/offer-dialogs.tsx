@@ -14,11 +14,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useEffectEvent, useRef } from "react";
 import { PlanBees } from "@/components/app/bee-plan";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ROLE_HINT, ROLE_LABEL } from "@/features/orgs/client";
 import { DayBanner } from "./day-price";
+import { Sheet } from "./upgrade-popup";
 import { buyTopUpNow, changeExtraAccounts, choosePlan } from "./plan-actions";
 import { PlanButton, TopUpButton } from "./plan-forms";
 import { BUSINESS_CALL_URL, EXTRAS, type Plan, type PlanId } from "./plans";
@@ -27,8 +27,9 @@ import type { OfferReason } from "./upgrade";
 import { upgradeOffer, type UpgradeOffer } from "./upgrade-offer";
 import type { PerkKey, WelcomeContent, WelcomePerk } from "./welcome";
 
-// The plan pop-ups (Walter's flow, 20 Nov): the upgrade offer by situation and the welcome after
-// setup. Friendly, with the bee; Esc, the backdrop or the quiet button closes them. Feedback in
+// The plan pop-ups on a paid plan (Walter's flow, 20 Nov): the upgrade offer by situation and the
+// welcome after setup, in the shared frame (upgrade-popup.tsx Sheet). Free has its own versions
+// (popup-copy.ts, approved 23 Nov). Friendly, with the bee; Esc, the backdrop or the quiet button closes them. Feedback in
 // place, no toasts (design.md §5). Non-owners see no billing buttons, only who can upgrade.
 
 /** What the pop-ups need about the organization (loaded on the server, BillingHost). */
@@ -41,6 +42,8 @@ export interface OfferOrg {
   plans: Record<PlanId, Plan>;
   /** Its first paid plan starts with 7 days free. */
   trial: boolean;
+  /** The founding offer applies to its first paid plan (spots left, checked with Stripe). */
+  founding: boolean;
   /** Stripe is set up on this server. */
   stripeReady: boolean;
   /** The interval a switch keeps. */
@@ -48,43 +51,6 @@ export interface OfferOrg {
 }
 
 const TEAM_HREF = "/settings/team";
-
-/** The pop-up frame: a sheet from the bottom on a phone, centered on a desktop. */
-function Modal({
-  labelledBy,
-  onClose,
-  children,
-}: {
-  labelledBy: string;
-  onClose: () => void;
-  children: React.ReactNode;
-}) {
-  const box = useRef<HTMLDivElement>(null);
-  const onEscape = useEffectEvent(onClose);
-  useEffect(() => {
-    box.current?.focus();
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onEscape();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-  return (
-    <>
-      <div aria-hidden className="bg-ink/30 fixed inset-0 z-[80]" onClick={onClose} />
-      <div
-        ref={box}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        tabIndex={-1}
-        className="bg-surface border-honey-border text-ink fixed inset-x-0 bottom-0 z-[90] flex max-h-[92dvh] flex-col overflow-hidden rounded-t-[18px] border shadow-[0_12px_32px_rgba(23,20,15,0.14)] outline-none sm:inset-x-auto sm:top-1/2 sm:bottom-auto sm:left-1/2 sm:w-[calc(100%-32px)] sm:max-w-[480px] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-[18px]"
-      >
-        {children}
-      </div>
-    </>
-  );
-}
 
 function Header({
   plan,
@@ -98,11 +64,11 @@ function Header({
   id: string;
 }) {
   return (
-    <div className="hexbg bg-honey-tint flex items-center gap-4 px-6 py-5">
-      <PlanBees plan={plan} />
+    <div className="flex items-center gap-3 sm:mt-4">
+      <PlanBees plan={plan} className="-m-2 shrink-0 scale-75" />
       <span className="flex min-w-0 flex-col">
         {eyebrow && <span className="meta">{eyebrow}</span>}
-        <h2 id={id} className="font-display text-[22px] leading-tight font-semibold">
+        <h2 id={id} className="font-display m-0 text-[21px] leading-[1.2] font-bold">
           {title}
         </h2>
       </span>
@@ -243,14 +209,14 @@ export function UpgradeDialog({
   const offer = upgradeOffer(org.current, reason, org.plans, { trial: org.trial, resetsOn });
   const header = offer.next ?? org.current;
   return (
-    <Modal labelledBy="upgrade-title" onClose={onClose}>
+    <Sheet labelledBy="upgrade-title" onClose={onClose}>
       <Header
         plan={header}
         eyebrow={org.plans[header].name}
         title={offer.title}
         id="upgrade-title"
       />
-      <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
+      <div className="flex flex-col gap-4 pt-4">
         {reason === "out" && pain && <PainTiles pain={pain} />}
         <p className="text-ink-2 m-0 text-[15px]">{offer.body}</p>
         {offer.line && <p className="meta m-0">{offer.line}</p>}
@@ -264,7 +230,7 @@ export function UpgradeDialog({
         />
         {offer.footnote && org.isOwner && <p className="meta m-0">{offer.footnote}</p>}
       </div>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -343,9 +309,9 @@ export function WelcomeDialog({
   const teamMain = content.team === "main";
   const [hero, ...others] = content.perks;
   return (
-    <Modal labelledBy="welcome-title" onClose={onClose}>
+    <Sheet labelledBy="welcome-title" onClose={onClose}>
       <Header plan={header} eyebrow={content.eyebrow} title={content.title} id="welcome-title" />
-      <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
+      <div className="flex flex-col gap-4 pt-4">
         {/* Setup's end (approved 21 Nov): the bee dances once as the Inbox opens. */}
         <BeeDance times={1} scale={0.4} className="self-center" />
         <p className="text-ink-2 m-0 text-[15px]">{content.pitch}</p>
@@ -376,7 +342,7 @@ export function WelcomeDialog({
         )}
         {content.now && <p className="meta m-0">{content.now}</p>}
       </div>
-      <div className="border-line flex flex-col gap-3 border-t px-6 py-4 max-sm:pb-[max(16px,env(safe-area-inset-bottom))]">
+      <div className="border-line mt-4 flex flex-col gap-3 border-t pt-4">
         {offer?.day && org.isOwner && <DayBanner amount={offer.day.amount} of={offer.day.of} />}
         {teamMain ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -407,6 +373,6 @@ export function WelcomeDialog({
         )}
         {offer?.footnote && org.isOwner && <p className="meta m-0">{offer.footnote}</p>}
       </div>
-    </Modal>
+    </Sheet>
   );
 }

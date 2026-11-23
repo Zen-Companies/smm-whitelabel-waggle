@@ -13,6 +13,8 @@ import {
 import {
   DM_ACCESS_MISSING,
   SocialProviderError,
+  EMPTY_ACCOUNT_CATEGORY,
+  type AccountCategory,
   type TelegramConnectStatus,
   isVideoUrl,
   type WhatsAppTemplate,
@@ -3697,6 +3699,110 @@ export class ZernioSocialProvider implements SocialProvider {
         providerMessageId: parse(privateReplySchema, data, "sendPrivateReply").messageId,
       };
     });
+  }
+
+  async getAccountCategory(input: {
+    accountId: string;
+    platform: string;
+    username?: string | null;
+    signal?: AbortSignal;
+  }): Promise<AccountCategory> {
+    try {
+      return await this.readAccountCategory(input);
+    } catch {
+      // Setup goes on without it (the kind is asked instead). No details: the error is Zernio's.
+      return EMPTY_ACCOUNT_CATEGORY;
+    }
+  }
+
+  private async readAccountCategory(input: {
+    accountId: string;
+    platform: string;
+    username?: string | null;
+    signal?: AbortSignal;
+  }): Promise<AccountCategory> {
+    const text = z
+      .string()
+      .nullish()
+      .transform((v) => v?.trim() || null);
+    if (input.platform === "facebook") {
+      return call("getAccountCategory", async (withFetch) => {
+        // docs.zernio.com: GET /v1/accounts/{accountId}/facebook-page (pages[].category,
+        // selectedPageId).
+        const { data } = await this.zernio.connect.getFacebookPages(
+          withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+        );
+        const found = parse(
+          z.object({
+            pages: z.array(z.object({ id: z.string().nullish(), category: text })).nullish(),
+            selectedPageId: z.string().nullish(),
+          }),
+          data,
+          "getAccountCategory",
+        );
+        const pages = found.pages ?? [];
+        const page =
+          pages.find((p) => !!found.selectedPageId && p.id === found.selectedPageId) ??
+          (pages.length === 1 ? pages[0] : undefined);
+        return { ...EMPTY_ACCOUNT_CATEGORY, category: page?.category ?? null };
+      });
+    }
+    if (input.platform === "instagram" && input.username) {
+      const username = input.username.replace(/^@/, "");
+      return call("getAccountCategory", async (withFetch) => {
+        // docs.zernio.com: GET /v1/accounts/{accountId}/instagram/business-discovery?username=
+        // (profile.biography, website; needs an account connected with Facebook Login).
+        const { data } = await this.zernio.instagram.getInstagramBusinessDiscovery(
+          withFetch({
+            signal: input.signal,
+            path: { accountId: input.accountId },
+            query: { username, limit: 1 },
+          }),
+        );
+        const found = parse(
+          z.object({ profile: z.object({ biography: text, website: text }) }),
+          data,
+          "getAccountCategory",
+        );
+        return {
+          ...EMPTY_ACCOUNT_CATEGORY,
+          bio: found.profile.biography,
+          website: found.profile.website,
+        };
+      });
+    }
+    if (input.platform === "googlebusiness") {
+      return call("getAccountCategory", async (withFetch) => {
+        // docs.zernio.com: GET /v1/accounts/{accountId}/gmb-location-details
+        // ?readMask=categories,profile (categories.primaryCategory.displayName,
+        // profile.description).
+        const { data } = await this.zernio.gmblocationdetails.getGoogleBusinessLocationDetails(
+          withFetch({
+            signal: input.signal,
+            path: { accountId: input.accountId },
+            query: { readMask: "categories,profile" },
+          }),
+        );
+        const found = parse(
+          z.object({
+            categories: z
+              .object({ primaryCategory: z.object({ displayName: text }).nullish() })
+              .nullish(),
+            profile: z.object({ description: text }).nullish(),
+            websiteUri: text,
+          }),
+          data,
+          "getAccountCategory",
+        );
+        return {
+          ...EMPTY_ACCOUNT_CATEGORY,
+          category: found.categories?.primaryCategory?.displayName ?? null,
+          description: found.profile?.description ?? null,
+          website: found.websiteUri,
+        };
+      });
+    }
+    return EMPTY_ACCOUNT_CATEGORY;
   }
 
   async getBusinessProfile(input: {

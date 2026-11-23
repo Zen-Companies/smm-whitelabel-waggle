@@ -147,10 +147,19 @@ export function isOfferReason(v: unknown): v is OfferReason {
  * dashboard or setup page, its own query kept), that page with the upgrade pop-up over it:
  * `upgradeHref("auto_reply", "/setup?step=3")` → `/setup?step=3&upgrade=auto_reply`.
  */
-export function upgradeHref(reason: OfferReason, here?: string): string {
+export function upgradeHref(
+  reason: OfferReason,
+  here?: string,
+  extra?: Record<string, string | null | undefined>,
+): string {
   if (!here) return `/plan?upgrade=${reason}#upgrade`;
   const url = new URL(here, "http://waggle.local");
   url.searchParams.set("upgrade", reason);
+  // What the pop-up names (23 Nov): `platform` tapped, `platforms` picked, a `topic`.
+  for (const [k, v] of Object.entries(extra ?? {})) {
+    if (v) url.searchParams.set(k, v);
+    else url.searchParams.delete(k);
+  }
   return `${url.pathname}${url.search}${url.hash}`;
 }
 

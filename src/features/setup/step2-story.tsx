@@ -1,56 +1,61 @@
 "use client";
 
 import Link from "next/link";
-import { Pause, Play } from "lucide-react";
+import { useFormStatus } from "react-dom";
+import { Clock, Lock, MessageCircle, Pause, Play, Plus, Star } from "lucide-react";
 import {
   useEffect,
   useMemo,
   useReducer,
-  useState,
+  useRef,
   useSyncExternalStore,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { cn } from "cn";
-import { BeeBody } from "@/components/app/bee";
+import { PlatformMark } from "@/components/app/platform-mark";
+// Straight to the server action module, not the accounts barrel (it re-exports server-only code).
+import { connectAccount } from "@/features/accounts/actions";
 // Straight to the pure modules, not the catch-up barrel (it re-exports server-only code).
 import { phaseProgress } from "@/features/catch-up/first-connect-copy";
 import type { CatchUpProgress } from "@/features/catch-up/reveal-data";
-import { plural } from "./copy";
 import type { StripDay } from "./day-strip";
 import { DayStripView } from "./day-strip-view";
 import type { SetupScreen } from "./flow";
-import { Combs } from "./combs";
-import { writingLine } from "./reading";
+import { ConnectSubmit } from "./connect-pending";
 import { ReadingPart, useReading } from "./reading-part";
-import { Avatar } from "./setup-parts";
-import { PRIMARY, QUIET, ScreenButton, ScreenTitle } from "./setup-frame";
+import { skipSetupAnswers } from "./actions";
+import { PRIMARY, ScreenButton, ScreenTitle } from "./setup-frame";
 import {
-  careNumbers,
+  answerableLine,
+  bandDelays,
   currentScene,
+  lockedSpamLine,
+  resultsFooter,
+  RESULTS_FOOTER_COPY,
+  resultTiles,
   showsLocked,
   startStory,
-  storyBars,
   storyScenes,
   storyStep,
   TICK_MS,
   type Scene,
   type StoryFacts,
+  type TileKind,
 } from "./story";
 
-// Step 2 plays like a story, then shows everything (board approved 23 Nov). Progress bars on top
-// with pause/play and Skip; each scene stays about 5 s, and the first one (the reading) holds until
-// Waggle has read. Then the summary stays, with one choice and Watch again. Reduced motion, Skip or
-// an old link open the summary at once.
+// Step 2 (board "Replica update", approved 23 Nov): the reading plays while Waggle reads (with
+// pause and Skip), then the 30-day strip and one Results card: red for the DMs Meta locked (its
+// 24-hour rule one tap away), green for what can still be answered, the places Waggle didn't check,
+// and one question whenever there's something to answer: Yes goes on to step 3's chat; Skip for
+// now finishes setup with safe defaults (skipSetupAnswers) and the replies wait in the Inbox.
 
-export interface StoryChat {
-  key: string;
-  name: string;
-  dm: boolean;
-  /** "DM · closes in 5 h", "comment · 6 days". */
-  meta: string;
-  /** A DM whose window is running (the meta goes red). */
-  urgent: boolean;
-  text: string;
+/** A place Waggle didn't check: connect it here, or (Free full) open the Solo pop-up. */
+export interface MorePlace {
+  platform: string;
+  label: string;
+  /** Free with its account used: where the chip goes (the pop-up on this page). */
+  upgradeHref: string | null;
 }
 
 export interface Step2StoryProps {
@@ -64,25 +69,24 @@ export interface Step2StoryProps {
   pastDms: boolean;
   dmAccessMissing: boolean;
   locked: number;
+  /** Of the locked DMs, those that looked like spam (a small line in the red band). */
+  lockedSpam: number;
   closeToday: number;
   dmsOpen: number;
   commentsOpen: number;
-  /** "What they wanted"; muted is "Not about your business" (grey, always last). */
-  topics: { label: string; count: number; muted?: boolean }[];
-  chats: StoryChat[];
-  drafted: number;
+  reviewsOpen: number;
+  /** Replies Waggle wrote that wait for the owner's OK. */
+  replies: number;
+  /** Customers Waggle couldn't answer on its own. */
   needYou: number;
-  writing: { done: number; of: number };
-  outOfReplies: boolean;
-  nothingToAnswer: boolean;
-  quiet: boolean;
+  more: MorePlace[];
   days: StripDay[];
   /** ISO time the page was rendered. */
   now: string;
-  /** Where "Yes, let's do it" goes: step 3's first screen ("how" when there's nothing to check). */
+  /** Where "Yes, answer them now" goes: step 3's chat. */
   into3: SetupScreen;
-  /** Open on the summary (an old ?screen=wanted|replies link). */
-  atSummary: boolean;
+  /** Open on the results (an old ?screen=wanted|replies link). */
+  atResults: boolean;
 }
 
 const REDUCE = "(prefers-reduced-motion: reduce)";
@@ -91,6 +95,8 @@ const subscribeMotion = (cb: () => void) => {
   m.addEventListener("change", cb);
   return () => m.removeEventListener("change", cb);
 };
+/** Chips before "+N more". */
+const CHIPS_SHOWN = 3;
 
 export function Step2Story(props: Step2StoryProps) {
   const live = useReading();
@@ -103,14 +109,12 @@ export function Step2Story(props: Step2StoryProps) {
     () => false,
   );
 
-  // The reading scene plays only if Waggle was reading when the story started.
-  const [withReading, setWithReading] = useState(reading);
-  const scenes = useMemo(() => storyScenes(storyFactsOf(props, withReading)), [props, withReading]);
+  const scenes = useMemo(() => storyScenes(storyFactsOf(props, reading)), [props, reading]);
   const [state, dispatch] = useReducer(storyStep, undefined, () =>
-    startStory(scenes, props.atSummary),
+    startStory(storyScenes(storyFactsOf(props, reading)), props.atResults),
   );
-  const shown: Scene = reduced && !state.replayed ? "summary" : currentScene(scenes, state.at);
-  const running = shown !== "summary" && !state.paused;
+  const shown: Scene = reduced ? "results" : currentScene(scenes, state.at);
+  const running = shown !== "results" && !state.paused;
 
   useEffect(() => {
     if (!running) return;
@@ -121,149 +125,62 @@ export function Step2Story(props: Step2StoryProps) {
     return () => clearInterval(id);
   }, [running, scenes, reading]);
 
-  const replay = () => {
-    setWithReading(reading);
-    dispatch({ type: "replay", scenes: storyScenes(storyFactsOf(props, reading)) });
-  };
-  const bars = storyBars(
-    scenes,
-    { ...state, at: shown },
-    reading && p ? phaseProgress(p.phase) / 100 : 1,
-  );
-  const canReplay = storyScenes(storyFactsOf(props, reading)).length > 1;
-
-  return (
-    <div className="flex flex-1 flex-col gap-3.5">
-      {shown !== "summary" && (
-        <div className="flex items-center gap-1.5">
-          <div className="flex flex-1 gap-1" aria-hidden>
-            {bars.map((b, i) => (
-              <span key={i} className="bg-line h-1 flex-1 overflow-hidden rounded-full">
-                <span
-                  className="bg-ink block h-full transition-[width] duration-100 ease-linear"
-                  style={{ width: `${Math.round(b * 100)}%` }}
-                />
-              </span>
-            ))}
-          </div>
-          <span className="sr-only">
-            Part {bars.findIndex((b) => b < 1) + 1 || bars.length} of {bars.length}
-          </span>
-          <button
-            type="button"
-            className="text-ink-3 hover:text-ink inline-flex size-9 items-center justify-center"
-            aria-label={state.paused ? "Play" : "Pause"}
-            onClick={() => dispatch({ type: "toggle" })}
-          >
-            {state.paused ? (
-              <Play className="size-3.5" aria-hidden />
-            ) : (
-              <Pause className="size-3.5" aria-hidden />
-            )}
-          </button>
-          <button
-            type="button"
-            className="text-ink-3 hover:text-ink min-h-9 px-1 text-[13px] font-medium"
-            onClick={() => dispatch({ type: "skip" })}
-          >
-            Skip
-          </button>
-        </div>
-      )}
-      <div
-        key={shown}
-        className="part-in flex flex-col gap-3.5"
-        aria-live="polite"
-        // Reading a day on the strip (or anything in a scene) pauses the story.
-        onPointerDownCapture={() => shown !== "summary" && dispatch({ type: "pause" })}
-        onFocusCapture={() => shown !== "summary" && dispatch({ type: "pause" })}
-      >
-        <SceneBody scene={shown} props={props} p={p} days={days} reading={reading} />
-      </div>
-      {shown === "summary" && canReplay && (
-        <button type="button" className={cn(QUIET, "self-start underline")} onClick={replay}>
-          Watch again
-        </button>
-      )}
-    </div>
-  );
-}
-
-function SceneBody({
-  scene,
-  props,
-  p,
-  days,
-  reading,
-}: {
-  scene: Scene;
-  props: Step2StoryProps;
-  p: CatchUpProgress | null;
-  days: StripDay[];
-  reading: boolean;
-}) {
   const strip =
     reading && p ? (
       <ReadingPart initial={p} handle={props.handle} days={days} now={props.now} />
     ) : (
       <DayStripView days={days} now={props.now} />
     );
-  switch (scene) {
-    case "reading":
-      return (
+
+  return (
+    <div className="flex flex-1 flex-col gap-3.5">
+      {shown === "reading" ? (
         <>
-          <ScreenTitle
-            title={reading ? "Reading your last 30 days…" : "Waggle read your last 30 days"}
-            sub={reading ? "About two minutes." : undefined}
-          />
-          {strip}
+          <div className="flex items-center gap-1.5">
+            <span className="bg-line h-1 flex-1 overflow-hidden rounded-full" aria-hidden>
+              <span
+                className="bg-ink block h-full transition-[width] duration-100 ease-linear"
+                style={{ width: `${reading && p ? phaseProgress(p.phase) : 100}%` }}
+              />
+            </span>
+            <button
+              type="button"
+              className="text-ink-3 hover:text-ink inline-flex size-9 items-center justify-center"
+              aria-label={state.paused ? "Play" : "Pause"}
+              onClick={() => dispatch({ type: "toggle" })}
+            >
+              {state.paused ? (
+                <Play className="size-3.5" aria-hidden />
+              ) : (
+                <Pause className="size-3.5" aria-hidden />
+              )}
+            </button>
+            <button
+              type="button"
+              className="text-ink-3 hover:text-ink min-h-9 px-1 text-[13px] font-medium"
+              onClick={() => dispatch({ type: "skip" })}
+            >
+              Skip
+            </button>
+          </div>
+          <div className="part-in flex flex-col gap-3.5" aria-live="polite">
+            <ScreenTitle
+              title={reading ? "Reading your last 30 days…" : "Waggle read your last 30 days"}
+              sub={reading ? "About two minutes." : undefined}
+            />
+            {strip}
+          </div>
         </>
-      );
-    case "days":
-      return (
-        <>
-          <ScreenTitle
-            title={`${props.firstName}, here’s your last 30 days`}
-            sub={`${props.brandName}’s ${props.platform}`}
-          />
-          {strip}
-          <span className="text-ink-3 text-[12.5px]">Tap a day to see it.</span>
-        </>
-      );
-    case "locked":
-      return (
-        <>
-          <BeeLine>First, the ones Waggle can’t save.</BeeLine>
-          <LockedCard n={props.locked} />
-        </>
-      );
-    case "answerable":
-      return (
-        <>
-          <BeeLine>These you can still answer.</BeeLine>
-          <AnswerableCards props={props} />
-        </>
-      );
-    case "wanted":
-      return (
-        <>
-          <ScreenTitle title="What they wanted" />
-          <TopicChips topics={props.topics} />
-          {props.chats.length > 0 && (
-            <ul className="card divide-line flex flex-col divide-y">
-              {props.chats.map((c) => (
-                <ChatRow key={c.key} chat={c} />
-              ))}
-            </ul>
-          )}
-        </>
-      );
-    case "summary":
-      return <Summary props={props} strip={strip} reading={reading} />;
-  }
+      ) : (
+        <div className="part-in flex flex-col gap-3.5">
+          <Results props={props} strip={strip} reading={reading} />
+        </div>
+      )}
+    </div>
+  );
 }
 
-function Summary({
+function Results({
   props,
   strip,
   reading,
@@ -272,25 +189,6 @@ function Summary({
   strip: ReactNode;
   reading: boolean;
 }) {
-  const nothing = props.into3 === "how";
-  const buttons = nothing ? (
-    <ScreenButton to="how" className={PRIMARY}>
-      Next: how replies go out
-    </ScreenButton>
-  ) : (
-    <div className="flex flex-wrap items-center gap-2">
-      <ScreenButton to={props.into3} className={PRIMARY}>
-        Yes, let’s do it
-      </ScreenButton>
-      <ScreenButton
-        to="how"
-        className="border-line bg-surface hover:border-honey inline-flex min-h-11 items-center justify-center rounded-xl border px-4 text-sm font-semibold"
-      >
-        Skip for now
-      </ScreenButton>
-    </div>
-  );
-
   if (props.readBefore || !props.progress) {
     return (
       <>
@@ -306,117 +204,129 @@ function Summary({
               : `Waggle reads the last 30 days on Instagram and Facebook. New ${props.platform} messages land in your Inbox from now on.`
           }
         />
-        {buttons}
+        <Chips props={props} />
+        <AskRow
+          into3={props.into3}
+          footer={resultsFooter(storyFactsOf(props, reading))}
+          className="card"
+        />
       </>
     );
   }
 
-  const locked = showsLocked(storyFactsOf(props, reading));
-  const care = careNumbers(
-    props.pastDms ? [props.closeToday, props.commentsOpen] : [props.dmsOpen, props.commentsOpen],
-  );
-  const writing = props.writing.of > 0 && props.writing.done < props.writing.of;
+  const f = storyFactsOf(props, reading);
+  const locked = showsLocked(f);
+  const tiles = resultTiles(f);
+  const delay = bandDelays(locked);
+  const footer = resultsFooter(f);
+  const chips = props.more.length > 0;
+
   return (
     <>
-      <ScreenTitle
-        title={`${props.firstName}, here’s what you missed`}
-        sub={`${props.brandName}’s ${props.platform}, last 30 days`}
-      />
+      <div className="flex flex-col gap-1">
+        <span className="font-display text-honey-text text-[13px] font-bold tracking-[0.12em] uppercase">
+          Results
+        </span>
+        <h1 className="font-display text-[22px] leading-tight font-semibold md:text-[26px]">
+          {props.firstName}, here’s what you missed in the last 30 days
+        </h1>
+        <p className="text-ink-2 text-[14px]">
+          On {props.brandName}’s {props.platform}.
+        </p>
+      </div>
       {strip}
-      {locked && !reading && props.locked === 0 ? (
-        <BigCard
-          tone="green"
-          n={0}
-          title="DMs got locked."
-          sub="Nobody’s chat ran past 24 hours. Nice."
-        />
-      ) : locked && props.locked > 0 ? (
-        <LockedCard n={props.locked} summary />
-      ) : null}
-      <AnswerableCards props={props} summary />
       {props.dmAccessMissing && (
         <p className="text-ink-3 text-sm">
           Waggle couldn’t read your {props.platform} messages, only comments.
         </p>
       )}
-      {props.topics.length > 0 && (
-        <div className="card flex flex-col gap-1 px-3 py-2.5">
-          <b className="text-[13px] font-semibold">What they wanted</b>
-          <span className="text-ink-2 text-[13px]">
-            {props.topics
-              .slice(0, 3)
-              .map((t) => t.label)
-              .join(" · ")}
-          </span>
-        </div>
-      )}
-      {writing ? (
-        <div
-          className="card flex flex-wrap items-center gap-2.5 px-3 py-2.5 text-[13px]"
-          role="status"
-        >
-          <BeeIcon />
-          <b className="font-semibold">{writingLine(props.writing)}</b>
-          <Combs on={props.writing.done} of={props.writing.of} size={14} />
-        </div>
-      ) : props.drafted + props.needYou > 0 ? (
-        <div className="card flex flex-wrap items-center gap-2.5 px-3 py-2.5 text-[13px]">
-          <Combs on={props.drafted} of={props.drafted + props.needYou} size={14} />
-          <span>
-            <b className="font-semibold">
-              Waggle wrote {plural(props.drafted, "reply", "replies")}
-            </b>
-            {care && props.drafted > 0 && <> for {care}</>}
-            {props.needYou > 0 && (
-              <>
-                {" · "}
-                {props.needYou} {props.needYou === 1 ? "needs" : "need"} you
-              </>
-            )}
-          </span>
-        </div>
-      ) : null}
-      {props.outOfReplies && props.needYou > 0 && (
-        <div className="border-honey-border bg-honey-tint flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border px-3 py-2.5">
-          <BeeIcon size={24} />
-          <span className="min-w-[200px] flex-1 text-[13px]">
-            <b className="font-semibold">Out of AI replies this month.</b>{" "}
-            {plural(props.needYou, "message waits", "messages wait")} for you.
-          </span>
-          <Link
-            href="/setup?screen=replies&upgrade=replies"
-            scroll={false}
-            className="bg-ink text-surface hover:bg-ink-2 inline-flex min-h-10 items-center rounded-xl px-3.5 text-sm font-semibold no-underline"
+
+      <div className="border-line bg-surface flex flex-col overflow-hidden rounded-2xl border">
+        {locked && (
+          <LockedBand n={props.locked} spam={props.lockedSpam} platform={props.platform} />
+        )}
+
+        {tiles.length > 0 && (
+          <div
+            className="part-in bg-success-soft flex flex-col gap-3 p-4 sm:p-5"
+            style={{ animationDelay: `${delay.green}ms` }}
           >
-            Add replies
-          </Link>
-        </div>
-      )}
-      {props.quiet && !reading ? (
-        <p className="text-ink-2 text-[13.5px]">
-          A quiet month. Waggle answers new messages from now on.
-        </p>
-      ) : props.nothingToAnswer && !reading ? (
-        <p className="flex items-center gap-2.5 text-[13.5px]">
-          <BeeIcon size={28} />
-          <span>
-            <b className="font-semibold">Nothing to answer from the last 30 days.</b>{" "}
-            <span className="text-ink-2">Waggle answers new messages from now on.</span>
-          </span>
-        </p>
-      ) : !nothing ? (
-        <b className="text-[14px] font-semibold">
-          {care
-            ? `With Waggle, we can take care of ${care} now. Want to work on them?`
-            : "Want to work on them now?"}
-        </b>
-      ) : null}
-      {buttons}
+            <p className="text-success text-[15px] font-semibold">{answerableLine(f)}</p>
+            <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+              {tiles.map((t) => (
+                <ResultTile
+                  key={t.kind}
+                  kind={t.kind}
+                  platform={props.progress?.platform ?? null}
+                  platformLabel={props.platform}
+                  n={t.n}
+                  text={t.text}
+                  note={t.note}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {chips && (
+          <div
+            className="part-in border-line border-t p-4 sm:p-5"
+            style={{ animationDelay: `${delay.chips}ms` }}
+          >
+            <Chips props={props} bare />
+          </div>
+        )}
+
+        <AskRow
+          into3={props.into3}
+          footer={footer}
+          className={cn("part-in", (tiles.length > 0 || chips) && "border-line border-t")}
+          delay={delay.ask}
+        />
+      </div>
     </>
   );
 }
 
-/** What decides which scenes play, from the page's numbers. */
+/**
+ * The Results footer, always shown: "Want to answer them now?" or, with nothing to answer, "Set up
+ * how Waggle answers new messages?". Yes opens step 3's chat; Skip for now finishes setup with the safe
+ * defaults and opens the Inbox, where Waggle's replies wait unsent.
+ */
+function AskRow({
+  into3,
+  footer,
+  className,
+  delay,
+}: {
+  into3: SetupScreen;
+  footer: ReturnType<typeof resultsFooter>;
+  className?: string;
+  delay?: number;
+}) {
+  const copy = RESULTS_FOOTER_COPY[footer];
+  return (
+    <div
+      className={cn("flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5", className)}
+      style={delay === undefined ? undefined : { animationDelay: `${delay}ms` }}
+    >
+      <span className="flex min-w-[200px] flex-1 flex-col">
+        <b className="font-semibold">{copy.title}</b>
+        <span className="text-ink-2 text-sm">{copy.sub}</span>
+      </span>
+      <span className="flex flex-wrap gap-2">
+        <ScreenButton to={into3} className={PRIMARY}>
+          {copy.yes}
+        </ScreenButton>
+        <form action={skipSetupAnswers} className="contents">
+          <SkipButton />
+        </form>
+      </span>
+    </div>
+  );
+}
+
+/** What decides what the results show, from the page's numbers. */
 const storyFactsOf = (props: Step2StoryProps, reading: boolean): StoryFacts => ({
   reading,
   read: !!props.progress,
@@ -426,156 +336,204 @@ const storyFactsOf = (props: Step2StoryProps, reading: boolean): StoryFacts => (
   locked: props.locked,
   dmsOpen: props.pastDms ? props.closeToday : props.dmsOpen,
   commentsOpen: props.commentsOpen,
-  wanted: props.topics.length + props.chats.length > 0,
+  reviewsOpen: props.reviewsOpen,
+  replies: props.replies,
+  needYou: props.needYou,
 });
 
-function BeeIcon({ size = 30 }: { size?: number }) {
+function LockedBand({ n, spam, platform }: { n: number; spam: number; platform: string }) {
+  const rule = useRef<HTMLDialogElement>(null);
+  const spamLine = lockedSpamLine(n, spam);
   return (
-    <span aria-hidden className="bee-bob inline-block shrink-0">
-      <svg width={size} height={Math.round((size * 16) / 24)} viewBox="0 0 24 16">
-        <BeeBody />
-      </svg>
-    </span>
-  );
-}
-
-/** The bee and what it says, as the scene's heading. */
-function BeeLine({ children }: { children: string }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <BeeIcon />
-      <h1 className="text-ink-2 text-[14px] font-medium">{children}</h1>
+    <div className="part-in bg-danger-soft border-danger-border flex flex-wrap items-start gap-4 border-b p-4 sm:p-5">
+      <span className="flex flex-col items-start gap-1.5">
+        <b className="text-danger font-display text-[44px] leading-none font-bold tabular-nums">
+          {n}
+        </b>
+        <span className="text-danger flex items-center gap-1 text-xs font-semibold tracking-wide uppercase">
+          <Lock className="size-3.5" aria-hidden /> Locked
+        </span>
+      </span>
+      <span className="flex min-w-[200px] flex-1 flex-col gap-1">
+        <b className="text-danger text-[17px] leading-snug font-semibold">
+          {n === 1
+            ? "A DM you missed. You can’t answer it anymore."
+            : "DMs you missed. You can’t answer them anymore."}
+        </b>
+        <span className="text-ink-2 text-sm leading-relaxed">
+          {n === 1 ? "This customer" : "These customers"} on {platform} waited more than 24 hours,
+          so {n === 1 ? "it’s" : "they’re"} locked by Meta.{" "}
+          <button
+            type="button"
+            className="link-inline cursor-pointer"
+            onClick={() => rule.current?.showModal()}
+          >
+            Meta’s 24-hour rule*
+          </button>
+        </span>
+        {spamLine && <span className="text-ink-3 text-xs">{spamLine}</span>}
+      </span>
+      <MetaRule ref={rule} />
     </div>
   );
 }
 
-const TONE = {
-  red: { box: "border-danger-border bg-danger-soft", n: "text-danger" },
-  honey: { box: "border-honey-border bg-honey-tint", n: "text-honey-text" },
-  green: { box: "border-success/30 bg-success-soft", n: "text-success" },
-} as const;
+/** Meta's 24-hour rule, in place: Esc, Got it or a tap outside closes it. */
+function MetaRule({ ref }: { ref: RefObject<HTMLDialogElement | null> }) {
+  const close = () => ref.current?.close();
+  return (
+    <dialog
+      ref={ref}
+      aria-labelledby="meta-rule-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+      className="bg-surface border-line text-ink m-auto w-[calc(100%-32px)] max-w-[440px] rounded-[18px] border p-0 shadow-[0_12px_32px_rgba(23,20,15,0.14)] backdrop:bg-[rgba(23,20,15,0.3)]"
+    >
+      <div className="flex flex-col gap-3 p-6">
+        <h2 id="meta-rule-title" className="font-display text-[22px] leading-tight font-semibold">
+          Meta’s 24-hour rule
+        </h2>
+        <p className="text-ink-2 text-[15px]">
+          On Instagram and Facebook, a business can answer a DM only within 24 hours of the
+          customer’s last message. After that, Meta locks the chat and your reply can’t be sent,
+          unless the customer writes again.
+        </p>
+        <p className="text-ink-2 text-[15px]">
+          That’s why these DMs are lost: they waited longer than a day. With Waggle, customers get
+          an answer in minutes, so a DM doesn’t get locked again.
+        </p>
+        <div>
+          <button type="button" className={PRIMARY} onClick={close} autoFocus>
+            Got it
+          </button>
+        </div>
+      </div>
+    </dialog>
+  );
+}
 
-function BigCard({
-  tone,
+const TILE_ICON: Record<TileKind, ReactNode> = {
+  dms: <Clock aria-hidden />,
+  comments: <MessageCircle aria-hidden />,
+  reviews: <Star aria-hidden />,
+};
+
+function ResultTile({
+  kind,
+  platform,
+  platformLabel,
   n,
-  title,
-  sub,
+  text,
   note,
 }: {
-  tone: keyof typeof TONE;
+  kind: TileKind;
+  platform: string | null;
+  platformLabel: string;
   n: number;
-  title: string;
-  sub: string;
-  note?: string;
+  text: string;
+  note: string | null;
 }) {
   return (
-    <div
-      className={cn("flex min-w-0 flex-1 flex-col gap-1 rounded-2xl border p-3", TONE[tone].box)}
-    >
-      <b
-        className={cn(
-          "font-display text-[36px] leading-none font-semibold tabular-nums",
-          TONE[tone].n,
-        )}
-      >
-        {n}
-      </b>
-      <span className="text-[13px]">
-        <b className="font-semibold">{title}</b> {sub}
-      </span>
-      {note && <span className="text-ink-2 text-[12px]">{note}</span>}
-    </div>
-  );
-}
-
-function LockedCard({ n, summary = false }: { n: number; summary?: boolean }) {
-  return (
-    <BigCard
-      tone="red"
-      n={n}
-      title={n === 1 ? "DM you can’t answer any more." : "DMs you can’t answer any more."}
-      sub={
-        summary
-          ? "Locked by Meta’s 24-hour rule."
-          : `${n === 1 ? "It’s" : "They’re"} locked by Meta’s 24-hour rule.`
-      }
-      note="Instagram and Facebook only let a business reply within 24 hours."
-    />
-  );
-}
-
-function AnswerableCards({
-  props,
-  summary = false,
-}: {
-  props: Step2StoryProps;
-  summary?: boolean;
-}) {
-  const dms = props.pastDms ? props.closeToday : props.dmsOpen;
-  if (dms + props.commentsOpen === 0) return null;
-  return (
-    <div className="flex flex-wrap gap-2">
-      {dms > 0 &&
-        (props.pastDms ? (
-          <BigCard
-            tone="honey"
-            n={dms}
-            title={dms === 1 ? "DM closes today." : "DMs close today."}
-            sub={
-              summary
-                ? `Answer ${dms === 1 ? "it" : "them"} first.`
-                : `Answer ${dms === 1 ? "it" : "them"} before Meta locks ${dms === 1 ? "it" : "them"}.`
-            }
-          />
+    <li className="border-success/25 bg-surface flex items-center gap-3 rounded-xl border p-3">
+      <span className="relative shrink-0">
+        {platform ? (
+          <PlatformMark platform={platform} size={32} />
         ) : (
-          <BigCard tone="honey" n={dms} title={dms === 1 ? "DM" : "DMs"} sub="with no reply." />
-        ))}
-      {props.commentsOpen > 0 && (
-        <BigCard
-          tone="green"
-          n={props.commentsOpen}
-          title={props.commentsOpen === 1 ? "comment" : "comments"}
-          sub="with no reply."
-        />
-      )}
+          <span className="bg-success-soft text-success inline-flex size-8 items-center justify-center rounded-lg [&_svg]:size-4">
+            {TILE_ICON[kind]}
+          </span>
+        )}
+        {platform && (
+          <span className="bg-success-soft text-success ring-surface absolute -right-1.5 -bottom-1.5 inline-flex size-[18px] items-center justify-center rounded-full ring-2 [&_svg]:size-2.5">
+            {TILE_ICON[kind]}
+          </span>
+        )}
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <b className="text-success text-[26px] leading-none font-semibold tabular-nums">{n}</b>
+        <span className="text-ink-2 text-sm leading-snug">
+          {text}
+          <span className="sr-only"> on {platformLabel}</span>
+        </span>
+        {note && <span className="text-success text-xs font-medium">{note}</span>}
+      </span>
+    </li>
+  );
+}
+
+const CHIP =
+  "border-line-strong bg-surface text-ink hover:border-ink inline-flex min-h-10 items-center gap-2 rounded-full border py-1.5 pr-3 pl-1.5 text-sm font-semibold no-underline";
+
+function ChipFace({ platform, label }: { platform: string; label: string }) {
+  return (
+    <>
+      <PlatformMark platform={platform} size={26} />
+      {label}
+      <Plus className="text-ink-3 size-4" aria-hidden />
+    </>
+  );
+}
+
+/**
+ * "Waggle only checked Instagram. Customers may be waiting here too:" one chip per place, each
+ * connecting it here; with Free full, the Solo pop-up on this page. "+N more" opens step 1.
+ */
+function Chips({ props, bare = false }: { props: Step2StoryProps; bare?: boolean }) {
+  if (props.more.length === 0) return null;
+  const shown = props.more.slice(0, CHIPS_SHOWN);
+  const rest = props.more.length - shown.length;
+  return (
+    <div className={cn("flex flex-col gap-2.5", !bare && "card px-3.5 py-3")}>
+      <p className="text-ink-2 text-sm">
+        <b className="text-ink font-semibold">Waggle only checked {props.platform}.</b> Customers
+        may be waiting here too:
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {shown.map((m) =>
+          m.upgradeHref ? (
+            <Link
+              key={m.platform}
+              href={m.upgradeHref}
+              scroll={false}
+              className={CHIP}
+              aria-label={`Connect ${m.label}`}
+            >
+              <ChipFace platform={m.platform} label={m.label} />
+            </Link>
+          ) : (
+            <form key={m.platform} action={connectAccount} className="contents">
+              <input type="hidden" name="platform" value={m.platform} />
+              <input type="hidden" name="back" value="/setup" />
+              <ConnectSubmit platform={m.label} className={CHIP}>
+                <ChipFace platform={m.platform} label={m.label} />
+              </ConnectSubmit>
+            </form>
+          ),
+        )}
+        {rest > 0 && (
+          <Link
+            href="/welcome?all=1"
+            className="text-ink-2 hover:text-ink inline-flex min-h-10 items-center px-1.5 text-sm font-semibold"
+          >
+            +{rest} more
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
 
-function TopicChips({ topics }: { topics: { label: string; count: number; muted?: boolean }[] }) {
-  if (topics.length === 0) return null;
+function SkipButton() {
+  const { pending } = useFormStatus();
   return (
-    <ul className="flex flex-wrap gap-1.5" aria-label="What they asked about">
-      {topics.map((t) => (
-        <li
-          key={t.label}
-          className={cn(
-            "border-line rounded-full border px-2.5 py-1 text-[12.5px]",
-            t.muted ? "text-ink-3 bg-transparent" : "bg-surface text-ink-2",
-          )}
-        >
-          {t.label} · <b className="font-semibold">{t.count}</b>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function ChatRow({ chat }: { chat: StoryChat }) {
-  return (
-    <li className="flex items-start gap-2.5 px-3 py-2.5">
-      <Avatar name={chat.name} size={28} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex flex-wrap items-baseline justify-between gap-x-2 text-[12.5px]">
-          <b className="min-w-0 font-semibold break-words">{chat.name}</b>
-          <span className={cn("whitespace-nowrap", chat.urgent ? "text-danger" : "text-ink-3")}>
-            {chat.meta}
-          </span>
-        </span>
-        <span className="bg-subtle max-w-[92%] self-start rounded-[14px] rounded-bl-[4px] px-2.5 py-1.5 text-[13px] break-words">
-          {chat.text}
-        </span>
-      </div>
-    </li>
+    <button
+      type="submit"
+      disabled={pending}
+      aria-busy={pending}
+      className="border-line bg-surface hover:border-honey inline-flex min-h-11 items-center justify-center rounded-xl border px-4 text-sm font-semibold"
+    >
+      {pending ? "Loading…" : "Skip for now"}
+    </button>
   );
 }

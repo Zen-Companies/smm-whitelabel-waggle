@@ -6,11 +6,12 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { connectAccount } from "@/features/accounts";
 import { sendAllReadyAction, updateAutonomyMode } from "@/features/approvals";
-import { planAllowsAutoReply } from "@/features/billing";
+import { planAllowsAutoReply, WELCOME_HREF } from "@/features/billing";
 import { redraftPulledItem } from "@/features/catch-up";
 import { addAnswerNow } from "@/features/knowledge-base";
 import { can } from "@/features/orgs";
 import {
+  type CurrentTenant,
   BRAND_NAME_MAX,
   ensureZernioProfile,
   getOpenOrg,
@@ -18,16 +19,18 @@ import {
   NOT_ALLOWED,
   openBrand,
 } from "@/features/tenants";
-import { ASK_FIRST_IDS, CUSTOM_MAX, isCustomTopic } from "@/lib/ask-first";
+import { ASK_FIRST_IDS, CUSTOM_MAX, isCustomTopic, withAskFirstFloor } from "@/lib/ask-first";
 import { writeAudit } from "@/lib/audit";
 import { markSetupPassed } from "@/lib/setup/passed";
 import { getSocialProvider } from "@/lib/social";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { PENDING_BRAND_NAME } from "./brand-name";
-import { batchProgress, type BatchProgress } from "./copy";
 import { isSetupScreen, type SetupScreen } from "./flow";
-import { loadSetupSending } from "./setup-data";
+import { chatSavedOf } from "./chat";
+import { storedProfile } from "./profile";
+import { kindFromProfile } from "./starter";
+import { skipAnswersDefaults } from "./story";
 
 // Setup, Walter's flow (approved 20 Nov). Every action checks the role first (an action is
 // reachable without its button), writes with the service role where owners have no grant, and
@@ -186,17 +189,6 @@ export async function sendSetupReplies(input: {
   return { sent, skipped };
 }
 
-/** The progress card asks every few seconds: the setup replies on their way (real statuses). */
-export async function setupSendingProgress(): Promise<BatchProgress | null> {
-  const tenant = await getTenantFor("inbox.read");
-  if (!tenant) return null;
-  try {
-    return batchProgress(await loadSetupSending(getServiceClient(), tenant.id));
-  } catch {
-    return null;
-  }
-}
-
 export interface AnswerWaitingState {
   error?: string;
   /** Waggle's new reply, saved as a draft (sent from here or the Inbox). */
@@ -293,25 +285,77 @@ export async function finishSetup(formData: FormData): Promise<void> {
     topics: formData.getAll("topic").map(String),
     mode: formData.get("mode") === "auto" ? "auto" : "approve",
   });
-  if (!parsed.success) redirect("/setup?screen=how");
+  if (!parsed.success) redirect("/setup?screen=chat");
   const tenant = await getTenantFor("brand.settings");
   if (!tenant) redirect("/inbox");
+  const { topics: chosen } = parsed.data;
+  await finishWith(tenant, {
+    mode: parsed.data.mode,
+    topicsFor: (kind) => withAskFirstFloor(chosen, kind),
+    skipped: false,
+  });
+  redirect("/setup?screen=done");
+}
+
+/**
+ * Step 2's "Skip for now" (23 Nov): finishes setup without step 3, with the safe defaults (Ask me
+ * first; the kind's safety floor plus refunds and complaints; none of the owner's own topics).
+ * Waggle's drafts stay unsent in the Inbox. Marked in setup_chat so the chat is never shown, and
+ * the business-profile AI call is skipped for the brand (profile-run: setup_done_at is set).
+ */
+export async function skipSetupAnswers(): Promise<void> {
+  const tenant = await getTenantFor("brand.settings");
+  if (!tenant) redirect("/inbox");
+  await finishWith(tenant, {
+    mode: "approve",
+    topicsFor: (kind) => skipAnswersDefaults(kind).topics,
+    skipped: true,
+  });
+  await writeAudit(getServiceClient(), {
+    tenantId: tenant.id,
+    action: "setup_skipped_answers",
+    actor: tenant.userId,
+    details: { from: "step2" },
+  });
+  redirect(WELCOME_HREF);
+}
+
+/** Saves the topics and how replies go out, marks setup done (audited), once per brand. */
+async function finishWith(
+  tenant: CurrentTenant,
+  input: {
+    mode: "approve" | "auto";
+    topicsFor: (kind: string | null) => string[];
+    skipped: boolean;
+  },
+): Promise<void> {
   const db = getServiceClient();
-  const { topics } = parsed.data;
   // Free approves every reply (19 Nov): Reply on its own opens the Solo offer instead.
   const mode =
-    parsed.data.mode === "auto" && (await planAllowsAutoReply(db, tenant.id)) ? "auto" : "approve";
+    input.mode === "auto" && (await planAllowsAutoReply(db, tenant.id)) ? "auto" : "approve";
 
   const { data: before } = await db
     .from("tenants")
-    .select("ask_first_topics, setup_done_at")
+    .select("ask_first_topics, setup_done_at, business_profile, ai_profile, setup_chat")
     .eq("id", tenant.id)
     .single();
+  // The safety floor for the kind (board "Step 3 is a conversation with Waggle", 23 Nov): code,
+  // never removed, whatever was ticked.
+  const kind =
+    kindFromProfile(before?.business_profile ?? "")?.key ??
+    storedProfile(before?.ai_profile)?.kind ??
+    null;
+  const topics = input.topicsFor(kind);
   await db
     .from("tenants")
     .update({
       ask_first_topics: topics,
-      setup_screen: "how",
+      setup_screen: "chat",
+      setup_chat: {
+        ...chatSavedOf(before?.setup_chat),
+        mode,
+        ...(input.skipped ? { topics, skippedAnswers: true as const } : {}),
+      },
       ...(before?.setup_done_at ? {} : { setup_done_at: new Date().toISOString() }),
     })
     .eq("id", tenant.id);
@@ -339,10 +383,13 @@ export async function finishSetup(formData: FormData): Promise<void> {
       tenantId: tenant.id,
       action: "setup_finished",
       actor: tenant.userId,
-      details: { topics: topics.length, mode },
+      details: { topics: topics.length, mode, skipped: input.skipped },
     });
   }
-  await markSetupPassed(db, { tenantId: tenant.id, how: "finished", userId: tenant.userId });
+  await markSetupPassed(db, {
+    tenantId: tenant.id,
+    how: input.skipped ? "skipped" : "finished",
+    userId: tenant.userId,
+  });
   revalidatePath("/", "layout");
-  redirect("/setup?screen=done");
 }

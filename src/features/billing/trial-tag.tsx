@@ -14,7 +14,7 @@ export async function TrialConversionTag({
   orgId: string;
 }) {
   const trial = await loadTrialConversion(sessionId, orgId);
-  if (!trial) return null;
+  if (!trial?.first) return null;
   const user = await getCurrentUser();
   const keys = matchKeys(user.id, user.email);
   return (

@@ -21,6 +21,7 @@ import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
 import { embedPendingEntries, findFactsAfterConnect } from "@/features/knowledge-base";
+import { buildBusinessProfiles, buildProfileAfterConnect } from "@/features/setup";
 import { getClassifier } from "@/lib/classifier";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
@@ -108,6 +109,28 @@ export async function POST(request: Request): Promise<Response> {
       db,
       llm,
       shouldContinue: () => deadline.remainingMs() > 15_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
+    // Setup item G: the business profile right after a first connect (the catch-up kick does it
+    // at once; this picks up the rest, e.g. accounts with no catch-up). One AI call per brand, ever.
+    const connectProfiles = await buildProfileAfterConnect({
+      db,
+      llm,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 20_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
+    // Step 3's business profile (board "Step 3 is a conversation with Waggle", 23 Nov): the
+    // fallback once a read is sorted, only for brands the connect-time run didn't make one for.
+    const businessProfiles = await buildBusinessProfiles({
+      db,
+      llm,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 20_000,
     }).catch((e: unknown) => {
       Sentry.captureException(e);
       return { error: true };
@@ -238,6 +261,8 @@ export async function POST(request: Request): Promise<Response> {
       backfill,
       catchUp,
       catchUpFinish,
+      connectProfiles,
+      businessProfiles,
       foundFacts,
       reviews,
       analytics,

@@ -14,8 +14,7 @@ import { isSetupScreen, type SetupScreen } from "./flow";
 type Pager = { has: (s: SetupScreen) => boolean; go: (s: SetupScreen) => void };
 const PagerContext = createContext<Pager | null>(null);
 
-const screenInUrl = (): string | null =>
-  new URLSearchParams(window.location.search).get("screen");
+const screenInUrl = (): string | null => new URLSearchParams(window.location.search).get("screen");
 
 export function ScreenPager({
   initial,

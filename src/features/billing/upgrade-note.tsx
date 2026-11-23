@@ -1,10 +1,10 @@
-import Link from "next/link";
-import { UPGRADE, upgradeHref, upgradeLabel, upgradeLine, type UpgradeReason } from "./upgrade";
+import { UPGRADE, upgradeLabel, upgradeLine, type UpgradeReason } from "./upgrade";
+import { UpgradeLink } from "./upgrade-link";
 
 /**
  * A limit said before anyone tries (Free plan, 20 Nov QA): in place of a form the plan doesn't
- * include, the limit's title, "To …, upgrade to … or above" and the way to the upgrade screen.
- * No toasts (design.md §4).
+ * include, the limit's title, "To …, upgrade to … or above" and the button that opens the upgrade
+ * pop-up over this page (23 Nov). No toasts (design.md §4).
  */
 export function UpgradeNote({ reason, isOwner }: { reason: UpgradeReason; isOwner: boolean }) {
   const copy = UPGRADE[reason];
@@ -18,12 +18,12 @@ export function UpgradeNote({ reason, isOwner }: { reason: UpgradeReason; isOwne
         {copy.why} {upgradeLine(reason)}
       </span>
       {isOwner ? (
-        <Link
-          href={upgradeHref(reason)}
+        <UpgradeLink
+          reason={reason}
           className="bg-ink inline-flex min-h-11 w-fit items-center rounded-xl px-4 text-sm font-semibold text-white"
         >
           {upgradeLabel(reason)}
-        </Link>
+        </UpgradeLink>
       ) : (
         <span className="meta">The Owner can upgrade the plan on Your plan.</span>
       )}

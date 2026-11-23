@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
+import { UpgradeLink } from "@/features/billing/client";
 import { updateAutonomyMode, type AutonomyFormState } from "./actions";
 import {
   AUTONOMY_MODES,
@@ -54,29 +55,35 @@ export function AutonomyForm({
           </span>
         </span>
         <span className="segmented justify-self-start" role="radiogroup" aria-label={label}>
-          {AUTONOMY_MODES.map((m) => (
-            <label
-              key={m}
-              data-active={value === m || undefined}
-              title={m === "auto" && !autoAllowed ? "Solo and up" : undefined}
-              className={m === "auto" && !autoAllowed ? "cursor-not-allowed opacity-50" : undefined}
-            >
-              <input
-                type="radio"
-                name="mode"
-                value={m}
-                checked={value === m}
-                disabled={m === "auto" && !autoAllowed}
-                onChange={() => {
-                  setValue(m);
-                  // Save right away.
-                  queueMicrotask(() => formRef.current?.requestSubmit());
-                }}
-                className="sr-only"
-              />
-              {MODE_LABELS[m]}
-            </label>
-          ))}
+          {AUTONOMY_MODES.map((m) =>
+            m === "auto" && !autoAllowed ? (
+              // Free (23 Nov): the locked mode opens the Worker Bee pop-up for this kind.
+              <UpgradeLink
+                key={m}
+                reason="auto_reply"
+                extra={{ topic: category }}
+                className="opacity-60 hover:opacity-100"
+              >
+                {MODE_LABELS[m]}
+              </UpgradeLink>
+            ) : (
+              <label key={m} data-active={value === m || undefined}>
+                <input
+                  type="radio"
+                  name="mode"
+                  value={m}
+                  checked={value === m}
+                  onChange={() => {
+                    setValue(m);
+                    // Save right away.
+                    queueMicrotask(() => formRef.current?.requestSubmit());
+                  }}
+                  className="sr-only"
+                />
+                {MODE_LABELS[m]}
+              </label>
+            ),
+          )}
         </span>
       </fieldset>
       {(pending || state.saved) && (

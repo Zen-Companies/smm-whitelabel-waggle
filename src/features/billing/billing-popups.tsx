@@ -6,14 +6,31 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PlanBees, RestingBee } from "@/components/app/bee-plan";
 import { Button } from "@/components/ui/button";
+import type { ConversionTagProps } from "@/features/ad-tracking/client";
 import { NUDGE_EVERY_DAYS, nudgeDue, popupFor, STORAGE, type Popup } from "./banners";
 import { recordPlanNotice } from "./notice-actions";
 import { UpgradeDialog, WelcomeDialog, type OfferOrg } from "./offer-dialogs";
 import { dailyAmount, TRIAL } from "./plans";
+import { confirmCheckout, popupFacts } from "./popup-actions";
+import { NO_FACTS, popupContent, popupVersion, type PopupFacts } from "./popup-copy";
 import { waitingLine, type ReplyPain } from "./reply-pain";
 import type { OfferReason } from "./upgrade";
 import { upgradeOffer } from "./upgrade-offer";
+import { carryOnFor, UpgradePopup } from "./upgrade-popup";
 import { welcomeFor } from "./welcome";
+
+/** The pop-up's own parameters, dropped from the address when it closes. */
+const POPUP_PARAMS = [
+  "upgrade",
+  "welcome",
+  "platform",
+  "platforms",
+  "topic",
+  "checkout",
+  "session_id",
+];
+/** Dropped from the page Checkout comes back to (choosePlan sets `upgrade` again). */
+const RETURN_DROP = ["upgrade", "welcome", "checkout", "session_id"];
 
 // The plan banner on top of every dashboard page and the plan pop-ups (Walter's flow, 20 Nov).
 // Pop-ups open from the URL: `?upgrade=<reason>` (any page but Your plan) and `?welcome=1`
@@ -44,15 +61,35 @@ export interface OutOfReplies {
   pain: ReplyPain;
 }
 
+/** This month's AI replies, for the replies pop-up (C). */
+export interface ReplyUsage {
+  used: number;
+  allowance: number;
+  /** "Dec 1". */
+  resetsOn: string;
+  reached: boolean;
+}
+
 export function BillingPopups({
   org,
   banner,
   out,
+  usage = null,
+  tenantId = null,
+  needsYou = [],
+  connect,
   showBanner = true,
 }: {
   org: OfferOrg;
   banner: "out" | "nudge" | null;
   out: OutOfReplies | null;
+  usage?: ReplyUsage | null;
+  /** The open brand, for the pop-up's own numbers (none in setup: the organization's first). */
+  tenantId?: string | null;
+  /** The Inbox's "need you" statuses. */
+  needsYou?: readonly string[];
+  /** Connect an account: after paying, "Connect TikTok" carries on (accounts' server action). */
+  connect?: (formData: FormData) => Promise<void>;
   /** Setup pages: pop-ups only, no banner. */
   showBanner?: boolean;
 }) {
@@ -82,12 +119,18 @@ export function BillingPopups({
     });
   }, [org.orgId, banner, out]);
 
+  // Stripe's return from the pop-up's checkout. Decided before the plan: the webhook may have
+  // moved the organization off Free already, and the pop-up still shows how it went.
+  const checkout = params.get("checkout");
+  const sessionId = params.get("session_id");
+  const paidReturn = checkout === "done" && !!sessionId;
   const fromUrl = popupFor({
     path,
     upgrade: params.get("upgrade"),
     welcome: params.get("welcome"),
     welcomeSeen: stored.welcomeSeen,
     outDue: stored.outDue,
+    onPlanToo: org.current === "free" || paidReturn,
   });
   const urlKey = `${path}?${params.toString()}`;
   const popup = local ?? (closed === urlKey ? null : fromUrl);
@@ -118,17 +161,125 @@ export function BillingPopups({
       setStored((s) => ({ ...s, outDue: false }));
       void recordPlanNotice({ orgId: org.orgId, what: "out_closed" }).catch(() => undefined);
     }
-    // Drop ?upgrade= and ?welcome= so a refresh doesn't open it again.
-    if (params.has("upgrade") || params.has("welcome")) {
+    // Drop the pop-up's parameters so a refresh doesn't open it again.
+    if (POPUP_PARAMS.some((k) => params.has(k))) {
       const next = new URLSearchParams(params.toString());
-      next.delete("upgrade");
-      next.delete("welcome");
+      for (const k of POPUP_PARAMS) next.delete(k);
       const q = next.toString();
       router.replace(q ? `${path}?${q}` : path, { scroll: false });
     }
   };
+  /** After paying: close, and the page reads the new plan. */
+  const done = () => {
+    close();
+    router.refresh();
+  };
 
   const open = (reason: OfferReason) => setLocal({ kind: "upgrade", reason });
+
+  // Free: the new pop-up (one layout, six versions), with the brand's own numbers once it opens.
+  const free = org.current === "free";
+  const [facts, setFacts] = useState<{ key: string; facts: Omit<PopupFacts, "usage"> } | null>(
+    null,
+  );
+  const factsKey = free && popup ? `${org.orgId}:${tenantId ?? ""}` : null;
+  const needsYouKey = needsYou.join(",");
+  useEffect(() => {
+    if (!factsKey || facts?.key === factsKey) return;
+    let live = true;
+    void popupFacts({
+      orgId: org.orgId,
+      tenantId,
+      needsYou: needsYouKey ? needsYouKey.split(",") : [],
+    })
+      .then((f) => {
+        if (live && f) setFacts({ key: factsKey, facts: f });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [factsKey, facts?.key, org.orgId, tenantId, needsYouKey]);
+
+  // Stripe's return: asked once per session id.
+  const [confirmed, setConfirmed] = useState<{
+    id: string;
+    result: { tag: ConversionTagProps | null } | null;
+  } | null>(null);
+  useEffect(() => {
+    if (checkout !== "done" || !sessionId || confirmed?.id === sessionId) return;
+    let live = true;
+    void confirmCheckout({ orgId: org.orgId, sessionId })
+      .catch(() => null)
+      .then((result) => {
+        if (live) setConfirmed({ id: sessionId, result });
+      });
+    return () => {
+      live = false;
+    };
+  }, [checkout, sessionId, confirmed?.id, org.orgId]);
+
+  const back = (() => {
+    const next = new URLSearchParams(params.toString());
+    for (const k of RETURN_DROP) next.delete(k);
+    const q = next.toString();
+    return q ? `${path}?${q}` : path;
+  })();
+
+  // Back from the pop-up's checkout: its success state, whatever the plan reads now.
+  const returning = !local && popup?.kind === "upgrade" && paidReturn;
+  const freePopup = (() => {
+    if (!popup || (!free && !returning)) return null;
+    const reason: OfferReason | "welcome" =
+      popup.kind === "upgrade" ? popup.reason : popup.kind === "out" ? "out" : "welcome";
+    const version = popupVersion(
+      reason,
+      {
+        platform: params.get("platform"),
+        platforms: params.get("platforms"),
+        topic: params.get("topic"),
+      },
+      usage?.reached ? "out" : "low",
+    );
+    const known: PopupFacts = {
+      ...NO_FACTS,
+      ...(facts?.facts ?? {}),
+      pain: facts?.facts.pain ?? out?.pain ?? null,
+      usage: usage
+        ? { used: usage.used, allowance: usage.allowance, resetsOn: usage.resetsOn }
+        : null,
+    };
+    const content = popupContent({
+      version,
+      plans: org.plans,
+      trial: org.trial,
+      founding: org.founding,
+      facts: known,
+      now: new Date(),
+    });
+    const returned =
+      !local && popup.kind === "upgrade" && (checkout === "done" || checkout === "cancelled");
+    return (
+      <UpgradePopup
+        content={content}
+        org={org}
+        // The welcome comes back as Try Solo (same offer, same success line).
+        reason={reason === "welcome" ? "nudge" : reason}
+        back={back}
+        checkout={returned ? (checkout as "done" | "cancelled") : null}
+        confirmed={
+          checkout === "done" && sessionId
+            ? confirmed?.id === sessionId
+              ? confirmed.result
+              : "checking"
+            : null
+        }
+        carryOn={carryOnFor(version, connect, back)}
+        onClose={close}
+        onDone={done}
+      />
+    );
+  })();
   const hideNudge = () => {
     write(() => localStorage, STORAGE.nudgeHiddenAt, String(Date.now()));
     setStored((s) => ({ ...s, nudge: false }));
@@ -143,7 +294,8 @@ export function BillingPopups({
       {showBanner && stored.nudge && (
         <SoloNudge org={org} onOpen={() => open("nudge")} onHide={hideNudge} />
       )}
-      {popup?.kind === "upgrade" && (
+      {freePopup}
+      {!free && !returning && popup?.kind === "upgrade" && (
         <UpgradeDialog
           reason={popup.reason}
           org={org}
@@ -152,7 +304,7 @@ export function BillingPopups({
           pain={popup.reason === "out" ? out?.pain : undefined}
         />
       )}
-      {popup?.kind === "out" && out && (
+      {!free && popup?.kind === "out" && out && (
         <UpgradeDialog
           reason="out"
           org={org}
@@ -161,7 +313,7 @@ export function BillingPopups({
           pain={out.pain}
         />
       )}
-      {popup?.kind === "welcome" && (
+      {!free && popup?.kind === "welcome" && (
         <WelcomeDialog
           content={welcomeFor(org.current, org.plans, { trial: org.trial })}
           org={org}
