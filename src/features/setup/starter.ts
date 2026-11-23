@@ -63,6 +63,18 @@ export const BUSINESS_KINDS = [
     more: ["How soon can you come?", "Are you licensed and insured?", "Do you work weekends?"],
   },
   {
+    // Clinic or health (board "Step 3 is a conversation with Waggle", 23 Nov): medical questions
+    // always come to the owner (the ask-first floor).
+    key: "health",
+    label: "Clinic or health",
+    questions: [
+      "When are you open?",
+      "How do I book an appointment?",
+      "How much is a consultation?",
+    ],
+    more: ["Do you accept my HMO or insurance?", "Where are you?", "Do you take walk-ins?"],
+  },
+  {
     key: "other",
     label: "Something else",
     questions: ["When are you open?", "Where are you?", "How do I buy or book?"],
@@ -74,6 +86,70 @@ export type BusinessKind = (typeof BUSINESS_KINDS)[number]["key"];
 
 export function kindOf(key: unknown): (typeof BUSINESS_KINDS)[number] | null {
   return BUSINESS_KINDS.find((k) => k.key === key) ?? null;
+}
+
+/**
+ * The category a page states (Facebook Page category, Google Business primary category) → our
+ * kind (setup item G, 23 Nov), so step 3 needn't ask. First match wins, most specific first:
+ * health before beauty ("Medical Spa"), beauty before shop ("Barber Shop"), services before food
+ * and shop ("Auto Repair Shop"), food before shop ("Coffee Shop"). "Home or local services" means
+ * trades and home services; anything else (photographers, schools, agencies, "Local Business")
+ * gives null and setup asks. Pure, tested.
+ */
+/** A whole-word, case-blind pattern (letters in any script count as word letters: "Café"). */
+const words = (alternatives: string) =>
+  new RegExp(String.raw`(?<![\p{L}\p{N}])(?:${alternatives})(?![\p{L}\p{N}])`, "iu");
+
+/** Facebook umbrella categories that could be either of two kinds: setup asks. */
+const AMBIGUOUS_CATEGORY = /^health\s*\/\s*beauty$/i;
+
+const CATEGORY_KINDS: readonly (readonly [BusinessKind, RegExp])[] = [
+  [
+    "health",
+    words(
+      String.raw`(dent(ist|al)|orthodont\w*|doctor|physician|clinic|medical|hospital|health|physiotherap\w*|physical therap\w*|chiropract\w*|optometr\w*|optician|eye care|pharmac\w*|pediatric\w*|dermatolog\w*|psycholog\w*|psychiatr\w*|veterinar\w*|nurs(e|ing)|laborator\w*|diagnostic\w*)`,
+    ),
+  ],
+  [
+    "beauty",
+    words(
+      String.raw`(salon|spa|barber\w*|beauty|beautician|nails?|hair\w*|cosmetic\w*|make-?up|lash(es)?|brows?|waxing|tattoo\w*|massage|skin ?care|esthetician)`,
+    ),
+  ],
+  [
+    "fitness",
+    words(
+      String.raw`(gym|fitness|yoga|pilates|crossfit|martial arts?|boxing|dance studio|personal trainer|sports club|bootcamp|cycling studio)`,
+    ),
+  ],
+  [
+    "realestate",
+    words(String.raw`(real estate|realtor|realty|property|properties|apartment rental|brokerage)`),
+  ],
+  [
+    "services",
+    words(
+      String.raw`(plumb\w*|electrician|electrical|hvac|heating|air condition\w*|roof\w*|contractor|construction|clean(ing|ers?)|janitorial|landscap\w*|lawn|gardener|locksmith|pest control|exterminator|mov(ing|ers?)|handyman|paint(er|ing)|carpent\w*|repair\w*|mechanic|auto(motive)? (service|repair)|car wash|towing|pool (service|cleaning)|flooring|renovation|remodel\w*|home improvement|appliance|window|solar|glass|welding|masonry|fencing|pressure washing)`,
+    ),
+  ],
+  [
+    "food",
+    words(
+      String.raw`(restaurant|caf[eé]|coffee|bakery|baker|bakeshop|bar|pub|pizz\w*|bistro|food|catering|caterer|diner|deli|brewery|winery|juice|tea ?(room|house|shop)|dessert|ice cream|donuts?|doughnuts?|patisserie|p[aâ]tisserie|grill|sushi|burgers?|steakhouse|eatery|noodle\w*|ramen|taqueria|barbecue|bbq|cake\w*|chocolate\w*|food truck)`,
+    ),
+  ],
+  [
+    "shop",
+    words(
+      String.raw`(shop|store|boutique|retail\w*|clothing|apparel|fashion|jewel\w*|florist|flowers?|gifts?|book ?store|supermarket|grocery|market|furniture|electronics|shoes?|pet supply|toys?|e-?commerce|merchandise)`,
+    ),
+  ],
+];
+
+export function kindFromPlatformCategory(category: string | null | undefined): BusinessKind | null {
+  const c = (category ?? "").replace(/\s+/g, " ").trim();
+  if (!c || AMBIGUOUS_CATEGORY.test(c)) return null;
+  return CATEGORY_KINDS.find(([, re]) => re.test(c))?.[0] ?? null;
 }
 
 const OTHER_PREFIX = "Something else: ";

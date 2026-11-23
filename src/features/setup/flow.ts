@@ -12,6 +12,7 @@ export const SETUP_SCREENS = [
   "quick",
   "waiting",
   "how",
+  "chat",
 ] as const;
 export type SetupScreen = (typeof SETUP_SCREENS)[number];
 
@@ -30,6 +31,7 @@ export const STEP_OF: Record<SetupScreen, 2 | 3> = {
   quick: 3,
   waiting: 3,
   how: 3,
+  chat: 3,
 };
 
 /** The line under the stepper: "What you missed · 2 of 3". */
@@ -57,31 +59,30 @@ export interface FlowFacts {
 }
 
 /**
- * The screens with something to show, in order. Step 2 is one screen, "missed" (board "Step 2
- * plays like a story", 23 Nov): its old parts "wanted" and "replies" are scenes in it now, and
- * links to them open it. "how" always shows.
+ * The screens to show, in order. Step 2 is one screen, "missed" (board "Step 2 plays like a
+ * story", 23 Nov): its old parts "wanted" and "replies" are scenes in it now, and links to them
+ * open it. Step 3 is one screen too, "chat" (board "Step 3 is a conversation with Waggle", 23
+ * Nov): its old screens (money, quick, waiting, how) are questions in the thread, and links to
+ * them open it. The facts no longer hide screens; each screen says what's empty in place.
  */
 export function visibleScreens(f: FlowFacts): SetupScreen[] {
-  const show: Record<SetupScreen, boolean> = {
-    name: f.namePending,
-    missed: true,
-    wanted: false,
-    replies: false,
-    money: f.money > 0,
-    quick: f.quick > 0,
-    waiting: f.needYou > 0,
-    how: true,
-  };
-  return SETUP_SCREENS.filter((s) => show[s]);
+  return f.namePending ? ["name", "missed", "chat"] : ["missed", "chat"];
 }
 
-/** Step 2's old parts open step 2's one screen. */
-const STEP2_PARTS: readonly SetupScreen[] = ["wanted", "replies"];
+/** Old screens and where they open now. */
+const OPENS_AS: Partial<Record<SetupScreen, SetupScreen>> = {
+  wanted: "missed",
+  replies: "missed",
+  money: "chat",
+  quick: "chat",
+  waiting: "chat",
+  how: "chat",
+};
 
-/** The first visible screen at or after `from` in the full order (an empty one is skipped). */
+/** The visible screen `from` opens as. */
 function atOrAfter(from: SetupScreen, visible: SetupScreen[]): SetupScreen {
-  const start = SETUP_SCREENS.indexOf(STEP2_PARTS.includes(from) ? "missed" : from);
-  return SETUP_SCREENS.slice(start).find((s) => visible.includes(s)) ?? "how";
+  const to = OPENS_AS[from] ?? from;
+  return visible.includes(to) ? to : "chat";
 }
 
 /**

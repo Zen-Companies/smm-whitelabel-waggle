@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { SEND_SPACING_MS } from "@/features/approvals";
 import { can } from "@/features/orgs";
 import { pullsPastDms } from "@/features/catch-up";
 import { getCurrentTenant } from "@/features/tenants";
@@ -8,27 +7,16 @@ import { getSocialProvider } from "@/lib/social";
 import { platformLabel } from "@/lib/social/platforms";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
-import { BatchScreen } from "./batch-screen";
 import { nameBrandFromProfile } from "./brand-name-server";
-import { ageLabel, batchProgress, doneLines, firstNameOf, plural } from "./copy";
-import {
-  nextScreen,
-  openScreen,
-  previousScreen,
-  setupEntry,
-  stepPosition,
-  stepsDone,
-} from "./flow";
-import { HowScreen } from "./how-screen";
-import { DoneScreen } from "./done-screen";
+import { upgradeHref } from "@/features/billing";
+import { firstNameOf } from "./copy";
+import { nextScreen, openScreen, setupEntry, stepPosition, stepsDone } from "./flow";
 import { NameScreen } from "./name-screen";
-import { flowFactsOf, loadSetupData, loadSetupSending, type SetupData } from "./setup-data";
+import { SetupChat } from "./setup-chat";
+import { flowFactsOf, loadSetupData } from "./setup-data";
 import { ReadingProvider, StartingRead } from "./reading-part";
-import { Step2Story, type StoryChat } from "./step2-story";
+import { Step2Story } from "./step2-story";
 import { SetupFrame } from "./setup-shell";
-import { SendingCard } from "./setup-parts";
-import { restTitle, topicsLine } from "./topics";
-import { WaitingScreen } from "./waiting-screen";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { ConnectingScreen } from "./connecting-screen";
 import { ConnectProblemBox } from "./connect-step-parts";
@@ -36,38 +24,6 @@ import type { ConnectProblem } from "./first-connect";
 
 // Setup steps 2 and 3 (Walter's flow, one screen at a time; boards approved 20 Nov), on the
 // first-connect engine. Step 1 (Connect) is /welcome.
-
-/** Step 2's chat rows (board "Step 2 plays like a story"): replies still to send, else lost DMs. */
-function storyChats(d: SetupData, now: Date): StoryChat[] {
-  const open = [...d.batches.money, ...d.batches.rest].filter((r) => !r.approved).slice(0, 2);
-  if (open.length > 0) {
-    return open.map((r) => ({
-      key: r.itemId,
-      name: r.author ?? "A customer",
-      dm: r.kind === "dm",
-      meta:
-        r.kind === "dm"
-          ? r.hoursLeft !== null
-            ? `DM · closes in ${r.hoursLeft} h`
-            : "DM"
-          : `comment · ${ageLabel(r.receivedAt, now)}`,
-      urgent: r.kind === "dm" && r.hoursLeft !== null,
-      text: r.text,
-    }));
-  }
-  // Spam isn't shown as an example of someone waiting.
-  return d.wanted.lost
-    .filter((l) => l.topic !== "spam")
-    .slice(0, 2)
-    .map((l) => ({
-      key: l.key,
-      name: l.name,
-      dm: true,
-      meta: `DM · ${ageLabel(l.receivedAt, now)}`,
-      urgent: false,
-      text: l.text,
-    }));
-}
 
 export async function SetupView({
   requested,
@@ -94,8 +50,6 @@ export async function SetupView({
   }
   const db = getServiceClient();
   const now = new Date();
-  const sendingLoad = loadSetupSending(db, tenant.id);
-  sendingLoad.catch(() => undefined); // awaited below on step 3; not an unhandled rejection
   const [user, firstLoad] = await Promise.all([
     getCurrentUser(),
     loadSetupData(db, { tenantId: tenant.id, organizationId: tenant.organizationId, now }),
@@ -138,31 +92,12 @@ export async function SetupView({
     );
   }
 
-  // The end (board "Setup, start to finish", 23 Nov): Finish setup lands here, in the frame.
-  if (requested === "done" && d.finished) {
-    const sent = batchProgress(await sendingLoad);
-    return (
-      <SetupFrame step={3} done={done} wayOut={false}>
-        <DoneScreen
-          firstName={firstName}
-          lines={doneLines({
-            platforms: d.connectedPlatforms,
-            sending: sent,
-            mode: d.replyMode,
-            waiting: d.waiting,
-          })}
-        />
-      </SetupFrame>
-    );
-  }
-
   const screen = openScreen({ requested, saved: d.savedScreen, facts });
   const pos = stepPosition(screen, facts);
   const after = nextScreen(screen, facts);
-  const back = previousScreen(screen, facts);
 
-  // Step 2 plays like a story, then shows everything (board approved 23 Nov). One screen,
-  // "missed"; old links to its parts (wanted, replies) open the summary.
+  // Step 2: the reading, then one Results card (board "Replica update", approved 23 Nov). One
+  // screen, "missed"; old links to its parts (wanted, replies) open the results.
   if (screen === "missed") {
     const p = d.progress;
     const handle = p?.handle ? `@${p.handle.replace(/^@/, "")}` : d.platform;
@@ -188,90 +123,74 @@ export async function SetupView({
             pastDms={!!p && pullsPastDms(p.platform)}
             dmAccessMissing={p?.dmAccessMissing ?? false}
             locked={d.missed.lostDms}
+            lockedSpam={d.missed.lockedSpam}
             closeToday={d.missed.closeToday}
             dmsOpen={d.missed.dmsOpen}
             commentsOpen={d.missed.commentsOpen}
-            topics={d.wanted.topics.map((t) => ({
-              label: t.label,
-              count: t.count,
-              muted: t.muted,
-            }))}
-            chats={storyChats(d, now)}
-            drafted={d.replies.drafted}
+            reviewsOpen={d.missed.reviewsOpen}
+            replies={[...d.batches.money, ...d.batches.rest].filter((r) => !r.approved).length}
             needYou={d.waiting.length}
-            writing={d.replies.writing}
-            outOfReplies={d.replies.outOfReplies}
-            nothingToAnswer={
-              d.replies.drafted === 0 && d.waiting.length === 0 && d.replies.writing.of === 0
-            }
-            quiet={!!p && p.commentsFound + p.messagesFound === 0 && d.missed.total === 0}
+            // Free full: the chip opens the Solo pop-up for that platform on this page.
+            more={d.more.map((m) => ({
+              platform: m.platform,
+              label: m.label,
+              upgradeHref: m.upgrade
+                ? upgradeHref("accounts", `/setup?platform=${encodeURIComponent(m.platform)}`)
+                : null,
+            }))}
             days={d.strip}
             now={now.toISOString()}
-            into3={after ?? "how"}
-            atSummary={requested === "wanted" || requested === "replies"}
+            into3={after ?? "chat"}
+            atResults={requested === "wanted" || requested === "replies"}
           />
         </ReadingProvider>
       </SetupFrame>
     );
   }
 
-  const listed = [...d.batches.money, ...d.batches.rest];
-  const meter = { approved: listed.filter((r) => r.approved).length, total: listed.length };
-  const sending = batchProgress(await sendingLoad);
-  const sendingCard =
-    sending.total > 0 ? (
-      <SendingCard initial={sending} spacingMs={SEND_SPACING_MS} platform={d.platform} />
-    ) : null;
-  const nav = { back, index: pos.index, count: pos.count };
-  const step: 2 | 3 = pos.step;
-
-  let body: React.ReactNode = null;
-  if (screen === "name") {
-    body = <NameScreen platform={d.platform} count={pos.count} />;
-  } else if (screen === "money" || screen === "quick") {
-    const money = screen === "money";
-    const replies = money ? d.batches.money : d.batches.rest;
-    body = (
-      <BatchScreen
-        title={
-          money
-            ? `${plural(replies.length, "person wants", "people want")} to buy`
-            : restTitle(replies)
-        }
-        sub={money ? "Untick any you’d rather not send." : topicsLine(replies)}
-        replies={replies}
-        unchecked={d.unchecked}
-        platformWord={d.platform}
-        meter={meter}
-        top={money ? null : sendingCard}
-        next={after ?? "how"}
-        {...nav}
-        spacingMs={SEND_SPACING_MS}
-        canSend={can(tenant.role, "replies.approve")}
-      />
-    );
-  } else if (screen === "waiting") {
-    body = (
-      <WaitingScreen
-        messages={d.waiting}
-        meter={meter}
-        top={sendingCard}
-        next={after ?? "how"}
-        {...nav}
-      />
-    );
-  } else if (screen === "how") {
-    body = (
-      <HowScreen
-        topics={d.askFirst}
-        custom={d.askFirstCustom}
-        mode={d.replyMode}
-        autoAllowed={d.autoAllowed}
-        top={sendingCard}
-        {...nav}
-      />
+  // Step 3 is a conversation with Waggle (board approved 23 Nov): one thread, and its end.
+  if (screen === "chat" || (requested === "done" && d.finished)) {
+    // Step 2's "Skip for now" finished setup without step 3: the chat is never shown.
+    if (d.finished && d.chat.saved.skippedAnswers) redirect("/inbox");
+    const saved =
+      d.finished && !d.chat.saved.mode ? { ...d.chat.saved, mode: d.replyMode } : d.chat.saved;
+    return (
+      <SetupFrame step={3} done={done} wayOut={!d.finished}>
+        <SetupChat
+          firstName={firstName}
+          brandName={d.brandName}
+          tenantId={tenant.id}
+          platformWord={d.platform}
+          saved={saved}
+          log={d.chat.log}
+          kind={d.chat.kind}
+          kindWords={d.chat.kindWords}
+          facts={d.chat.facts}
+          known={d.chat.known}
+          answers={d.chat.answers}
+          replies={[...d.batches.money, ...d.batches.rest]}
+          unchecked={d.unchecked}
+          writing={d.replies.writing}
+          outOfReplies={d.replies.outOfReplies}
+          readBefore={d.readBefore}
+          waiting={d.waiting}
+          autoAllowed={d.autoAllowed}
+          topics={d.askFirst}
+          custom={d.askFirstCustom}
+          suggested={d.chat.suggested}
+          urgent={d.chat.urgent}
+          wanted={d.wanted.topics.map((t) => ({ label: t.label, count: t.count, muted: t.muted }))}
+          buyers={d.wanted.count}
+          finished={d.finished}
+          canSend={can(tenant.role, "replies.approve")}
+        />
+      </SetupFrame>
     );
   }
+
+  const step: 2 | 3 = pos.step;
+  const body: React.ReactNode =
+    screen === "name" ? <NameScreen platform={d.platform} count={pos.count} /> : null;
 
   return (
     <SetupFrame step={step} done={done}>

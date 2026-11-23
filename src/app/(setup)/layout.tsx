@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
+import { connectAccount } from "@/features/accounts";
 import { BillingHost } from "@/features/billing";
 import { Feedback } from "@/features/feedback";
 import { can, listMyOrgs, OrgMenu } from "@/features/orgs";
@@ -21,6 +22,7 @@ async function SetupOffers() {
       orgId={open.id}
       isOwner={can(open.role, "billing.view")}
       canInvite={can(open.role, "team.manage")}
+      connect={connectAccount}
       showBanner={false}
     />
   );

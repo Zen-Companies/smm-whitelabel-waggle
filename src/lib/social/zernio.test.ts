@@ -224,6 +224,70 @@ describe("ZernioSocialProvider", () => {
     expect(captured).toHaveLength(0);
   });
 
+  it("getAccountCategory reads the selected Facebook Page's category (setup item G)", async () => {
+    respond = () =>
+      json({
+        pages: [
+          { id: "p1", name: "Other", category: "Musician/Band" },
+          { id: "p2", name: "Harbour Bean", category: "Coffee Shop" },
+        ],
+        selectedPageId: "p2",
+        cached: true,
+      });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual({ category: "Coffee Shop", bio: null, website: null, description: null });
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_fb/facebook-page");
+  });
+
+  it("getAccountCategory reads an Instagram bio and a Google Business category", async () => {
+    respond = () =>
+      json({ profile: { biography: "Plumbers in QC", website: "https://x.ph" }, media: [] });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_ig", platform: "instagram", username: "@q" }),
+    ).resolves.toEqual({
+      category: null,
+      bio: "Plumbers in QC",
+      website: "https://x.ph",
+      description: null,
+    });
+    expect(captured[0].url.searchParams.get("username")).toBe("q");
+
+    respond = () =>
+      json({
+        title: "QC Plumbing",
+        categories: { primaryCategory: { name: "gcid:plumber", displayName: "Plumber" } },
+        profile: { description: "24/7 emergency plumbing." },
+      });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_g", platform: "googlebusiness" }),
+    ).resolves.toEqual({
+      category: "Plumber",
+      bio: null,
+      website: null,
+      description: "24/7 emergency plumbing.",
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/accounts/acc_g/gmb-location-details");
+    expect(captured[1].url.searchParams.get("readMask")).toBe("categories,profile");
+  });
+
+  it("getAccountCategory never throws: failures and other platforms give the empty info", async () => {
+    const empty = { category: null, bio: null, website: null, description: null };
+    respond = () => json({ error: "nope" }, 400);
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual(empty);
+    respond = () => json({ pages: "not a list" });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual(empty);
+    const before = captured.length;
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_t", platform: "tiktok" }),
+    ).resolves.toEqual(empty);
+    expect(captured).toHaveLength(before);
+  });
+
   it("listReviews asks for Google reviews and keeps their stars (T61)", async () => {
     respond = () =>
       json({

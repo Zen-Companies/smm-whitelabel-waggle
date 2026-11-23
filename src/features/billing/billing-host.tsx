@@ -3,8 +3,10 @@ import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { offerTrialDays } from "./referrals";
 import { billingBanner } from "./banners";
 import { loadBilling } from "./billing-store";
-import { BillingPopups, type OutOfReplies } from "./billing-popups";
+import { BillingPopups, type OutOfReplies, type ReplyUsage } from "./billing-popups";
 import type { OfferOrg } from "./offer-dialogs";
+import { foundingSpotsLeftCached } from "./founding";
+import { checkoutTrialDays } from "./plans";
 import { perDayFromWeek, type ReplyPain } from "./reply-pain";
 import { getStripe } from "./stripe-client";
 import { loadPlans, loadReplyLimit, orgPlanId, planLimitsOn } from "./usage";
@@ -15,6 +17,8 @@ import { loadPlans, loadReplyLimit, orgPlanId, planLimitsOn } from "./usage";
 
 const day = (d: Date) =>
   d.toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+const shortDay = (d: Date) =>
+  d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 
 /** The open brand's customer messages a day (last 7 days) and how many need the owner now. */
 async function loadReplyPain(
@@ -45,7 +49,12 @@ async function loadHostProps(input: {
   canInvite: boolean;
   tenantId: string | null;
   needsYouStatuses: readonly string[];
-}): Promise<{ org: OfferOrg; banner: "out" | "nudge" | null; out: OutOfReplies | null }> {
+}): Promise<{
+  org: OfferOrg;
+  banner: "out" | "nudge" | null;
+  out: OutOfReplies | null;
+  usage: ReplyUsage | null;
+}> {
   const { orgId, isOwner, canInvite, tenantId, needsYouStatuses } = input;
   const db = getServiceClient();
   const now = new Date();
@@ -54,6 +63,11 @@ async function loadHostProps(input: {
     loadPlans(db),
     planLimitsOn(db),
   ]);
+  // Founding, as Your plan and checkout decide it: the first paid plan, while Stripe has spots
+  // (cached for a few minutes: this runs on every dashboard and setup page).
+  const trial = checkoutTrialDays(bill) !== null;
+  const stripe = getStripe();
+  const founding = trial && !!stripe && (await foundingSpotsLeftCached(stripe));
   const status = limitsOn ? await loadReplyLimit(db, orgId, now) : null;
   const offerDays = await offerTrialDays(db, orgId, bill, now);
   const banner = billingBanner({
@@ -71,18 +85,28 @@ async function loadHostProps(input: {
             : { perDay: 0, waiting: 0 },
         }
       : null;
+  const usage: ReplyUsage | null = status
+    ? {
+        used: status.limit.used,
+        allowance: status.limit.allowance,
+        resetsOn: shortDay(status.limit.resetsAt),
+        reached: status.limit.level === "reached",
+      }
+    : null;
   return {
     banner,
     out,
+    usage,
     org: {
       orgId,
       isOwner,
       canInvite,
       current: orgPlanId(bill),
       plans,
-      trial: offerDays !== null,
+      trial,
       trialDays: offerDays ?? undefined,
-      stripeReady: !!getStripe(),
+      founding,
+      stripeReady: !!stripe,
       interval: bill?.billing_interval === "year" ? "year" : "month",
     },
   };
@@ -94,6 +118,7 @@ export async function BillingHost({
   canInvite,
   tenantId = null,
   needsYouStatuses = [],
+  connect,
   showBanner = true,
 }: {
   orgId: string;
@@ -105,6 +130,8 @@ export async function BillingHost({
   tenantId?: string | null;
   /** The Inbox's "need you" statuses (the badge). */
   needsYouStatuses?: readonly string[];
+  /** Connect an account (accounts' server action): after paying, the tapped connect carries on. */
+  connect?: (formData: FormData) => Promise<void>;
   showBanner?: boolean;
 }) {
   const props = await loadHostProps({
@@ -122,5 +149,13 @@ export async function BillingHost({
     return null;
   });
   if (!props) return null;
-  return <BillingPopups {...props} showBanner={showBanner} />;
+  return (
+    <BillingPopups
+      {...props}
+      tenantId={tenantId}
+      needsYou={needsYouStatuses}
+      connect={connect}
+      showBanner={showBanner}
+    />
+  );
 }

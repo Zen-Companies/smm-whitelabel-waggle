@@ -5,6 +5,7 @@ import { z } from "zod";
 import { kickCatchUp, MAX_KICK_HOPS, runCatchUpSlice } from "@/features/catch-up";
 import { getProductionSteps } from "@/features/inbox";
 import { findFactsAfterConnect } from "@/features/knowledge-base";
+import { buildProfileAfterConnect } from "@/features/setup";
 import { getClassifier } from "@/lib/classifier";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
@@ -38,6 +39,25 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.success) return Response.json({ error: "invalid body" }, { status: 400 });
   const { tenantId, hop } = parsed.data;
   const deadline = createDeadline({ maxMs: 55_000 });
+
+  // Setup item G: the business profile right after connect (page category, bio, recent captions),
+  // alongside the read so the reading screen isn't held up. One AI call per brand, ever.
+  after(async () => {
+    try {
+      await buildProfileAfterConnect(
+        {
+          db: getServiceClient(),
+          llm: getLlmClientOrNull(),
+          social: getSocialProvider,
+          shouldContinue: () => deadline.remainingMs() > 15_000,
+        },
+        { tenantId, limit: 1 },
+      );
+    } catch (error) {
+      // Ids only (CLAUDE.md rule 10).
+      Sentry.captureException(error, { extra: { tenantId, step: "profile" } });
+    }
+  });
 
   after(async () => {
     try {

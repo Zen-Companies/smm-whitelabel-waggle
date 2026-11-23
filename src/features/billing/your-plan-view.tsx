@@ -35,6 +35,7 @@ import {
   type Plan,
   type PlanId,
 } from "./plans";
+import { UpgradeLink } from "./upgrade-link";
 import { UPGRADE, upgradeCopy, upgradeLabel, upgradeLine, type UpgradeReason } from "./upgrade";
 import { NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 import { getStripe } from "./stripe-client";
@@ -240,18 +241,7 @@ export async function YourPlanSection({
             Nothing was charged. You&apos;re still on Free.
           </p>
         )}
-        {upgrade && (
-          <UpgradePanel
-            reason={upgrade}
-            orgId={org.id}
-            isOwner={org.isOwner}
-            owners={owners}
-            plans={plans}
-            live={false}
-            trial={firstTime}
-            trialDays={offerDays}
-          />
-        )}
+        {/* A limit's ?upgrade= opens the upgrade pop-up over this page on Free (23 Nov). */}
         <section className="card hexbg border-honey-border flex flex-col gap-4 border p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex flex-wrap items-center gap-5">
@@ -307,6 +297,16 @@ export async function YourPlanSection({
             reply top-ups (${EXTRAS.topUp.usd} for {EXTRAS.topUp.replies}) are on paid plans.{" "}
             {upgradeLine("top_up")}
           </span>
+          {org.isOwner && (
+            <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <UpgradeLink reason="accounts" className="action-link">
+                Connect more accounts
+              </UpgradeLink>
+              <UpgradeLink reason="replies" className="action-link">
+                Get more replies
+              </UpgradeLink>
+            </span>
+          )}
         </section>
         {getStripe() ? (
           <section id="change-plan" className="flex scroll-mt-6 flex-col gap-3">

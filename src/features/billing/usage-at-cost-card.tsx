@@ -8,7 +8,8 @@ import type { BillingRecord } from "./billing-store";
 /** The start of the cycle Stripe is in now: the trial's first day, else a month or year back. */
 function cycleStart(bill: BillingRecord): Date | null {
   if (bill.status === "trialing" && bill.trial_ends_at) {
-    return new Date(new Date(bill.trial_ends_at).getTime() - TRIAL.days * 24 * 60 * 60_000);
+    const days = bill.trial_days ?? TRIAL.days;
+    return new Date(new Date(bill.trial_ends_at).getTime() - days * 24 * 60 * 60_000);
   }
   if (!bill.current_period_end) return null;
   const d = new Date(bill.current_period_end);

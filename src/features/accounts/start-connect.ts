@@ -1,7 +1,8 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
-import { orgOnFree, roomForAnotherAccount, upgradeHref } from "@/features/billing";
+import { orgOnFree, roomForAnotherAccount } from "@/features/billing";
+import { freeFullHref } from "./free-full";
 import { loadPlatformStatuses, recordSignin, statusOf } from "@/features/platforms";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
@@ -78,9 +79,9 @@ export async function startConnect(
   if (statusOf(await loadPlatformStatuses(db), id) !== "available") return fail("unavailable", id);
   if (social && !(await roomForAnotherAccount(db, tenant.id))) {
     await queueAccountLimit(db, tenant.organizationId);
-    // Free: the upgrade screen, never an add-on (19 Nov).
+    // Free: the upgrade pop-up over this page, never an add-on (19 and 23 Nov).
     if (await orgOnFree(db, tenant.organizationId)) {
-      return { kind: "upgrade", href: upgradeHref("accounts") };
+      return { kind: "upgrade", href: await freeFullHref(db, tenant.id, origin, id) };
     }
     return fail("accounts_full", id);
   }

@@ -12,6 +12,8 @@ export interface TrialConversion {
   plan: PaidPlanId;
   /** The monthly price the trial turns into, in US dollars (founding price when it applies). */
   valueUsd: number;
+  /** The organization's first plan checkout (marked when it was made): only this tells the ads. */
+  first: boolean;
 }
 
 /** Checkout Session ids are cs_test_… or cs_live_…; anything else is ignored without a Stripe call. */
@@ -48,7 +50,13 @@ export function trialFromSession(
     : key.interval === "year" && p.yearlyUsd !== null
       ? Math.round((p.yearlyUsd / 12) * 100) / 100
       : p.monthlyUsd;
-  return { sessionId: session.id, kind: trial ? "trial" : "paid", plan: key.plan, valueUsd };
+  return {
+    sessionId: session.id,
+    kind: trial ? "trial" : "paid",
+    plan: key.plan,
+    valueUsd,
+    first: session.metadata?.first === "1",
+  };
 }
 
 /**
@@ -59,6 +67,17 @@ export async function loadTrialConversion(
   sessionId: unknown,
   orgId: string,
 ): Promise<TrialConversion | null> {
+  return (await loadCheckoutReturn(sessionId, orgId))?.conversion ?? null;
+}
+
+/**
+ * The same check, with the subscription it started (the upgrade pop-up stores it at once, so the
+ * tapped action can carry on before the webhook lands).
+ */
+export async function loadCheckoutReturn(
+  sessionId: unknown,
+  orgId: string,
+): Promise<{ conversion: TrialConversion; subscription: Stripe.Subscription } | null> {
   if (!looksLikeSessionId(sessionId)) return null;
   const stripe = getStripe();
   if (!stripe) return null;
@@ -66,7 +85,10 @@ export async function loadTrialConversion(
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["subscription"],
     });
-    return trialFromSession(session, orgId);
+    const conversion = trialFromSession(session, orgId);
+    const sub = session.subscription;
+    if (!conversion || !sub || typeof sub === "string") return null;
+    return { conversion, subscription: sub };
   } catch (e) {
     console.error("billing: reading the checkout for the trial tag failed", {
       orgId,
