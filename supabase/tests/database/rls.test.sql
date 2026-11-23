@@ -97,7 +97,9 @@ select is_empty(
                                 -- Free plan idle disconnect (20 Nov): per organization, server-only.
                                 'org_idle', 'first_morning_emails', 'email_opt_outs',
                                 -- Confirm later (hotfix 21 Nov): per login, server-written.
-                                'email_confirmations')
+                                'email_confirmations',
+                                -- Give a month, get a month (23 Nov): per organization, server-only.
+                                'referral_codes', 'referrals')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,
