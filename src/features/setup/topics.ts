@@ -1,17 +1,31 @@
 // What customers wanted, and Waggle's replies in batches (setup steps 2 and 3, Walter's flow
-// approved 20 Nov). Money first: people who want to buy or order, and price questions; then the
-// quick ones (hours, where you are, delivery) and the rest. Pure, tested.
+// approved 20 Nov). Grouped by Jev's category (approved 23 Nov): leads want to buy, complaints are
+// complaints, spam is "Not about your business" (grey, always last); questions are refined by
+// their words into prices, hours, delivery and where you are, else stay "Questions". With no
+// category (a locked DM over the classify cap), the words alone decide. Money first: leads and
+// price questions. Pure, tested.
 
-export const SETUP_TOPICS = ["order", "price", "delivery", "hours", "location", "other"] as const;
+export const SETUP_TOPICS = [
+  "order",
+  "price",
+  "delivery",
+  "hours",
+  "location",
+  "question",
+  "complaint",
+  "spam",
+] as const;
 export type SetupTopic = (typeof SETUP_TOPICS)[number];
 
 export const TOPIC_LABEL: Record<SetupTopic, string> = {
-  order: "Orders",
+  order: "Wants to buy",
   price: "Prices",
   delivery: "Delivery",
   hours: "Opening hours",
   location: "Where you are",
-  other: "Other",
+  question: "Questions",
+  complaint: "Complaints",
+  spam: "Not about your business",
 };
 
 const ORDER =
@@ -25,39 +39,57 @@ const HOURS =
 const LOCATION =
   /\b(where|located|location|address|branch|branches|directions|map|near|parking|saan|asa)\b/i;
 
+/** Jev's categories that are questions (refined by their words). */
+const QUESTION_CATEGORIES = new Set(["faq", "unclear"]);
+
 /**
- * A message's topic from its words; a lead (Jev: wants to buy or book) with no clearer topic is
- * an order. Price beats order when both are there ("how much for 50?" is a price question).
+ * A message's topic. Jev's category first: spam, complaint and lead (wants to buy) decide alone;
+ * a question (faq, unclear) is refined by its words, else stays a question. With no category the
+ * words decide, wanting to buy included; price beats buying ("how much for 50?" asks a price).
  */
 export function setupTopic(text: string, category?: string | null): SetupTopic {
+  if (category === "spam") return "spam";
+  if (category === "complaint") return "complaint";
+  if (category === "lead") return "order";
   if (PRICE.test(text)) return "price";
-  if (ORDER.test(text)) return "order";
+  if (!QUESTION_CATEGORIES.has(category ?? "") && ORDER.test(text)) return "order";
   if (DELIVERY.test(text)) return "delivery";
   if (HOURS.test(text)) return "hours";
   if (LOCATION.test(text)) return "location";
-  return category === "lead" ? "order" : "other";
+  return "question";
 }
 
 /** Wanting to buy or order: setup's "N wanted to buy or order" and the first batch. */
 export const isMoneyTopic = (t: SetupTopic): boolean => t === "order" || t === "price";
 
-/** How many asked about each topic, most first, Other last; topics no one asked are left out. */
-export function topicCounts(
-  messages: readonly { text: string; category?: string | null }[],
-): { topic: SetupTopic; label: string; count: number }[] {
+/**
+ * A conversation's topic from its messages (one category for the whole conversation): any
+ * message about money makes it a money one, else its first clearer topic, else a question.
+ */
+export function conversationTopic(texts: readonly string[], category?: string | null): SetupTopic {
+  const topics = texts.map((t) => setupTopic(t, category));
+  return topics.find(isMoneyTopic) ?? topics.find((t) => t !== "question") ?? "question";
+}
+
+export interface TopicCount {
+  topic: SetupTopic;
+  label: string;
+  count: number;
+  /** "Not about your business": shown grey. */
+  muted: boolean;
+}
+
+/** How many asked about each topic, most first, spam always last; topics no one asked are left out. */
+export function topicCounts(topics: readonly SetupTopic[]): TopicCount[] {
   const counts = new Map<SetupTopic, number>();
-  for (const m of messages) {
-    const t = setupTopic(m.text, m.category);
-    counts.set(t, (counts.get(t) ?? 0) + 1);
-  }
+  for (const t of topics) counts.set(t, (counts.get(t) ?? 0) + 1);
   return [...counts.entries()]
-    .map(([topic, count]) => ({ topic, label: TOPIC_LABEL[topic], count }))
-    .sort((a, b) =>
-      a.topic === "other"
-        ? 1
-        : b.topic === "other"
-          ? -1
-          : b.count - a.count || SETUP_TOPICS.indexOf(a.topic) - SETUP_TOPICS.indexOf(b.topic),
+    .map(([topic, count]) => ({ topic, label: TOPIC_LABEL[topic], count, muted: topic === "spam" }))
+    .sort(
+      (a, b) =>
+        Number(a.muted) - Number(b.muted) ||
+        b.count - a.count ||
+        SETUP_TOPICS.indexOf(a.topic) - SETUP_TOPICS.indexOf(b.topic),
     );
 }
 
@@ -136,7 +168,9 @@ export function topicsLine(rest: readonly { topic: SetupTopic }[]): string {
     delivery: "delivery",
     hours: "hours",
     location: "where you are",
-    other: "other questions",
+    question: "questions",
+    complaint: "complaints",
+    spam: "messages not about your business",
   };
   const seen = SETUP_TOPICS.filter((t) => rest.some((r) => r.topic === t)).map((t) => words[t]);
   if (seen.length === 0) return "";

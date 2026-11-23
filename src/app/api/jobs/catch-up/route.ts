@@ -5,6 +5,7 @@ import { z } from "zod";
 import { kickCatchUp, MAX_KICK_HOPS, runCatchUpSlice } from "@/features/catch-up";
 import { getProductionSteps } from "@/features/inbox";
 import { findFactsAfterConnect } from "@/features/knowledge-base";
+import { getClassifier } from "@/lib/classifier";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
 import { getSocialProvider } from "@/lib/social";
@@ -45,6 +46,7 @@ export async function POST(request: Request): Promise<Response> {
           db: getServiceClient(),
           social: getSocialProvider,
           llm: getLlmClientOrNull(),
+          classifier: getClassifier(),
           steps: getProductionSteps(),
           deadline,
           findFacts: (id, shouldContinue) =>

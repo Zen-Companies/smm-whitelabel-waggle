@@ -43,13 +43,13 @@ export function batchProgress(statuses: readonly string[]): BatchProgress {
   return { total: sent + left + failed, sent, left, failed };
 }
 
+/** "2 replies couldn't go out. They're in your Inbox." */
+const failedLine = (failed: number): string =>
+  `${plural(failed, "reply", "replies")} couldn’t go out. They’re in your Inbox.`;
+
 /** The progress card's line under the bar. */
 export function progressLine(p: BatchProgress, spacingMs: number, platform: string): string {
-  if (p.left === 0) {
-    return p.failed
-      ? `${plural(p.failed, "reply", "replies")} couldn’t go out. They’re in your Inbox.`
-      : "All sent.";
-  }
+  if (p.left === 0) return p.failed ? failedLine(p.failed) : "All sent.";
   const m = sendingMinutes(p.left, spacingMs);
   return `One every ${Math.round(spacingMs / 1000)} seconds, so ${platform} doesn’t flag the account. About ${plural(m, "minute", "minutes")} left; you can go on.`;
 }
@@ -113,4 +113,34 @@ export function ageLabel(receivedAt: string, now: Date): string {
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   return `${days} days`;
+}
+
+/** The end of setup's list (board "Setup, start to finish", 23 Nov): what's done, in order. */
+export function doneLines(input: {
+  platforms: readonly string[];
+  sending: BatchProgress;
+  mode: "approve" | "auto";
+  waiting: readonly { author: string; category: string | null }[];
+}): string[] {
+  const lines: string[] = [];
+  if (input.platforms.length) lines.push(`${input.platforms.join(" and ")} connected`);
+  // Only what really happened: sent (or still going) and, apart, what couldn't go out.
+  const s = input.sending;
+  if (s.left > 0) {
+    const going = s.sent + s.left;
+    lines.push(`${plural(going, "reply", "replies")} on ${going === 1 ? "its" : "their"} way`);
+  } else if (s.sent > 0) {
+    lines.push(`${plural(s.sent, "reply", "replies")} sent`);
+  }
+  if (s.failed > 0) lines.push(failedLine(s.failed));
+  lines.push(input.mode === "auto" ? "Waggle replies on its own" : "Ask me first before sending");
+  const w = input.waiting;
+  if (w.length === 1) {
+    lines.push(
+      `${w[0].author}’s ${w[0].category === "complaint" ? "complaint" : "message"} is in your Inbox`,
+    );
+  } else if (w.length > 1) {
+    lines.push(`${w.length} messages wait for you in your Inbox`);
+  }
+  return lines;
 }

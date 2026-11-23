@@ -66,8 +66,15 @@ export async function connectAccount(formData: FormData): Promise<void> {
         dedupeKey: `account_limit:${tenant.organizationId}:${new Date().toISOString().slice(0, 10)}`,
       }),
     );
-    // Free: the upgrade screen, never an add-on (19 Nov).
-    if (await orgOnFree(db, tenant.organizationId)) redirect(upgradeHref("accounts"));
+    // Free: the upgrade screen, never an add-on (19 Nov). Setup's Connect says so in place
+    // instead (23 Nov).
+    if (await orgOnFree(db, tenant.organizationId)) {
+      redirect(
+        origin === "/welcome"
+          ? connectErrorHref(origin, "free_full", platform)
+          : upgradeHref("accounts"),
+      );
+    }
     redirect(connectErrorHref(origin, "accounts_full", platform));
   }
   const back = connectReturnHref({

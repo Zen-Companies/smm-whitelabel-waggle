@@ -18,7 +18,7 @@ import {
   NOT_ALLOWED,
   openBrand,
 } from "@/features/tenants";
-import { ASK_FIRST_IDS } from "@/lib/ask-first";
+import { ASK_FIRST_IDS, CUSTOM_MAX, isCustomTopic } from "@/lib/ask-first";
 import { writeAudit } from "@/lib/audit";
 import { markSetupPassed } from "@/lib/setup/passed";
 import { getSocialProvider } from "@/lib/social";
@@ -272,13 +272,21 @@ export async function skipWaitingMessages(input: { itemIds: string[] }): Promise
 }
 
 const finishSchema = z.object({
-  topics: z.array(z.enum(ASK_FIRST_IDS)).max(ASK_FIRST_IDS.length),
+  // Built-in topics and the owner's own ("custom:…", approved 21 Nov). Refunds and complaints is
+  // always on, chosen or not.
+  topics: z
+    .array(z.union([z.enum(ASK_FIRST_IDS), z.string().refine(isCustomTopic)]))
+    .max(ASK_FIRST_IDS.length + CUSTOM_MAX)
+    // At most CUSTOM_MAX of the owner's own, as everywhere else they're added.
+    .refine((t) => new Set(t.filter(isCustomTopic)).size <= CUSTOM_MAX)
+    .transform((t) => [...new Set(["refunds", ...t])]),
   mode: z.enum(["approve", "auto"]),
 });
 
 /**
- * 3.4 "Go to my inbox": saves the Always ask me topics and how replies go out, marks setup done
- * (audited), then the Inbox with the welcome pop-up (build A, /inbox?welcome=1).
+ * 3.4 "Finish setup": saves the Always ask me topics and how replies go out, marks setup done
+ * (audited), then the end of setup in its frame (board "Setup, start to finish", 23 Nov), whose
+ * "Go to my Inbox" opens the Inbox with the welcome pop-up (/inbox?welcome=1).
  */
 export async function finishSetup(formData: FormData): Promise<void> {
   const parsed = finishSchema.safeParse({
@@ -336,5 +344,5 @@ export async function finishSetup(formData: FormData): Promise<void> {
   }
   await markSetupPassed(db, { tenantId: tenant.id, how: "finished", userId: tenant.userId });
   revalidatePath("/", "layout");
-  redirect("/inbox?welcome=1");
+  redirect("/setup?screen=done");
 }

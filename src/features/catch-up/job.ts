@@ -1,6 +1,8 @@
 import * as Sentry from "@sentry/nextjs";
 import { insertInboundItem, recordConversation } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { businessContext } from "@/lib/classifier/business-context";
+import type { Classifier } from "@/lib/classifier/types";
 import { getPlatformPause, recordPlatformPause } from "@/lib/social/platform-pause";
 import { hasLiveComments } from "@/lib/social/platforms";
 import {
@@ -11,6 +13,7 @@ import {
 } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { missedToClassify } from "./missed-topics";
 import { SORT_CAP } from "./reveal-data";
 import {
   addTally,
@@ -53,6 +56,11 @@ interface Deps {
   social: () => SocialProvider;
   now?: Date;
   shouldContinue?: () => boolean;
+  /**
+   * Sorts locked DMs for setup's "What they wanted" (23 Nov): one call per conversation, capped.
+   * None (not configured, or tests): they are left to setup's keywords.
+   */
+  classifier?: Classifier | null;
 }
 
 /** A run holding a catch-up longer than this is assumed dead; another may take it. */
@@ -269,6 +277,8 @@ async function runStages(
       await save(db, row.id, { next_run_at: now.toISOString() });
       return false;
     }
+    // A DM sweep is done: sort its locked DMs (the re-sweep sorts only ones it added).
+    if (stage !== "comments") await classifyMissed(deps, row, account, more);
     const from = stage;
     stage = nextStage(stage, dms);
     // Reading is over once the first DM sweep (or, without DMs, the comments) is done: the
@@ -628,6 +638,77 @@ async function pullConversation(
     }
   }
   return { created, missed: added, response };
+}
+
+/** Classifier calls for locked DMs get this long each. */
+const MISSED_CLASSIFY_TIMEOUT_MS = 20_000;
+/** Locked DMs read for sorting (setup reads as many). */
+const MISSED_READ_MAX = 600;
+
+/**
+ * Sorts the account's locked DMs (missed_messages) with the classifier, one call per
+ * conversation, within the per-catch-up cap, and stores the category on the conversation's rows.
+ * Never fails the catch-up: a failed call stops the pass (the rest fall back to keywords) and is
+ * reported by ids only.
+ */
+async function classifyMissed(
+  deps: Deps,
+  row: CatchUpRow,
+  account: Account,
+  more: () => boolean,
+): Promise<void> {
+  const { db, classifier } = deps;
+  if (!classifier) return;
+  let sorted = 0;
+  try {
+    const { data: rows, error } = await db
+      .from("missed_messages")
+      .select("zernio_conversation_id, text, received_at, category")
+      .eq("social_account_id", account.id)
+      .order("received_at", { ascending: false })
+      .limit(MISSED_READ_MAX);
+    if (error) throw new Error(`missed_messages lookup failed: ${error.message}`);
+    const todo = missedToClassify(rows ?? []);
+    if (todo.length === 0) return;
+    const { data: tenant, error: tenantError } = await db
+      .from("tenants")
+      .select("name, business_profile")
+      .eq("id", account.tenant_id)
+      .single();
+    if (tenantError) throw new Error(`tenant lookup failed: ${tenantError.message}`);
+    const context = businessContext({ name: tenant.name, profile: tenant.business_profile });
+    for (const c of todo) {
+      if (!more()) break;
+      const result = await classifier.classify(
+        {
+          tenantId: account.tenant_id,
+          itemId: null,
+          text: c.text,
+          kind: "dm",
+          businessContext: context.text,
+          businessName: tenant.name.trim(),
+        },
+        { signal: AbortSignal.timeout(MISSED_CLASSIFY_TIMEOUT_MS) },
+      );
+      const { error: updateError } = await db
+        .from("missed_messages")
+        .update({ category: result.category })
+        .eq("social_account_id", account.id)
+        .eq("zernio_conversation_id", c.conversationId);
+      if (updateError) throw new Error(`missed_messages update failed: ${updateError.message}`);
+      sorted += 1;
+    }
+  } catch (err) {
+    Sentry.captureException(err, { extra: { catchUpId: row.id, accountId: account.id } });
+  }
+  if (sorted > 0) {
+    await writeAudit(db, {
+      tenantId: account.tenant_id,
+      action: "catch_up_missed_classified",
+      actor: "system",
+      details: { accountId: account.id, catchUpId: row.id, conversations: sorted },
+    }).catch((e: unknown) => Sentry.captureException(e, { extra: { catchUpId: row.id } }));
+  }
 }
 
 async function finish(

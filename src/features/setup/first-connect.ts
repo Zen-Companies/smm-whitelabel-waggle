@@ -20,8 +20,19 @@ export function isInAppBrowser(ua: string | null | undefined): "Instagram" | "Fa
 export type ConnectProblem =
   /** Any failed Instagram connect: worded as the likely cause, a personal account (board). */
   | { kind: "instagram-personal" }
+  /** The owner closed or declined the platform's sign-in (23 Nov): Try again. */
+  | { kind: "cancelled"; platform: string }
+  /** Free's accounts are all in use (23 Nov): the Solo card in place, not the plan page. */
+  | { kind: "free-full" }
   /** Anything else that came back with an error: said in the connect banner's words. */
   | { kind: "message"; text: string };
+
+/**
+ * The sign-in was declined or closed: Zernio's `oauth_denied`, with the platform's own
+ * `access_denied` / `user_denied` when sent (docs.zernio.com/guides/connecting-accounts, "If it
+ * fails"). On Instagram a bare `oauth_denied` stays the personal-account fix, its likely cause.
+ */
+const DENIED = new Set(["access_denied", "user_denied"]);
 
 /**
  * Pure: what went wrong when the connect flow sent the owner back to step 2. The flow appends
@@ -34,7 +45,14 @@ export function connectProblem(params: Params, bannerText: string | null): Conne
   if (!error && !ours) return null;
   // Not a failure: an earlier request already finished the connection.
   if (error === "code_already_redeemed") return null;
+  if (ours === "free_full") return { kind: "free-full" };
   const platform = first(params.platform) ?? first(params.connecting);
+  if (error === "oauth_denied" && platform) {
+    const theirs = first(params.platform_error);
+    if (platform !== "instagram" || (theirs && DENIED.has(theirs))) {
+      return { kind: "cancelled", platform };
+    }
+  }
   if (error && platform === "instagram") return { kind: "instagram-personal" };
   return bannerText ? { kind: "message", text: bannerText } : null;
 }

@@ -4,6 +4,9 @@ import { withSentryConfig } from "@sentry/nextjs/config";
 const nextConfig: NextConfig = {
   // AGENTS.md only points to CLAUDE.md; stop `next dev` from writing its own block into it.
   agentRules: false,
+  // Local live tests run through an ngrok tunnel (skill local-live): without this, `next dev`
+  // blocks its dev scripts for that host and the page never becomes interactive. Dev only.
+  allowedDevOrigins: ["*.ngrok-free.app", "*.trycloudflare.com"],
   cacheComponents: true,
   partialPrefetching: true,
   experimental: {

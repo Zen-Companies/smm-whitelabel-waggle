@@ -1536,6 +1536,7 @@ export type Database = {
       }
       missed_messages: {
         Row: {
+          category: string | null
           created_at: string
           id: string
           platform_message_id: string
@@ -1548,6 +1549,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          category?: string | null
           created_at?: string
           id?: string
           platform_message_id: string
@@ -1559,6 +1561,7 @@ export type Database = {
           zernio_conversation_id: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           id?: string
           platform_message_id?: string
@@ -2489,6 +2492,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          accounts_reconciled_at: string | null
           ai_monthly_cap_usd: number | null
           analytics_audience_at: string | null
           analytics_full_at: string | null
@@ -2527,6 +2531,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          accounts_reconciled_at?: string | null
           ai_monthly_cap_usd?: number | null
           analytics_audience_at?: string | null
           analytics_full_at?: string | null
@@ -2564,6 +2569,7 @@ export type Database = {
           zernio_profile_id?: string | null
         }
         Update: {
+          accounts_reconciled_at?: string | null
           ai_monthly_cap_usd?: number | null
           analytics_audience_at?: string | null
           analytics_full_at?: string | null

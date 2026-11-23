@@ -1,6 +1,7 @@
 import { Suspense } from "react";
-import { FirstConnectTag } from "@/features/accounts";
-import { SetupView } from "@/features/setup";
+import { SetupLoading } from "@/components/app/setup-loading";
+import { connectBanner, FirstConnectTag } from "@/features/accounts";
+import { connectProblem, SetupView } from "@/features/setup";
 import { getOpenOrg } from "@/features/tenants";
 
 export const metadata = { title: "Set up Waggle" };
@@ -13,13 +14,17 @@ const one = (v: string | string[] | undefined) => (typeof v === "string" ? v : u
  * Setup steps 2 and 3 (Walter's flow, one screen at a time, approved 20 Nov): `?screen=` opens a
  * screen, else the one left. Old links (`?step=` of the 5-step setup, `/setup/resume`, `/reveal`)
  * land here and open where the owner left off; with nothing connected it's step 1, /welcome.
+ * A first connect that failed comes back here with `error` (23 Nov): the connecting screen says
+ * what happened in place.
  */
 async function Setup({ searchParams }: Props) {
   const params = await searchParams;
+  const banner = connectBanner(params);
   return (
     <SetupView
       requested={one(params.screen) ?? null}
       connecting={one(params.connecting)}
+      problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
       go={params.go === "1"}
     />
   );
@@ -35,7 +40,11 @@ export default function SetupPage({ searchParams }: Props) {
   return (
     <>
       <Suspense
-        fallback={<div className="skeleton mx-auto mt-12 h-96 w-full max-w-[640px] rounded-xl" />}
+        fallback={
+          <main className="mx-auto w-full max-w-[640px] px-4">
+            <SetupLoading />
+          </main>
+        }
       >
         <Setup searchParams={searchParams} />
       </Suspense>

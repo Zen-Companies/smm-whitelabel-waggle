@@ -54,6 +54,34 @@ describe("connectProblem", () => {
       kind: "instagram-personal",
     });
   });
+  it("is a cancelled sign-in when the owner declined (23 Nov)", () => {
+    expect(
+      connectProblem({ connecting: "facebook", error: "oauth_denied", platform: "facebook" }, "x"),
+    ).toEqual({ kind: "cancelled", platform: "facebook" });
+    expect(
+      connectProblem(
+        {
+          connecting: "instagram",
+          error: "oauth_denied",
+          platform: "instagram",
+          platform_error: "access_denied",
+        },
+        "x",
+      ),
+    ).toEqual({ kind: "cancelled", platform: "instagram" });
+    // A bare oauth_denied on Instagram keeps the likely cause, a personal account.
+    expect(
+      connectProblem(
+        { connecting: "instagram", error: "oauth_denied", platform: "instagram" },
+        "x",
+      ),
+    ).toEqual({ kind: "instagram-personal" });
+  });
+  it("is the Solo card when Free's accounts are used (23 Nov)", () => {
+    expect(connectProblem({ connect_error: "free_full", platform: "tiktok" }, "x")).toEqual({
+      kind: "free-full",
+    });
+  });
   it("is not a failure when the code was already redeemed", () => {
     expect(
       connectProblem({ connecting: "instagram", error: "code_already_redeemed" }, "x"),

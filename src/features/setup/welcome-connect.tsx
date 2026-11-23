@@ -2,9 +2,12 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "cn";
 import { BrandMark, PlatformMark } from "@/components/app/platform-mark";
+import { StateMark } from "@/components/app/state-mark";
 import { connectAccount } from "@/features/accounts";
-import { statusOf, type PlatformStatuses } from "@/features/platforms";
+import { pullsPastDms } from "@/features/catch-up";
+import { statusOf, SWITCHABLE, type PlatformStatuses } from "@/features/platforms";
 import {
+  hasLiveComments,
   isConnectable,
   PLATFORM_IDS,
   PLATFORMS,
@@ -12,48 +15,66 @@ import {
   type PlatformId,
 } from "@/lib/social/platforms";
 import { connectFirstAccount } from "./actions";
+import { ConnectTileSubmit } from "./connect-pending";
+import {
+  BEFORE_CONNECT,
+  BeforeConnect,
+  ConnectProblemBox,
+  FreeFullCard,
+} from "./connect-step-parts";
 import type { ConnectProblem } from "./first-connect";
 import { InAppGate } from "./in-app-gate";
 import { SetupStepper } from "./setup-frame";
 
-// Setup step 1, Connect (/welcome; Walter's flow, approved 20 Nov): six places first, Facebook
-// and Instagram marked "Best results", Google Ads and X "Coming soon", "See all N platforms".
+// Setup step 1, Connect (/welcome; Walter's flow, approved 20 Nov): the 4 main places first,
+// Facebook and Instagram marked "Best results" (the only ones whose past DMs Zernio replays), then
+// "See all N platforms" (board "Connect, step-2 platforms only", v2 approved 21 Nov). Only
+// platforms whose last 30 days the first-connect read fills step 2 with are offered; Coming soon
+// ones (Staff → Platforms) that would too come last, greyed. The rest (Google reviews, WhatsApp,
+// Pinterest…) are connected after setup, in Settings: one quiet line says so. Every card the same
+// size.
 // Uses the normal connect (SocialProvider through accounts' connectAccount); with no business
 // yet, connectFirstAccount makes it first (named later, decision 6).
 
-const FIRST: { id: PlatformId | "googleads"; best?: boolean }[] = [
-  { id: "facebook", best: true },
-  { id: "instagram", best: true },
-  { id: "tiktok" },
-  { id: "linkedin" },
-  { id: "googleads" },
-  { id: "twitter" },
-];
+const MAIN: PlatformId[] = ["facebook", "instagram", "tiktok", "linkedin"];
+const BEST = new Set<string>(["facebook", "instagram"]);
 
-/** Platforms that connect through a sign-in and come back here. */
-function oauthAvailable(statuses: PlatformStatuses): PlatformId[] {
+/** Platforms that connect through a sign-in and come back here, with their switch. */
+function oauthPlatforms(statuses: PlatformStatuses, status: "available" | "soon"): PlatformId[] {
   return PLATFORM_IDS.filter(
     (id) =>
-      isConnectable(id) &&
-      PLATFORMS[id].connect === "oauth" &&
-      statusOf(statuses, id) === "available",
+      isConnectable(id) && PLATFORMS[id].connect === "oauth" && statusOf(statuses, id) === status,
   );
+}
+
+/** The first-connect read fills step 2 here: past comments, or past DMs (the read's own rule). */
+const fillsStepTwo = (id: string): boolean => hasLiveComments(id) || pullsPastDms(id);
+/** A Coming soon platform that would fill step 2 once it's on. */
+const wouldFillStepTwo = (id: string): boolean =>
+  fillsStepTwo(id) || (id in PLATFORMS && PLATFORMS[id as PlatformId].inbox.comments);
+
+/** "X" for twitter; the Staff → Platforms name for the ones Waggle can't connect yet. */
+function labelOf(id: string): string {
+  if (id === "twitter") return "X";
+  if (id in PLATFORMS) return platformLabel(id);
+  return SWITCHABLE.find((p) => p.id === id)?.label ?? id;
 }
 
 function ConnectTile({
   id,
+  label,
   best,
   available,
   connected,
   hasBrand,
 }: {
   id: string;
+  label: string;
   best?: boolean;
   available: boolean;
   connected: boolean;
   hasBrand: boolean;
 }) {
-  const label = id === "googleads" ? "Google Ads" : id === "twitter" ? "X" : platformLabel(id);
   const line = !available
     ? "Coming soon"
     : connected
@@ -77,29 +98,53 @@ function ConnectTile({
             </span>
           )}
         </span>
-        <span className={cn("text-[13px]", connected ? "text-success" : "text-ink-2")}>{line}</span>
+        {available ? (
+          <span className={cn("text-[13px]", connected ? "text-success" : "text-ink-2")}>
+            {line}
+          </span>
+        ) : (
+          <span className="text-ink-3 inline-flex items-center gap-1.5 text-[13px]">
+            <StateMark state="soon" />
+            Coming soon
+          </span>
+        )}
       </span>
     </>
   );
-  const box = "card flex min-h-[76px] w-full items-center gap-3 px-4 py-3";
+  // Every card the same size: the grid's rows are equal and each card fills its cell.
+  const box = "card flex h-full min-h-[92px] w-full items-center gap-3 px-4 py-3";
+  // Coming soon (23 Nov): a dashed card with the dashed hexagon, not a faded one.
   if (!available || connected) {
     return (
-      <div className={cn(box, !available && "opacity-60")} aria-disabled={!available || undefined}>
+      <div
+        className={cn(box, !available && "border-line-strong border-dashed shadow-none")}
+        aria-disabled={!available || undefined}
+      >
         {inner}
       </div>
     );
   }
-  return (
-    <form action={hasBrand ? connectAccount : connectFirstAccount}>
-      <input type="hidden" name="platform" value={id} />
-      <input type="hidden" name="back" value="/welcome" />
-      <button
-        type="submit"
+  const tap = cn(box, "hover:border-honey cursor-pointer transition-colors duration-150");
+  // Instagram and Facebook: "Before you connect" first, in place (23 Nov).
+  if (BEFORE_CONNECT.has(id)) {
+    return (
+      <Link
+        href={`/welcome?before=${id}`}
+        scroll={false}
         aria-label={`Connect ${label}`}
-        className={cn(box, "hover:border-honey cursor-pointer transition-colors duration-150")}
+        className={cn(tap, "text-ink no-underline")}
       >
         {inner}
-      </button>
+      </Link>
+    );
+  }
+  return (
+    <form action={hasBrand ? connectAccount : connectFirstAccount} className="h-full">
+      <input type="hidden" name="platform" value={id} />
+      <input type="hidden" name="back" value="/welcome" />
+      <ConnectTileSubmit platform={label} className={tap}>
+        {inner}
+      </ConnectTileSubmit>
     </form>
   );
 }
@@ -111,6 +156,7 @@ export function WelcomeConnect({
   connected,
   statuses,
   all,
+  before,
   problem,
   inApp,
   invites,
@@ -118,43 +164,83 @@ export function WelcomeConnect({
 }: {
   firstName: string;
   /** On Free: how many accounts it connects (from plan settings); null when not on Free. */
-  free: { accounts: number } | null;
+  free: { accounts: number; soloAccounts: number; full: boolean } | null;
   hasBrand: boolean;
   connected: readonly string[];
   statuses: PlatformStatuses;
   /** "See all N platforms" opened. */
   all: boolean;
+  /** "Before you connect" open for this platform (Instagram or Facebook). */
+  before: string | null;
   problem: ConnectProblem | null;
   inApp: string | null;
   /** Team invites, shown on top (the welcome page's invite list). */
   invites: ReactNode;
   email: string | undefined;
 }) {
-  const available = new Set(oauthAvailable(statuses));
-  const others = [...available].filter((id) => !FIRST.some((f) => f.id === id));
+  const open = oauthPlatforms(statuses, "available");
+  const available = open.filter(fillsStepTwo);
+  const soon = SWITCHABLE.filter(
+    (p) => statusOf(statuses, p.id) === "soon" && wouldFillStepTwo(p.id),
+  ).map((p) => p.id);
+  const main = MAIN.filter((id) => available.includes(id));
+  const others = available.filter((id) => !MAIN.includes(id));
+  const later = open.filter((id) => !fillsStepTwo(id));
+  const total = available.length + soon.length;
+  const shown: { id: string; available: boolean }[] = [
+    ...main.map((id) => ({ id, available: true })),
+    ...(all
+      ? [
+          ...others.map((id) => ({ id, available: true })),
+          ...soon.map((id) => ({ id, available: false })),
+        ]
+      : []),
+  ];
+  const laterNames = later.slice(0, 3).map(labelOf);
+  const beforeOpen =
+    before &&
+    BEFORE_CONNECT.has(before) &&
+    main.includes(before as PlatformId) &&
+    !connected.includes(before)
+      ? before
+      : null;
   const tiles = (
     <div className="flex flex-col gap-3">
-      <ul className="grid gap-3 sm:grid-cols-2" aria-label="Where to connect">
-        {[...FIRST, ...(all ? others.map((id) => ({ id, best: false })) : [])].map((f) => (
+      <ul className="grid auto-rows-fr gap-3 sm:grid-cols-2" aria-label="Where to connect">
+        {shown.map((f) => (
           <li key={f.id}>
             <ConnectTile
               id={f.id}
-              best={f.best}
-              available={f.id !== "googleads" && available.has(f.id as PlatformId)}
+              label={labelOf(f.id)}
+              best={BEST.has(f.id)}
+              available={f.available}
               connected={connected.includes(f.id)}
               hasBrand={hasBrand}
             />
           </li>
         ))}
       </ul>
-      {others.length > 0 && (
+      {total > main.length && (
         <Link
           href={all ? "/welcome" : "/welcome?all=1"}
           scroll={false}
           className="action-link self-start text-sm"
         >
-          {all ? "Show fewer" : `See all ${available.size} platforms`}
+          {all ? "Show fewer" : `See all ${total} platforms`}
         </Link>
+      )}
+      {later.length > 0 && (
+        <p className="bg-subtle text-ink-2 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px]">
+          <span className="flex shrink-0 gap-1">
+            {later.slice(0, 3).map((id) => (
+              <PlatformMark key={id} platform={id} size={22} />
+            ))}
+          </span>
+          <span>
+            {laterNames.join(", ")}
+            {later.length > 3 ? " and more" : ""}: connect them after setup, in Settings.
+          </span>
+        </p>
       )}
     </div>
   );
@@ -179,37 +265,13 @@ export function WelcomeConnect({
           </p>
         </div>
 
-        {problem?.kind === "message" && (
-          <p
-            role="alert"
-            className="border-danger-border bg-danger-soft text-danger rounded-xl border p-4 text-sm"
-          >
-            {problem.text}
-          </p>
+        {problem && problem.kind !== "free-full" && (
+          <ConnectProblemBox problem={problem} hasBrand={hasBrand} />
         )}
-        {problem?.kind === "instagram-personal" ? (
-          <div className="border-danger-border bg-danger-soft rounded-xl border p-5">
-            <h2 className="section-title">This Instagram is a personal account</h2>
-            <p className="text-ink-2 mt-1 text-sm">
-              Instagram only lets apps read business inboxes. Switching takes about a minute, and
-              you keep your posts and followers:
-            </p>
-            <ol className="text-ink-2 mt-2 list-decimal space-y-1 pl-5 text-sm">
-              <li>In Instagram, open Settings → Account type and tools.</li>
-              <li>Tap Switch to professional account, then Business.</li>
-              <li>Come back here.</li>
-            </ol>
-            <form action={hasBrand ? connectAccount : connectFirstAccount} className="mt-4">
-              <input type="hidden" name="platform" value="instagram" />
-              <input type="hidden" name="back" value="/welcome" />
-              <button
-                type="submit"
-                className="bg-honey hover:bg-honey-hover inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-[#17140F]"
-              >
-                I switched, try again
-              </button>
-            </form>
-          </div>
+        {free && (free.full || problem?.kind === "free-full") ? (
+          <FreeFullCard accounts={free.accounts} soloAccounts={free.soloAccounts} />
+        ) : problem?.kind === "instagram-personal" ? null : beforeOpen ? (
+          <BeforeConnect platform={beforeOpen} hasBrand={hasBrand} />
         ) : inApp ? (
           <InAppGate app={inApp}>{tiles}</InAppGate>
         ) : (
@@ -225,7 +287,7 @@ export function WelcomeConnect({
         </p>
       </section>
       <p className="border-line text-ink-2 border-t pt-4 text-sm">
-        Joining someone&apos;s team instead? Ask them to invite{" "}
+        Joining someone&apos;s business instead? Ask them to invite{" "}
         <b className="text-ink font-semibold">{email}</b>. The invite shows up right here.
       </p>
     </>

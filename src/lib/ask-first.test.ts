@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { askFirstMatch, askFirstTopicsFor, isAskFirstId } from "./ask-first";
+import {
+  askFirstMatch,
+  askFirstTopicsFor,
+  isAskFirstId,
+  customLabel,
+  customTopic,
+  isCustomTopic,
+} from "./ask-first";
 
 describe("askFirstTopicsFor", () => {
   it("starts with refunds and complaints, on", () => {
@@ -47,5 +54,29 @@ describe("askFirstMatch", () => {
   it("checks ids", () => {
     expect(isAskFirstId("refunds")).toBe(true);
     expect(isAskFirstId("nope")).toBe(false);
+  });
+});
+
+describe("the owner's own topics", () => {
+  it("cleans what was typed into the stored form", () => {
+    expect(customTopic("  Wedding   Cakes! ")).toBe("custom:wedding cakes");
+    expect(customTopic("x")).toBeNull();
+    expect(customTopic("a".repeat(41))).toBeNull();
+    expect(isCustomTopic("custom:wedding cakes")).toBe(true);
+    expect(isCustomTopic("custom:Wedding")).toBe(false);
+    expect(customLabel("custom:rush orders")).toBe("rush orders");
+  });
+  it("matches the words typed, plurals too, as a phrase", () => {
+    const topics = ["custom:wedding cake", "custom:rush orders"];
+    expect(askFirstMatch("Do you make wedding cakes?", topics)).toBe("custom:wedding cake");
+    expect(askFirstMatch("Is a rush order possible?", topics)).toBe("custom:rush orders");
+    expect(askFirstMatch("A cake for my wedding?", topics)).toBeNull();
+    expect(askFirstMatch("weddingcakes", topics)).toBeNull();
+  });
+  it("only when chosen, after the built-in topics", () => {
+    expect(askFirstMatch("wedding cake refund", ["refunds", "custom:wedding cake"])).toBe(
+      "refunds",
+    );
+    expect(askFirstMatch("wedding cake", [])).toBeNull();
   });
 });
