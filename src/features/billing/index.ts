@@ -40,6 +40,7 @@ export type { WelcomeContent } from "./welcome";
 export { BillingHost } from "./billing-host";
 export { DayBanner, DayPill } from "./day-price";
 export { UpgradeNote } from "./upgrade-note";
+export { UpgradeLink } from "./upgrade-link";
 export { NEVER_DARK, limitEmailDue, replyLimit, replyLimitNote } from "./reply-limit";
 export type { ReplyLimit, ReplyLimitLevel } from "./reply-limit";
 export {

@@ -2,7 +2,7 @@ import { FlaskConical } from "lucide-react";
 import Link from "next/link";
 import { can } from "@/features/orgs";
 import { getCurrentTenant, RoleGate } from "@/features/tenants";
-import { planAllowsAutoReply, upgradeHref, upgradeLabel, upgradeLine } from "@/features/billing";
+import { planAllowsAutoReply, UpgradeLink, upgradeLabel, upgradeLine } from "@/features/billing";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import {
@@ -53,9 +53,9 @@ export async function AutonomyCard({ variant = "settings" }: { variant?: "settin
         {!autoOk && (
           <p className="border-honey-border bg-honey-tint rounded-xl border px-4 py-3 text-sm">
             <b>On Free, you approve every reply.</b> {upgradeLine("auto_reply")}{" "}
-            <Link href={upgradeHref("auto_reply")} className="action-link">
+            <UpgradeLink reason="auto_reply" className="action-link">
               {upgradeLabel("auto_reply")}
-            </Link>
+            </UpgradeLink>
           </p>
         )}
         <div className="card flex flex-col divide-y">

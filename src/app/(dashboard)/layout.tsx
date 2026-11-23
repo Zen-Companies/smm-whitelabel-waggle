@@ -2,7 +2,7 @@ import { TimeZoneCookie } from "@/components/app/time-zone-cookie";
 
 import { Suspense } from "react";
 
-import { AccountBanner, ConnectResult, FirstConnectTag } from "@/features/accounts";
+import { AccountBanner, ConnectResult, connectAccount, FirstConnectTag } from "@/features/accounts";
 
 import { Bell } from "@/features/alerts";
 
@@ -77,6 +77,7 @@ async function PlanBanner() {
       canInvite={!!org && can(org.role, "team.manage")}
       tenantId={tenant.id}
       needsYouStatuses={NEEDS_OWNER}
+      connect={connectAccount}
     />
   );
 }

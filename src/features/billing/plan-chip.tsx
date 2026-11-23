@@ -10,6 +10,7 @@ import { planPeek, type PlanPeek } from "./plan-peek";
 import { planChipState, planChipText, showOnPhone, type PlanChipState } from "./plan-chip-state";
 import { planIsLive } from "./subscription";
 import { upgradeHref } from "./upgrade";
+import { UpgradeLink } from "./upgrade-link";
 import { loadPlans, loadReplyLimit } from "./usage";
 
 // Your plan next to your profile (design "Your plan next to your profile, and connecting in a
@@ -200,9 +201,9 @@ function PeekAction({ peek }: { peek: PlanPeek }) {
   switch (peek.action.kind) {
     case "upgrade":
       return (
-        <Link href={upgradeHref("replies")} className={PEEK_BUTTON}>
+        <UpgradeLink reason="replies" className={PEEK_BUTTON}>
           Upgrade to Solo
-        </Link>
+        </UpgradeLink>
       );
     case "top_up":
       return (

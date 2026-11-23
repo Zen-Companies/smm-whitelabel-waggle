@@ -35,8 +35,9 @@ export type Popup =
 
 /**
  * Pure: the pop-up to open on this page. A link's `?upgrade=<reason>` first (not on Your plan,
- * whose own upgrade screen says it), then `?welcome=1` (once per organization in this browser),
- * then out of replies (once per browser session).
+ * whose own upgrade screen says it, unless `onPlanToo`: Free's pop-ups open everywhere, 23 Nov),
+ * then `?welcome=1` (once per organization in this browser), then out of replies (once per
+ * browser session).
  */
 export function popupFor(input: {
   path: string;
@@ -44,8 +45,9 @@ export function popupFor(input: {
   welcome: string | null;
   welcomeSeen: boolean;
   outDue: boolean;
+  onPlanToo?: boolean;
 }): Popup {
-  if (isOfferReason(input.upgrade) && input.path !== "/plan") {
+  if (isOfferReason(input.upgrade) && (input.onPlanToo || input.path !== "/plan")) {
     return { kind: "upgrade", reason: input.upgrade };
   }
   if (input.welcome === "1" && !input.welcomeSeen) return { kind: "welcome" };

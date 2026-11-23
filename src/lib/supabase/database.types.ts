@@ -2521,6 +2521,10 @@ export type Database = {
           setup_passed_at: string | null
           setup_done_at: string | null
           setup_screen: string | null
+          setup_chat: Json
+          setup_chat_log: Json | null
+          ai_profile: Json | null
+          ai_profile_at: string | null
           name_pending: boolean
           ask_first_topics: string[]
           setup_passed_by: string | null
@@ -2560,6 +2564,10 @@ export type Database = {
           setup_passed_at?: string | null
           setup_done_at?: string | null
           setup_screen?: string | null
+          setup_chat?: Json
+          setup_chat_log?: Json | null
+          ai_profile?: Json | null
+          ai_profile_at?: string | null
           name_pending?: boolean
           ask_first_topics?: string[]
           setup_passed_by?: string | null
@@ -2598,6 +2606,10 @@ export type Database = {
           setup_passed_at?: string | null
           setup_done_at?: string | null
           setup_screen?: string | null
+          setup_chat?: Json
+          setup_chat_log?: Json | null
+          ai_profile?: Json | null
+          ai_profile_at?: string | null
           name_pending?: boolean
           ask_first_topics?: string[]
           setup_passed_by?: string | null

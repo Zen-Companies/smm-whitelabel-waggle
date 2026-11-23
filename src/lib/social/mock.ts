@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  AccountCategory,
   AccountHealth,
   AccountPicture,
   CreatePostInput,
@@ -53,7 +54,7 @@ import type {
   CommentAutomationLogEntry,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
-import { DM_ACCESS_MISSING, SocialProviderError } from "./types";
+import { DM_ACCESS_MISSING, EMPTY_ACCOUNT_CATEGORY, SocialProviderError } from "./types";
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 import {
   MOCK_BEST_TIMES,
@@ -1780,6 +1781,34 @@ export class MockSocialProvider implements SocialProvider {
   async getBusinessProfile(input: { accountId: string }): Promise<BusinessProfile | null> {
     this.businessProfileCalls++;
     return this.businessProfiles.get(input.accountId) ?? null;
+  }
+
+  /** Setup item G: a test sets an account's category; otherwise a plausible café. */
+  readonly accountCategories = new Map<string, AccountCategory>();
+  accountCategoryCalls = 0;
+
+  async getAccountCategory(input: {
+    accountId: string;
+    platform: string;
+  }): Promise<AccountCategory> {
+    this.accountCategoryCalls++;
+    const set = this.accountCategories.get(input.accountId);
+    if (set) return set;
+    if (input.platform === "facebook" || input.platform === "googlebusiness") {
+      return {
+        ...EMPTY_ACCOUNT_CATEGORY,
+        category: "Coffee Shop",
+        description: "Small-batch coffee and fresh pastries, baked every morning.",
+      };
+    }
+    if (input.platform === "instagram") {
+      return {
+        ...EMPTY_ACCOUNT_CATEGORY,
+        bio: "Neighbourhood café ☕ Fresh pastries daily. Open 7am–4pm.",
+        website: "https://example.com",
+      };
+    }
+    return EMPTY_ACCOUNT_CATEGORY;
   }
 
   readonly reviews = new Map<string, ProviderReview[]>();

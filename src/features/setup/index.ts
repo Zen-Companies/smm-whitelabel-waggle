@@ -7,3 +7,4 @@ export { SetupStepper } from "./setup-frame";
 export { connectProblem, isInAppBrowser } from "./first-connect";
 export { setupEntry } from "./flow";
 export { loadSetupConnected, loadSetupStrip } from "./setup-data";
+export { buildBusinessProfiles, buildProfileAfterConnect } from "./profile-run";

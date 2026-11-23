@@ -168,6 +168,29 @@ export interface ProviderComment {
 }
 
 /**
+ * What a connected account says it is (setup item G, 23 Nov): read right after connect so setup
+ * can tell the kind of business and make its business profile without waiting for the 30-day read.
+ * Facebook: the selected Page's `category` from `GET /v1/accounts/{id}/facebook-page`. Instagram:
+ * `profile.biography` and `website` from `GET /v1/accounts/{id}/instagram/business-discovery`.
+ * Google Business: `categories` and `profile.description` from
+ * `GET /v1/accounts/{id}/gmb-location-details?readMask=categories,profile`. Every other platform,
+ * and any failure, gives the empty info (never thrown: setup goes on without it).
+ */
+export interface AccountCategory {
+  category: string | null;
+  bio: string | null;
+  website: string | null;
+  description: string | null;
+}
+
+export const EMPTY_ACCOUNT_CATEGORY: AccountCategory = {
+  category: null,
+  bio: null,
+  website: null,
+  description: null,
+};
+
+/**
  * A connected account's public business info (found facts, decision 7, 20 Nov). Facebook:
  * `GET /v1/accounts/{accountId}/facebook-page-info` (docs.zernio.com/account-settings/get-facebook-page-info).
  * Instagram: `GET /v1/accounts/{accountId}/instagram/business-discovery?username=` on the
@@ -1252,6 +1275,15 @@ export interface SocialProvider {
       message: string;
     } & CallOptions,
   ): Promise<{ providerMessageId: string }>;
+  /** What the account says it is (AccountCategory). Never throws: failures give the empty info. */
+  getAccountCategory(
+    input: {
+      accountId: string;
+      platform: string;
+      /** Instagram: the account's own handle (business discovery looks up by username). */
+      username?: string | null;
+    } & CallOptions,
+  ): Promise<AccountCategory>;
   /**
    * The account's public business info (decision 7). null when the platform has none we can
    * read: not Facebook or Instagram, or an Instagram account connected with Instagram Login

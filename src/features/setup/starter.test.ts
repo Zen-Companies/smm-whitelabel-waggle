@@ -4,6 +4,7 @@ import {
   BUSINESS_KINDS,
   customKindFromProfile,
   doneLine,
+  kindFromPlatformCategory,
   kindFromProfile,
   parseStep,
   profileText,
@@ -97,5 +98,41 @@ describe("first-time setup (T73b)", () => {
     expect(stepDetail("practice", false, facts)).toBe("1 of 3 tried");
     expect(stepDetail("replies", true, facts)).toBe("On its own, for questions your answers cover");
     expect(stepDetail("replies", false, facts)).toBe("Not chosen yet");
+  });
+});
+
+describe("kindFromPlatformCategory (setup item G)", () => {
+  it.each([
+    ["Bakery", "food"],
+    ["Coffee Shop", "food"],
+    ["Café", "food"],
+    ["Wine Bar", "food"],
+    ["Plumbing Service", "services"],
+    ["Auto Repair Shop", "services"],
+    ["Electrician", "services"],
+    ["Dentist & Dental Office", "health"],
+    ["Medical Spa", "health"],
+    ["Veterinarian", "health"],
+    ["Hair Salon", "beauty"],
+    ["Barber Shop", "beauty"],
+    ["Nail Salon", "beauty"],
+    ["Gym/Physical Fitness Center", "fitness"],
+    ["Yoga Studio", "fitness"],
+    ["Real Estate Agent", "realestate"],
+    ["Property Management Company", "realestate"],
+    ["Clothing Store", "shop"],
+    ["Florist", "shop"],
+  ])("%s → %s", (category, kind) => {
+    expect(kindFromPlatformCategory(category)).toBe(kind);
+  });
+
+  it("gives null when unsure (setup asks the kind)", () => {
+    // A photographer isn't a home or local trade, and no other kind fits.
+    expect(kindFromPlatformCategory("Wedding Photographer")).toBeNull();
+    expect(kindFromPlatformCategory("Local Business")).toBeNull();
+    expect(kindFromPlatformCategory("Health/Beauty")).toBeNull();
+    expect(kindFromPlatformCategory("Barbados Tours")).toBeNull();
+    expect(kindFromPlatformCategory("")).toBeNull();
+    expect(kindFromPlatformCategory(null)).toBeNull();
   });
 });
