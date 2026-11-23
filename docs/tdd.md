@@ -505,7 +505,7 @@ As built (T7):
 
 ## 10. LLM drafting
 
-- Provider: **OpenRouter** through the Vercel AI SDK (`@openrouter/ai-sdk-provider` 3.x, AI SDK 7), so one balance covers every model. Models are OpenRouter `provider/model` ids set by env (`LLM_CLASSIFY_MODEL`, `LLM_DRAFT_MODEL`, `EMBEDDING_MODEL`).
+- Provider: **OpenRouter** through the Vercel AI SDK (`@openrouter/ai-sdk-provider` 3.x, AI SDK 7), so one balance covers every model. Models are OpenRouter `provider/model` ids set by env (`LLM_CLASSIFY_MODEL`, `LLM_DRAFT_MODEL`, `EMBEDDING_MODEL`). Setup (business profile, setup chat) uses `purpose: setup` and `LLM_SETUP_MODEL` (unset: the classify model); a failed setup call (network, HTTP, invalid output) retries once on `LLM_CLASSIFY_MODEL` through the same validated path, and ai_usage records `setup` with the model that served it. Structured output goes as a JSON-schema `response_format` (AI SDK `Output.object`), never forced tool calling, which current Claude models reject with HTTP 400.
 - Provider resolution lives only in `lib/llm/provider.ts` (`LLM_PROVIDER`, `EMBEDDING_PROVIDER`; only `openrouter` today), so going direct to a provider later is config plus one case there.
 - Structured output: AI SDK 7 `generateText` with `Output.object({ schema })` (zod schema matching `DraftResult`), wrapped by `LlmClient.generateObject`.
 - Embeddings: OpenRouter's `/embeddings` endpoint natively (`openrouter.textEmbeddingModel`, e.g. `openai/text-embedding-3-small`); no `@ai-sdk/openai` needed.
@@ -659,7 +659,7 @@ As built (T17):
 NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY
 ZERNIO_API_KEY, ZERNIO_WEBHOOK_SECRET
 JEV_API_URL, JEV_API_KEY, JEV_MODEL, JEV_TIMEOUT_MS, JEV_COST_PER_MTOK_INPUT
-LLM_PROVIDER (openrouter), OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL
+LLM_PROVIDER (openrouter), OPENROUTER_API_KEY, LLM_CLASSIFY_MODEL, LLM_DRAFT_MODEL, LLM_SETUP_MODEL (optional)
 EMBEDDING_PROVIDER (openrouter), EMBEDDING_MODEL
 RESEND_API_KEY, ALERT_FROM_EMAIL, EMAIL_REPLY_TO, OPERATOR_ALERT_EMAIL
 SOCIAL_PROVIDER_MODE (mock | zernio)

@@ -9,6 +9,7 @@ import {
   errorResponse,
   fakeOpenRouter,
   memoryUsage,
+  testLlmConfig,
   toolCallCompletion,
 } from "./test-utils";
 
@@ -113,6 +114,103 @@ describe("createLlmClient.generateObject", () => {
   });
 });
 
+describe("createLlmClient.generateObject purpose setup", () => {
+  const setupConfig = { ...testLlmConfig, LLM_SETUP_MODEL: "anthropic/claude-sonnet-5.5" };
+
+  it("uses LLM_SETUP_MODEL with a JSON-schema response_format, not forced tool calling", async () => {
+    const { fetchMock, models } = fakeOpenRouter(
+      () => chatCompletion({ answer: "ok" }, { model: "anthropic/claude-sonnet-5.5", cost: 0.002 }),
+      setupConfig,
+    );
+    const usage = memoryUsage();
+    const result = await createLlmClient({ models, usage }).generateObject({
+      ...call,
+      purpose: "setup",
+      schema,
+      system: "s",
+      prompt: "p",
+    });
+
+    expect(result).toEqual({ object: { answer: "ok" }, model: "anthropic/claude-sonnet-5.5" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.model).toBe("anthropic/claude-sonnet-5.5");
+    expect(body.response_format).toMatchObject({ type: "json_schema" });
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
+    expect(usage.records).toMatchObject([
+      { purpose: "setup", model: "anthropic/claude-sonnet-5.5", costUsd: 0.002 },
+    ]);
+  });
+
+  it("falls back to the classify model when LLM_SETUP_MODEL is unset", async () => {
+    const { fetchMock, models } = fakeOpenRouter(() => chatCompletion({ answer: "ok" }));
+    const usage = memoryUsage();
+    await createLlmClient({ models, usage }).generateObject({
+      ...call,
+      purpose: "setup",
+      schema,
+      system: "s",
+      prompt: "p",
+    });
+    expect(models.setup.id).toBe(testLlmConfig.LLM_CLASSIFY_MODEL);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).model).toBe("openai/gpt-5-mini");
+    expect(usage.records[0].purpose).toBe("setup");
+  });
+
+  it.each([
+    ["an HTTP error", () => errorResponse(400)],
+    ["output that fails the schema", () => chatCompletion({ wrong: true })],
+  ])("retries once on the classify model after %s", async (_, failure) => {
+    const { fetchMock, models } = fakeOpenRouter(
+      (_url, body) =>
+        body.model === "anthropic/claude-sonnet-5.5"
+          ? failure()
+          : chatCompletion({ answer: "free" }, { model: "openai/gpt-5-mini" }),
+      setupConfig,
+    );
+    const usage = memoryUsage();
+    const result = await createLlmClient({ models, usage }).generateObject({
+      ...call,
+      purpose: "setup",
+      schema,
+      system: "s",
+      prompt: "p",
+    });
+
+    expect(result).toEqual({ object: { answer: "free" }, model: "openai/gpt-5-mini" });
+    const sent = fetchMock.mock.calls.map((c) => JSON.parse(String(c[1]?.body)).model);
+    expect(sent[0]).toBe("anthropic/claude-sonnet-5.5");
+    expect(sent.at(-1)).toBe("openai/gpt-5-mini");
+    expect(usage.records).toMatchObject([{ purpose: "setup", model: "openai/gpt-5-mini" }]);
+  });
+
+  it("fails when the classify model fails too", async () => {
+    const { models } = fakeOpenRouter(() => errorResponse(400), setupConfig);
+    const usage = memoryUsage();
+    await expect(
+      createLlmClient({ models, usage }).generateObject({
+        ...call,
+        purpose: "setup",
+        schema,
+        system: "s",
+        prompt: "p",
+      }),
+    ).rejects.toThrow();
+    expect(usage.records).toHaveLength(0);
+  });
+
+  it("does not fail over for other purposes", async () => {
+    const { fetchMock, models } = fakeOpenRouter(() => errorResponse(400), setupConfig);
+    const llm = createLlmClient({ models, usage: memoryUsage() });
+    await expect(
+      llm.generateObject({ ...call, purpose: "classify", schema, system: "s", prompt: "p" }),
+    ).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("createLlmClient.embed", () => {
   it("embeds through OpenRouter and records purpose embed with cost", async () => {
     const { fetchMock, models } = fakeOpenRouter(() =>
@@ -156,6 +254,20 @@ describe("loadLlmConfig", () => {
     });
     expect(config.LLM_PROVIDER).toBe("openrouter");
     expect(config.EMBEDDING_PROVIDER).toBe("openrouter");
+    expect(config.LLM_SETUP_MODEL).toBeUndefined();
+  });
+
+  it("reads LLM_SETUP_MODEL when set and treats an empty one as unset", () => {
+    const base = {
+      OPENROUTER_API_KEY: "k",
+      LLM_CLASSIFY_MODEL: "a/b",
+      LLM_DRAFT_MODEL: "a/c",
+      EMBEDDING_MODEL: "a/d",
+    };
+    expect(loadLlmConfig({ ...base, LLM_SETUP_MODEL: "anthropic/x" }).LLM_SETUP_MODEL).toBe(
+      "anthropic/x",
+    );
+    expect(loadLlmConfig({ ...base, LLM_SETUP_MODEL: "" }).LLM_SETUP_MODEL).toBeUndefined();
   });
 
   it("names missing keys", () => {

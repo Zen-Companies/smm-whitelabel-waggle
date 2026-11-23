@@ -19,6 +19,8 @@ export interface ResolvedModel<M> {
 export interface ResolvedModels {
   classify: ResolvedModel<LanguageModel>;
   draft: ResolvedModel<LanguageModel>;
+  /** Setup's model (LLM_SETUP_MODEL); the classify model when that is unset. */
+  setup: ResolvedModel<LanguageModel>;
   embedding: ResolvedModel<EmbeddingModel>;
 }
 
@@ -43,6 +45,7 @@ export function resolveModels(
   return {
     classify: chat(config.LLM_CLASSIFY_MODEL),
     draft: chat(config.LLM_DRAFT_MODEL),
+    setup: chat(config.LLM_SETUP_MODEL ?? config.LLM_CLASSIFY_MODEL),
     embedding: {
       model: openrouter.textEmbeddingModel(config.EMBEDDING_MODEL, {
         extraBody: { dimensions: EMBEDDING_DIMENSIONS },

@@ -7,6 +7,8 @@ const llmEnvSchema = z.object({
   OPENROUTER_API_KEY: z.string(),
   LLM_CLASSIFY_MODEL: z.string(),
   LLM_DRAFT_MODEL: z.string(),
+  // Setup's own calls (business profile, setup chat). Unset: LLM_CLASSIFY_MODEL.
+  LLM_SETUP_MODEL: z.string().optional(),
   EMBEDDING_PROVIDER: z.enum(["openrouter"]).default("openrouter"),
   EMBEDDING_MODEL: z.string(),
 });

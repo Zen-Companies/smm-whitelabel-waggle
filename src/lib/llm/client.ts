@@ -1,6 +1,14 @@
-import { embed, generateText, Output, stepCountIs, type StepResult, type ToolSet } from "ai";
+import {
+  embed,
+  generateText,
+  Output,
+  stepCountIs,
+  type LanguageModel,
+  type StepResult,
+  type ToolSet,
+} from "ai";
 import type { z } from "zod";
-import type { ResolvedModels } from "./provider";
+import type { ResolvedModel, ResolvedModels } from "./provider";
 import { openRouterCostUsd, type UsageRecorder } from "./usage";
 
 export interface LlmCallContext {
@@ -10,7 +18,8 @@ export interface LlmCallContext {
 }
 
 export interface GenerateObjectInput<T> extends LlmCallContext {
-  purpose: "classify" | "draft";
+  /** setup: its own model, retried once on the classify model when that call fails. */
+  purpose: "classify" | "draft" | "setup";
   schema: z.ZodType<T>;
   system: string;
   prompt: string;
@@ -44,28 +53,47 @@ export interface LlmClient {
 export function createLlmClient(deps: { models: ResolvedModels; usage: UsageRecorder }): LlmClient {
   const { models, usage } = deps;
 
+  // Output.object sends a JSON-schema response_format (OpenRouter `json_schema`, strict), never a
+  // forced tool call: current Claude models reject forced tool_choice with HTTP 400.
+  async function callObject<T>(
+    resolved: ResolvedModel<LanguageModel>,
+    input: GenerateObjectInput<T>,
+  ) {
+    const result = await generateText({
+      model: resolved.model,
+      system: input.system,
+      prompt: input.prompt,
+      output: Output.object({ schema: input.schema }),
+      abortSignal: input.signal,
+    });
+    const model = result.response.modelId || resolved.id;
+    await usage.record({
+      tenantId: input.tenantId,
+      itemId: input.itemId,
+      purpose: input.purpose,
+      provider: resolved.provider,
+      model,
+      inputTokens: result.usage.inputTokens ?? 0,
+      outputTokens: result.usage.outputTokens ?? 0,
+      costUsd: openRouterCostUsd(result.providerMetadata),
+    });
+    return { object: result.output, model };
+  }
+
   return {
     async generateObject<T>(input: GenerateObjectInput<T>) {
       const resolved = models[input.purpose];
-      const result = await generateText({
-        model: resolved.model,
-        system: input.system,
-        prompt: input.prompt,
-        output: Output.object({ schema: input.schema }),
-        abortSignal: input.signal,
-      });
-      const model = result.response.modelId || resolved.id;
-      await usage.record({
-        tenantId: input.tenantId,
-        itemId: input.itemId,
-        purpose: input.purpose,
-        provider: resolved.provider,
-        model,
-        inputTokens: result.usage.inputTokens ?? 0,
-        outputTokens: result.usage.outputTokens ?? 0,
-        costUsd: openRouterCostUsd(result.providerMetadata),
-      });
-      return { object: result.output, model };
+      if (input.purpose !== "setup" || resolved.id === models.classify.id) {
+        return callObject(resolved, input);
+      }
+      try {
+        return await callObject(resolved, input);
+      } catch (err) {
+        // Network, HTTP or output that fails the schema: one retry on the classify model through
+        // the same validated path. The failed call's text is never shown or logged.
+        if (input.signal?.aborted) throw err;
+        return callObject(models.classify, input);
+      }
     },
 
     async runTools<T>(input: RunToolsInput<T>) {
