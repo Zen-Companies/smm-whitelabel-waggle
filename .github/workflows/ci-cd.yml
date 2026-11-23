@@ -82,7 +82,7 @@ jobs:
       - run: supabase link --project-ref vkwstnnrqxcbiafyjkfc
       - name: Pending migrations
         run: supabase migration list --remote
-      - run: supabase db push --remote --yes
+      - run: supabase db push --remote --yes --include-all
 
   # Staging (hive-723mp4.gowaggle.ai) has its own database: every push to the staging branch
   # applies new migrations there too, so staging never runs code against an old schema.
@@ -104,7 +104,7 @@ jobs:
       - run: supabase link --project-ref jmtiruircxnaqtoozika
       - name: Pending migrations
         run: supabase migration list --remote
-      - run: supabase db push --remote --yes
+      - run: supabase db push --remote --yes --include-all
 
   deploy:
     name: Deploy to Vercel production
