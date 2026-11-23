@@ -95,7 +95,9 @@ select is_empty(
                                 -- CRM sync (18 Nov): per owner / per login, server-only.
                                 'crm_events', 'user_activity',
                                 -- Free plan idle disconnect (20 Nov): per organization, server-only.
-                                'org_idle', 'first_morning_emails', 'email_opt_outs')
+                                'org_idle', 'first_morning_emails', 'email_opt_outs',
+                                -- Confirm later (hotfix 21 Nov): per login, server-written.
+                                'email_confirmations')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

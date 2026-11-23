@@ -6,8 +6,9 @@ import { Brand } from "@/components/app/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
-import { GoogleButton, OrDivider } from "@/features/auth";
+import { GoogleButton, InAppGoogleGate, OrDivider } from "@/features/auth";
 import { PASSWORD_MIN } from "./password";
+import { PasswordInput } from "./password-input";
 
 /** Messages for `?error=` on the sign-in page (Google and email links come back with these). */
 const LINK_ERRORS: Record<string, string> = {
@@ -54,11 +55,14 @@ export function AuthForm({
         </p>
       )}
       <div className="mb-4 flex flex-col gap-4">
-        <GoogleButton
-          label={isSignup ? "Sign up with Google" : "Continue with Google"}
-          next={next}
-        />
-        <OrDivider />
+        {/* Inside TikTok's or Instagram's own browser Google blocks sign-in: say so instead (20 Nov). */}
+        <InAppGoogleGate>
+          <GoogleButton
+            label={isSignup ? "Sign up with Google" : "Continue with Google"}
+            next={next}
+          />
+          <OrDivider />
+        </InAppGoogleGate>
       </div>
       <form action={formAction} className="flex flex-col gap-4">
         {next && <input type="hidden" name="next" value={next} />}
@@ -87,10 +91,9 @@ export function AuthForm({
               </Link>
             )}
           </span>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete={isSignup ? "new-password" : "current-password"}
             minLength={isSignup ? PASSWORD_MIN : undefined}
             aria-invalid={state.error ? true : undefined}
@@ -101,6 +104,20 @@ export function AuthForm({
             <p id="password-hint" className="text-ink-3 text-xs">
               At least {PASSWORD_MIN} characters.
             </p>
+          )}
+          {isSignup && (
+            <>
+              <label htmlFor="confirmPassword" className="mt-2 text-sm font-medium">
+                Confirm your password
+              </label>
+              <PasswordInput
+                id="confirmPassword"
+                name="confirmPassword"
+                autoComplete="new-password"
+                aria-invalid={state.error ? true : undefined}
+                required
+              />
+            </>
           )}
           {state.error && (
             <p role="alert" className="text-danger text-sm">
