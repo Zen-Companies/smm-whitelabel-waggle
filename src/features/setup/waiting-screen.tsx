@@ -1,11 +1,12 @@
 "use client";
 
+import { AnswerCombs } from "@/components/app/bee-setup";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 // The server action file directly: the approvals index also exports server-only code, which a
 // client component must not pull in.
-import { decideDraft } from "@/features/approvals/actions";
+import { decideDraft, ownerReplyAction } from "@/features/approvals/actions";
 import { answerWaitingMessage, goToSetupScreen, skipWaitingMessages } from "./actions";
 import { plural } from "./copy";
 import type { SetupScreen } from "./flow";
@@ -13,14 +14,17 @@ import type { WaitingMessage } from "./setup-data";
 import { PRIMARY, QUIET, ScreenButton, ScreenFooter, ScreenTitle } from "./setup-frame";
 import { AnswerMeter } from "./setup-parts";
 
-// 3.3 "N customers are still waiting" (Walter's flow, paged, approved 20 Nov): one at a time.
-// The owner types the facts; they're saved as business info and Waggle writes the reply, saved
-// as a draft (Send it here, or later from the Inbox). Skip leaves it in the Inbox.
+// 3.3 "N customers need you" (Walter's flow, paged, approved 20 Nov; board "Setup, start to
+// finish", 23 Nov): one at a time, complaints first. Where Waggle tried but lacked the facts, the
+// owner types them; they're saved as business info and Waggle writes the reply, saved as a draft
+// (Send it here, or later from the Inbox). Where Waggle wrote nothing (a complaint, unclear, out
+// of AI replies), the owner writes the reply. "Answer later in Inbox" leaves it there.
 
 type Outcome =
   | { kind: "reply"; draftId: string; body: string; sent?: boolean }
   | { kind: "queued" }
   | { kind: "still" }
+  | { kind: "sent" }
   | { kind: "skipped" };
 
 export function WaitingScreen({
@@ -62,15 +66,26 @@ export function WaitingScreen({
       <AnswerMeter approved={meter.approved} total={meter.total} />
       {top}
       <ScreenTitle
-        title={`${plural(messages.length, "customer is", "customers are")} still waiting`}
-        sub="I couldn’t answer these from what I know. Tell me the facts and I’ll write the reply."
+        title={`${plural(messages.length, "customer needs", "customers need")} you`}
+        sub="Waggle didn’t have the answer."
+      />
+      {/* One cell fills, and the bee hops to it, for each customer answered (approved 21 Nov). */}
+      <AnswerCombs
+        done={
+          messages.filter((x) => ["reply", "sent"].includes(outcomes[x.itemId]?.kind ?? "")).length
+        }
+        of={messages.length}
       />
       {m && (
         <div className="card flex flex-col gap-2.5 p-3">
           <span className="flex items-center justify-between gap-2 text-[12.5px]">
-            <b className="min-w-0 font-semibold break-words">
-              {m.author} · {m.kind === "dm" ? "DM" : "comment"}
-            </b>
+            <span className="min-w-0 break-words">
+              <b className="font-semibold">{m.author}</b>{" "}
+              <span className={m.category === "complaint" ? "text-danger" : "text-ink-3"}>
+                · {m.kind === "dm" ? "DM" : "comment"}
+                {m.category === "complaint" ? " · complaint" : ""}
+              </span>
+            </span>
             <span className="text-ink-3 flex items-center gap-1 tabular-nums">
               {at + 1} of {messages.length}
               <button
@@ -143,6 +158,10 @@ export function WaitingScreen({
             <p className="text-ink-2 text-sm" role="status">
               Saved. Waggle still needs more to go on, so this one stays in your Inbox for you.
             </p>
+          ) : outcome?.kind === "sent" ? (
+            <p className="text-ink-2 text-sm" role="status">
+              Sent. {m.author} will see your reply in a moment.
+            </p>
           ) : outcome?.kind === "skipped" ? (
             <p className="text-ink-2 text-sm" role="status">
               It stays in your Inbox for you to answer.
@@ -150,38 +169,24 @@ export function WaitingScreen({
           ) : (
             <>
               <label className="sr-only" htmlFor={`facts-${m.itemId}`}>
-                What’s the answer? Just the facts.
+                {m.ownReply ? "Your reply" : "What’s the answer? Just the facts."}
               </label>
               <textarea
                 id={`facts-${m.itemId}`}
                 rows={2}
                 value={facts[m.itemId] ?? ""}
                 onChange={(e) => setFacts((f) => ({ ...f, [m.itemId]: e.target.value }))}
-                placeholder="What’s the answer? Just the facts."
+                placeholder={
+                  m.ownReply ? "Write your reply…" : "What’s the answer? Just the facts."
+                }
                 className="field border-honey text-[13px]"
               />
-              <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <button
-                  type="button"
-                  disabled={pending || !(facts[m.itemId] ?? "").trim()}
-                  data-busy={pending || undefined}
-                  className="bg-ink text-surface hover:bg-ink-2 inline-flex min-h-10 items-center rounded-xl px-3.5 text-sm font-semibold disabled:opacity-60"
-                  onClick={() =>
-                    start(async () => {
-                      setError(null);
-                      const r = await answerWaitingMessage({
-                        itemId: m.itemId,
-                        facts: facts[m.itemId] ?? "",
-                      });
-                      if (r.error) setError(r.error);
-                      else if (r.reply) set(m.itemId, { kind: "reply", ...r.reply });
-                      else if (r.queued) set(m.itemId, { kind: "queued" });
-                      else set(m.itemId, { kind: "still" });
-                    })
-                  }
-                >
-                  {pending ? "Writing…" : "Write the reply"}
-                </button>
+              {!m.ownReply && (
+                <span className="text-ink-3 text-xs">
+                  Tell Waggle the facts and it writes the reply.
+                </span>
+              )}
+              <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <button
                   type="button"
                   className={QUIET}
@@ -191,8 +196,54 @@ export function WaitingScreen({
                     goNext();
                   }}
                 >
-                  Skip, I’ll answer it myself
+                  Answer later in Inbox
                 </button>
+                {m.ownReply ? (
+                  <button
+                    type="button"
+                    disabled={pending || !(facts[m.itemId] ?? "").trim()}
+                    data-busy={pending || undefined}
+                    className={PRIMARY}
+                    onClick={() =>
+                      start(async () => {
+                        setError(null);
+                        const fd = new FormData();
+                        fd.set("itemId", m.itemId);
+                        fd.set("body", facts[m.itemId] ?? "");
+                        const r = await ownerReplyAction({}, fd);
+                        if (r.error) setError(r.error);
+                        else {
+                          set(m.itemId, { kind: "sent" });
+                          goNext();
+                        }
+                      })
+                    }
+                  >
+                    {pending ? "Sending…" : "Send reply"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={pending || !(facts[m.itemId] ?? "").trim()}
+                    data-busy={pending || undefined}
+                    className="bg-ink text-surface hover:bg-ink-2 inline-flex min-h-10 items-center rounded-xl px-3.5 text-sm font-semibold disabled:opacity-60"
+                    onClick={() =>
+                      start(async () => {
+                        setError(null);
+                        const r = await answerWaitingMessage({
+                          itemId: m.itemId,
+                          facts: facts[m.itemId] ?? "",
+                        });
+                        if (r.error) setError(r.error);
+                        else if (r.reply) set(m.itemId, { kind: "reply", ...r.reply });
+                        else if (r.queued) set(m.itemId, { kind: "queued" });
+                        else set(m.itemId, { kind: "still" });
+                      })
+                    }
+                  >
+                    {pending ? "Writing…" : "Write the reply"}
+                  </button>
+                )}
               </span>
             </>
           )}

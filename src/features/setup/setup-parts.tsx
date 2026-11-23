@@ -1,5 +1,6 @@
 "use client";
 
+import { BeeCarrying } from "@/components/app/bee-setup";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { cn } from "cn";
@@ -102,7 +103,8 @@ export function PagedList<T>({
           {p.items.map(render)}
         </ul>
       </div>
-      <PagerNav {...p} onPage={setPage} label={label} />
+      {/* No "1–1 of 1" when everything fits on one page (21 Nov). */}
+      {items.length > size && <PagerNav {...p} onPage={setPage} label={label} />}
     </div>
   );
 }
@@ -115,9 +117,12 @@ export function Exchange({
   question,
   reply,
   marks = [],
+  dm = false,
   children,
 }: {
   name: string;
+  /** A DM reads as a chat: the person's avatar beside their name (21 Nov). */
+  dm?: boolean;
   meta: string;
   metaTone?: "danger" | "muted" | "success";
   question: string;
@@ -127,8 +132,11 @@ export function Exchange({
 }) {
   return (
     <div className="flex flex-col gap-1.5 px-3 py-2.5">
-      <span className="flex flex-wrap items-baseline justify-between gap-x-2 text-[12.5px]">
-        <b className="min-w-0 font-semibold break-words">{name}</b>
+      <span className="flex flex-wrap items-center justify-between gap-x-2 text-[12.5px]">
+        <span className="flex min-w-0 items-center gap-2">
+          {dm && <Avatar name={name} size={24} />}
+          <b className="min-w-0 font-semibold break-words">{name}</b>
+        </span>
         <span
           className={cn(
             "whitespace-nowrap",
@@ -230,7 +238,31 @@ export function SendingCard({
       <span className="bg-line h-[5px] overflow-hidden rounded-full">
         <span className="bg-success block h-full rounded-full" style={{ width: `${pct}%` }} />
       </span>
+      {p.left > 0 && <BeeCarrying className="-my-1 max-w-full" />}
       <span className="text-ink-2">{progressLine(p, spacingMs, platform)}</span>
     </div>
+  );
+}
+
+const AVATAR_COLORS = ["#C2185B", "#6D4C41", "#1E5AA8", "#2E7D32", "#7B1FA2", "#B45309", "#0F766E"];
+
+/** Pure: the same colour for the same person. */
+export function avatarColor(name: string): string {
+  let h = 0;
+  for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+/** A DM's avatar: the first letter of the handle on a colour of its own (DMs read as chats). */
+export function Avatar({ name, size = 30 }: { name: string; size?: number }) {
+  const letter = name.replace(/^@/, "").charAt(0).toUpperCase() || "?";
+  return (
+    <span
+      aria-hidden
+      className="inline-flex flex-none items-center justify-center rounded-full text-[12px] font-semibold text-white"
+      style={{ width: size, height: size, background: avatarColor(name) }}
+    >
+      {letter}
+    </span>
   );
 }

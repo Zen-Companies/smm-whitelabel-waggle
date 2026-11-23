@@ -9,7 +9,13 @@ export { draftOnOpen } from "./draft-on-open";
 export type { DraftOnOpenOutcome } from "./draft-on-open";
 export { draftPulledItem, redraftPulledItem } from "./actions";
 export { CATCH_UP_COMMENTS_MS, CATCH_UP_DMS_MS, DM_REPLY_WINDOW_MS, pullsPastDms } from "./rules";
-export { authorHandle, CLOSED_STATUSES, needsReply, safeToQuote } from "./reveal-rules";
+export {
+  authorHandle,
+  catchUpAccountKeys,
+  CLOSED_STATUSES,
+  needsReply,
+  safeToQuote,
+} from "./reveal-rules";
 export { responseScore, RESPONSE_SCORE_MIN } from "./response-score";
 export type { ResponseScore, ResponseWord } from "./response-score";
 export {

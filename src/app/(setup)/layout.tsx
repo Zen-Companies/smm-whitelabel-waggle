@@ -56,6 +56,8 @@ export default function SetupLayout({ children }: LayoutProps<"/">) {
           </form>
         </div>
       </header>
+      {/* Confirm later's line shows in the app only, once setup is done (21 Nov): during
+          onboarding "Wrong email?" led to Settings, which sends you back to setup. */}
       {children}
       <Suspense fallback={null}>
         <SetupOffers />

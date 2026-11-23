@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { SetupLoading } from "@/components/app/setup-loading";
 import { buttonVariants } from "@/components/ui/button";
 import {
   ConversionTag,
@@ -11,7 +12,7 @@ import {
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
 import { headers } from "next/headers";
 import { connectBanner } from "@/features/accounts";
-import { loadOrgPlan, orgOnFree, TrialConversionTag } from "@/features/billing";
+import { freeAccountsFull, TrialConversionTag } from "@/features/billing";
 import { loadPlatformStatuses } from "@/features/platforms";
 import { connectProblem, isInAppBrowser, WelcomeConnect } from "@/features/setup";
 import { AddBrandForm, getCurrentTenant, getOpenOrg } from "@/features/tenants";
@@ -154,8 +155,10 @@ async function Content({
         : null;
     const h = await headers();
     const banner = connectBanner(params);
-    const [statuses, onFree] = await Promise.all([loadPlatformStatuses(db), orgOnFree(db, org.id)]);
-    const plan = onFree ? await loadOrgPlan(db, org.id) : null;
+    const [statuses, free] = await Promise.all([
+      loadPlatformStatuses(db),
+      freeAccountsFull(db, org.id),
+    ]);
     return (
       <>
         {keys && (
@@ -169,11 +172,12 @@ async function Content({
         {betaBanner}
         <WelcomeConnect
           firstName={name}
-          free={plan ? { accounts: plan.details.accounts } : null}
+          free={free}
           hasBrand={hasBrand}
           connected={connected}
           statuses={statuses}
           all={params.all === "1"}
+          before={typeof params.before === "string" ? params.before : null}
           problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
           inApp={isInAppBrowser(h.get("user-agent"))}
           invites={<InviteList invites={invites} email={user.email} />}
@@ -272,7 +276,7 @@ async function TrialTag({ sessionId }: { sessionId: string }) {
 export default function WelcomePage(props: PageProps<"/welcome">) {
   return (
     <main className="mx-auto flex w-full max-w-[760px] flex-col gap-6 px-4 py-10 md:px-8 md:py-12">
-      <Suspense fallback={<div className="skeleton h-64 rounded-xl" />}>
+      <Suspense fallback={<SetupLoading />}>
         <WithParams {...props} />
       </Suspense>
     </main>

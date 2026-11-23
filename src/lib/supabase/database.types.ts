@@ -720,6 +720,30 @@ export type Database = {
           },
         ]
       }
+      email_confirmations: {
+        Row: {
+          confirmed_at: string | null
+          email: string
+          sent_at: string
+          token_hash: string
+          user_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          email: string
+          sent_at?: string
+          token_hash: string
+          user_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          email?: string
+          sent_at?: string
+          token_hash?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       email_opt_outs: {
         Row: {
           created_at: string
@@ -1512,6 +1536,7 @@ export type Database = {
       }
       missed_messages: {
         Row: {
+          category: string | null
           created_at: string
           id: string
           platform_message_id: string
@@ -1524,6 +1549,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          category?: string | null
           created_at?: string
           id?: string
           platform_message_id: string
@@ -1535,6 +1561,7 @@ export type Database = {
           zernio_conversation_id: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           id?: string
           platform_message_id?: string
@@ -2465,6 +2492,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          accounts_reconciled_at: string | null
           ai_monthly_cap_usd: number | null
           analytics_audience_at: string | null
           analytics_full_at: string | null
@@ -2503,6 +2531,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          accounts_reconciled_at?: string | null
           ai_monthly_cap_usd?: number | null
           analytics_audience_at?: string | null
           analytics_full_at?: string | null
@@ -2540,6 +2569,7 @@ export type Database = {
           zernio_profile_id?: string | null
         }
         Update: {
+          accounts_reconciled_at?: string | null
           ai_monthly_cap_usd?: number | null
           analytics_audience_at?: string | null
           analytics_full_at?: string | null

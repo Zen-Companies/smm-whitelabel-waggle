@@ -21,6 +21,7 @@ export {
   SUPPORTED_PLATFORMS,
 } from "./events";
 export type { ConnectOutcome } from "./events";
+export { reconcileConnectedAccounts } from "./connect-reconcile";
 export {
   backfillComments,
   checkAccountsHealth,

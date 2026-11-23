@@ -6,6 +6,7 @@ import { z } from "zod";
 import { planAllowsTeam, upgradeLine } from "@/features/billing";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
+import { unconfirmedUserIds } from "@/lib/email/confirmations";
 import { can } from "./abilities";
 import { listMyOrgs } from "./server";
 import { inviteLink, newInviteToken, sendInviteEmail } from "./team";
@@ -67,6 +68,13 @@ export async function inviteMember(_prev: InviteState, formData: FormData): Prom
   }
 
   const db = getServiceClient();
+  // Confirm later (hotfix 21 Nov): invites come from this address, so it must be confirmed first.
+  if ((await unconfirmedUserIds(db, [ctx.user.id])).size > 0) {
+    return {
+      error: `Confirm your email first. Invites come from your address, so we need to know it's yours. We sent a link to ${ctx.user.email ?? "your email"}; Send again is at the top of the page.`,
+      email: rawEmail,
+    };
+  }
   // Team members and roles come with Team and Business (decided 17 Nov).
   if (!(await planAllowsTeam(db, ctx.org.id))) {
     return {

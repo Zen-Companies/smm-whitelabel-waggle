@@ -1024,3 +1024,58 @@ label:not(:has(:checked)) .choice-bee {
     animation: none;
   }
 }
+
+/* Setup comes alive (approved 21 Nov): Next glides the next part in; the folded part's ✓ pops. */
+@keyframes part-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.part-in {
+  animation: part-in 220ms ease-out both;
+}
+@keyframes tick-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  60% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.tick-pop {
+  animation: tick-pop 260ms ease-out both;
+}
+/* The day strip's bee moves with the reading; the "Send" pill on Ask me first breathes. */
+.strip-bee {
+  transition: transform 600ms ease-out;
+}
+@keyframes send-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(246, 178, 27, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(246, 178, 27, 0);
+  }
+}
+.send-pulse {
+  animation: send-pulse 1.6s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .part-in,
+  .tick-pop,
+  .send-pulse {
+    animation: none;
+  }
+  .strip-bee {
+    transition: none;
+  }
+}

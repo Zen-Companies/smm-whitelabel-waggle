@@ -134,3 +134,32 @@ export function ScreenTitle({ title, sub }: { title: string; sub?: ReactNode }) 
     </div>
   );
 }
+
+/** One number on step 2 (reading counters, the 30-day tiles): one style everywhere; red is lost. */
+export function Tile({
+  value,
+  label,
+  note,
+  tone = "lost",
+}: {
+  value: string;
+  label: string;
+  /** Under the label while the number can still change: "still counting…". */
+  note?: string | null;
+  tone?: "lost" | "plain";
+}) {
+  return (
+    <div className="card flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-2.5">
+      <b
+        className={cn(
+          "font-display text-[24px] leading-none font-semibold tabular-nums",
+          tone === "lost" && "text-danger",
+        )}
+      >
+        {value}
+      </b>
+      <span className="text-ink-2 text-[12.5px] leading-snug">{label}</span>
+      {note && <span className="text-ink-3 text-[11.5px] italic">{note}</span>}
+    </div>
+  );
+}

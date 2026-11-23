@@ -44,6 +44,7 @@ export { NEVER_DARK, limitEmailDue, replyLimit, replyLimitNote } from "./reply-l
 export type { ReplyLimit, ReplyLimitLevel } from "./reply-limit";
 export {
   countAiReplies,
+  freeAccountsFull,
   loadOrgPlan,
   loadReplyLimit,
   PLANS_FLAG,

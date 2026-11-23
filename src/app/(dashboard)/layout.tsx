@@ -16,7 +16,7 @@ import { Feedback } from "@/features/feedback";
 
 import { can, listMyOrgs } from "@/features/orgs";
 
-import { AppHeader, getCurrentTenant } from "@/features/tenants";
+import { AppHeader, ConfirmEmailLine, getCurrentTenant } from "@/features/tenants";
 
 import { getServiceClient } from "@/lib/supabase/service";
 
@@ -114,6 +114,11 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
         <div className="mx-auto w-full max-w-[1240px] px-4 pt-4 empty:hidden md:px-8 md:pt-6">
           <PlanBanner />
         </div>
+      </Suspense>
+
+      {/* Confirm later (hotfix 21 Nov): until the email is confirmed. */}
+      <Suspense fallback={null}>
+        <ConfirmEmailLine className="mx-auto w-full max-w-[1240px] px-4 pt-4 md:px-8 md:pt-6" />
       </Suspense>
 
       {/* What happened to a connect started on this page, said here (20 Nov). */}

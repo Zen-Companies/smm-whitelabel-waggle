@@ -23,22 +23,14 @@ const full: FlowFacts = {
 
 describe("visibleScreens", () => {
   it("shows every screen with something on it", () => {
-    expect(visibleScreens(full)).toEqual([
-      "missed",
-      "wanted",
-      "replies",
-      "money",
-      "quick",
-      "waiting",
-      "how",
-    ]);
+    expect(visibleScreens(full)).toEqual(["missed", "money", "quick", "waiting", "how"]);
   });
 
   it("asks the name first while the brand has none", () => {
     expect(visibleScreens({ ...full, namePending: true })[0]).toBe("name");
   });
 
-  it("skips empty screens; the summary and how replies go out always show", () => {
+  it("skips empty step 3 screens; step 2 and how replies go out always show", () => {
     const empty: FlowFacts = {
       namePending: false,
       wanted: 0,
@@ -48,9 +40,8 @@ describe("visibleScreens", () => {
       money: 0,
       quick: 0,
     };
+    // Step 2 is one screen (its story says what's empty in place).
     expect(visibleScreens(empty)).toEqual(["missed", "how"]);
-    // No lost DMs: what they wanted still shows.
-    expect(visibleScreens({ ...empty, wanted: 3 })).toContain("wanted");
     // No one waiting: straight to how replies go out.
     expect(visibleScreens({ ...full, needYou: 0 })).not.toContain("waiting");
     expect(visibleScreens({ ...full, money: 0 })).not.toContain("money");
@@ -67,7 +58,12 @@ describe("openScreen", () => {
   });
 
   it("a link to a screen wins over the saved one", () => {
-    expect(openScreen({ requested: "wanted", saved: "quick", facts: full })).toBe("wanted");
+    expect(openScreen({ requested: "money", saved: "quick", facts: full })).toBe("money");
+  });
+
+  it("step 2's old parts open step 2's one screen", () => {
+    expect(openScreen({ requested: "wanted", saved: "quick", facts: full })).toBe("missed");
+    expect(openScreen({ requested: null, saved: "replies", facts: full })).toBe("missed");
   });
 
   it("an empty screen opens the next one with something on it", () => {
@@ -93,7 +89,7 @@ describe("openScreen", () => {
 describe("nextScreen and previousScreen", () => {
   it("walks the visible screens, skipping empty ones", () => {
     const facts = { ...full, quick: 0 };
-    expect(nextScreen("missed", facts)).toBe("wanted");
+    expect(nextScreen("missed", facts)).toBe("money");
     expect(nextScreen("money", facts)).toBe("waiting");
     expect(nextScreen("how", facts)).toBeNull();
     expect(nextScreen("name", facts)).toBe("missed");
@@ -102,7 +98,6 @@ describe("nextScreen and previousScreen", () => {
   it("has no Back on the first screen of a step", () => {
     expect(previousScreen("missed", full)).toBeNull();
     expect(previousScreen("money", full)).toBeNull();
-    expect(previousScreen("wanted", full)).toBe("missed");
     expect(previousScreen("how", { ...full, needYou: 0 })).toBe("quick");
   });
 
@@ -113,10 +108,10 @@ describe("nextScreen and previousScreen", () => {
 
 describe("stepPosition", () => {
   it("counts the screens of the step that show", () => {
-    expect(stepPosition("wanted", full)).toEqual({
+    expect(stepPosition("missed", full)).toEqual({
       step: 2,
-      index: 2,
-      count: 3,
+      index: 1,
+      count: 1,
       sublabel: "What you missed",
     });
     expect(stepPosition("how", { ...full, needYou: 0 })).toEqual({

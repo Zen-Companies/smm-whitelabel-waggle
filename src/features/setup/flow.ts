@@ -56,13 +56,17 @@ export interface FlowFacts {
   quick: number;
 }
 
-/** The screens with something to show, in order. "missed" and "how" always show. */
+/**
+ * The screens with something to show, in order. Step 2 is one screen, "missed" (board "Step 2
+ * plays like a story", 23 Nov): its old parts "wanted" and "replies" are scenes in it now, and
+ * links to them open it. "how" always shows.
+ */
 export function visibleScreens(f: FlowFacts): SetupScreen[] {
   const show: Record<SetupScreen, boolean> = {
     name: f.namePending,
     missed: true,
-    wanted: f.wanted > 0 || f.lostDms > 0,
-    replies: f.drafted + f.needYou > 0,
+    wanted: false,
+    replies: false,
     money: f.money > 0,
     quick: f.quick > 0,
     waiting: f.needYou > 0,
@@ -71,9 +75,12 @@ export function visibleScreens(f: FlowFacts): SetupScreen[] {
   return SETUP_SCREENS.filter((s) => show[s]);
 }
 
+/** Step 2's old parts open step 2's one screen. */
+const STEP2_PARTS: readonly SetupScreen[] = ["wanted", "replies"];
+
 /** The first visible screen at or after `from` in the full order (an empty one is skipped). */
 function atOrAfter(from: SetupScreen, visible: SetupScreen[]): SetupScreen {
-  const start = SETUP_SCREENS.indexOf(from);
+  const start = SETUP_SCREENS.indexOf(STEP2_PARTS.includes(from) ? "missed" : from);
   return SETUP_SCREENS.slice(start).find((s) => visible.includes(s)) ?? "how";
 }
 

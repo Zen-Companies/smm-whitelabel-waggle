@@ -1,5 +1,6 @@
 "use client";
 
+import { BeeDance } from "@/components/app/bee-setup";
 import {
   AtSign,
   Building2,
@@ -345,6 +346,8 @@ export function WelcomeDialog({
     <Modal labelledBy="welcome-title" onClose={onClose}>
       <Header plan={header} eyebrow={content.eyebrow} title={content.title} id="welcome-title" />
       <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5">
+        {/* Setup's end (approved 21 Nov): the bee dances once as the Inbox opens. */}
+        <BeeDance times={1} scale={0.4} className="self-center" />
         <p className="text-ink-2 m-0 text-[15px]">{content.pitch}</p>
         {hero && <HeroPerk perk={hero} />}
         {others.length > 0 && (

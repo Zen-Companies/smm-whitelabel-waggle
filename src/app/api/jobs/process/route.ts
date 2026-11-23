@@ -21,6 +21,7 @@ import { escalateClosingDmWindows } from "@/features/approvals";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
 import { embedPendingEntries, findFactsAfterConnect } from "@/features/knowledge-base";
+import { getClassifier } from "@/lib/classifier";
 import { createDeadline } from "@/lib/jobs";
 import { getLlmClientOrNull } from "@/lib/llm";
 import { getSocialProvider, resolveSocialProviderMode } from "@/lib/social";
@@ -87,6 +88,7 @@ export async function POST(request: Request): Promise<Response> {
     const catchUp = await runCatchUps({
       db,
       social: getSocialProvider,
+      classifier: getClassifier(),
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
     // Walter's flow (decision 7): once a catch-up has read the account, the business info found

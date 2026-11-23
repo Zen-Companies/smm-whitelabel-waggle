@@ -3,6 +3,7 @@ import {
   ageLabel,
   answerMeter,
   batchProgress,
+  doneLines,
   firstNameOf,
   highlightParts,
   progressLine,
@@ -77,5 +78,88 @@ describe("small words", () => {
     expect(ageLabel("2026-11-19T10:00:00Z", now)).toBe("yesterday");
     expect(ageLabel("2026-11-17T10:00:00Z", now)).toBe("3 days");
     expect(ageLabel("2026-11-20T10:00:00Z", now)).toBe("today");
+  });
+});
+
+describe("doneLines", () => {
+  const sending = { total: 0, sent: 0, left: 0, failed: 0 };
+  it("lists what's done, as on the board", () => {
+    expect(
+      doneLines({
+        platforms: ["Instagram"],
+        sending: { total: 2, sent: 2, left: 0, failed: 0 },
+        mode: "approve",
+        waiting: [{ author: "Leo", category: "complaint" }],
+      }),
+    ).toEqual([
+      "Instagram connected",
+      "2 replies sent",
+      "Ask me first before sending",
+      "Leo’s complaint is in your Inbox",
+    ]);
+  });
+
+  it("says replies still going out, on its own, and several waiting", () => {
+    expect(
+      doneLines({
+        platforms: ["Instagram", "Facebook"],
+        sending: { total: 3, sent: 1, left: 2, failed: 0 },
+        mode: "auto",
+        waiting: [
+          { author: "Leo", category: "faq" },
+          { author: "Ana", category: "lead" },
+        ],
+      }),
+    ).toEqual([
+      "Instagram and Facebook connected",
+      "3 replies on their way",
+      "Waggle replies on its own",
+      "2 messages wait for you in your Inbox",
+    ]);
+  });
+
+  it("never counts replies that couldn't go out as sent", () => {
+    expect(
+      doneLines({
+        platforms: ["Instagram"],
+        sending: { total: 2, sent: 0, left: 0, failed: 2 },
+        mode: "approve",
+        waiting: [],
+      }),
+    ).toEqual([
+      "Instagram connected",
+      "2 replies couldn’t go out. They’re in your Inbox.",
+      "Ask me first before sending",
+    ]);
+    expect(
+      doneLines({
+        platforms: [],
+        sending: { total: 4, sent: 2, left: 1, failed: 1 },
+        mode: "approve",
+        waiting: [],
+      }),
+    ).toEqual([
+      "3 replies on their way",
+      "1 reply couldn’t go out. They’re in your Inbox.",
+      "Ask me first before sending",
+    ]);
+    expect(
+      doneLines({
+        platforms: [],
+        sending: { total: 3, sent: 2, left: 0, failed: 1 },
+        mode: "approve",
+        waiting: [],
+      }),
+    ).toEqual([
+      "2 replies sent",
+      "1 reply couldn’t go out. They’re in your Inbox.",
+      "Ask me first before sending",
+    ]);
+  });
+
+  it("leaves out what didn't happen", () => {
+    expect(doneLines({ platforms: [], sending, mode: "approve", waiting: [] })).toEqual([
+      "Ask me first before sending",
+    ]);
   });
 });

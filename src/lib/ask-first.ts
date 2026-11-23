@@ -45,10 +45,52 @@ export function askFirstTopicsFor(
   return ids.map((t) => ({ ...t, label: ASK_FIRST_LABELS[t.id] }));
 }
 
-/** The first chosen topic the message is about, or null. Unknown ids are ignored. */
-export function askFirstMatch(text: string, topics: readonly string[]): AskFirstId | null {
+// The owner's own topics (approved 21 Nov, "Add your own"): stored beside the built-in ids as
+// "custom:<words>". Matched on the words typed (each may take an s/es), as a phrase, not on meaning.
+export const CUSTOM_PREFIX = "custom:";
+export const CUSTOM_MAX = 10;
+export const CUSTOM_LENGTH_MAX = 40;
+
+/** Pure: the stored form of a topic the owner typed, or null when there's nothing usable. */
+export function customTopic(words: string): string | null {
+  const clean = words
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}'\- ]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (clean.length < 2 || clean.length > CUSTOM_LENGTH_MAX) return null;
+  return CUSTOM_PREFIX + clean;
+}
+
+export const isCustomTopic = (v: unknown): v is string =>
+  typeof v === "string" &&
+  v.startsWith(CUSTOM_PREFIX) &&
+  customTopic(v.slice(CUSTOM_PREFIX.length)) === v;
+
+/** "wedding cakes" from "custom:wedding cakes". */
+export const customLabel = (topic: string): string => topic.slice(CUSTOM_PREFIX.length);
+
+function customPattern(topic: string): RegExp {
+  const words = customLabel(topic)
+    .split(" ")
+    .map((w) => escapeRegExp(w.replace(/(?:es|s)$/, "")) + "(?:s|es)?");
+  return new RegExp(`(?<![\\p{L}\\p{N}])${words.join("\\s+")}(?![\\p{L}\\p{N}])`, "iu");
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * The first chosen topic the message is about (a built-in id, or the owner's own "custom:…"), or
+ * null. Unknown ids are ignored.
+ */
+export function askFirstMatch(text: string, topics: readonly string[]): string | null {
   for (const id of ASK_FIRST_IDS) {
     if (topics.includes(id) && WORDS[id].test(text)) return id;
+  }
+  for (const t of topics) {
+    if (isCustomTopic(t) && customPattern(t).test(text)) return t;
   }
   return null;
 }
