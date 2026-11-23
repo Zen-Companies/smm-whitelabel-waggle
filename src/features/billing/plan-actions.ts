@@ -23,6 +23,8 @@ import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
 import { foundingSpotsLeft } from "./founding";
+import { firstCheckoutTrial } from "./promo";
+import { loadReferralForCheckout } from "./referrals";
 import {
   billingFromSubscription,
   isExtraAccountKey,
@@ -165,8 +167,29 @@ export async function choosePlan(
 
     const customer = await ensureCustomer(stripe, db, orgId, user.email, bill);
     // The first paid plan starts with 7 days free, with a card (trial back, 20 Nov).
-    const trialDays = checkoutTrialDays(bill);
-    const firstTime = trialDays !== null;
+    const baseTrial = checkoutTrialDays(bill);
+    const firstTime = baseTrial !== null;
+    // Black Friday and referrals (23 Nov): the free month replaces the 7 days on the first
+    // checkout, with nothing to type; banked referral months add to it.
+    const ref = firstTime
+      ? await loadReferralForCheckout(db, orgId)
+      : { referred: false, bankedIds: [] as string[] };
+    const free = firstTime
+      ? firstCheckoutTrial({
+          now: new Date(),
+          referred: ref.referred,
+          bankedMonths: ref.bankedIds.length,
+          baseDays: baseTrial,
+        })
+      : null;
+    const trialDays = free ? free.days : null;
+    const promoMeta =
+      free && (free.reasons.length || ref.bankedIds.length)
+        ? {
+            promo: free.reasons.join(",") || "banked",
+            ...(ref.bankedIds.length ? { banked_referrals: ref.bankedIds.join(",") } : {}),
+          }
+        : {};
     const founding =
       choice.plan === FOUNDING.plan &&
       choice.interval === "month" &&
@@ -184,7 +207,7 @@ export async function choosePlan(
       payment_method_collection: "always",
       subscription_data: {
         // Stripe's subscription events list discounts by id only, so founding is marked here too.
-        metadata: { organization_id: orgId, ...(founding ? { founding: "1" } : {}) },
+        metadata: { organization_id: orgId, ...(founding ? { founding: "1" } : {}), ...promoMeta },
         ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
       ...(founding
@@ -192,7 +215,7 @@ export async function choosePlan(
         : { allow_promotion_codes: false }),
       // Prices are in US dollars (Pricing Bible): no local-currency conversion at checkout.
       adaptive_pricing: { enabled: false },
-      metadata: { organization_id: orgId, kind: "plan" },
+      metadata: { organization_id: orgId, kind: "plan", ...promoMeta },
       client_reference_id: orgId,
       // A first checkout comes back with its session id, so Your plan can ask Stripe what it
       // started and tell the ads (TrialConversionTag). Stripe fills {CHECKOUT_SESSION_ID}.

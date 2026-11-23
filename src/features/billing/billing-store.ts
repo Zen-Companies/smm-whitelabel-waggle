@@ -7,6 +7,8 @@ import { monthStart } from "@/lib/llm/spend";
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { EXTRAS } from "./plans";
+import { earnsReferralReward } from "./referral-code";
+import { markBankedUsed, markReferralRewardDue } from "./referrals";
 import { billingFromSubscription, carriedReplies, planIsLive } from "./subscription";
 
 // The organization's bill as Waggle stores it (org_billing, reply_top_ups), and the Stripe events
@@ -209,6 +211,21 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded": {
       const s = event.data.object;
+      // Referrals (23 Nov): a first plan checkout that used banked months in its trial.
+      if (
+        s.metadata?.kind === "plan" &&
+        s.metadata.banked_referrals &&
+        s.metadata.organization_id
+      ) {
+        return (
+          (await markBankedUsed(
+            db,
+            s.metadata.organization_id,
+            s.metadata.banked_referrals,
+            s.id,
+          )) || "ignored"
+        );
+      }
       if (s.metadata?.kind !== "top_up" || s.payment_status !== "paid") return "ignored";
       const orgId = s.metadata.organization_id;
       if (!orgId) return "ignored: no organization";
@@ -235,6 +252,12 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
       // Top-ups charged to the saved card (automatic, or one click); a checkout's own invoice
       // ("top_up") is counted by its session instead.
       const kind = inv.metadata?.kind;
+      // Referrals (23 Nov): a referred organization's first real payment earns its referrer a
+      // month. Database only; the jobs route credits it.
+      if (earnsReferralReward(inv)) {
+        const payer = await orgForCustomer(db, undefined, customerId(inv.customer) ?? "");
+        return (payer && (await markReferralRewardDue(db, payer))) || "ignored";
+      }
       if (kind !== "auto_top_up" && kind !== "top_up_now") return "ignored";
       const orgId =
         inv.metadata?.organization_id ??

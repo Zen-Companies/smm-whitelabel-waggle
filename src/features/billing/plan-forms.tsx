@@ -86,6 +86,7 @@ export function PlanCards({
   foundingNote,
   founding = null,
   trial = false,
+  trialDays = TRIAL.days,
   freeLine = null,
   action,
 }: {
@@ -100,8 +101,10 @@ export function PlanCards({
   foundingNote: string | null;
   /** The founding offer, while spots are left, for owners who never had a paid plan. */
   founding?: FoundingOffer | null;
-  /** The organization's first paid plan starts with 7 days free. */
+  /** The organization's first paid plan starts with a free trial. */
   trial?: boolean;
+  /** How long: 7 days, or 30 with the Black Friday or referral month. */
+  trialDays?: number;
   /** Free's row when it's the plan: "12 of 100 AI replies used this month". */
   freeLine?: string | null;
   action: Action;
@@ -186,7 +189,7 @@ export function PlanCards({
               </b>
               <span className="text-ink-2 text-sm">
                 Then ${offerPlan.monthlyUsd}. Only for the first {founding.spots} businesses.
-                {trial && ` Starts with ${TRIAL.days} days free.`}
+                {trial && ` Starts with ${trialDays} days free.`}
               </span>
             </span>
           </span>
@@ -269,7 +272,7 @@ export function PlanCards({
               {!byCall && <DayPill amount={dailyAmount(shownUsd, yearly ? "year" : "month")} />}
               {!byCall && trial && !live && p.forSale && !noYearly && (
                 <span className="meta">
-                  {TRIAL.days} days free, then {price}
+                  {trialDays} days free, then {price}
                 </span>
               )}
               <ul className="flex flex-col gap-2 text-sm">
@@ -306,7 +309,7 @@ export function PlanCards({
                       live
                         ? `Move to ${p.name}`
                         : trial
-                          ? `Start ${TRIAL.days} days free`
+                          ? `Start ${trialDays} days free`
                           : `Upgrade to ${p.name}`
                     }
                     pendingLabel={live ? "Switching…" : "Starting…"}
@@ -323,8 +326,8 @@ export function PlanCards({
       </div>
       {trial && !live && (
         <p className="meta">
-          Paid plans start with {TRIAL.days} days free. A card starts your trial; cancel before day{" "}
-          {TRIAL.days} and you pay nothing.
+          Paid plans start with {trialDays} days free. A card starts your trial; cancel before day{" "}
+          {trialDays} and you pay nothing.
         </p>
       )}
     </div>

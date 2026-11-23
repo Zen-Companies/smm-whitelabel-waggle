@@ -39,8 +39,10 @@ export interface OfferOrg {
   canInvite: boolean;
   current: PlanId;
   plans: Record<PlanId, Plan>;
-  /** Its first paid plan starts with 7 days free. */
+  /** Its first paid plan starts with a free trial. */
   trial: boolean;
+  /** How long: 7 days, or 30 with the Black Friday or referral month. */
+  trialDays?: number;
   /** Stripe is set up on this server. */
   stripeReady: boolean;
   /** The interval a switch keeps. */
@@ -240,7 +242,11 @@ export function UpgradeDialog({
   resetsOn?: string;
   pain?: ReplyPain;
 }) {
-  const offer = upgradeOffer(org.current, reason, org.plans, { trial: org.trial, resetsOn });
+  const offer = upgradeOffer(org.current, reason, org.plans, {
+    trial: org.trial,
+    trialDays: org.trialDays,
+    resetsOn,
+  });
   const header = offer.next ?? org.current;
   return (
     <Modal labelledBy="upgrade-title" onClose={onClose}>

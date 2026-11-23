@@ -26,6 +26,8 @@ export interface SubscriptionLike {
   /** Newer API versions cancel by date (the portal sets this, not cancel_at_period_end). */
   cancel_at?: number | null;
   trial_end: number | null;
+  /** When the trial started (absent on old fixtures). */
+  trial_start?: number | null;
   metadata: Record<string, string>;
   discounts?: Array<
     | string
@@ -50,6 +52,8 @@ export interface BillingRow {
   billing_interval: Interval | null;
   status: string;
   trial_ends_at: string | null;
+  /** How long the trial is: 7 days usually, 30 with the Black Friday or referral month. */
+  trial_days: number | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   extra_accounts: number;
@@ -81,6 +85,10 @@ export function billingFromSubscription(sub: SubscriptionLike): BillingRow {
     billing_interval: parsed?.interval ?? null,
     status: sub.status,
     trial_ends_at: iso(sub.trial_end),
+    trial_days:
+      sub.trial_start && sub.trial_end
+        ? Math.max(1, Math.round((sub.trial_end - sub.trial_start) / 86_400))
+        : null,
     current_period_end: iso(planItem?.current_period_end ?? sub.items.data[0]?.current_period_end),
     cancel_at_period_end: sub.cancel_at_period_end || !!sub.cancel_at,
     extra_accounts: extra,

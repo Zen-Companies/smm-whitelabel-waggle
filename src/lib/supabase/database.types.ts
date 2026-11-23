@@ -1874,6 +1874,7 @@ export type Database = {
           stripe_customer_id: string
           stripe_event_at: string | null
           stripe_subscription_id: string | null
+          trial_days: number | null
           trial_ends_at: string | null
           updated_at: string
         }
@@ -1891,6 +1892,7 @@ export type Database = {
           stripe_customer_id: string
           stripe_event_at?: string | null
           stripe_subscription_id?: string | null
+          trial_days?: number | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -1907,6 +1909,7 @@ export type Database = {
           stripe_customer_id?: string
           stripe_event_at?: string | null
           stripe_subscription_id?: string | null
+          trial_days?: number | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -2327,6 +2330,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      referral_codes: {
+        Row: {
+          code: string
+          created_at: string
+          organization_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          organization_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          referred_org_id: string
+          referrer_org_id: string
+          reward_cents: number
+          reward_due_at: string | null
+          rewarded_at: string | null
+          status: string
+          stripe_ref: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          referred_org_id: string
+          referrer_org_id: string
+          reward_cents?: number
+          reward_due_at?: string | null
+          rewarded_at?: string | null
+          status?: string
+          stripe_ref?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          referred_org_id?: string
+          referrer_org_id?: string
+          reward_cents?: number
+          reward_due_at?: string | null
+          rewarded_at?: string | null
+          status?: string
+          stripe_ref?: string | null
+        }
+        Relationships: []
       }
       reply_top_ups: {
         Row: {

@@ -68,11 +68,18 @@ describe("billingFromSubscription", () => {
       billing_interval: "month",
       status: "trialing",
       trial_ends_at: new Date(1_795_000_000_000).toISOString(),
+      trial_days: null,
       current_period_end: new Date(1_797_000_000_000).toISOString(),
       cancel_at_period_end: false,
       extra_accounts: 0,
       founding: false,
     });
+  });
+  it("keeps how long the trial is (30 days with the free month)", () => {
+    const row = billingFromSubscription(
+      sub({ trial_start: 1_795_000_000 - 30 * 86_400, trial_end: 1_795_000_000 }),
+    );
+    expect(row.trial_days).toBe(30);
   });
   it("counts extra accounts and spots the founding coupon", () => {
     const row = billingFromSubscription(

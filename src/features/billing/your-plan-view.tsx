@@ -18,6 +18,7 @@ import {
   type PlanCardData,
 } from "./plan-forms";
 import { foundingSpotsLeft } from "./founding";
+import { offerTrialDays } from "./referrals";
 import { cardLabel } from "./auto-top-up";
 import {
   accountAllowance,
@@ -79,15 +80,17 @@ async function ownerNames(db: ServiceClient, orgId: string): Promise<string> {
   return names.join(" and ") || "the Owner";
 }
 
-/** Pure: which day of the trial it is (1..7), from when it ends. */
-export function trialDay(trialEndsAt: Date, now: Date): number {
-  const start = trialEndsAt.getTime() - TRIAL.days * 86_400_000;
-  return Math.min(TRIAL.days, Math.max(1, Math.ceil((now.getTime() - start) / 86_400_000)));
+/** Pure: which day of the trial it is (1..length), from when it ends. 7 days, or 30 with the free month. */
+export function trialDay(trialEndsAt: Date, now: Date, length: number = TRIAL.days): number {
+  const start = trialEndsAt.getTime() - length * 86_400_000;
+  return Math.min(length, Math.max(1, Math.ceil((now.getTime() - start) / 86_400_000)));
 }
 
 /** Pure: what the plan costs, said the way the header says it. */
 export function priceLine(
-  bill: Pick<BillingRecord, "plan" | "billing_interval" | "founding" | "trial_ends_at">,
+  bill: Pick<BillingRecord, "plan" | "billing_interval" | "founding" | "trial_ends_at"> & {
+    trial_days?: number | null;
+  },
   now: Date = new Date(),
 ): {
   line: string;
@@ -105,7 +108,9 @@ export function priceLine(
   }
   if (bill.founding && bill.plan === FOUNDING.plan) {
     const start = bill.trial_ends_at
-      ? new Date(new Date(bill.trial_ends_at).getTime() - TRIAL.days * 86_400_000)
+      ? new Date(
+          new Date(bill.trial_ends_at).getTime() - (bill.trial_days ?? TRIAL.days) * 86_400_000,
+        )
       : new Date();
     const until = new Date(start);
     until.setUTCMonth(until.getUTCMonth() + FOUNDING.months);
@@ -188,6 +193,8 @@ export async function YourPlanSection({
   }));
   // The first paid plan starts with 7 days free, with a card (trial back, 20 Nov).
   const firstTime = checkoutTrialDays(bill) !== null;
+  // Black Friday and referrals (23 Nov): 30 days instead of 7, said everywhere the trial is.
+  const offerDays = (await offerTrialDays(db, org.id, bill, now)) ?? TRIAL.days;
   // Founding offer, highlighted (approved 20 Nov): a banner and the Team card, while spots last.
   const stripe = getStripe();
   const founding: FoundingOffer | null =
@@ -242,6 +249,7 @@ export async function YourPlanSection({
             plans={plans}
             live={false}
             trial={firstTime}
+            trialDays={offerDays}
           />
         )}
         <section className="card hexbg border-honey-border flex flex-col gap-4 border p-6">
@@ -263,7 +271,7 @@ export async function YourPlanSection({
                 fields={{ ...fields, plan: "solo", interval: "month" }}
                 label={
                   firstTime
-                    ? `Try ${plans.solo.name}: ${TRIAL.days} days free`
+                    ? `Try ${plans.solo.name}: ${offerDays} days free`
                     : `Upgrade to ${plans.solo.name}`
                 }
                 pendingLabel="Starting…"
@@ -273,8 +281,8 @@ export async function YourPlanSection({
           </div>
           {org.isOwner && getStripe() && firstTime && (
             <span className="meta">
-              {TRIAL.days} days free, then ${plans.solo.monthlyUsd} a month (
-              {perDay(plans.solo.monthlyUsd)}). Cancel before day {TRIAL.days} and you pay nothing.
+              {offerDays} days free, then ${plans.solo.monthlyUsd} a month (
+              {perDay(plans.solo.monthlyUsd)}). Cancel before day {offerDays} and you pay nothing.
             </span>
           )}
           <div className="text-ink-2 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
@@ -313,6 +321,7 @@ export async function YourPlanSection({
               foundingNote={null}
               founding={founding}
               trial={firstTime}
+              trialDays={offerDays}
               freeLine={`${limit.used} of ${limit.allowance} AI replies used this month`}
               action={choosePlan}
             />
@@ -396,10 +405,18 @@ export async function YourPlanSection({
 
       {bill.status === "trialing" && bill.trial_ends_at && (
         <section className="border-honey-border bg-honey-tint flex flex-wrap items-center gap-4 rounded-xl border px-4 py-3">
-          <TrialCells day={trialDay(new Date(bill.trial_ends_at), now)} of={TRIAL.days} />
+          {/* One hexagon a day fits 7; a 30-day free month says it in words only. */}
+          {(bill.trial_days ?? TRIAL.days) <= TRIAL.days && (
+            <TrialCells
+              day={trialDay(new Date(bill.trial_ends_at), now, bill.trial_days ?? TRIAL.days)}
+              of={bill.trial_days ?? TRIAL.days}
+            />
+          )}
           <span className="min-w-[240px] flex-1 text-sm">
             <b>
-              Free trial: day {trialDay(new Date(bill.trial_ends_at), now)} of {TRIAL.days}.
+              Free trial: day{" "}
+              {trialDay(new Date(bill.trial_ends_at), now, bill.trial_days ?? TRIAL.days)} of{" "}
+              {bill.trial_days ?? TRIAL.days}.
             </b>{" "}
             {bill.cancel_at_period_end
               ? `It ends on ${day(bill.trial_ends_at)} and you won't be charged.`
@@ -669,6 +686,7 @@ function UpgradePanel({
   live,
   interval = "month",
   trial = false,
+  trialDays = TRIAL.days,
 }: {
   reason: UpgradeReason;
   orgId: string;
@@ -677,8 +695,10 @@ function UpgradePanel({
   plans: Record<PlanId, Plan>;
   live: boolean;
   interval?: "month" | "year";
-  /** The first paid plan starts with 7 days free. */
+  /** The first paid plan starts with a free trial. */
   trial?: boolean;
+  /** How long: 7 days, or 30 with the Black Friday or referral month. */
+  trialDays?: number;
 }) {
   // Numbers from the plans as staff set them (decision 10).
   const copy = upgradeCopy(reason, plans);
@@ -717,7 +737,7 @@ function UpgradePanel({
             <PlanButton
               action={choosePlan}
               fields={{ orgId, plan: copy.plan, interval }}
-              label={trial ? `Start ${TRIAL.days} days free` : upgradeLabel(reason)}
+              label={trial ? `Start ${trialDays} days free` : upgradeLabel(reason)}
               pendingLabel="Starting…"
               honey
               className="items-start"
@@ -735,7 +755,7 @@ function UpgradePanel({
       {!live && (
         <span className="meta">
           {trial
-            ? `A card starts your trial: ${TRIAL.days} days free, then $${target.monthlyUsd} a month. Cancel before day ${TRIAL.days} and you pay nothing.`
+            ? `A card starts your trial: ${trialDays} days free, then $${target.monthlyUsd} a month. Cancel before day ${trialDays} and you pay nothing.`
             : "Card at checkout. Cancel any time and you go back to Free."}
         </span>
       )}

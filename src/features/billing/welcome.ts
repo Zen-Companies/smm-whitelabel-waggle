@@ -195,7 +195,7 @@ function businessPerks(biz: Plan): WelcomePerk[] {
 export function welcomeFor(
   current: PlanId,
   plans: Record<PlanId, Plan> = PLANS,
-  ctx: { trial: boolean } = { trial: false },
+  ctx: { trial: boolean; trialDays?: number } = { trial: false },
 ): WelcomeContent {
   if (current === "team") {
     return {
@@ -214,7 +214,7 @@ export function welcomeFor(
   const eyebrow = !next
     ? ""
     : offer.via === "trial"
-      ? `${next.name} · ${TRIAL.days} days free`
+      ? `${next.name} · ${ctx.trialDays ?? TRIAL.days} days free`
       : offer.via === "call"
         ? `${next.name} · for agencies`
         : `${next.name} · $${next.monthlyUsd} a month`;

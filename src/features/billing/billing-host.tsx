@@ -1,10 +1,10 @@
 import "server-only";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
+import { offerTrialDays } from "./referrals";
 import { billingBanner } from "./banners";
 import { loadBilling } from "./billing-store";
 import { BillingPopups, type OutOfReplies } from "./billing-popups";
 import type { OfferOrg } from "./offer-dialogs";
-import { checkoutTrialDays } from "./plans";
 import { perDayFromWeek, type ReplyPain } from "./reply-pain";
 import { getStripe } from "./stripe-client";
 import { loadPlans, loadReplyLimit, orgPlanId, planLimitsOn } from "./usage";
@@ -55,6 +55,7 @@ async function loadHostProps(input: {
     planLimitsOn(db),
   ]);
   const status = limitsOn ? await loadReplyLimit(db, orgId, now) : null;
+  const offerDays = await offerTrialDays(db, orgId, bill, now);
   const banner = billingBanner({
     limitsOn,
     plan: status?.plan.plan ?? null,
@@ -79,7 +80,8 @@ async function loadHostProps(input: {
       canInvite,
       current: orgPlanId(bill),
       plans,
-      trial: checkoutTrialDays(bill) !== null,
+      trial: offerDays !== null,
+      trialDays: offerDays ?? undefined,
       stripeReady: !!getStripe(),
       interval: bill?.billing_interval === "year" ? "year" : "month",
     },

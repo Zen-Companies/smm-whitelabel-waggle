@@ -163,7 +163,10 @@ export function BillingPopups({
       )}
       {popup?.kind === "welcome" && (
         <WelcomeDialog
-          content={welcomeFor(org.current, org.plans, { trial: org.trial })}
+          content={welcomeFor(org.current, org.plans, {
+            trial: org.trial,
+            trialDays: org.trialDays,
+          })}
           org={org}
           onClose={close}
         />
@@ -248,7 +251,7 @@ function SoloNudge({
             Let Waggle answer on its own
             {org.trial && (
               <span className="bg-honey text-ink rounded-full px-2 py-0.5 font-sans text-[11px] font-bold tracking-wide uppercase">
-                {TRIAL.days} days free
+                {org.trialDays ?? TRIAL.days} days free
               </span>
             )}
           </p>
