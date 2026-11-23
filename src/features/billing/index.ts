@@ -5,12 +5,15 @@ export {
   accountAllowance,
   canAddBrand,
   canConnectAnother,
+  checkoutTrialDays,
+  dailyAmount,
   EXTRAS,
   FOUNDING,
   BUSINESS_CALL_URL,
   isPaidPlanId,
   isPlanId,
   monthlyPrice,
+  perDay,
   PLANS,
   PROMOTED_PLAN,
   replyAllowance,
@@ -19,19 +22,30 @@ export {
 } from "./plans";
 export type { PaidPlanId, Plan, PlanId } from "./plans";
 export {
+  isOfferReason,
   isUpgradeReason,
   UPGRADE,
+  upgradeCopy,
   upgradeHref,
+  WELCOME_HREF,
   upgradeLabel,
   upgradeLine,
   UPGRADE_REASONS,
 } from "./upgrade";
-export type { UpgradeReason } from "./upgrade";
+export type { OfferReason, UpgradeReason } from "./upgrade";
+export { nextPlan, upgradeOffer } from "./upgrade-offer";
+export type { UpgradeOffer } from "./upgrade-offer";
+export { welcomeFor } from "./welcome";
+export type { WelcomeContent } from "./welcome";
+export { BillingHost } from "./billing-host";
+export { DayBanner, DayPill } from "./day-price";
 export { UpgradeNote } from "./upgrade-note";
+export { UpgradeLink } from "./upgrade-link";
 export { NEVER_DARK, limitEmailDue, replyLimit, replyLimitNote } from "./reply-limit";
 export type { ReplyLimit, ReplyLimitLevel } from "./reply-limit";
 export {
   countAiReplies,
+  freeAccountsFull,
   loadOrgPlan,
   loadReplyLimit,
   PLANS_FLAG,

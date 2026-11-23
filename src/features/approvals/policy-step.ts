@@ -1,5 +1,7 @@
+import { askFirstMatch } from "@/lib/ask-first";
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { uncheckedFactIds } from "@/lib/facts";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { dmRepliesSince } from "./dm-replies";
 import {
@@ -30,8 +32,8 @@ export async function loadPolicyInput(
   const { data: item, error } = await db
     .from("inbound_items")
     .select(
-      "id, tenant_id, kind, category, confidence, conversation_id, " +
-        "social_accounts!inner (status, platform), tenants!inner (subscription_status, confidence_threshold, replies_paused, auto_hide_spam)",
+      "id, tenant_id, kind, category, confidence, conversation_id, text, " +
+        "social_accounts!inner (status, platform), tenants!inner (subscription_status, confidence_threshold, replies_paused, auto_hide_spam, ask_first_topics)",
     )
     .eq("id", itemId)
     .single();
@@ -42,12 +44,14 @@ export async function loadPolicyInput(
     category: Category | null;
     confidence: number | null;
     conversation_id: string | null;
+    text: string | null;
     social_accounts: { status: PolicyInput["account"]["status"]; platform: string };
     tenants: {
       subscription_status: SubscriptionStatus;
       confidence_threshold: number;
       replies_paused: boolean;
       auto_hide_spam: boolean;
+      ask_first_topics: string[] | null;
     };
   };
   if (!row.category || row.confidence === null) throw new Error("policy: item is not classified");
@@ -61,7 +65,7 @@ export async function loadPolicyInput(
       .maybeSingle(),
     db
       .from("drafts")
-      .select("id, needs_human")
+      .select("id, needs_human, kb_entry_ids")
       .eq("item_id", itemId)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
@@ -78,6 +82,12 @@ export async function loadPolicyInput(
   ]);
 
   const last = conversation?.last_customer_message_at ?? null;
+  const autonomyMode = (setting?.mode as AutonomyMode | undefined) ?? "off";
+  // Decision 7: only auto mode looks at it (approve mode waits for the owner anyway).
+  const usesUncheckedFacts =
+    draft && autonomyMode === "auto"
+      ? (await uncheckedFactIds(db, draft.kb_entry_ids ?? [])).length > 0
+      : false;
   const dmRepliesSinceCustomer = await dmRepliesSince(db, {
     platform: row.social_accounts.platform,
     conversationId: row.conversation_id,
@@ -89,7 +99,7 @@ export async function loadPolicyInput(
     input: {
       item: { kind: row.kind },
       classification: { category: row.category, confidence: Number(row.confidence) },
-      draft: draft ? { needsHuman: draft.needs_human } : null,
+      draft: draft ? { needsHuman: draft.needs_human, usesUncheckedFacts } : null,
       tenant: {
         subscriptionStatus: row.tenants.subscription_status,
         confidenceThreshold: Number(row.tenants.confidence_threshold),
@@ -98,9 +108,10 @@ export async function loadPolicyInput(
       },
       account: row.social_accounts,
       // A missing row means the default for a new category: the safest mode.
-      autonomyMode: (setting?.mode as AutonomyMode | undefined) ?? "off",
+      autonomyMode,
       lastCustomerMessageAt: last ? new Date(last) : null,
       dmRepliesSinceCustomer,
+      askFirst: askFirstMatch(row.text ?? "", row.tenants.ask_first_topics ?? []) !== null,
       now,
     },
   };

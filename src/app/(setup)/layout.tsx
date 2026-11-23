@@ -2,13 +2,30 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
+import { connectAccount } from "@/features/accounts";
+import { BillingHost } from "@/features/billing";
 import { Feedback } from "@/features/feedback";
-import { listMyOrgs, OrgMenu } from "@/features/orgs";
+import { can, listMyOrgs, OrgMenu } from "@/features/orgs";
 import { getOpenOrg, signOut } from "@/features/tenants";
 
 async function Switcher() {
   const [orgs, open] = await Promise.all([listMyOrgs(), getOpenOrg()]);
   return <OrgMenu orgs={orgs} currentId={open?.id ?? null} />;
+}
+
+/** The plan pop-ups over setup: any link to `?upgrade=<reason>` opens the offer (20 Nov). */
+async function SetupOffers() {
+  const open = await getOpenOrg();
+  if (!open) return null;
+  return (
+    <BillingHost
+      orgId={open.id}
+      isOwner={can(open.role, "billing.view")}
+      canInvite={can(open.role, "team.manage")}
+      connect={connectAccount}
+      showBanner={false}
+    />
+  );
 }
 
 async function SetupFeedback() {
@@ -44,6 +61,9 @@ export default function SetupLayout({ children }: LayoutProps<"/">) {
       {/* Confirm later's line shows in the app only, once setup is done (21 Nov): during
           onboarding "Wrong email?" led to Settings, which sends you back to setup. */}
       {children}
+      <Suspense fallback={null}>
+        <SetupOffers />
+      </Suspense>
       <Suspense fallback={null}>
         <SetupFeedback />
       </Suspense>

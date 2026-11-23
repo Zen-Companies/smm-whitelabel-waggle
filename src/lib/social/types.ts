@@ -163,6 +163,55 @@ export interface ProviderComment {
   createdAt: string | null;
   /** One of the replies Zernio carries inline is the account's own (first-connect catch-up). */
   ownerReplied?: boolean;
+  /** When the account's first own reply was written, when Zernio says (response score). */
+  ownerRepliedAt?: string | null;
+}
+
+/**
+ * What a connected account says it is (setup item G, 23 Nov): read right after connect so setup
+ * can tell the kind of business and make its business profile without waiting for the 30-day read.
+ * Facebook: the selected Page's `category` from `GET /v1/accounts/{id}/facebook-page`. Instagram:
+ * `profile.biography` and `website` from `GET /v1/accounts/{id}/instagram/business-discovery`.
+ * Google Business: `categories` and `profile.description` from
+ * `GET /v1/accounts/{id}/gmb-location-details?readMask=categories,profile`. Every other platform,
+ * and any failure, gives the empty info (never thrown: setup goes on without it).
+ */
+export interface AccountCategory {
+  category: string | null;
+  bio: string | null;
+  website: string | null;
+  description: string | null;
+}
+
+export const EMPTY_ACCOUNT_CATEGORY: AccountCategory = {
+  category: null,
+  bio: null,
+  website: null,
+  description: null,
+};
+
+/**
+ * A connected account's public business info (found facts, decision 7, 20 Nov). Facebook:
+ * `GET /v1/accounts/{accountId}/facebook-page-info` (docs.zernio.com/account-settings/get-facebook-page-info).
+ * Instagram: `GET /v1/accounts/{accountId}/instagram/business-discovery?username=` on the
+ * account's own handle (docs.zernio.com/instagram/get-instagram-business-discovery), which only
+ * works for an account connected through Facebook Login. Neither gives an address or a category.
+ */
+export interface BusinessProfile {
+  source: "facebook_page" | "instagram_profile";
+  /** Instagram's display name; null on Facebook (the Page info has none). */
+  name: string | null;
+  /** Instagram biography, or the Page's About (short) and Additional information (long). */
+  about: string | null;
+  website: string | null;
+  /** Facebook only. */
+  phone: string | null;
+  /** Facebook only. */
+  emails: string[];
+  /** Facebook only: `{day}_{slot}_{open|close}` → "HH:MM", e.g. mon_1_open: "09:00". */
+  hours: Record<string, string>;
+  /** Instagram only: the newest posts' captions, newest first. */
+  captions: string[];
 }
 
 /** A review (recommendation) on a connected Facebook Page (T42). Ids are Zernio's. */
@@ -1226,6 +1275,30 @@ export interface SocialProvider {
       message: string;
     } & CallOptions,
   ): Promise<{ providerMessageId: string }>;
+  /** What the account says it is (AccountCategory). Never throws: failures give the empty info. */
+  getAccountCategory(
+    input: {
+      accountId: string;
+      platform: string;
+      /** Instagram: the account's own handle (business discovery looks up by username). */
+      username?: string | null;
+    } & CallOptions,
+  ): Promise<AccountCategory>;
+  /**
+   * The account's public business info (decision 7). null when the platform has none we can
+   * read: not Facebook or Instagram, or an Instagram account connected with Instagram Login
+   * (business discovery needs Facebook Login; Zernio answers 400).
+   */
+  getBusinessProfile(
+    input: {
+      accountId: string;
+      platform: string;
+      /** Instagram: the account's own handle (business discovery looks up by username). */
+      username?: string | null;
+      /** Instagram: how many recent captions to read. */
+      captions?: number;
+    } & CallOptions,
+  ): Promise<BusinessProfile | null>;
   /**
    * An account's reviews, newest first (`GET /v1/inbox/reviews?platform=…&accountId=…`).
    * Facebook (T42) sends no review webhooks, so the job polls this; Google (T61) uses it to check

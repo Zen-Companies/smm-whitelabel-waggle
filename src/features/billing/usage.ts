@@ -208,19 +208,43 @@ export async function orgOnFree(db: ServiceClient, orgId: string): Promise<boole
 export async function roomForAnotherAccount(db: ServiceClient, tenantId: string): Promise<boolean> {
   const found = await planForBrand(db, tenantId);
   if (!found) return true;
-  const { data: brands } = await db.from("tenants").select("id").eq("organization_id", found.orgId);
+  return canConnectAnother(
+    await activeAccountsInOrg(db, found.orgId),
+    accountAllowance(found.plan.details, found.plan.extraAccounts),
+  );
+}
+
+/** Active social accounts across every brand of the organization. */
+async function activeAccountsInOrg(db: ServiceClient, orgId: string): Promise<number> {
+  const { data: brands } = await db.from("tenants").select("id").eq("organization_id", orgId);
+  const ids = (brands ?? []).map((b) => b.id);
+  if (!ids.length) return 0;
   const { count } = await db
     .from("social_accounts")
     .select("id", { count: "exact", head: true })
-    .in(
-      "tenant_id",
-      (brands ?? []).map((b) => b.id),
-    )
+    .in("tenant_id", ids)
     .eq("status", "active");
-  return canConnectAnother(
-    count ?? 0,
-    accountAllowance(found.plan.details, found.plan.extraAccounts),
-  );
+  return count ?? 0;
+}
+
+/**
+ * For setup's Connect on Free (23 Nov): what Free and Solo connect, and whether every account
+ * Free connects is already in use across the organization's brands. Null when the organization
+ * isn't on Free (or plan limits are off).
+ */
+export async function freeAccountsFull(
+  db: ServiceClient,
+  orgId: string,
+): Promise<{ accounts: number; soloAccounts: number; full: boolean } | null> {
+  if (!(await planLimitsOn(db))) return null;
+  const plan = await loadOrgPlan(db, orgId);
+  if (plan?.plan !== "free") return null;
+  const [plans, connected] = await Promise.all([loadPlans(db), activeAccountsInOrg(db, orgId)]);
+  return {
+    accounts: plan.details.accounts,
+    soloAccounts: plans.solo.accounts,
+    full: !canConnectAnother(connected, accountAllowance(plan.details, plan.extraAccounts)),
+  };
 }
 
 /**

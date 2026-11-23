@@ -1,4 +1,5 @@
 import { processDueItems, type Steps } from "@/features/inbox";
+import type { Classifier } from "@/lib/classifier/types";
 import { claimItem, type ClaimedItem, type Deadline } from "@/lib/jobs";
 import type { LlmClient } from "@/lib/llm/client";
 import type { SocialProvider } from "@/lib/social/types";
@@ -44,18 +45,33 @@ export async function runCatchUpSlice(
     db: ServiceClient;
     social: () => SocialProvider;
     llm: LlmClient | null;
+    /** Sorts locked DMs during the read (setup's "What they wanted"); none leaves them to keywords. */
+    classifier?: Classifier | null;
     /** The production steps; sending is left to the job. */
     steps: Steps;
     deadline: Deadline;
+    /**
+     * Walter's flow (decision 7): the business info found on the account, once it's read
+     * (knowledge-base's findFactsAfterConnect, passed in by the route). Before the drafts, so
+     * the reveal's drafts can use it.
+     */
+    findFacts?: (tenantId: string, shouldContinue: () => boolean) => Promise<unknown>;
   },
   tenantId: string,
 ): Promise<{ phase: CatchUpPhase | null }> {
   const { db, deadline } = deps;
   const time = (ms: number) => () => deadline.remainingMs() > ms;
   await runCatchUps(
-    { db, social: deps.social, shouldContinue: time(25_000) },
+    { db, social: deps.social, classifier: deps.classifier, shouldContinue: time(25_000) },
     { tenantId, limit: 1 },
   );
+  if (deps.findFacts && time(25_000)()) {
+    try {
+      await deps.findFacts(tenantId, time(20_000));
+    } catch {
+      // Reported by the caller's own handler; the slice goes on.
+    }
+  }
   const steps: Steps = {
     ...(deps.steps.new ? { new: deps.steps.new } : {}),
     ...(deps.steps.classified ? { classified: deps.steps.classified } : {}),

@@ -13,10 +13,13 @@ import {
 import {
   DM_ACCESS_MISSING,
   SocialProviderError,
+  EMPTY_ACCOUNT_CATEGORY,
+  type AccountCategory,
   type TelegramConnectStatus,
   isVideoUrl,
   type WhatsAppTemplate,
   type AccountHealth,
+  type BusinessProfile,
   type AccountPicture,
   type CreatePostInput,
   type ProviderCommentReply,
@@ -405,6 +408,17 @@ const commentedPostsPageSchema = z.object({
     .optional(),
   pagination: z.object({ nextCursor: z.string().nullish() }).nullish(),
 });
+/** The earliest of the account's own inline replies (response score, 20 Nov); null if unknown. */
+function firstOwnerReplyAt(
+  replies: { from?: { isOwner?: boolean } | null; createdTime?: string | null }[],
+): string | null {
+  const times = replies
+    .filter((r) => r.from?.isOwner === true && r.createdTime)
+    .map((r) => r.createdTime as string)
+    .filter((t) => Number.isFinite(Date.parse(t)))
+    .sort((a, b) => Date.parse(a) - Date.parse(b));
+  return times[0] ?? null;
+}
 const postCommentsPageSchema = z.object({
   comments: z
     .array(
@@ -421,7 +435,12 @@ const postCommentsPageSchema = z.object({
           .nullish(),
         // Up to a few inline replies; the docs give them the comment's shape.
         replies: z
-          .array(z.object({ from: z.object({ isOwner: z.boolean().optional() }).nullish() }))
+          .array(
+            z.object({
+              from: z.object({ isOwner: z.boolean().optional() }).nullish(),
+              createdTime: z.string().nullish(),
+            }),
+          )
           .nullish(),
       }),
     )
@@ -3682,6 +3701,192 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
+  async getAccountCategory(input: {
+    accountId: string;
+    platform: string;
+    username?: string | null;
+    signal?: AbortSignal;
+  }): Promise<AccountCategory> {
+    try {
+      return await this.readAccountCategory(input);
+    } catch {
+      // Setup goes on without it (the kind is asked instead). No details: the error is Zernio's.
+      return EMPTY_ACCOUNT_CATEGORY;
+    }
+  }
+
+  private async readAccountCategory(input: {
+    accountId: string;
+    platform: string;
+    username?: string | null;
+    signal?: AbortSignal;
+  }): Promise<AccountCategory> {
+    const text = z
+      .string()
+      .nullish()
+      .transform((v) => v?.trim() || null);
+    if (input.platform === "facebook") {
+      return call("getAccountCategory", async (withFetch) => {
+        // docs.zernio.com: GET /v1/accounts/{accountId}/facebook-page (pages[].category,
+        // selectedPageId).
+        const { data } = await this.zernio.connect.getFacebookPages(
+          withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+        );
+        const found = parse(
+          z.object({
+            pages: z.array(z.object({ id: z.string().nullish(), category: text })).nullish(),
+            selectedPageId: z.string().nullish(),
+          }),
+          data,
+          "getAccountCategory",
+        );
+        const pages = found.pages ?? [];
+        const page =
+          pages.find((p) => !!found.selectedPageId && p.id === found.selectedPageId) ??
+          (pages.length === 1 ? pages[0] : undefined);
+        return { ...EMPTY_ACCOUNT_CATEGORY, category: page?.category ?? null };
+      });
+    }
+    if (input.platform === "instagram" && input.username) {
+      const username = input.username.replace(/^@/, "");
+      return call("getAccountCategory", async (withFetch) => {
+        // docs.zernio.com: GET /v1/accounts/{accountId}/instagram/business-discovery?username=
+        // (profile.biography, website; needs an account connected with Facebook Login).
+        const { data } = await this.zernio.instagram.getInstagramBusinessDiscovery(
+          withFetch({
+            signal: input.signal,
+            path: { accountId: input.accountId },
+            query: { username, limit: 1 },
+          }),
+        );
+        const found = parse(
+          z.object({ profile: z.object({ biography: text, website: text }) }),
+          data,
+          "getAccountCategory",
+        );
+        return {
+          ...EMPTY_ACCOUNT_CATEGORY,
+          bio: found.profile.biography,
+          website: found.profile.website,
+        };
+      });
+    }
+    if (input.platform === "googlebusiness") {
+      return call("getAccountCategory", async (withFetch) => {
+        // docs.zernio.com: GET /v1/accounts/{accountId}/gmb-location-details
+        // ?readMask=categories,profile (categories.primaryCategory.displayName,
+        // profile.description).
+        const { data } = await this.zernio.gmblocationdetails.getGoogleBusinessLocationDetails(
+          withFetch({
+            signal: input.signal,
+            path: { accountId: input.accountId },
+            query: { readMask: "categories,profile" },
+          }),
+        );
+        const found = parse(
+          z.object({
+            categories: z
+              .object({ primaryCategory: z.object({ displayName: text }).nullish() })
+              .nullish(),
+            profile: z.object({ description: text }).nullish(),
+            websiteUri: text,
+          }),
+          data,
+          "getAccountCategory",
+        );
+        return {
+          ...EMPTY_ACCOUNT_CATEGORY,
+          category: found.categories?.primaryCategory?.displayName ?? null,
+          description: found.profile?.description ?? null,
+          website: found.websiteUri,
+        };
+      });
+    }
+    return EMPTY_ACCOUNT_CATEGORY;
+  }
+
+  async getBusinessProfile(input: {
+    accountId: string;
+    platform: string;
+    username?: string | null;
+    captions?: number;
+    signal?: AbortSignal;
+  }): Promise<BusinessProfile | null> {
+    const nullable = z
+      .string()
+      .nullish()
+      .transform((v) => v?.trim() || null);
+    if (input.platform === "facebook") {
+      return call("getBusinessProfile", async (withFetch) => {
+        // docs.zernio.com/account-settings/get-facebook-page-info
+        const { data } = await this.zernio.accountsettings.getFacebookPageInfo(
+          withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+        );
+        const page = parse(
+          z.object({
+            about: nullable,
+            description: nullable,
+            website: nullable,
+            phone: nullable,
+            emails: z.array(z.string()).nullish(),
+            hours: z.record(z.string(), z.string()).nullish(),
+          }),
+          data,
+          "getBusinessProfile",
+        );
+        const about = [page.about, page.description].filter(Boolean).join("\n\n") || null;
+        return {
+          source: "facebook_page" as const,
+          name: null,
+          about,
+          website: page.website,
+          phone: page.phone,
+          emails: page.emails ?? [],
+          hours: page.hours ?? {},
+          captions: [],
+        };
+      });
+    }
+    if (input.platform !== "instagram" || !input.username) return null;
+    const username = input.username;
+    try {
+      return await call("getBusinessProfile", async (withFetch) => {
+        // docs.zernio.com/instagram/get-instagram-business-discovery: our own handle, looked up
+        // through our own account.
+        const { data } = await this.zernio.instagram.getInstagramBusinessDiscovery(
+          withFetch({
+            signal: input.signal,
+            path: { accountId: input.accountId },
+            query: { username, limit: input.captions ?? 25 },
+          }),
+        );
+        const found = parse(
+          z.object({
+            profile: z.object({ name: nullable, biography: nullable, website: nullable }),
+            media: z.array(z.object({ caption: nullable })).nullish(),
+          }),
+          data,
+          "getBusinessProfile",
+        );
+        return {
+          source: "instagram_profile" as const,
+          name: found.profile.name,
+          about: found.profile.biography,
+          website: found.profile.website,
+          phone: null,
+          emails: [],
+          hours: {},
+          captions: (found.media ?? []).flatMap((m) => (m.caption ? [m.caption] : [])),
+        };
+      });
+    } catch (error) {
+      // Connected with Instagram Login (instagram_business_discovery_requires_facebook_login), or
+      // a personal account: nothing we can read.
+      if (error instanceof SocialProviderError && error.details.status === 400) return null;
+      throw error;
+    }
+  }
+
   async listReviews(input: {
     accountId: string;
     platform?: string;
@@ -4158,6 +4363,7 @@ export class ZernioSocialProvider implements SocialProvider {
           fromOwner: c.from?.isOwner ?? false,
           createdAt: c.createdTime ?? null,
           ownerReplied: (c.replies ?? []).some((r) => r.from?.isOwner === true),
+          ownerRepliedAt: firstOwnerReplyAt(c.replies ?? []),
         })),
         nextCursor: page.pagination?.hasMore ? (page.pagination.cursor ?? null) : null,
       };

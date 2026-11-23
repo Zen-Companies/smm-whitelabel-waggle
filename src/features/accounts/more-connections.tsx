@@ -96,7 +96,7 @@ export async function MoreConnections({ before }: { before?: string | null } = {
                 <li key={item.id} className="flex flex-col px-4 py-3">
                   <div className="flex flex-wrap items-center gap-3">
                     <BrandMark brand={item.id} size={32} />
-                    <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-[200px] flex-1 flex-col">
                       <b className="font-semibold">{item.label}</b>
                       <span className="text-ink-2 text-[13px]">{item.line}</span>
                     </span>
@@ -180,7 +180,7 @@ export async function MoreConnections({ before }: { before?: string | null } = {
               <li className="flex flex-col px-4 py-3">
                 <div className="flex flex-wrap items-center gap-3">
                   <BrandMark brand="whatsapp" size={32} />
-                  <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="flex min-w-[200px] flex-1 flex-col">
                     <b className="font-semibold">WhatsApp: use my own Meta keys</b>
                     <span className="text-ink-2 text-[13px]">
                       Advanced. For a number already set up in Meta Business.

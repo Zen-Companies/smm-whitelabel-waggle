@@ -7,7 +7,7 @@ import { getProductionSteps } from "@/features/inbox";
 import { getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { getServiceClient } from "@/lib/supabase/service";
-import { draftOnOpen, type DraftOnOpenOutcome } from "./draft-on-open";
+import { draftOnOpen, redraftNow, type DraftOnOpenOutcome } from "./draft-on-open";
 
 const idSchema = z.object({ id: z.uuid() });
 
@@ -31,6 +31,28 @@ export async function draftPulledItem(
     );
     if (result.outcome === "drafted") revalidatePath("/inbox");
     return result;
+  } catch (error) {
+    Sentry.captureException(error, { extra: { itemId: parsed.data } });
+    return { outcome: "failed" };
+  }
+}
+
+/**
+ * Setup's "customers still waiting" (20 Nov): after the owner's facts were saved as an answer,
+ * write the reply to this pulled message again now (redraftNow). Same outcomes as draftPulledItem.
+ */
+export async function redraftPulledItem(
+  itemId: string,
+): Promise<DraftOnOpenOutcome | { outcome: "not_allowed" | "failed" }> {
+  const parsed = z.uuid().safeParse(itemId);
+  if (!parsed.success) return { outcome: "not_waiting" };
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { outcome: "not_allowed" };
+  try {
+    return await redraftNow(
+      { db: getServiceClient(), steps: getProductionSteps() },
+      { tenantId: tenant.id, itemId: parsed.data, actor: tenant.userId },
+    );
   } catch (error) {
     Sentry.captureException(error, { extra: { itemId: parsed.data } });
     return { outcome: "failed" };

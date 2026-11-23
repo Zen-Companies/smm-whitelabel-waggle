@@ -125,7 +125,7 @@ export function AccountProblems({ accounts }: { accounts: AnalyticsAccount[] }) 
           className="danger-box flex flex-wrap items-center gap-x-3 gap-y-1"
         >
           <CircleAlert className="size-4 shrink-0" strokeWidth={2} aria-hidden />
-          <span className="flex-1">
+          <span className="min-w-[200px] flex-1">
             {platformName(a.platform)}
             {a.username ? ` @${a.username}` : ""} stopped sending numbers. What&apos;s here is from
             before it disconnected.

@@ -70,7 +70,7 @@ export function BestTimes({ slots }: { slots: BestTimeSlot[] }) {
   const next = client ? nextOccurrence(local[0], new Date()) : null;
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-[200px] flex-1 flex-col gap-0.5">
         <span>
           <b className="font-semibold">Best times to post:</b>{" "}
           {client ? local.map(slotLabel).join(" · ") : "…"}

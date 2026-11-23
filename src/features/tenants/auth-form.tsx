@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Brand } from "@/components/app/brand";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,10 @@ import { signIn, signUp, type AuthFormState } from "./actions";
 import { GoogleButton, InAppGoogleGate, OrDivider } from "@/features/auth";
 import { PASSWORD_MIN } from "./password";
 import { PasswordInput } from "./password-input";
+
+type FormState = AuthFormState & { values?: { fullName: string; email: string } };
+
+const MISMATCH = "The passwords don't match";
 
 /** Messages for `?error=` on the sign-in page (Google and email links come back with these). */
 const LINK_ERRORS: Record<string, string> = {
@@ -30,11 +34,29 @@ export function AuthForm({
   next?: string;
   error?: string;
 }) {
-  const [state, formAction, pending] = useActionState<AuthFormState, FormData>(
-    mode === "signup" ? signUp : signIn,
+  // A failed submit resets the form (React 19), so the name and email come back as its defaults.
+  // Passwords never travel back; a mismatch is caught here before submitting, so nothing clears.
+  const [state, formAction, pending] = useActionState<FormState, FormData>(
+    async (prev, formData) => {
+      const result = await (mode === "signup" ? signUp : signIn)(prev, formData);
+      return result.error
+        ? {
+            ...result,
+            values: {
+              fullName: String(formData.get("fullName") ?? ""),
+              email: String(formData.get("email") ?? ""),
+            },
+          }
+        : result;
+    },
     {},
   );
+  const [mismatch, setMismatch] = useState(false);
+  // The last submit's error goes once the form changes after it (it's about what was sent), and
+  // comes back with the next submit's answer.
+  const [edited, setEdited] = useState(false);
   const isSignup = mode === "signup";
+  const formError = mismatch ? MISMATCH : edited ? undefined : state.error;
 
   return (
     <div className="card w-full max-w-[420px] rounded-3xl px-6 pt-8 pb-6 shadow-[0_24px_60px_rgba(60,40,0,0.12)] md:px-[34px] md:pt-9">
@@ -64,21 +86,51 @@ export function AuthForm({
           <OrDivider />
         </InAppGoogleGate>
       </div>
-      <form action={formAction} className="flex flex-col gap-4">
+      <form
+        action={formAction}
+        onSubmit={(e) => {
+          setEdited(false);
+          if (!isSignup) return;
+          const fd = new FormData(e.currentTarget);
+          if (fd.get("password") !== fd.get("confirmPassword")) {
+            e.preventDefault();
+            setMismatch(true);
+          }
+        }}
+        onChange={() => {
+          if (mismatch) setMismatch(false);
+          if (state.error) setEdited(true);
+        }}
+        className="flex flex-col gap-4"
+      >
         {next && <input type="hidden" name="next" value={next} />}
         {isSignup && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="fullName" className="text-sm font-medium">
               Your name
             </label>
-            <Input id="fullName" name="fullName" autoComplete="name" required maxLength={100} />
+            <Input
+              id="fullName"
+              name="fullName"
+              autoComplete="name"
+              required
+              maxLength={100}
+              defaultValue={state.values?.fullName}
+            />
           </div>
         )}
         <div className="flex flex-col gap-1.5">
           <label htmlFor="email" className="text-sm font-medium">
             Email
           </label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            defaultValue={state.values?.email}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="flex items-baseline justify-between">
@@ -96,7 +148,7 @@ export function AuthForm({
             name="password"
             autoComplete={isSignup ? "new-password" : "current-password"}
             minLength={isSignup ? PASSWORD_MIN : undefined}
-            aria-invalid={state.error ? true : undefined}
+            aria-invalid={formError ? true : undefined}
             aria-describedby={isSignup ? "password-hint" : undefined}
             required
           />
@@ -114,17 +166,17 @@ export function AuthForm({
                 id="confirmPassword"
                 name="confirmPassword"
                 autoComplete="new-password"
-                aria-invalid={state.error ? true : undefined}
+                aria-invalid={formError ? true : undefined}
                 required
               />
             </>
           )}
-          {state.error && (
+          {formError && (
             <p role="alert" className="text-danger text-sm">
-              {state.error}
+              {formError}
             </p>
           )}
-          {state.error && !isSignup && (
+          {formError && !isSignup && (
             <p className="text-ink-3 text-xs">
               Signed up with Google? Use Continue with Google, or set a password with Forgot
               password.

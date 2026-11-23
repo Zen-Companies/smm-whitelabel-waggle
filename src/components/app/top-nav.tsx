@@ -7,7 +7,7 @@ import { isActive, NAV_ITEMS } from "./nav-items";
 
 /**
  * The top bar's tabs (design.md §4): active = ink fill with white text. A honey count on Inbox
- * while replies wait for the owner's OK. Desktop only; phones use the bottom tabs.
+ * while messages need the owner (the For you list). Desktop only; phones use the bottom tabs.
  */
 export function TopNav({ inboxCount }: { inboxCount: number }) {
   const pathname = usePathname();
@@ -29,7 +29,7 @@ export function TopNav({ inboxCount }: { inboxCount: number }) {
             {item.href === "/inbox" && inboxCount > 0 && (
               <span
                 className="bg-honey rounded-full px-2 text-xs font-semibold text-[#17140f]"
-                aria-label={`${inboxCount} waiting for your OK`}
+                aria-label={`${inboxCount} need you`}
               >
                 {inboxCount}
               </span>

@@ -142,7 +142,7 @@ export async function TeachView({ replies = false }: { replies?: boolean }) {
         className="card hover:bg-subtle flex flex-wrap items-center gap-x-4 gap-y-1 px-6 py-4 no-underline transition-colors duration-150"
       >
         <b className="text-ink font-semibold">Ready to reply on its own? · Try it</b>
-        <span className="text-ink-2 min-w-0 flex-1 text-sm">
+        <span className="text-ink-2 min-w-[200px] flex-1 text-sm">
           Type what a customer might say and see Waggle&apos;s reply. Nothing gets posted.
         </span>
         <span className="action-link with-arrow">Open the Lab</span>

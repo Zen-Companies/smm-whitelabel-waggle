@@ -33,7 +33,12 @@ describe("trialFromSession", () => {
       kind: "trial",
       plan: "business",
       valueUsd: 99,
+      first: false,
     });
+  });
+  it("knows a first-time checkout by the mark it was made with", () => {
+    const first = session({ metadata: { kind: "plan", organization_id: "org-1", first: "1" } });
+    expect(trialFromSession(first, "org-1")?.first).toBe(true);
   });
   it("uses the founding price when the subscription is founding", () => {
     const s = session({ subscription: sub({ metadata: { founding: "1" } }) });

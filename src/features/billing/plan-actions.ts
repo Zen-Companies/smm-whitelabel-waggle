@@ -9,6 +9,7 @@ import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
 import { FOUNDING_COUPON, PRICE_KEYS, type Interval } from "./catalog";
 import {
+  checkoutTrialDays,
   EXTRAS,
   FOUNDING,
   PLANS,
@@ -94,6 +95,24 @@ async function syncNow(db: ServiceClient, orgId: string, sub: Stripe.Subscriptio
     .eq("organization_id", orgId);
 }
 
+/**
+ * The page the upgrade pop-up was on, ready for Stripe's parameters: `/setup?step=2&upgrade=
+ * accounts&platform=tiktok&` (its own query kept, the pop-up's reason set). Only a path on this
+ * site; anything else returns to Your plan as before.
+ */
+function popupReturn(
+  back: FormDataEntryValue | null,
+  reason: FormDataEntryValue | null,
+): string | null {
+  if (typeof back !== "string" || typeof reason !== "string") return null;
+  if (!/^\/(?![/\\])[^\s]{0,400}$/.test(back) || !/^[a-z_]{1,32}$/.test(reason)) return null;
+  const url = new URL(back, "http://waggle.local");
+  if (url.origin !== "http://waggle.local") return null;
+  for (const k of ["checkout", "session_id", "welcome"]) url.searchParams.delete(k);
+  url.searchParams.set("upgrade", reason);
+  return `${url.pathname}?${url.searchParams.toString()}&`;
+}
+
 function readChoice(
   formData: FormData,
   plans: Record<PlanId, Plan>,
@@ -108,9 +127,9 @@ function readChoice(
 }
 
 /**
- * Choose a plan. From Free: Stripe Checkout, paid right away (no trial since Free, 19-20 Nov),
- * with the founding price on Team monthly while spots last. With a paid plan: switch it in
- * place, prorated.
+ * Choose a plan. From Free: Stripe Checkout with a card; the organization's first paid plan
+ * starts with 7 days free (trial back, 20 Nov), with the founding price on Team monthly while
+ * spots last. With a paid plan: switch it in place, prorated.
  */
 export async function choosePlan(
   _prev: PlanActionState,
@@ -124,6 +143,7 @@ export async function choosePlan(
   if (!stripe) return { error: NO_STRIPE };
   const { db, orgId, user } = who;
   const bill = await loadBilling(db, orgId);
+  const returnTo = popupReturn(formData.get("back"), formData.get("reason"));
 
   let url: string | null = null;
   try {
@@ -163,7 +183,9 @@ export async function choosePlan(
     }
 
     const customer = await ensureCustomer(stripe, db, orgId, user.email, bill);
-    const firstTime = !bill?.trial_ends_at && !bill?.stripe_subscription_id;
+    // The first paid plan starts with 7 days free, with a card (trial back, 20 Nov).
+    const trialDays = checkoutTrialDays(bill);
+    const firstTime = trialDays !== null;
     const founding =
       choice.plan === FOUNDING.plan &&
       choice.interval === "month" &&
@@ -182,27 +204,35 @@ export async function choosePlan(
       subscription_data: {
         // Stripe's subscription events list discounts by id only, so founding is marked here too.
         metadata: { organization_id: orgId, ...(founding ? { founding: "1" } : {}) },
+        ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
       ...(founding
         ? { discounts: [{ coupon: FOUNDING_COUPON }] }
         : { allow_promotion_codes: false }),
       // Prices are in US dollars (Pricing Bible): no local-currency conversion at checkout.
       adaptive_pricing: { enabled: false },
-      metadata: { organization_id: orgId, kind: "plan" },
+      // "first": only a first-time checkout tells the ads (StartTrial / Subscribe) on return.
+      metadata: { organization_id: orgId, kind: "plan", ...(firstTime ? { first: "1" } : {}) },
       client_reference_id: orgId,
       // A first checkout comes back with its session id, so Your plan can ask Stripe what it
       // started and tell the ads (TrialConversionTag). Stripe fills {CHECKOUT_SESSION_ID}.
+      // From the upgrade pop-up (23 Nov): back to the page it was on, the pop-up open again.
       success_url: appUrl(
-        firstTime
-          ? `${PLAN_PATH}?checkout=done&session_id={CHECKOUT_SESSION_ID}`
-          : `${PLAN_PATH}?checkout=done`,
+        returnTo
+          ? `${returnTo}checkout=done&session_id={CHECKOUT_SESSION_ID}`
+          : firstTime
+            ? `${PLAN_PATH}?checkout=done&session_id={CHECKOUT_SESSION_ID}`
+            : `${PLAN_PATH}?checkout=done`,
       ),
-      cancel_url: appUrl(`${PLAN_PATH}?checkout=cancelled`),
+      cancel_url: appUrl(
+        returnTo ? `${returnTo}checkout=cancelled` : `${PLAN_PATH}?checkout=cancelled`,
+      ),
     });
     await auditOrg(db, orgId, "billing.checkout_started", user.id, {
       plan: choice.plan,
       interval: choice.interval,
       founding,
+      trialDays,
     });
     url = session.url;
   } catch (e) {

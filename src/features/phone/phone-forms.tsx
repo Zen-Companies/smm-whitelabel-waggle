@@ -84,7 +84,7 @@ export function NumberPicker({
         <ul className="card divide-line flex flex-col divide-y">
           {found.numbers.map((n) => (
             <li key={n.phoneNumber} className="flex flex-wrap items-center gap-3 px-4 py-3">
-              <span className="flex min-w-0 flex-1 flex-col">
+              <span className="flex min-w-[200px] flex-1 flex-col">
                 <b className="font-semibold tabular-nums">{displayNumber(n.phoneNumber)}</b>
                 <span className="meta">
                   {[

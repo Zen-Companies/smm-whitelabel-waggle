@@ -99,13 +99,16 @@ export function errorResponse(status: number) {
   return json({ error: { code: status, message: "upstream error" } }, status);
 }
 
-export function fakeOpenRouter(respond: (url: string, body: Record<string, unknown>) => Response) {
+export function fakeOpenRouter(
+  respond: (url: string, body: Record<string, unknown>) => Response,
+  config: LlmConfig = testLlmConfig,
+) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     const body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
     return respond(url, body);
   });
-  const models = resolveModels(testLlmConfig, { fetch: fetchMock as unknown as typeof fetch });
+  const models = resolveModels(config, { fetch: fetchMock as unknown as typeof fetch });
   return { fetchMock, models };
 }
 

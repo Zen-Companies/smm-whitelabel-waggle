@@ -28,7 +28,7 @@ export function AdLeadRow({ lead, canEdit }: { lead: AdLead; canEdit: boolean })
   return (
     <li className="flex flex-col gap-2 px-4 py-3.5">
       <div className="flex flex-wrap items-start gap-3">
-        <button type="button" onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 flex-col text-left" aria-expanded={open}>
+        <button type="button" onClick={() => setOpen((o) => !o)} className="flex min-w-[200px] flex-1 flex-col text-left" aria-expanded={open}>
           <b className="font-semibold">{person.name}</b>
           <span className="meta truncate">
             {[person.email, person.phone].filter(Boolean).join(" · ")} · {lead.formName} · {ago(lead.createdAt)}

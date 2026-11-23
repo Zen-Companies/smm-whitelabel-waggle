@@ -209,3 +209,87 @@ export function BeeOnItsOwn() {
     </span>
   );
 }
+
+/**
+ * Setup step 3, the customers still waiting (approved 21 Nov): one honeycomb cell per customer,
+ * filled as you answer; the bee hops onto the newest filled cell.
+ */
+export function AnswerCombs({ done, of }: { done: number; of: number }) {
+  const cells = Math.min(of, 10);
+  const on = Math.min(done, cells);
+  const perch = Math.max(0, on - 1);
+  return (
+    <span aria-hidden className="relative inline-block pt-4" style={{ width: cells * 18 + 8 }}>
+      <span className="flex items-center gap-0.5">
+        {Array.from({ length: cells }, (_, i) => (
+          <svg key={i} width="18" height="20" viewBox="0 0 14 16">
+            <path
+              d="M7 1 13 4.5v7L7 15 1 11.5v-7Z"
+              fill={i < on ? HONEY : "var(--surface)"}
+              stroke={INK}
+              strokeWidth="1.1"
+              strokeLinejoin="round"
+              className="transition-[fill] duration-500"
+            />
+          </svg>
+        ))}
+      </span>
+      <span
+        className="bee-bob absolute top-0 transition-[left] duration-500"
+        style={{ left: on ? perch * 18 - 2 : -6 }}
+      >
+        <svg width="22" height="15" viewBox="0 0 24 16">
+          <BeeBody />
+        </svg>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * "Ask me first" (approved 21 Nov): the bee holds the written reply by your phone and waits, while
+ * the Send button breathes. You send it. Moves only while the choice is picked.
+ */
+export function BeeHandsYouSend() {
+  return (
+    <span aria-hidden className="choice-bee flex h-[60px] items-center gap-2">
+      <span className="bee-bob relative inline-block">
+        <svg width="30" height="20" viewBox="0 0 24 16">
+          <BeeBody />
+        </svg>
+        <span className="bg-honey-tint border-honey-border absolute top-3 -right-3 h-2.5 w-4 rounded-[3px] border" />
+      </span>
+      <span className="border-line-strong bg-surface flex h-[52px] w-9 flex-col items-center justify-end rounded-lg border p-1">
+        <span className="bg-honey send-pulse text-ink rounded px-1 text-[8px] leading-[12px] font-bold">
+          Send
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * "Reply on its own" (approved 21 Nov): the bee grabs the reply and flies it out along the dotted
+ * path to the customer's chat, which shows ✓ Sent. Moves only while the choice is picked.
+ */
+export function BeeFliesItOut() {
+  const arc = "M6,44 C40,0 90,0 120,26";
+  return (
+    <span aria-hidden className="choice-bee relative block h-[60px] w-[176px]">
+      <svg width="176" height="60" viewBox="0 0 176 60" className="absolute inset-0">
+        <path
+          d={arc}
+          fill="none"
+          stroke="var(--line-strong)"
+          strokeWidth="1.5"
+          strokeDasharray="2 5"
+          strokeLinecap="round"
+        />
+      </svg>
+      <FlyingBee path={arc} className="bee-carry" />
+      <span className="bg-subtle text-success absolute top-[30px] left-[122px] rounded-full px-2 text-[10px] leading-[18px] font-semibold">
+        ✓ Sent
+      </span>
+    </span>
+  );
+}

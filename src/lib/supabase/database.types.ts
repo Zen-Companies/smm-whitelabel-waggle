@@ -413,6 +413,8 @@ export type Database = {
           post_offset: number
           posts_read: number
           praise_and_tags: number
+          response_messages: number
+          response_answered: number
           sorted_at: string | null
           top_questions: Json | null
           top_questions_at: string | null
@@ -425,6 +427,8 @@ export type Database = {
           created_at: string
           dismissed_at: string | null
           dismissed_by: string | null
+          facts_found: number
+          facts_found_at: string | null
           dm_offset: number
           dms_created: number
           finished_at: string | null
@@ -450,6 +454,8 @@ export type Database = {
           post_offset?: number
           posts_read?: number
           praise_and_tags?: number
+          response_messages?: number
+          response_answered?: number
           sorted_at?: string | null
           top_questions?: Json | null
           top_questions_at?: string | null
@@ -462,6 +468,8 @@ export type Database = {
           created_at?: string
           dismissed_at?: string | null
           dismissed_by?: string | null
+          facts_found?: number
+          facts_found_at?: string | null
           dm_offset?: number
           dms_created?: number
           finished_at?: string | null
@@ -486,6 +494,8 @@ export type Database = {
           post_offset?: number
           posts_read?: number
           praise_and_tags?: number
+          response_messages?: number
+          response_answered?: number
           sorted_at?: string | null
           top_questions?: Json | null
           top_questions_at?: string | null
@@ -498,6 +508,8 @@ export type Database = {
           created_at?: string
           dismissed_at?: string | null
           dismissed_by?: string | null
+          facts_found?: number
+          facts_found_at?: string | null
           dm_offset?: number
           dms_created?: number
           finished_at?: string | null
@@ -1141,34 +1153,59 @@ export type Database = {
       }
       kb_entries: {
         Row: {
+          checked_at: string | null
+          checked_by: string | null
           content: string
           created_at: string
           embedding: string | null
+          found_catch_up_id: string | null
+          found_kind: string | null
+          found_source: string | null
           id: string
+          needs_check: boolean
           tenant_id: string
           title: string
           updated_at: string
         }
         ComputedFields: never
         Insert: {
+          checked_at?: string | null
+          checked_by?: string | null
           content: string
           created_at?: string
           embedding?: string | null
+          found_catch_up_id?: string | null
+          found_kind?: string | null
+          found_source?: string | null
           id?: string
+          needs_check?: boolean
           tenant_id: string
           title: string
           updated_at?: string
         }
         Update: {
+          checked_at?: string | null
+          checked_by?: string | null
           content?: string
           created_at?: string
           embedding?: string | null
+          found_catch_up_id?: string | null
+          found_kind?: string | null
+          found_source?: string | null
           id?: string
+          needs_check?: boolean
           tenant_id?: string
           title?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "kb_entries_found_catch_up_id_fkey"
+            columns: ["found_catch_up_id"]
+            isOneToOne: false
+            referencedRelation: "catch_ups"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "kb_entries_tenant_id_fkey"
             columns: ["tenant_id"]
@@ -1499,6 +1536,7 @@ export type Database = {
       }
       missed_messages: {
         Row: {
+          category: string | null
           created_at: string
           id: string
           platform_message_id: string
@@ -1511,6 +1549,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          category?: string | null
           created_at?: string
           id?: string
           platform_message_id: string
@@ -1522,6 +1561,7 @@ export type Database = {
           zernio_conversation_id: string
         }
         Update: {
+          category?: string | null
           created_at?: string
           id?: string
           platform_message_id?: string
@@ -2452,6 +2492,7 @@ export type Database = {
       }
       tenants: {
         Row: {
+          accounts_reconciled_at: string | null
           ai_monthly_cap_usd: number | null
           analytics_audience_at: string | null
           analytics_full_at: string | null
@@ -2478,6 +2519,14 @@ export type Database = {
           purged_at: string | null
           replies_paused: boolean
           setup_passed_at: string | null
+          setup_done_at: string | null
+          setup_screen: string | null
+          setup_chat: Json
+          setup_chat_log: Json | null
+          ai_profile: Json | null
+          ai_profile_at: string | null
+          name_pending: boolean
+          ask_first_topics: string[]
           setup_passed_by: string | null
           setup_passed_how: string | null
           stripe_customer_id: string | null
@@ -2486,6 +2535,7 @@ export type Database = {
         }
         ComputedFields: never
         Insert: {
+          accounts_reconciled_at?: string | null
           ai_monthly_cap_usd?: number | null
           analytics_audience_at?: string | null
           analytics_full_at?: string | null
@@ -2512,6 +2562,14 @@ export type Database = {
           purged_at?: string | null
           replies_paused?: boolean
           setup_passed_at?: string | null
+          setup_done_at?: string | null
+          setup_screen?: string | null
+          setup_chat?: Json
+          setup_chat_log?: Json | null
+          ai_profile?: Json | null
+          ai_profile_at?: string | null
+          name_pending?: boolean
+          ask_first_topics?: string[]
           setup_passed_by?: string | null
           setup_passed_how?: string | null
           stripe_customer_id?: string | null
@@ -2519,6 +2577,7 @@ export type Database = {
           zernio_profile_id?: string | null
         }
         Update: {
+          accounts_reconciled_at?: string | null
           ai_monthly_cap_usd?: number | null
           analytics_audience_at?: string | null
           analytics_full_at?: string | null
@@ -2545,6 +2604,14 @@ export type Database = {
           purged_at?: string | null
           replies_paused?: boolean
           setup_passed_at?: string | null
+          setup_done_at?: string | null
+          setup_screen?: string | null
+          setup_chat?: Json
+          setup_chat_log?: Json | null
+          ai_profile?: Json | null
+          ai_profile_at?: string | null
+          name_pending?: boolean
+          ask_first_topics?: string[]
           setup_passed_by?: string | null
           setup_passed_how?: string | null
           stripe_customer_id?: string | null

@@ -27,7 +27,7 @@ export function BroadcastRow({ b, canEdit }: { b: Broadcast; canEdit: boolean })
   return (
     <li className="flex flex-wrap items-start gap-3 px-4 py-3.5">
       <PlatformMark platform={b.platform} size={28} />
-      <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex min-w-[200px] flex-1 flex-col">
         <b className="font-semibold">{b.name}</b>
         <span className="meta">
           {b.status === "scheduled" && b.scheduledAt

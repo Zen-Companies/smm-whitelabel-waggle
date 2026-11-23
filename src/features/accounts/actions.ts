@@ -3,7 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { orgOnFree, roomForAnotherAccount, upgradeHref } from "@/features/billing";
+import { orgOnFree, roomForAnotherAccount } from "@/features/billing";
 import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
@@ -19,6 +19,7 @@ import {
   firstConnectHref,
 } from "./connect-return";
 import { isFirstAccount } from "./first-account";
+import { freeFullHref } from "./free-full";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { blueskyErrorText, blueskyInputSchema, connectBlueskyFor } from "./bluesky";
@@ -66,8 +67,11 @@ export async function connectAccount(formData: FormData): Promise<void> {
         dedupeKey: `account_limit:${tenant.organizationId}:${new Date().toISOString().slice(0, 10)}`,
       }),
     );
-    // Free: the upgrade screen, never an add-on (19 Nov).
-    if (await orgOnFree(db, tenant.organizationId)) redirect(upgradeHref("accounts"));
+    // Free: the upgrade pop-up over the page, naming the platform (19 and 23 Nov). Setup's
+    // Connect says so in place instead (23 Nov).
+    if (await orgOnFree(db, tenant.organizationId)) {
+      redirect(await freeFullHref(db, tenant.id, origin, platform));
+    }
     redirect(connectErrorHref(origin, "accounts_full", platform));
   }
   const back = connectReturnHref({

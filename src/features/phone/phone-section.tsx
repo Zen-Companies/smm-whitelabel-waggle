@@ -74,7 +74,7 @@ export async function PhoneSection() {
         </p>
       ) : number ? (
         <div className="card flex flex-wrap items-center gap-3 p-5">
-          <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-[200px] flex-1 flex-col">
             <b className="text-lg font-semibold tabular-nums">
               {displayNumber(number.phoneNumber)}
             </b>

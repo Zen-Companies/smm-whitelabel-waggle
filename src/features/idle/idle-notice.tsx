@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { connectAccount } from "@/features/accounts";
+import { UpgradeLink } from "@/features/billing";
 import { can } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 import { platformLabel } from "@/lib/social/platforms";
@@ -70,9 +70,13 @@ export async function IdleNotice() {
               </form>
             ))}
           {canUpgrade && (
-            <Link href="/plan?upgrade=idle" className="action-link text-sm">
+            <UpgradeLink
+              reason="idle"
+              extra={{ platform: platforms[0] ?? null }}
+              className="action-link text-sm"
+            >
               Upgrade to Solo
-            </Link>
+            </UpgradeLink>
           )}
         </div>
       )}

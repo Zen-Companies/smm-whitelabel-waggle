@@ -47,7 +47,7 @@ function Tile({ p, status }: { p: Platform; status: PlatformStatus }) {
     // Opening the note (18 Nov) widens the tile to the whole row.
     <li className="border-line bg-surface flex flex-wrap items-center gap-3.5 rounded-xl border px-4 py-3.5 has-[[data-connect-open]]:col-span-full">
       <PlatformMark platform={p.id} size={40} />
-      <span className="flex min-w-0 flex-1 flex-col">
+      <span className="flex min-w-[200px] flex-1 flex-col">
         <b className="font-semibold">{p.label}</b>
         <span className="text-ink-2 text-[13px]">{line}</span>
         {note && <span className="text-ink-3 text-xs">{note}</span>}

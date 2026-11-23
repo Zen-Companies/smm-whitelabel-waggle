@@ -89,7 +89,9 @@ export function practiceCard(result: PreviewResult): PracticeCard {
         next:
           reason === "replies_paused"
             ? "I'd ask you first: you've paused all replies."
-            : `I'd ask you first: your setting for ${topic} is Ask me first.`,
+            : reason === "facts_unchecked"
+              ? "I'd ask you first: it uses info I found on your account that you haven't checked yet."
+              : `I'd ask you first: your setting for ${topic} is Ask me first.`,
         tone: "reply",
       };
     case "ignore":

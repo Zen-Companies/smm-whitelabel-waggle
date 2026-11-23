@@ -77,7 +77,7 @@ function SequenceRow({ s, canEdit }: { s: Sequence; canEdit: boolean }) {
     <li className="flex flex-col gap-2 px-4 py-3.5">
       <div className="flex flex-wrap items-start gap-3">
         <PlatformMark platform={s.platform} size={30} />
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-[200px] flex-1 flex-col">
           <b className="font-semibold">{s.name}</b>
           <span className="meta">
             {s.steps} {s.steps === 1 ? "message" : "messages"} · {s.enrolled} in it · {s.completed} finished ·{" "}

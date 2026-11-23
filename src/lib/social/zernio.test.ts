@@ -147,6 +147,147 @@ describe("ZernioSocialProvider", () => {
     expect(captured.filter((r) => r.url.pathname === "/api/v1/users")).toHaveLength(1);
   });
 
+  it("getBusinessProfile reads a Facebook Page's info (found facts, decision 7)", async () => {
+    respond = () =>
+      json({
+        about: "Specialty coffee in Makati.",
+        description: null,
+        website: "https://harbourbean.ph",
+        phone: "+63 917 555 0142",
+        emails: ["hi@harbourbean.ph"],
+        hours: { mon_1_open: "08:00", mon_1_close: "17:00" },
+      });
+    await expect(
+      provider.getBusinessProfile({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual({
+      source: "facebook_page",
+      name: null,
+      about: "Specialty coffee in Makati.",
+      website: "https://harbourbean.ph",
+      phone: "+63 917 555 0142",
+      emails: ["hi@harbourbean.ph"],
+      hours: { mon_1_open: "08:00", mon_1_close: "17:00" },
+      captions: [],
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_fb/facebook-page-info");
+  });
+
+  it("getBusinessProfile looks up an Instagram account's own handle, with recent captions", async () => {
+    respond = () =>
+      json({
+        profile: {
+          id: "1789",
+          username: "harbourbean",
+          name: "Harbour Bean Café",
+          biography: "Open daily 8–5 · Legaspi Village",
+          website: null,
+        },
+        media: [
+          { id: "m1", caption: "Iced latte ₱180 this week" },
+          { id: "m2", caption: null },
+        ],
+      });
+    const profile = await provider.getBusinessProfile({
+      accountId: "acc_ig",
+      platform: "instagram",
+      username: "harbourbean",
+    });
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_ig/instagram/business-discovery");
+    expect(captured[0].url.searchParams.get("username")).toBe("harbourbean");
+    expect(profile).toMatchObject({
+      source: "instagram_profile",
+      name: "Harbour Bean Café",
+      about: "Open daily 8–5 · Legaspi Village",
+      website: null,
+      captions: ["Iced latte ₱180 this week"],
+    });
+  });
+
+  it("getBusinessProfile: Instagram connected without Facebook Login has nothing to read", async () => {
+    respond = () =>
+      json(
+        {
+          error: "Business discovery requires Facebook Login",
+          code: "instagram_business_discovery_requires_facebook_login",
+        },
+        400,
+      );
+    await expect(
+      provider.getBusinessProfile({ accountId: "acc_ig", platform: "instagram", username: "x" }),
+    ).resolves.toBeNull();
+  });
+
+  it("getBusinessProfile: other platforms have none", async () => {
+    await expect(
+      provider.getBusinessProfile({ accountId: "acc_t", platform: "tiktok", username: "x" }),
+    ).resolves.toBeNull();
+    expect(captured).toHaveLength(0);
+  });
+
+  it("getAccountCategory reads the selected Facebook Page's category (setup item G)", async () => {
+    respond = () =>
+      json({
+        pages: [
+          { id: "p1", name: "Other", category: "Musician/Band" },
+          { id: "p2", name: "Harbour Bean", category: "Coffee Shop" },
+        ],
+        selectedPageId: "p2",
+        cached: true,
+      });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual({ category: "Coffee Shop", bio: null, website: null, description: null });
+    expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_fb/facebook-page");
+  });
+
+  it("getAccountCategory reads an Instagram bio and a Google Business category", async () => {
+    respond = () =>
+      json({ profile: { biography: "Plumbers in QC", website: "https://x.ph" }, media: [] });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_ig", platform: "instagram", username: "@q" }),
+    ).resolves.toEqual({
+      category: null,
+      bio: "Plumbers in QC",
+      website: "https://x.ph",
+      description: null,
+    });
+    expect(captured[0].url.searchParams.get("username")).toBe("q");
+
+    respond = () =>
+      json({
+        title: "QC Plumbing",
+        categories: { primaryCategory: { name: "gcid:plumber", displayName: "Plumber" } },
+        profile: { description: "24/7 emergency plumbing." },
+      });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_g", platform: "googlebusiness" }),
+    ).resolves.toEqual({
+      category: "Plumber",
+      bio: null,
+      website: null,
+      description: "24/7 emergency plumbing.",
+    });
+    expect(captured[1].url.pathname).toBe("/api/v1/accounts/acc_g/gmb-location-details");
+    expect(captured[1].url.searchParams.get("readMask")).toBe("categories,profile");
+  });
+
+  it("getAccountCategory never throws: failures and other platforms give the empty info", async () => {
+    const empty = { category: null, bio: null, website: null, description: null };
+    respond = () => json({ error: "nope" }, 400);
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual(empty);
+    respond = () => json({ pages: "not a list" });
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),
+    ).resolves.toEqual(empty);
+    const before = captured.length;
+    await expect(
+      provider.getAccountCategory({ accountId: "acc_t", platform: "tiktok" }),
+    ).resolves.toEqual(empty);
+    expect(captured).toHaveLength(before);
+  });
+
   it("listReviews asks for Google reviews and keeps their stars (T61)", async () => {
     respond = () =>
       json({
