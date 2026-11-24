@@ -23,7 +23,7 @@ export const MAX_TRIAL_DAYS = 730;
 
 /** The code's default (Staff → Promotions may move it). */
 export const BLACK_FRIDAY = {
-  /** Monday 30 November 2026, 11:59 pm Eastern (= 1 December 04:59:59 UTC). */
+  /** Tuesday 1 December 2026, 11:59 pm Eastern (= 2 December 04:59:59 UTC). */
   endsAt: SEASONAL.endsAt ?? new Date(8.64e15),
 } as const;
 

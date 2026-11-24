@@ -13,6 +13,8 @@ export interface QueuedCrmEvent {
   note?: { title: string; body: string };
   /** Unique per thing that happened, e.g. the Stripe event id. The user id is added. */
   dedupeKey: string;
+  /** Not sent before this (the sender skips it until then): e.g. the 30 s referral gap. */
+  notBefore?: Date | null;
 }
 
 /** The organization's owners: the contacts its lifecycle events are about. */
@@ -37,6 +39,7 @@ export async function queueCrmEvent(
       event: input.event,
       details: { ...(input.details ?? {}), ...(input.note ? { note: input.note } : {}) } as Json,
       dedupe_key: `${input.dedupeKey}:${input.userId}`,
+      ...(input.notBefore ? { next_attempt_at: input.notBefore.toISOString() } : {}),
     },
     { onConflict: "dedupe_key", ignoreDuplicates: true },
   );

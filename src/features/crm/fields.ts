@@ -2,7 +2,7 @@
 // (snapshot.ts) gathers the facts, this turns them into HighLevel's strings.
 
 import { PLANS, isPlanId } from "@/features/billing";
-import type { CrmEvent, CrmField } from "@/lib/crm";
+import { referralRewardedFields, type CrmEvent, type CrmField } from "@/lib/crm";
 
 export interface CrmSnapshot {
   event: CrmEvent;
@@ -54,7 +54,10 @@ export function crmFields(s: CrmSnapshot): Record<CrmField, string> {
   return {
     waggle_event: s.event,
     waggle_event_at: s.eventAt.toISOString(),
-    waggle_plan: crmPlan(s.planId),
+    // referral_rewarded names the plan its month was applied to (queued with the event).
+    waggle_plan: crmPlan(
+      s.event === "referral_rewarded" && text(s.details.plan) ? text(s.details.plan) : s.planId,
+    ),
     waggle_from_plan: crmPlan(text(s.details.from_plan)),
     waggle_founding: s.founding ? "true" : "false",
     waggle_trial_ends: day(s.trialEndsAt),
@@ -68,5 +71,8 @@ export function crmFields(s: CrmSnapshot): Record<CrmField, string> {
     waggle_reply_limit: s.replyLimit === null ? "" : String(s.replyLimit),
     waggle_resets_on: day(s.resetsOn),
     waggle_business: s.business,
+    ...(s.event === "referral_rewarded"
+      ? referralRewardedFields(s.details)
+      : referralRewardedFields({})),
   };
 }

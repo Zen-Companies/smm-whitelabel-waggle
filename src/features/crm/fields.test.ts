@@ -63,6 +63,31 @@ describe("crmFields", () => {
     });
   });
 
+  it("referral_rewarded: role, the other business, a readable end and the plan", () => {
+    const f = crmFields({
+      ...base,
+      event: "referral_rewarded",
+      planId: "free",
+      details: {
+        referral_id: "r1",
+        role: "referrer",
+        with: "Harbour Bean Café",
+        ends: "2026-12-30T15:00:00Z",
+        plan: "solo",
+      },
+    });
+    expect(f).toMatchObject({
+      waggle_event: "referral_rewarded",
+      waggle_plan: "solo",
+      waggle_referral_role: "referrer",
+      waggle_referral_with: "Harbour Bean Café",
+      waggle_referral_ends: "December 30",
+    });
+    // Other events send the referral fields blank (HighLevel doesn't store blanks).
+    expect(crmFields(base).waggle_referral_role).toBe("");
+    expect(crmFields({ ...base, details: { plan: "team" } }).waggle_plan).toBe("team");
+  });
+
   it("access ends at the trial's end when a trial is canceled", () => {
     expect(crmFields({ ...base, event: "canceled", cancelAtPeriodEnd: true }).waggle_ends_on).toBe(
       "2026-11-25",

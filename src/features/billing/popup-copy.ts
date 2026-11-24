@@ -130,6 +130,12 @@ export interface StripBox {
   text: string;
   /** done: green (connected); now: honey (what the tap adds); open: dashed (room left). */
   tone: "done" | "now" | "open";
+  /**
+   * The picture on top of the box (Walter's spec, 24 Nov): a platform's real logo, the bee for
+   * Worker Bee, else a plain ✓ (done) or + (now, open).
+   */
+  platform?: string | null;
+  bee?: boolean;
 }
 
 export interface Tick {
@@ -319,7 +325,8 @@ export function popupContent(input: PopupInput): PopupContent {
   const plan = plans[planId];
   const pay = payWords(plan, free, trial, now, founding, trialDays);
   const used = facts.connected.length > 0 ? facts.connected.length : null;
-  const first = facts.connected[0] ? label(facts.connected[0]) : null;
+  const firstId = facts.connected[0];
+  const first = firstId ? label(firstId) : null;
   const scan = facts.scan;
   const scanOn = scan ? label(scan.platform) : null;
   const pain = facts.pain;
@@ -347,8 +354,8 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: first ?? "Your account", text: "Connected", tone: "done" },
-          { title: adding ?? "+", text: "Adding now", tone: "now" },
+          { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
+          { title: adding ?? "+", text: "Adding now", tone: "now", platform: version.platform },
           ...(open > 0
             ? [{ title: `+ ${n(open)} more`, text: "open", tone: "open" as const }]
             : []),
@@ -374,8 +381,13 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: names[0]!, text: "Picked", tone: "done" },
-          { title: andList(names.slice(1)), text: "Adding now", tone: "now" },
+          { title: names[0]!, text: "Picked", tone: "done", platform: version.picked[0] },
+          {
+            title: andList(names.slice(1)),
+            text: "Adding now",
+            tone: "now",
+            platform: version.picked[1],
+          },
           ...(open > 0
             ? [{ title: `+ ${n(open)} more`, text: "open", tone: "open" as const }]
             : []),
@@ -413,7 +425,7 @@ export function popupContent(input: PopupInput): PopupContent {
         ...base,
         strip: [
           { title: "You", text: "approve each reply", tone: "done" },
-          { title: "Worker Bee", text: "Turning on", tone: "now" },
+          { title: "Worker Bee", text: "Turning on", tone: "now", bee: true },
           { title: "Asks you", text: "when unsure", tone: "open" },
         ],
         headline: `Turn on Worker Bee with ${solo.name}`,
@@ -493,7 +505,12 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: name ?? "Your account", text: "Disconnected", tone: "done" },
+          {
+            title: name ?? "Your account",
+            text: "Disconnected",
+            tone: "done",
+            platform: version.platform,
+          },
           { title: "Reconnect", text: `with ${solo.name}`, tone: "now" },
           ...(open > 0
             ? [{ title: `+ ${n(open)} more`, text: "open", tone: "open" as const }]
@@ -565,11 +582,12 @@ export function popupContent(input: PopupInput): PopupContent {
         return {
           ...base,
           strip: [
-            { title: first ?? "Your account", text: "Connected", tone: "done" },
+            { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
             {
               title: "Worker Bee",
               text: trial ? `${trialDays} days free` : `on ${solo.name}`,
               tone: "now",
+              bee: true,
             },
             ...(extra > 0
               ? [{ title: `+ ${n(extra)}`, text: "accounts", tone: "open" as const }]
@@ -616,11 +634,11 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: first ?? "Your account", text: "Connected", tone: "done" },
+          { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
           ...(sent > 0
             ? [{ title: plural(sent, "reply", "replies"), text: "sent", tone: "done" as const }]
             : []),
-          { title: "Worker Bee", text: "Next", tone: "now" },
+          { title: "Worker Bee", text: "Next", tone: "now", bee: true },
         ],
         headline: "You’re set up. Want Worker Bee to take it from here?",
         sub: `On ${free.name} you approve every reply. ${solo.name} answers for you, day and night.`,

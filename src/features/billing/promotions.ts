@@ -116,8 +116,9 @@ export const PROMOTIONS: readonly Promotion[] = [
     kind: "seasonal",
     enabled: true,
     startsAt: null,
-    // Monday 30 November 2026, 11:59 pm Eastern (= 1 December 04:59:59 UTC). Jason's date.
-    endsAt: new Date("2026-12-01T04:59:59Z"),
+    // Tuesday 1 December 2026, 11:59 pm Eastern (= 2 December 04:59:59 UTC): extended a day
+    // for Walter's GHL campaign (24 Nov), the same end as the referral offer.
+    endsAt: new Date("2026-12-02T04:59:59Z"),
     trialDays: 30,
     countdown: true,
     rewardMonths: 1,
@@ -130,23 +131,23 @@ export const PROMOTIONS: readonly Promotion[] = [
       label: "Black Friday",
       lines: [
         { text: "Your first month on any plan is free" },
-        { text: "Choose a plan by Mon 30 Nov, 11:59 pm ET" },
+        { text: "Choose a plan by Tue 1 Dec, 11:59 pm ET" },
         { text: "Give a month, get a month: ", honey: "refer a friend" },
       ],
-      phoneLines: [{ text: "First month free on any plan" }, { text: "Ends Mon 30 Nov" }],
+      phoneLines: [{ text: "First month free on any plan" }, { text: "Ends Tue 1 Dec" }],
       cta: "Choose a plan →",
       phoneCta: "Plans →",
     },
     pass: {
       dayName: ["Black", "Friday"],
       headline: "Your first month is free.",
-      small: "Choose any plan by Monday, 30 Nov · 11:59 pm ET. Card today, $0 until 30 days later.",
+      small: "Choose any plan by Tuesday, 1 Dec · 11:59 pm ET. Card today, $0 until 30 days later.",
     },
     lastDay: {
-      // Monday 30 November, 00:00 Eastern.
-      startsAt: new Date("2026-11-30T05:00:00Z"),
+      // Tuesday 1 December, 00:00 Eastern: the last day since the extension (24 Nov).
+      startsAt: new Date("2026-12-01T05:00:00Z"),
       bar: {
-        label: "Cyber Monday",
+        label: "Last day",
         lines: [
           { text: "Last day: your first month on any plan is free" },
           { text: "Ends tonight, 11:59 pm ET" },
@@ -157,7 +158,7 @@ export const PROMOTIONS: readonly Promotion[] = [
         phoneCta: "Plans →",
       },
       pass: {
-        dayName: ["Cyber", "Monday"],
+        dayName: ["Last", "Day"],
         headline: "Last day: your first month is free.",
         small: "Choose any plan before 11:59 pm ET tonight.",
       },
@@ -169,8 +170,9 @@ export const PROMOTIONS: readonly Promotion[] = [
     kind: "referral",
     enabled: true,
     startsAt: null,
-    // null = the program keeps running (Jason's ads: "a free month for every friend you bring").
-    endsAt: null,
+    // Walter's GHL campaign (24 Nov): "give a month, get a month" runs through Tuesday 1 December,
+    // 11:59 pm Eastern. null would keep it running (Staff → Promotions can move it).
+    endsAt: new Date("2026-12-02T04:59:59Z"),
     trialDays: 30,
     countdown: false,
     rewardMonths: 1,

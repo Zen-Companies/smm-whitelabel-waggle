@@ -54,6 +54,15 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
   **only when the contact has none yet** (the gowaggle.ai waitlist may have set them first). See `src/lib/crm/utm.ts`.
 - The old inbound webhook (`src/lib/ghl.ts`) still sends beta_joined / feedback / page_rating until it's retired.
 
+## Give a month, get a month (Walter's GHL referral campaign, 24 Nov)
+
+| Event / field     | What HighLevel gets                                                                                                                                                                                                                                                                             | Queued from                                                                                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| signed_up         | Also `ref_code` (the friend's link code) and `referred_by` (the referrer's business name) when they came through a friend's link, read at send time.                                                                                                                                            | `sender.ts` (`signupReferral`)                                                                                                                                                       |
+| referral_rewarded | Once per person per referral: `waggle_referral_role` (referrer / friend), `waggle_referral_with` (the other side's business name), `waggle_referral_ends` (their free month's end, "December 30", US Eastern), `waggle_plan`, then `waggle-app-event`. Referrer and friend at least 30 s apart. | `features/billing/referrals.ts`: the friend when their first trial starts (Stripe webhook); the referrer when the credit lands (jobs route) or banked months start their first trial |
+
+The pure rules (readable date, dedupe key, 30 s gap, friend's month applied) are in `src/lib/crm/referral.ts`.
+
 ## Rules (Walter's)
 
 - Plan words are `free` (no paid plan, 19 Nov), `solo`, `team` ($99), `business` (by call). Waggle's **ids are swapped** for the two

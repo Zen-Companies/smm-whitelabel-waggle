@@ -11,11 +11,11 @@ import {
 } from "./referral-code";
 
 const during = new Date("2026-11-27T15:00:00Z");
-const lastMinute = new Date("2026-12-01T04:59:00Z");
-const after = new Date("2026-12-01T05:00:00Z");
+const lastMinute = new Date("2026-12-02T04:59:00Z");
+const after = new Date("2026-12-02T05:00:00Z");
 
 describe("Black Friday", () => {
-  it("runs until Monday 30 November, 11:59 pm Eastern", () => {
+  it("runs until Tuesday 1 December, 11:59 pm Eastern", () => {
     expect(blackFridayOn(during)).toBe(true);
     expect(blackFridayOn(lastMinute)).toBe(true);
     expect(blackFridayOn(after)).toBe(false);
@@ -122,7 +122,9 @@ describe("when the referrer earns the month", () => {
 
 describe("first checkout trial from Staff → Promotions", () => {
   const edited: Promotion[] = PROMOTIONS.map((p) =>
-    p.kind === "seasonal" ? { ...p, trialDays: 45 } : { ...p, trialDays: 14, rewardMonths: 2 },
+    p.kind === "seasonal"
+      ? { ...p, trialDays: 45 }
+      : { ...p, trialDays: 14, rewardMonths: 2, endsAt: null },
   );
   it("uses the seasonal promotion's trial days", () => {
     expect(

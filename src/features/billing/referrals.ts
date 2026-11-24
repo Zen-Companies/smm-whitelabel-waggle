@@ -1,6 +1,15 @@
 import "server-only";
 import * as Sentry from "@sentry/nextjs";
 import type Stripe from "stripe";
+import {
+  creditedMonthEnd,
+  friendMonthApplied,
+  queueForOwners,
+  queueQuietly,
+  referralDedupeKey,
+  referralSendAfter,
+  type ReferralRole,
+} from "@/lib/crm";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { auditOrg } from "./billing-store";
 import { checkoutTrialDays, FOUNDING, isPaidPlanId, monthlyPrice } from "./plans";
@@ -156,7 +165,7 @@ export async function grantReferralRewards(deps: {
     try {
       const { data: bill } = await db
         .from("org_billing")
-        .select("stripe_customer_id, plan, billing_interval, status, founding")
+        .select("stripe_customer_id, plan, billing_interval, status, founding, current_period_end")
         .eq("organization_id", row.referrer_org_id)
         .maybeSingle();
       const now = new Date().toISOString();
@@ -191,6 +200,17 @@ export async function grantReferralRewards(deps: {
         referralId: row.id,
         cents,
       });
+      // GHL (24 Nov): the referrer's month is applied, as the next bill's credit.
+      await queueQuietly(() =>
+        queueReferralRewarded(db, {
+          referralId: row.id,
+          role: "referrer",
+          orgId: row.referrer_org_id,
+          otherOrgId: row.referred_org_id,
+          endsAt: creditedMonthEnd(bill.current_period_end, rewardMonths),
+          plan: bill.plan,
+        }),
+      );
       result.credited++;
     } catch (e) {
       result.failed++;
@@ -247,6 +267,107 @@ export async function offerTrialDays(
     baseDays: base,
     promotions,
   }).days;
+}
+
+/**
+ * CRM (Walter's GHL referral campaign, 24 Nov): `referral_rewarded` for one side of a referral,
+ * for each Owner of that organization, once (dedupe per referral and side). Queued at least 30 s
+ * after the other side's event (`next_attempt_at`), so his workflow can clear the trigger tag.
+ * Database only: safe from the Stripe webhook.
+ */
+export async function queueReferralRewarded(
+  db: ServiceClient,
+  input: {
+    referralId: string;
+    role: ReferralRole;
+    orgId: string;
+    otherOrgId: string;
+    endsAt: Date | string | null;
+    plan: string | null;
+  },
+  now = new Date(),
+): Promise<void> {
+  const other: ReferralRole = input.role === "friend" ? "referrer" : "friend";
+  const [name, { data: others }] = await Promise.all([
+    businessNameOf(db, input.otherOrgId),
+    db
+      .from("crm_events")
+      .select("sent_at, next_attempt_at, created_at")
+      .like("dedupe_key", `${referralDedupeKey(input.referralId, other)}:%`),
+  ]);
+  const ends = input.endsAt
+    ? typeof input.endsAt === "string"
+      ? input.endsAt
+      : input.endsAt.toISOString()
+    : "";
+  await queueForOwners(db, input.orgId, {
+    event: "referral_rewarded",
+    details: {
+      referral_id: input.referralId,
+      role: input.role,
+      with: name ?? "",
+      ends,
+      ...(input.plan ? { plan: input.plan } : {}),
+    },
+    dedupeKey: referralDedupeKey(input.referralId, input.role),
+    notBefore: referralSendAfter(
+      (others ?? []).map((o) => ({
+        sentAt: o.sent_at,
+        nextAttemptAt: o.next_attempt_at,
+        createdAt: o.created_at,
+      })),
+      now,
+    ),
+  });
+}
+
+/**
+ * Stripe webhook (database only): a first plan's trial just started. The friend's free month is
+ * applied now (their referral_rewarded), and banked months used in it are the referrer's own
+ * (the organization paying is the referrer there).
+ */
+export async function queueReferralMonthsApplied(
+  db: ServiceClient,
+  input: {
+    orgId: string;
+    promo: string | undefined;
+    bankedIds: string | undefined;
+    trialEndsAt: string | null;
+    plan: string | null;
+  },
+): Promise<void> {
+  const { data: mine } = await db
+    .from("referrals")
+    .select("id, referrer_org_id")
+    .eq("referred_org_id", input.orgId)
+    .maybeSingle();
+  if (mine && friendMonthApplied({ referred: true, trialStarted: true, promo: input.promo })) {
+    await queueReferralRewarded(db, {
+      referralId: mine.id,
+      role: "friend",
+      orgId: input.orgId,
+      otherOrgId: mine.referrer_org_id,
+      endsAt: input.trialEndsAt,
+      plan: input.plan,
+    });
+  }
+  const ids = (input.bankedIds ?? "").split(",").filter((s) => /^[0-9a-f-]{36}$/.test(s));
+  if (!ids.length) return;
+  const { data: banked } = await db
+    .from("referrals")
+    .select("id, referred_org_id")
+    .in("id", ids)
+    .eq("referrer_org_id", input.orgId);
+  for (const r of banked ?? []) {
+    await queueReferralRewarded(db, {
+      referralId: r.id,
+      role: "referrer",
+      orgId: input.orgId,
+      otherOrgId: r.referred_org_id,
+      endsAt: input.trialEndsAt,
+      plan: input.plan,
+    });
+  }
 }
 
 /**

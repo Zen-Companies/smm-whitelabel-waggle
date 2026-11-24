@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { BeeBody } from "@/components/app/bee";
+import { PlatformMark } from "@/components/app/platform-mark";
 import { cn } from "cn";
 import { CheckoutSuccess } from "./checkout-success";
 import { choosePlan, type PlanActionState } from "./plan-actions";
@@ -94,6 +95,44 @@ const TONE: Record<StripBox["tone"], string> = {
   open: "bg-surface text-ink-3 border-line-strong border-dashed",
 };
 
+const GLYPH_TONE: Record<StripBox["tone"], string> = {
+  done: "bg-success text-surface",
+  now: "bg-honey text-ink",
+  open: "bg-subtle text-ink-3",
+};
+
+/**
+ * The picture on top of a strip box (Walter's spec, 24 Nov: "three boxes with the real logos"):
+ * the platform's own logo, the bee for Worker Bee, else a plain ✓ or +. Decorative: the box's
+ * words say the same.
+ */
+function StripIcon({ box }: { box: StripBox }) {
+  if (box.platform) return <PlatformMark platform={box.platform} size={30} />;
+  if (box.bee) {
+    return (
+      <span
+        aria-hidden
+        className="bg-surface grid size-[30px] place-items-center rounded-full shadow-[inset_0_0_0_1px_rgba(23,20,15,0.10)]"
+      >
+        <svg width="22" height="15" viewBox="0 0 24 16">
+          <BeeBody flutter={false} />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "grid size-[30px] place-items-center rounded-full text-[15px] font-bold",
+        GLYPH_TONE[box.tone],
+      )}
+    >
+      {box.tone === "done" ? "✓" : "+"}
+    </span>
+  );
+}
+
 function Strip({ boxes }: { boxes: StripBox[] }) {
   return (
     <div className="flex gap-1.5 sm:mt-5">
@@ -105,6 +144,9 @@ function Strip({ boxes }: { boxes: StripBox[] }) {
             TONE[b.tone],
           )}
         >
+          <span className="mb-1">
+            <StripIcon box={b} />
+          </span>
           <b className="text-ink w-full truncate text-[12.5px]">{b.title}</b>
           <span>{b.text}</span>
         </div>
