@@ -8,7 +8,9 @@ import { platformLabel } from "@/lib/social/platforms";
 import { connectFirstAccount } from "./actions";
 import { ConnectSubmit } from "./connect-pending";
 import type { ConnectProblem } from "./first-connect";
-import { PRIMARY } from "./setup-frame";
+import { switchSteps } from "./connect-help";
+import { PRIMARY, QUIET } from "./setup-frame";
+import { OkLine, PROGRESS_SAVED, StepRow } from "./step-drawings";
 
 // Setup step 1's states around leaving for a sign-in (board "Setup, start to finish", approved
 // 23 Nov): "Before you connect", what came back wrong, and Free with its account used.
@@ -143,24 +145,61 @@ export function ConnectProblemBox({
       </section>
     );
   }
+  // Connect fix 2 (approved 24 Nov): the switch steps already open, only Instagram's (we know
+  // which one failed); one primary, "I switched, try again"; free, posts kept, progress saved.
   return (
-    <section role="alert" className="flex flex-col gap-3">
-      <div className="border-danger-border bg-danger-soft rounded-xl border p-4">
-        <h2 className="text-danger text-[15px] font-semibold">That’s a personal Instagram</h2>
-        <p className="text-ink mt-1 text-sm">
-          Switch it to business or creator in Instagram’s settings.
-        </p>
+    <section aria-labelledby="personal-title" className="flex flex-col gap-3">
+      <div
+        role="alert"
+        className="border-danger-border bg-danger-soft flex flex-col gap-3 rounded-xl border p-4"
+      >
+        <div className="flex flex-col gap-1">
+          <h2 id="personal-title" className="text-danger text-[15px] font-semibold">
+            That’s a personal Instagram
+          </h2>
+          <p className="text-ink text-sm">
+            Waggle needs a business or creator account. Switching is free and takes 30 seconds. Your
+            posts and followers stay the same.
+          </p>
+        </div>
+        <div className="bg-surface rounded-xl p-3">
+          <StepRow
+            steps={switchSteps("instagram")}
+            label="How to switch Instagram to business or creator"
+          />
+        </div>
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        <Link href="/welcome" className={QUIET}>
+          Connect another account
+        </Link>
         <ConnectForm platform="instagram" hasBrand={hasBrand}>
           <ConnectSubmit platform="Instagram" className={PRIMARY}>
             I switched, try again
           </ConnectSubmit>
         </ConnectForm>
-        <Link href="/welcome" className={buttonVariants({ variant: "secondary" })}>
-          Pick another
-        </Link>
       </div>
+      <OkLine>{PROGRESS_SAVED}</OkLine>
     </section>
+  );
+}
+
+/** The "I switched, connect …" button under the switch steps (a connect form, made here). */
+export function SwitchedConnect({
+  platform,
+  hasBrand,
+}: {
+  platform: "instagram" | "facebook";
+  hasBrand: boolean;
+}) {
+  const label = platformLabel(platform);
+  return (
+    <ConnectForm platform={platform} hasBrand={hasBrand}>
+      <ConnectSubmit platform={label} className={PRIMARY}>
+        {platform === "facebook"
+          ? "I have a Page, connect Facebook"
+          : "I switched, connect Instagram"}
+      </ConnectSubmit>
+    </ConnectForm>
   );
 }
