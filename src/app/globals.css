@@ -1079,3 +1079,102 @@ label:not(:has(:checked)) .choice-bee {
     transition: none;
   }
 }
+
+/* Promotions (board "Promotions in the app", approved 24 Nov; Walter's website strip and pass).
+   The bar drifts, the pass's light sweeps, the success honeycombs burst once. All stop with
+   reduced motion. */
+@keyframes promo-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.promo-marquee {
+  display: flex;
+  width: max-content;
+  animation: promo-marquee 28s linear infinite;
+}
+.promo-fade {
+  -webkit-mask: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+/* the black pass with a notch on each side */
+.promo-pass {
+  border-radius: 26px;
+  background: #0d0b08;
+  color: #fff6e6;
+  box-shadow: inset 0 0 0 1.5px rgb(246 178 27 / 0.55);
+  -webkit-mask:
+    radial-gradient(circle 12px at 0 50%, #0000 97%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 50%, #0000 97%, #000) right / 51% 100% no-repeat;
+  mask:
+    radial-gradient(circle 12px at 0 50%, #0000 97%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 12px at 100% 50%, #0000 97%, #000) right / 51% 100% no-repeat;
+}
+.promo-pass-shadow {
+  filter: drop-shadow(0 12px 20px rgb(23 20 15 / 0.25)) drop-shadow(0 0 1px rgb(246 178 27 / 0.6));
+}
+.promo-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.2px #f6b21b;
+  text-shadow: 0 0 18px rgb(246 178 27 / 0.35);
+}
+@keyframes promo-shine {
+  0% {
+    left: -60%;
+  }
+  35%,
+  100% {
+    left: 130%;
+  }
+}
+.promo-shine {
+  position: relative;
+  overflow: hidden;
+}
+.promo-shine::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  bottom: -50%;
+  left: -60%;
+  width: 30%;
+  background: linear-gradient(100deg, transparent, rgb(246 178 27 / 0.28), transparent);
+  transform: skewX(-18deg);
+  animation: promo-shine 5s ease-in-out 1s infinite;
+  pointer-events: none;
+}
+@keyframes promo-burst {
+  0% {
+    transform: translate(0, 0) scale(0.2);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--dx), var(--dy)) scale(1);
+    opacity: 0;
+  }
+}
+.promo-burst {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -7px 0 0 -7px;
+  opacity: 0;
+  animation: promo-burst 2.4s ease-out 1 both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .promo-marquee,
+  .promo-shine::after,
+  .promo-burst {
+    animation: none;
+  }
+  .promo-burst,
+  .promo-shine::after {
+    display: none;
+  }
+}

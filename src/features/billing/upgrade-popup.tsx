@@ -11,13 +11,12 @@ import {
   useSyncExternalStore,
 } from "react";
 import { BeeBody } from "@/components/app/bee";
-import { BeeDance } from "@/components/app/bee-setup";
-import { buttonVariants } from "@/components/ui/button";
-import { ConversionTag, type ConversionTagProps } from "@/features/ad-tracking/client";
+import { PlatformMark } from "@/components/app/platform-mark";
 import { cn } from "cn";
+import { CheckoutSuccess } from "./checkout-success";
 import { choosePlan, type PlanActionState } from "./plan-actions";
+import type { CheckoutSuccess as Confirmed } from "./popup-actions";
 import type { PopupContent, PopupVersion, Seg, StripBox } from "./popup-copy";
-import { platformLabel } from "@/lib/social/platforms";
 import { browserWallet, type Wallet } from "./wallet";
 import { AcceptedMarks, WALLET_LABEL, WalletMark } from "./wallet-mark";
 
@@ -96,6 +95,44 @@ const TONE: Record<StripBox["tone"], string> = {
   open: "bg-surface text-ink-3 border-line-strong border-dashed",
 };
 
+const GLYPH_TONE: Record<StripBox["tone"], string> = {
+  done: "bg-success text-surface",
+  now: "bg-honey text-ink",
+  open: "bg-subtle text-ink-3",
+};
+
+/**
+ * The picture on top of a strip box (Walter's spec, 24 Nov: "three boxes with the real logos"):
+ * the platform's own logo, the bee for Worker Bee, else a plain ✓ or +. Decorative: the box's
+ * words say the same.
+ */
+function StripIcon({ box }: { box: StripBox }) {
+  if (box.platform) return <PlatformMark platform={box.platform} size={30} />;
+  if (box.bee) {
+    return (
+      <span
+        aria-hidden
+        className="bg-surface grid size-[30px] place-items-center rounded-full shadow-[inset_0_0_0_1px_rgba(23,20,15,0.10)]"
+      >
+        <svg width="22" height="15" viewBox="0 0 24 16">
+          <BeeBody flutter={false} />
+        </svg>
+      </span>
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "grid size-[30px] place-items-center rounded-full text-[15px] font-bold",
+        GLYPH_TONE[box.tone],
+      )}
+    >
+      {box.tone === "done" ? "✓" : "+"}
+    </span>
+  );
+}
+
 function Strip({ boxes }: { boxes: StripBox[] }) {
   return (
     <div className="flex gap-1.5 sm:mt-5">
@@ -107,6 +144,9 @@ function Strip({ boxes }: { boxes: StripBox[] }) {
             TONE[b.tone],
           )}
         >
+          <span className="mb-1">
+            <StripIcon box={b} />
+          </span>
           <b className="text-ink w-full truncate text-[12.5px]">{b.title}</b>
           <span>{b.text}</span>
         </div>
@@ -253,7 +293,7 @@ export function UpgradePopup({
   /** Stripe's return: done or cancelled. */
   checkout: "done" | "cancelled" | null;
   /** After done: Stripe confirmed the checkout (with the ads tag), or not (null), or still asking. */
-  confirmed: { tag: ConversionTagProps | null } | null | "checking";
+  confirmed: Confirmed | null | "checking";
   carryOn: CarryOn;
   onClose: () => void;
   /** After success: close and refresh the page for the new plan. */
@@ -264,51 +304,37 @@ export function UpgradePopup({
       <Sheet labelledBy="upgrade-title" onClose={onDone}>
         <div className="flex flex-col gap-3 sm:mt-4">
           {confirmed === "checking" ? (
-            <p id="upgrade-title" className="text-ink-2 m-0 text-center text-sm">
-              Checking with Stripe…
-            </p>
+            <div className="flex flex-col items-center gap-2 py-4">
+              <svg width="36" height="24" viewBox="0 0 24 16" aria-hidden className="bee-bob">
+                <BeeBody />
+              </svg>
+              <p id="upgrade-title" className="text-ink-2 m-0 text-center text-sm" role="status">
+                Checking with Stripe…
+              </p>
+            </div>
           ) : confirmed ? (
-            <>
-              {confirmed.tag && <ConversionTag {...confirmed.tag} />}
-              <BeeDance times={1} scale={0.35} className="self-center" />
-              <h2
-                id="upgrade-title"
-                className="font-display m-0 text-center text-[18px] font-semibold"
-              >
-                {content.success}
-              </h2>
-              {carryOn?.kind === "connect" && (
-                <form action={carryOn.action} className="flex flex-col">
-                  <input type="hidden" name="platform" value={carryOn.platform} />
-                  <input type="hidden" name="back" value={carryOn.back} />
-                  <button type="submit" className={buttonVariants({ variant: "primary" })}>
-                    Connect {platformLabel(carryOn.platform)}
-                  </button>
-                </form>
-              )}
-              {carryOn?.kind === "link" && (
-                <Link
-                  href={carryOn.href}
-                  onClick={onDone}
-                  className={buttonVariants({ variant: "primary" })}
-                >
-                  {carryOn.label}
-                </Link>
-              )}
-            </>
+            // The success moment (approved 24 Nov): one primary button, then Go to my Inbox.
+            <CheckoutSuccess
+              content={content}
+              confirmed={confirmed}
+              carryOn={carryOn}
+              onDone={onDone}
+            />
           ) : (
             <h2 id="upgrade-title" className="text-ink-2 m-0 text-center text-sm font-normal">
               We couldn’t confirm the payment yet. If you added a card, your plan updates in a
               minute.
             </h2>
           )}
-          <button
-            type="button"
-            onClick={onDone}
-            className="text-ink-2 hover:text-ink min-h-10 self-center text-[13.5px] font-semibold underline"
-          >
-            {carryOn && confirmed && confirmed !== "checking" ? "Later" : "Done"}
-          </button>
+          {(!confirmed || confirmed === "checking") && (
+            <button
+              type="button"
+              onClick={onDone}
+              className="text-ink-2 hover:text-ink min-h-10 self-center text-[13.5px] font-semibold underline"
+            >
+              Done
+            </button>
+          )}
         </div>
       </Sheet>
     );

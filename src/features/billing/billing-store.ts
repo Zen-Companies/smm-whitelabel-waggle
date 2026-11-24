@@ -2,11 +2,13 @@ import { queueUsageCharge } from "./usage-charges";
 import "server-only";
 import type Stripe from "stripe";
 import { writeAudit } from "@/lib/audit";
-import { lifecycleEvents, organizationHasPaid, queueForOwners } from "@/lib/crm";
+import { lifecycleEvents, organizationHasPaid, queueForOwners, queueQuietly } from "@/lib/crm";
 import { monthStart } from "@/lib/llm/spend";
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { EXTRAS } from "./plans";
+import { earnsReferralReward } from "./referral-code";
+import { markBankedUsed, markReferralRewardDue, queueReferralMonthsApplied } from "./referrals";
 import { billingFromSubscription, carriedReplies, planIsLive } from "./subscription";
 
 // The organization's bill as Waggle stores it (org_billing, reply_top_ups), and the Stripe events
@@ -190,12 +192,26 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
         before && ["past_due", "canceled", "active"].includes(row.status)
           ? await organizationHasPaid(db, orgId)
           : false;
-      for (const e of lifecycleEvents(before, row, hasPaid)) {
+      const lifecycle = lifecycleEvents(before, row, hasPaid);
+      for (const e of lifecycle) {
         await queueForOwners(db, orgId, {
           event: e.event,
           details: e.details,
           dedupeKey: `${event.id}:${e.event}`,
         });
+      }
+      // Give a month, get a month (GHL campaign, 24 Nov): the first plan's trial starts with the
+      // friend's month or banked months, so those months are applied now (referral_rewarded).
+      if (lifecycle.some((e) => e.event === "trial_started")) {
+        await queueQuietly(() =>
+          queueReferralMonthsApplied(db, {
+            orgId,
+            promo: sub.metadata.promo,
+            bankedIds: sub.metadata.banked_referrals,
+            trialEndsAt: row.trial_ends_at,
+            plan: row.plan,
+          }),
+        );
       }
       if (before?.plan !== row.plan || before?.status !== row.status) {
         await auditOrg(db, orgId, "billing.subscription", "system", {
@@ -209,6 +225,21 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
     case "checkout.session.completed":
     case "checkout.session.async_payment_succeeded": {
       const s = event.data.object;
+      // Referrals (23 Nov): a first plan checkout that used banked months in its trial.
+      if (
+        s.metadata?.kind === "plan" &&
+        s.metadata.banked_referrals &&
+        s.metadata.organization_id
+      ) {
+        return (
+          (await markBankedUsed(
+            db,
+            s.metadata.organization_id,
+            s.metadata.banked_referrals,
+            s.id,
+          )) || "ignored"
+        );
+      }
       if (s.metadata?.kind !== "top_up" || s.payment_status !== "paid") return "ignored";
       const orgId = s.metadata.organization_id;
       if (!orgId) return "ignored: no organization";
@@ -235,6 +266,12 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
       // Top-ups charged to the saved card (automatic, or one click); a checkout's own invoice
       // ("top_up") is counted by its session instead.
       const kind = inv.metadata?.kind;
+      // Referrals (23 Nov): a referred organization's first real payment earns its referrer a
+      // month. Database only; the jobs route credits it.
+      if (earnsReferralReward(inv)) {
+        const payer = await orgForCustomer(db, undefined, customerId(inv.customer) ?? "");
+        return (payer && (await markReferralRewardDue(db, payer))) || "ignored";
+      }
       if (kind !== "auto_top_up" && kind !== "top_up_now") return "ignored";
       const orgId =
         inv.metadata?.organization_id ??

@@ -1,38 +1,41 @@
 "use client";
 
+import { Mail } from "lucide-react";
 import Link from "next/link";
 import { useActionState } from "react";
 import { settingsHref } from "@/lib/routes";
 import { resendEmailConfirmation, type ResendState } from "./actions";
 
-/** The quiet line on top until the email is confirmed (hotfix 21 Nov). Feedback in place. */
+/**
+ * The line on top until the email is confirmed (hotfix 21 Nov; restyled 24 Nov as the app's
+ * standard banner: icon, message, actions on the right). Feedback in place, no toasts.
+ */
 export function ConfirmEmailLineView({ email }: { email: string }) {
   const [state, action, pending] = useActionState<ResendState>(resendEmailConfirmation, {});
   return (
-    <div
-      role="status"
-      className="border-honey-border bg-honey-tint flex items-start gap-2.5 rounded-xl border px-3 py-2.5 text-[13px]"
-    >
-      <span aria-hidden>✉️</span>
-      <div className="min-w-0 flex-1">
-        <b className="font-semibold">Confirm your email when you can.</b>{" "}
+    <div role="status" className="banner text-[13.5px]">
+      <Mail className="size-[18px] shrink-0" strokeWidth={1.75} aria-hidden />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <b className="font-semibold">Confirm your email</b>
         <span className="text-ink-2">
-          {state.sent ? "Sent again to " : "We sent a link to "}
-          <b className="text-ink font-semibold break-all">{email}</b>.
-        </span>{" "}
-        {state.error && <span className="text-danger">{state.error} </span>}
-        <form action={action} className="inline">
+          {state.sent ? "We sent a new link to " : "We sent a link to "}
+          <b className="text-ink font-semibold break-all">{email}</b>. Open it to keep getting
+          Waggle&apos;s emails.
+        </span>
+        {state.error && <span className="text-danger text-[12.5px]">{state.error}</span>}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <form action={action}>
           <button
             type="submit"
-            disabled={pending}
-            className="font-semibold underline underline-offset-2 disabled:opacity-60"
+            disabled={pending || state.sent}
+            className="border-line bg-surface hover:border-honey inline-flex min-h-9 items-center rounded-lg border px-3 text-[13px] font-semibold disabled:opacity-60"
           >
-            {pending ? "Sending…" : "Send again"}
+            {pending ? "Sending…" : state.sent ? "Sent" : "Send again"}
           </button>
         </form>
-        {" · "}
-        <Link href={settingsHref("account")} className="font-semibold">
-          Wrong email?
+        <Link href={settingsHref("account")} className="text-ink-2 text-[13px] font-semibold">
+          Change email
         </Link>
       </div>
     </div>

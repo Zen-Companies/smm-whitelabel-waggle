@@ -12,7 +12,7 @@ import {
 import { syncAnalytics } from "@/features/analytics";
 import { finishCatchUps, runCatchUps } from "@/features/catch-up";
 import { crmClient, deliverCrmEvents, sweepInactive, sweepUsage } from "@/features/crm";
-import { chargeUsageAtCost, getStripe } from "@/features/billing";
+import { chargeUsageAtCost, getStripe, grantReferralRewards } from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
 import { pruneCalls } from "@/features/mcp";
 import { purgeDueBrands } from "@/features/offboarding";
@@ -161,6 +161,13 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
 
+    // Referrals (23 Nov): a month off the next bill for each friend whose first payment went through.
+    const referralRewards = await grantReferralRewards({
+      db,
+      stripe: getStripe(),
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+
     // Follow-ups for leads that went quiet (18 Nov): the owner's message, through Zernio Sequences.
     const followUps = await sendQuietLeadFollowUps({
       db,
@@ -251,6 +258,8 @@ export async function POST(request: Request): Promise<Response> {
       followUpsFailed: followUps.failed,
       usageAtCostAdded: usageAtCost.added,
       usageAtCostMissed: usageAtCost.missed,
+      referralsCredited: referralRewards.credited,
+      referralsBanked: referralRewards.banked,
       kbEmbedFailed: kb.failed,
       dmWindowsEscalated,
       nudges,

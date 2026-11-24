@@ -41,6 +41,8 @@ export interface UpgradeOffer {
 export interface OfferContext {
   /** The organization never had a paid plan: its first one starts with the trial. */
   trial: boolean;
+  /** How long that trial is: 7 days, or 30 with the Black Friday or referral month. */
+  trialDays?: number;
   /** Out of replies: the date replies come back, "December 1". */
   resetsOn?: string;
 }
@@ -102,7 +104,7 @@ export function upgradeOffer(
           : "checkout";
   const cta =
     via === "trial"
-      ? `Start ${TRIAL.days} days free`
+      ? `Start ${ctx.trialDays ?? TRIAL.days} days free`
       : via === "checkout"
         ? `Upgrade to ${next!.name}`
         : via === "switch"
@@ -112,7 +114,7 @@ export function upgradeOffer(
             : null;
   const footnote =
     via === "trial"
-      ? `A card starts your trial. Cancel before day ${TRIAL.days} and you pay nothing.`
+      ? `A card starts your trial. Cancel before day ${ctx.trialDays ?? TRIAL.days} and you pay nothing.`
       : via === "checkout"
         ? "Paid at checkout. Cancel any time and you go back to Free."
         : via === "switch"
@@ -126,7 +128,7 @@ export function upgradeOffer(
           amount: dailyAmount(next.monthlyUsd),
           of:
             via === "trial"
-              ? `$${next.monthlyUsd} a month after ${TRIAL.days} days free`
+              ? `$${next.monthlyUsd} a month after ${ctx.trialDays ?? TRIAL.days} days free`
               : `$${next.monthlyUsd} a month`,
         }
       : null;
@@ -165,7 +167,7 @@ export function upgradeOffer(
           extra: null,
           title:
             via === "trial"
-              ? `Try ${to.name} free for ${TRIAL.days} days.`
+              ? `Try ${to.name} free for ${ctx.trialDays ?? TRIAL.days} days.`
               : `Upgrade to ${to.name}.`,
           body: `${auto ? "Waggle answers the regular questions on its own" : "More room for Waggle"}: ${n(to.accounts)} accounts and ${n(to.replies)} AI replies a month.`,
         };

@@ -16,6 +16,7 @@ import {
   type Utm,
   isCrmEvent,
   queueCrmEvent,
+  signupReferralFields,
 } from "@/lib/crm";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { crmFields } from "./fields";
@@ -56,6 +57,54 @@ async function checkFoundingFull(db: ServiceClient, row: Row): Promise<void> {
       dedupeKey: "founding_full",
     });
   }
+}
+
+/**
+ * Sign-up through a friend's link (24 Nov): the code and the referrer's business name, read at
+ * send time (the referral is claimed just after the sign-up is queued).
+ */
+async function signupReferral(
+  db: ServiceClient,
+  orgId: string | null,
+): Promise<Record<string, string>> {
+  if (!orgId) return {};
+  const { data: ref } = await db
+    .from("referrals")
+    .select("code, referrer_org_id")
+    .eq("referred_org_id", orgId)
+    .maybeSingle();
+  if (!ref) return {};
+  const { data: brand } = await db
+    .from("tenants")
+    .select("name")
+    .eq("organization_id", ref.referrer_org_id)
+    .eq("name_pending", false)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return signupReferralFields({ code: ref.code, referrerName: brand?.name ?? null });
+}
+
+/**
+ * Walter's rule for referral_rewarded: the referrer's and the friend's events for the same
+ * referral at least 30 s apart. When the other side went out less than 30 s ago, this one waits.
+ */
+async function referralGapWait(db: ServiceClient, row: Row, now: Date): Promise<Date | null> {
+  const referralId = (row.details as { referral_id?: unknown } | null)?.referral_id;
+  if (row.event !== "referral_rewarded" || typeof referralId !== "string") return null;
+  const since = new Date(now.getTime() - CRM_MIN_GAP_MS).toISOString();
+  const { data } = await db
+    .from("crm_events")
+    .select("sent_at")
+    .eq("event", "referral_rewarded")
+    .eq("status", "sent")
+    .neq("id", row.id)
+    .like("dedupe_key", `referral_rewarded:${referralId}:%`)
+    .gt("sent_at", since)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+  const sentAt = data?.[0]?.sent_at;
+  return sentAt ? new Date(new Date(sentAt).getTime() + CRM_MIN_GAP_MS) : null;
 }
 
 /** A note queued with the event (details.note = { title, body }), if any. */
@@ -104,6 +153,15 @@ export async function deliverCrmEvents(deps: {
     if (last?.sent_at && now.getTime() - new Date(last.sent_at).getTime() < CRM_MIN_GAP_MS) {
       continue;
     }
+    const gapUntil = await referralGapWait(db, row, now);
+    if (gapUntil) {
+      await db
+        .from("crm_events")
+        .update({ next_attempt_at: gapUntil.toISOString() })
+        .eq("id", row.id)
+        .eq("status", "pending");
+      continue;
+    }
     // Claim it, so two runs never send the same row.
     const { data: claimed } = await db
       .from("crm_events")
@@ -142,11 +200,14 @@ export async function deliverCrmEvents(deps: {
         const raw = (row.details as { utm?: unknown } | null)?.utm;
         const visit: Utm | null = parseUtmCookie(typeof raw === "string" ? raw : null);
         const utm = visit ? firstTouchUtm(visit, await client.contactFields(contact.email)) : {};
+        // A friend's link: its code and who sent them, always (the link is what brought them).
+        const referral =
+          row.event === "signed_up" ? await signupReferral(db, row.organization_id) : {};
         ({ contactId } = await client.upsertContact({
           email: contact.email,
           name: contact.name,
           companyName: snapshot.business || null,
-          fields: { ...crmFields(snapshot), ...(utm as Record<string, string>) },
+          fields: { ...crmFields(snapshot), ...(utm as Record<string, string>), ...referral },
         }));
         const extra = CRM_EXTRA_TAGS[row.event];
         await client.addTags(contactId, extra ? [CRM_TRIGGER_TAG, extra] : [CRM_TRIGGER_TAG]);

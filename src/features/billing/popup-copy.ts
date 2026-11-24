@@ -130,6 +130,12 @@ export interface StripBox {
   text: string;
   /** done: green (connected); now: honey (what the tap adds); open: dashed (room left). */
   tone: "done" | "now" | "open";
+  /**
+   * The picture on top of the box (Walter's spec, 24 Nov): a platform's real logo, the bee for
+   * Worker Bee, else a plain ✓ (done) or + (now, open).
+   */
+  platform?: string | null;
+  bee?: boolean;
 }
 
 export interface Tick {
@@ -154,6 +160,9 @@ export interface PopupContent {
   closable: boolean;
   /** After Stripe's return: "You're on Solo. Free until November 30." */
   success: string;
+  /** The success moment (24 Nov): "Solo" and "$49 a month" (founding price when it applies). */
+  planName: string;
+  price: string;
 }
 
 export interface PopupInput {
@@ -161,6 +170,8 @@ export interface PopupInput {
   plans: Record<PlanId, Plan>;
   /** The organization's first paid plan starts with the trial. */
   trial: boolean;
+  /** How long: 7 days, or 30 with the Black Friday or referral month (23 Nov). */
+  trialDays?: number;
   /** The founding offer applies (first paid plan, spots left: BillingHost, as Your plan and checkout do). */
   founding?: boolean;
   facts: PopupFacts;
@@ -191,19 +202,23 @@ export function payWords(
   trial: boolean,
   now: Date,
   founding = false,
-): { note: string; cardLabel: string; success: string } {
-  const end = trialEndLabel(now);
+  trialDays: number = TRIAL.days,
+): { note: string; cardLabel: string; success: string; price: string } {
+  const end = trialEndLabel(now, trialDays);
   const offer = founding && plan.id === FOUNDING.plan;
   const price = offer
     ? `$${n(FOUNDING.monthlyUsd)} a month (founding price, locked for ${n(FOUNDING.months)} months)`
     : `$${n(plan.monthlyUsd)} a month`;
+  const perMonth = `$${n(offer ? FOUNDING.monthlyUsd : plan.monthlyUsd)} a month`;
   return trial
     ? {
+        price: perMonth,
         note: `Add a card, pay $0 today. Then ${price} from ${end}. Cancel before then and you pay nothing.`,
         cardLabel: "Start free with a card",
         success: `You’re on ${plan.name}. Free until ${end}.`,
       }
     : {
+        price: perMonth,
         note: offer
           ? `Pay $${n(FOUNDING.monthlyUsd)} today, then every month (founding price, locked for ${n(FOUNDING.months)} months). Cancel any time and you go back to ${free.name}.`
           : `Pay $${n(plan.monthlyUsd)} today, then every month. Cancel any time and you go back to ${free.name}.`,
@@ -303,13 +318,15 @@ export function andList(items: string[]): string {
 /** Pure: everything the pop-up says, for one version with what's known. */
 export function popupContent(input: PopupInput): PopupContent {
   const { version, plans, trial, founding = false, facts, now } = input;
+  const trialDays = input.trialDays ?? TRIAL.days;
   const free = plans.free;
   const solo = plans.solo;
   const planId = offeredBy(version);
   const plan = plans[planId];
-  const pay = payWords(plan, free, trial, now, founding);
+  const pay = payWords(plan, free, trial, now, founding, trialDays);
   const used = facts.connected.length > 0 ? facts.connected.length : null;
-  const first = facts.connected[0] ? label(facts.connected[0]) : null;
+  const firstId = facts.connected[0];
+  const first = firstId ? label(firstId) : null;
   const scan = facts.scan;
   const scanOn = scan ? label(scan.platform) : null;
   const pain = facts.pain;
@@ -321,6 +338,8 @@ export function popupContent(input: PopupInput): PopupContent {
     note: pay.note,
     cardLabel: pay.cardLabel,
     success: pay.success,
+    planName: plan.name,
+    price: pay.price,
     keep: keepFree,
     closable: true,
   };
@@ -335,8 +354,8 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: first ?? "Your account", text: "Connected", tone: "done" },
-          { title: adding ?? "+", text: "Adding now", tone: "now" },
+          { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
+          { title: adding ?? "+", text: "Adding now", tone: "now", platform: version.platform },
           ...(open > 0
             ? [{ title: `+ ${n(open)} more`, text: "open", tone: "open" as const }]
             : []),
@@ -362,8 +381,13 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: names[0]!, text: "Picked", tone: "done" },
-          { title: andList(names.slice(1)), text: "Adding now", tone: "now" },
+          { title: names[0]!, text: "Picked", tone: "done", platform: version.picked[0] },
+          {
+            title: andList(names.slice(1)),
+            text: "Adding now",
+            tone: "now",
+            platform: version.picked[1],
+          },
           ...(open > 0
             ? [{ title: `+ ${n(open)} more`, text: "open", tone: "open" as const }]
             : []),
@@ -401,7 +425,7 @@ export function popupContent(input: PopupInput): PopupContent {
         ...base,
         strip: [
           { title: "You", text: "approve each reply", tone: "done" },
-          { title: "Worker Bee", text: "Turning on", tone: "now" },
+          { title: "Worker Bee", text: "Turning on", tone: "now", bee: true },
           { title: "Asks you", text: "when unsure", tone: "open" },
         ],
         headline: `Turn on Worker Bee with ${solo.name}`,
@@ -481,7 +505,12 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: name ?? "Your account", text: "Disconnected", tone: "done" },
+          {
+            title: name ?? "Your account",
+            text: "Disconnected",
+            tone: "done",
+            platform: version.platform,
+          },
           { title: "Reconnect", text: `with ${solo.name}`, tone: "now" },
           ...(open > 0
             ? [{ title: `+ ${n(open)} more`, text: "open", tone: "open" as const }]
@@ -553,18 +582,19 @@ export function popupContent(input: PopupInput): PopupContent {
         return {
           ...base,
           strip: [
-            { title: first ?? "Your account", text: "Connected", tone: "done" },
+            { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
             {
               title: "Worker Bee",
-              text: trial ? `${TRIAL.days} days free` : `on ${solo.name}`,
+              text: trial ? `${trialDays} days free` : `on ${solo.name}`,
               tone: "now",
+              bee: true,
             },
             ...(extra > 0
               ? [{ title: `+ ${n(extra)}`, text: "accounts", tone: "open" as const }]
               : []),
           ],
           headline: trial
-            ? `Try ${solo.name} free for ${TRIAL.days} days`
+            ? `Try ${solo.name} free for ${trialDays} days`
             : `Let Worker Bee answer with ${solo.name}`,
           sub: "Worker Bee answers for you. You still decide what it can say.",
           honey:
@@ -604,11 +634,11 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: first ?? "Your account", text: "Connected", tone: "done" },
+          { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
           ...(sent > 0
             ? [{ title: plural(sent, "reply", "replies"), text: "sent", tone: "done" as const }]
             : []),
-          { title: "Worker Bee", text: "Next", tone: "now" },
+          { title: "Worker Bee", text: "Next", tone: "now", bee: true },
         ],
         headline: "You’re set up. Want Worker Bee to take it from here?",
         sub: `On ${free.name} you approve every reply. ${solo.name} answers for you, day and night.`,

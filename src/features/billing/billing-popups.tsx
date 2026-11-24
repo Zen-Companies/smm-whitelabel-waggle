@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PlanBees, RestingBee } from "@/components/app/bee-plan";
 import { Button } from "@/components/ui/button";
-import type { ConversionTagProps } from "@/features/ad-tracking/client";
+import type { CheckoutSuccess } from "./popup-actions";
 import { NUDGE_EVERY_DAYS, nudgeDue, popupFor, STORAGE, type Popup } from "./banners";
 import { recordPlanNotice } from "./notice-actions";
 import { UpgradeDialog, WelcomeDialog, type OfferOrg } from "./offer-dialogs";
@@ -204,7 +204,7 @@ export function BillingPopups({
   // Stripe's return: asked once per session id.
   const [confirmed, setConfirmed] = useState<{
     id: string;
-    result: { tag: ConversionTagProps | null } | null;
+    result: CheckoutSuccess | null;
   } | null>(null);
   useEffect(() => {
     if (checkout !== "done" || !sessionId || confirmed?.id === sessionId) return;
@@ -253,6 +253,7 @@ export function BillingPopups({
       version,
       plans: org.plans,
       trial: org.trial,
+      trialDays: org.trialDays,
       founding: org.founding,
       facts: known,
       now: new Date(),
@@ -315,7 +316,10 @@ export function BillingPopups({
       )}
       {!free && popup?.kind === "welcome" && (
         <WelcomeDialog
-          content={welcomeFor(org.current, org.plans, { trial: org.trial })}
+          content={welcomeFor(org.current, org.plans, {
+            trial: org.trial,
+            trialDays: org.trialDays,
+          })}
           org={org}
           onClose={close}
         />
@@ -328,6 +332,7 @@ export function BillingPopups({
 function OutBanner({ org, out, onOpen }: { org: OfferOrg; out: OutOfReplies; onOpen: () => void }) {
   const offer = upgradeOffer(org.current, "out", org.plans, {
     trial: org.trial,
+    trialDays: org.trialDays,
     resetsOn: out.resetsOn,
   });
   const label =
@@ -400,7 +405,7 @@ function SoloNudge({
             Let Waggle answer on its own
             {org.trial && (
               <span className="bg-honey text-ink rounded-full px-2 py-0.5 font-sans text-[11px] font-bold tracking-wide uppercase">
-                {TRIAL.days} days free
+                {org.trialDays ?? TRIAL.days} days free
               </span>
             )}
           </p>

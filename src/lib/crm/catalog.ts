@@ -24,6 +24,8 @@ export const CRM_EVENTS = {
   usage_100: "AI replies reach 100%",
   account_limit: "A connect is blocked: the plan's accounts are all in use",
   founding_full: "The 50th founding spot is taken",
+  referral_rewarded:
+    "Give a month, get a month (24 Nov): this person's free month was applied in Stripe. The friend at their checkout (the 30-day trial starts), the referrer when the credit lands after the friend's first payment (or banked months start their first trial). Once per person per referral",
 } as const;
 
 export type CrmEvent = keyof typeof CRM_EVENTS;
@@ -58,6 +60,10 @@ export const CRM_FIELDS = [
   "waggle_reply_limit",
   "waggle_resets_on",
   "waggle_business",
+  // Walter's GHL referral campaign (24 Nov): filled on referral_rewarded, blank otherwise.
+  "waggle_referral_role",
+  "waggle_referral_with",
+  "waggle_referral_ends",
 ] as const;
 export type CrmField = (typeof CRM_FIELDS)[number];
 
