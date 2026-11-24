@@ -6,7 +6,7 @@ import { Switch } from "@/components/app/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { updatePlanSettings, type PlanSettingsState } from "./actions";
-import { EXTRAS, FOUNDING, PLAN_IDS, type Plan, type PlanId } from "./plans";
+import { EXTRAS, PLAN_IDS, isCustomPrice, type Plan, type PlanId } from "./plans";
 
 const IDS: PlanId[] = PLAN_IDS;
 
@@ -46,7 +46,7 @@ function FormSwitch({ name, initial, label }: { name: string; initial: boolean; 
 
 function priceLine(id: PlanId, plan: Plan): string {
   if (id === "free") return "Free, no card";
-  if (id === "team") return "By call";
+  if (isCustomPrice(id)) return "Custom price, set on a call";
   return `$${plan.monthlyUsd} a month`;
 }
 
@@ -106,7 +106,7 @@ export function PlanSettingsForm({
           <div />
           {IDS.map((id) => {
             const plan = plans[id];
-            const onSale = id === "free" || plan.forSale;
+            const onSale = id === "free" || (plan.forSale && !isCustomPrice(id));
             return (
               <div key={id} className="flex flex-col gap-1 px-4 py-4">
                 <b className="font-display text-lg font-semibold">{plan.name}</b>
@@ -121,17 +121,12 @@ export function PlanSettingsForm({
                   >
                     {id === "free"
                       ? "Always on"
-                      : plan.forSale
-                        ? "On sale"
-                        : id === "team"
-                          ? "By call only"
+                      : isCustomPrice(id)
+                        ? "By call only"
+                        : plan.forSale
+                          ? "On sale"
                           : "Not on sale"}
                   </span>
-                  {id === FOUNDING.plan && (
-                    <span className="bg-honey-tint text-honey-text rounded-full px-2 py-0.5 text-xs font-semibold">
-                      Founding ${FOUNDING.monthlyUsd}
-                    </span>
-                  )}
                 </span>
               </div>
             );
@@ -162,20 +157,23 @@ export function PlanSettingsForm({
           ))}
 
           <div className={group}>Selling</div>
-          {row("On sale", "Off hides it from owners", (id) =>
-            id === "free" ? (
-              // Free is always there: it's where every new owner starts.
-              <>
-                <input type="hidden" name="free.forSale" value="on" />
-                <span className="meta">Always</span>
-              </>
-            ) : (
-              <FormSwitch
-                name={`${id}.forSale`}
-                initial={plans[id].forSale}
-                label={`${plans[id].name}: on sale`}
-              />
-            ),
+          {row(
+            "On sale",
+            "Off hides it from owners. Business is never a checkout: Talk to us",
+            (id) =>
+              id === "free" ? (
+                // Free is always there: it's where every new owner starts.
+                <>
+                  <input type="hidden" name="free.forSale" value="on" />
+                  <span className="meta">Always</span>
+                </>
+              ) : (
+                <FormSwitch
+                  name={`${id}.forSale`}
+                  initial={plans[id].forSale}
+                  label={`${plans[id].name}: on sale`}
+                />
+              ),
           )}
         </div>
       </div>

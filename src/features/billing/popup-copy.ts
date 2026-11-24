@@ -1,5 +1,5 @@
 import { platformLabel } from "@/lib/social/platforms";
-import { FOUNDING, TRIAL, type PaidPlanId, type Plan, type PlanId } from "./plans";
+import { TRIAL, type PaidPlanId, type Plan, type PlanId } from "./plans";
 import type { ReplyPain } from "./reply-pain";
 import type { OfferReason } from "./upgrade";
 
@@ -160,7 +160,7 @@ export interface PopupContent {
   closable: boolean;
   /** After Stripe's return: "You're on Solo. Free until November 30." */
   success: string;
-  /** The success moment (24 Nov): "Solo" and "$49 a month" (founding price when it applies). */
+  /** The success moment (24 Nov): "Solo" and "$49 a month". */
   planName: string;
   price: string;
 }
@@ -170,10 +170,8 @@ export interface PopupInput {
   plans: Record<PlanId, Plan>;
   /** The organization's first paid plan starts with the trial. */
   trial: boolean;
-  /** How long: 7 days, or 30 with the Black Friday or referral month (23 Nov). */
+  /** How long: the first month (30 days), more with banked referral months. */
   trialDays?: number;
-  /** The founding offer applies (first paid plan, spots left: BillingHost, as Your plan and checkout do). */
-  founding?: boolean;
   facts: PopupFacts;
   now: Date;
 }
@@ -194,22 +192,17 @@ export function trialEndLabel(now: Date, days: number = TRIAL.days): string {
 /** Pure: the plan a version offers (Team features go straight to Team). */
 export const offeredBy = (v: PopupVersion): PaidPlanId => (v.v === "team" ? "business" : "solo");
 
-/** Pure: the "$0 today" note and the success line. With the founding offer (the pricing bible:
- * first 50 businesses, Team at $79 locked for 6 months) the founding plan's note uses that price. */
+/** Pure: the "$0 today" note and the success line. */
 export function payWords(
   plan: Plan,
   free: Plan,
   trial: boolean,
   now: Date,
-  founding = false,
   trialDays: number = TRIAL.days,
 ): { note: string; cardLabel: string; success: string; price: string } {
   const end = trialEndLabel(now, trialDays);
-  const offer = founding && plan.id === FOUNDING.plan;
-  const price = offer
-    ? `$${n(FOUNDING.monthlyUsd)} a month (founding price, locked for ${n(FOUNDING.months)} months)`
-    : `$${n(plan.monthlyUsd)} a month`;
-  const perMonth = `$${n(offer ? FOUNDING.monthlyUsd : plan.monthlyUsd)} a month`;
+  const price = `$${n(plan.monthlyUsd)} a month`;
+  const perMonth = price;
   return trial
     ? {
         price: perMonth,
@@ -219,9 +212,7 @@ export function payWords(
       }
     : {
         price: perMonth,
-        note: offer
-          ? `Pay $${n(FOUNDING.monthlyUsd)} today, then every month (founding price, locked for ${n(FOUNDING.months)} months). Cancel any time and you go back to ${free.name}.`
-          : `Pay $${n(plan.monthlyUsd)} today, then every month. Cancel any time and you go back to ${free.name}.`,
+        note: `Pay $${n(plan.monthlyUsd)} today, then every month. Cancel any time and you go back to ${free.name}.`,
         cardLabel: "Pay with a card",
         success: `You’re on ${plan.name}.`,
       };
@@ -317,13 +308,13 @@ export function andList(items: string[]): string {
 
 /** Pure: everything the pop-up says, for one version with what's known. */
 export function popupContent(input: PopupInput): PopupContent {
-  const { version, plans, trial, founding = false, facts, now } = input;
+  const { version, plans, trial, facts, now } = input;
   const trialDays = input.trialDays ?? TRIAL.days;
   const free = plans.free;
   const solo = plans.solo;
   const planId = offeredBy(version);
   const plan = plans[planId];
-  const pay = payWords(plan, free, trial, now, founding, trialDays);
+  const pay = payWords(plan, free, trial, now, trialDays);
   const used = facts.connected.length > 0 ? facts.connected.length : null;
   const firstId = facts.connected[0];
   const first = firstId ? label(firstId) : null;

@@ -136,6 +136,7 @@ function toValues(f: PromotionFields): Values {
     ...f,
     starts_at: wall(f.starts_at),
     ends_at: wall(f.ends_at),
+    // Kept in the table, never shown or edited (24 Nov: no countdown, no last-day face).
     last_day_starts_at: wall(f.last_day_starts_at),
     trial_days: String(f.trial_days),
     reward_months: String(f.reward_months),
@@ -192,13 +193,11 @@ function PassPreview({
   dayName,
   headline,
   small,
-  chip,
   trialDays,
 }: {
   dayName: [string, string];
   headline: string;
   small: string;
-  chip: string | null;
   trialDays: string;
 }) {
   const [lead, honey] = splitLastWord(headline);
@@ -210,11 +209,6 @@ function PassPreview({
           <span className="promo-outline block">{dayName[1] || "Name"}</span>
         </span>
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {chip && (
-            <span className="bg-honey text-ink self-start rounded-full px-[9px] py-[3px] text-[10.5px] font-bold tracking-[1px] uppercase">
-              {chip}
-            </span>
-          )}
           <b className="font-display text-[20px] leading-[1.2] font-bold">
             {lead}
             <span className="text-honey">{honey}</span>
@@ -249,12 +243,11 @@ export function PromotionEditForm({
     {},
   );
   const [v, setV] = useState<Values>(() => toValues(initial));
-  const [face, setFace] = useState<"main" | "last">("main");
   const set =
     <K extends keyof Values>(k: K) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setV((o) => ({ ...o, [k]: e.target.value }));
-  const flip = (k: "countdown" | "bar_enabled") => () => setV((o) => ({ ...o, [k]: !o[k] }));
+  const flip = (k: "bar_enabled") => () => setV((o) => ({ ...o, [k]: !o[k] }));
 
   const text = (k: keyof Values, max: number, placeholder?: string) => (
     <Input
@@ -275,7 +268,7 @@ export function PromotionEditForm({
       className="field min-h-20 py-2.5"
     />
   );
-  const date = (k: "starts_at" | "ends_at" | "last_day_starts_at") => (
+  const date = (k: "starts_at" | "ends_at") => (
     <Input
       type="datetime-local"
       step={1}
@@ -285,7 +278,7 @@ export function PromotionEditForm({
       className="tabular-nums"
     />
   );
-  const sw = (k: "countdown" | "bar_enabled", label: string) => (
+  const sw = (k: "bar_enabled", label: string) => (
     <span className="flex items-center gap-2 text-sm font-medium">
       {v[k] && <input type="hidden" name={k} value="on" />}
       <Switch type="button" on={v[k]} label={label} onClick={flip(k)} />
@@ -293,9 +286,6 @@ export function PromotionEditForm({
     </span>
   );
 
-  const last = face === "last" && !!v.last_day_starts_at;
-  const endsAt = v.ends_at ? wallToUtc(v.ends_at) : null;
-  const chip = v.countdown && endsAt ? "Ends in N days" : null;
   const group = "border-line flex flex-col gap-4 border-t px-5 py-5";
   const head = "meta text-xs font-semibold tracking-wide uppercase";
   const seasonal = v.kind === "seasonal";
@@ -313,7 +303,10 @@ export function PromotionEditForm({
               <Field label="Starts (US Eastern)" hint={zones(v.starts_at)}>
                 {date("starts_at")}
               </Field>
-              <Field label="Ends (US Eastern)" hint={zones(v.ends_at)}>
+              <Field
+                label="Ends (US Eastern)"
+                hint={`${zones(v.ends_at)} Only switches it off: owners never see the date.`}
+              >
                 {date("ends_at")}
               </Field>
             </div>
@@ -327,11 +320,7 @@ export function PromotionEditForm({
                   className="w-24 tabular-nums"
                 />
               </Field>
-              {seasonal ? (
-                <span className="flex items-end pb-2">
-                  {sw("countdown", "Show “Ends in N days”")}
-                </span>
-              ) : (
+              {!seasonal && (
                 <Field
                   label="Reward months"
                   hint="Months off for the friend who shared the link, after the new friend's first payment. 0 pauses rewards."
@@ -409,77 +398,30 @@ export function PromotionEditForm({
               {text("subline", 160)}
             </Field>
           </div>
-
-          <div className={group}>
-            <span className={head}>Last day (optional)</span>
-            <Field
-              label="Last day starts (US Eastern)"
-              hint={
-                v.last_day_starts_at
-                  ? zones(v.last_day_starts_at)
-                  : "Empty: no last-day face. Set it for a Cyber Monday style last day."
-              }
-            >
-              {date("last_day_starts_at")}
-            </Field>
-            <Field label="Bar label">{text("last_bar_label", 40, "Cyber Monday")}</Field>
-            <Field label="Bar lines (computer)">{area("last_bar_text", 400)}</Field>
-            <Field label="Bar lines (phone)">{area("last_bar_phone_text", 200, 2)}</Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Day name, first line">{text("last_day_name_1", 20, "Cyber")}</Field>
-              <Field label="Day name, second line">{text("last_day_name_2", 20, "Monday")}</Field>
-            </div>
-            <Field label="Headline">{text("last_headline", 80)}</Field>
-            <Field label="Small line">{text("last_subline", 160)}</Field>
-          </div>
         </div>
 
         <aside className="border-line bg-subtle flex flex-col gap-4 border-t px-5 py-5 lg:border-t-0 lg:border-l">
           <div className="flex flex-col gap-4 lg:sticky lg:top-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className={head}>Preview</span>
-              {v.last_day_starts_at && (
-                <span className="flex gap-1 text-xs">
-                  {(["main", "last"] as const).map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      onClick={() => setFace(f)}
-                      aria-pressed={face === f}
-                      className={
-                        face === f
-                          ? "bg-ink text-surface rounded-full px-2.5 py-1 font-semibold"
-                          : "text-ink-2 rounded-full px-2.5 py-1"
-                      }
-                    >
-                      {f === "main" ? "Before" : "Last day"}
-                    </button>
-                  ))}
-                </span>
-              )}
             </div>
             <span className="meta text-xs">
               Top bar, computer{v.bar_enabled ? "" : " (off: nobody sees it)"}
             </span>
-            <BarPreview
-              label={last ? v.last_bar_label : v.bar_label}
-              lines={parseBarText(last ? v.last_bar_text : v.bar_text)}
-              cta={v.bar_cta}
-            />
+            <BarPreview label={v.bar_label} lines={parseBarText(v.bar_text)} cta={v.bar_cta} />
             <span className="meta text-xs">Top bar, phone</span>
             <div className="max-w-[360px]">
               <BarPreview
-                label={last ? v.last_bar_label : v.bar_label}
-                lines={parseBarText(last ? v.last_bar_phone_text : v.bar_phone_text)}
+                label={v.bar_label}
+                lines={parseBarText(v.bar_phone_text)}
                 cta={v.bar_phone_cta}
               />
             </div>
             <span className="meta text-xs">Your plan</span>
             <PassPreview
-              dayName={last ? [v.last_day_name_1, v.last_day_name_2] : [v.day_name_1, v.day_name_2]}
-              headline={last ? v.last_headline : v.headline}
-              small={(last ? v.last_subline : v.subline).replace("{name}", "Harbour Bean Café")}
-              chip={last && chip ? "Ends tonight" : chip}
+              dayName={[v.day_name_1, v.day_name_2]}
+              headline={v.headline}
+              small={v.subline.replace("{name}", "Harbour Bean Café")}
               trialDays={v.trial_days}
             />
           </div>

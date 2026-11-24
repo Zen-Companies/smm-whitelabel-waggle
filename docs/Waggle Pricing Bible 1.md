@@ -1,17 +1,18 @@
-# 
+# Waggle Pricing Bible
 
-Nov 16, 2026 · updated Nov 18, 2026 (plan contents agreed by Jason; names changed, Business on sale) · @Someone
+Nov 16, 2026 · updated Nov 18, 2026 · **FINAL 24 Nov 2026 (Jason)** · source of truth: https://claude.ai/artifact/WToFy5MjGxDEVqA4fYN5Kk (Jason) · app changes: `docs/plans/pricing-bible-24nov.md`
 
-Waggle sells three plans: **Solo at $49 a month**, **Team at $99 a month** and **Business at $199 a month**, each after a **7-day free trial with a card**, starting at sign-up. The names changed on 17 November (Jason): the $99 plan is now Team and the $199 plan is Business, at the same prices. This page is the one source of truth for every ad, caption, page and sales conversation. Only Jason changes a price.
+**24 November (final):** Waggle has four plans: **Free** ($0, no card), **Solo at $49 a month**, **Team at $99 a month** and **Business, a custom price set on a call** (no checkout). Solo and Team start with **the first month free, with a card** (billed after; it stays on the paid plan), every day, not only on Black Friday. Owners get **a reminder email 3 days before the first charge**, and the app shows the billing date ("First charge: December 24 ($49)"). **Give a month, get a month:** a friend who picks Solo or Team with a card gets the first month free; the referrer gets a month after the friend's first real payment. The offer runs as Black Friday, then every day until about 1,000 subscribers; **never say it ends on a date.** Retired: the 7-day trial, the founding Team price ($79 for the first 50, 0 redemptions) and the $199 Business checkout. Not public until Febron confirms it is live. This page is the one source of truth for every ad, caption, page and sales conversation. Only Jason changes a price.
 
 |   |   |   |   |   |   |   |
 |---|---|---|---|---|---|---|
-|Plan|Price|Businesses (brands)|People|Accounts included|AI (artificial intelligence) replies a month|Status|
-|Solo|$49 a month|1|Just you|3, then $10 each|About 200|Selling now|
-|Team|$99 a month|Unlimited|Unlimited|4, then $10 each|About 750|Selling now, the plan to promote|
-|Business|$199 a month|Unlimited|Unlimited|10, then $10 each|About 1,500|Selling now from launch, monthly only (no yearly price yet)|
+|Plan|Price|Businesses (brands)|People|Accounts included|AI (artificial intelligence) replies a month|How you get it|
+|Free|$0, no card|1|Just you|1, no add-ons|100, you approve every reply|Sign up|
+|Solo|$49 a month, first month free|1|Just you|3, then $10 each|About 300|Card at checkout, first month free|
+|Team|$99 a month, first month free|Unlimited|Unlimited|6, then $10 each|About 750|Card at checkout, first month free; the plan to promote|
+|Business|Custom price, set on the call|Unlimited|Unlimited|10+|About 1,500|Talk to us (Jason's booking page); no checkout|
 
-No contract on any plan. Cancel any time. Prices are in US dollars.
+No contract on any plan. Cancel any time. Prices are in US dollars. The plan tables further down keep their earlier history; where they differ, this summary (24 November) wins.
 
 ## The plans
 
@@ -59,16 +60,16 @@ Pay-per-use that our providers bill us for a business (X posts and DMs, texts, c
 
 ## Launch offers
 
-There are three launch offers. Ads and posts may promote the founding offer; the Destin seeds are offered in person only.
+Since 24 November (final). The first two run as Black Friday, then every day until about 1,000 subscribers. Never say they end on a date.
 
 |   |   |   |   |
 |---|---|---|---|
 |Offer|Terms|Who gets it|Where it can be said|
-|7-day free trial|7 days free with a card, on the first paid plan (Free → Solo or Team); Free itself needs no card (Febron, 20 November; earlier: starts at sign-up, Jason, 17 November)|Every organization that never had a paid plan|Everywhere|
-|Founding members|Team for $79 a month, locked for 6 months, then $99|The first 50 businesses to sign up|Everywhere: site, ads, captions (Jason, 16 November 2026)|
+|First month free|Solo or Team, with a card; nothing to pay for 30 days, then the plan's price. A reminder email 3 days before the first charge; the billing date shown in the app. Cancel before then and pay nothing|Every organization that never had a paid plan|Everywhere (once Febron confirms it is live)|
+|Give a month, get a month|The friend picks Solo or Team with a card: first month free. The referrer gets a month off after the friend's first real payment. Business (a call) is not part of it|Anyone with a Waggle referral link|Everywhere (once Febron confirms it is live)|
 |Destin seeds|90 days free|Up to 25 local Destin businesses, in exchange for a testimonial, a monthly 15-minute call and permission to share their results|Offered directly, not in ads|
 
-When the first 50 founding spots are gone, remove the $79 line from the site and stop using it in new posts.
+Retired on 24 November: the 7-day free trial, the founding Team price ($79 for the first 50; 0 redemptions in Stripe) and the $199 Business checkout.
 
 ## When the AI reply limit runs out
 
@@ -83,14 +84,16 @@ Only AI drafting pauses. Posting, the inbox, replying by hand, and lead and revi
 
 Quote the prices exactly as below, and never describe a plan limit as something the app already enforces.
 
-**Approved lines**
+**Approved lines** (24 November)
 
-- "Solo is $49 a month. Team is $99 a month. Try it free for 7 days."
-- "The first 50 businesses get Team for $79 a month, locked for 6 months."
+- "Solo is $49 a month. Team is $99 a month. Your first month is free."
+- "Business is a custom price. Talk to us."
+- "Give a month, get a month: send a friend your link, their first month is free, and you get a month free after their first payment."
+- "We email you before the first charge. Cancel before then and you pay nothing."
 - "No contract. Cancel any time."
 - "Review and inbox tools like Birdeye start around $299 a month. Waggle starts at $49."
 - "You never go dark. If you hit your reply limit, Waggle just stops writing for you until next month."
-- Calls to action: "Try it free for 7 days at gowaggle.ai" (sign-up open from launch, 18 November).
+- Calls to action: "Start your free month at gowaggle.ai".
 
 **Never say**
 
@@ -98,7 +101,11 @@ Quote the prices exactly as below, and never describe a plan limit as something 
 |---|---|
 |Don't say|Why|
 |$39, $79 Growth, $149 Pro, Starter or Growth plan names|The first draft of the plans, replaced on 9 November 2026|
-|"14-day trial" or "no card needed"|The trial is 7 days with a card|
+|"7-day trial", "7 days free" or "14-day trial"|Since 24 November: the first month is free, with a card|
+|"Founding members", $79 Team|Retired 24 November (0 redemptions)|
+|$199 for Business, or a Business checkout|Business is a custom price set on a call (24 November)|
+|An end date for the offer ("ends Monday", "last day", a countdown)|The offer runs until about 1,000 subscribers; never say it ends on a date (24 November)|
+|"No card needed" for Solo or Team|Only Free needs no card|
 |A platform count (14, 16 or any number)|Not settled. Say "all your platforms" or name them|
 |Follow-ups written by AI for each lead|They're the owner's own message, sent automatically when a lead goes quiet|
 |A follow-up "days later" on Instagram or Facebook|Those platforms allow it only within 24 hours of the person's last message|
@@ -136,8 +143,7 @@ Meta is the competitor to watch. Don't fight it on price; sell approval before a
 |Plan|Price|AI cost limit|Margin at 100 customer accounts|Margin at 1,000|
 |Solo|$49|$4 a month|65%|77%|
 |Team|$99|$15 a month|67%|75%|
-|Business|$199|$30 a month|65%|75%|
-|Team, founding $79|$79|$15 a month|59%|69%|
+|Business|Custom (was $199)|$30 a month|Set on the call|Set on the call|
 |Extra account|$10|None|65%|85%|
 |Reply top-up|$15|$4|68%|68%|
 
@@ -168,6 +174,7 @@ Updated 18 November 2026. Billing is built but not switched on: no one is charge
 |   |   |   |
 |---|---|---|
 |Date|Change|Decided by|
+|24 November 2026 (FINAL)|Free $0 (1 account, 100 replies, approve-first, no add-ons, no card); Solo $49 (3 accounts, ~300 replies) and Team $99 (6 accounts, ~750 replies) with the first month free, card required, billed after, every day; Business a custom price by call (10+ accounts, ~1,500 replies), no checkout. Reminder before the first charge and the billing date in the app. Give a month, get a month (friend on Solo or Team). Runs as Black Friday, then every day until about 1,000 subscribers; never say it ends on a date. Retired: 7-day trial, founding $79 (0 redemptions), $199 Business checkout. Extras unchanged. Not public until Febron confirms live|Jason|
 |20 November 2026 (Walter's flow)|The trial is back: 7 days free with a card when a Free organization picks its first paid plan (Solo or Team); never again after a paid plan or a trial. Prices also shown per day on Your plan and the upgrade pop-ups ("about $1.61 a day": monthly × 12 ÷ 365, yearly ÷ 365; none for Business, priced on a call)|Febron (from Walter's demo; per-day is marketing framing of the same prices, no Jason check needed)|
 |18 November 2026 (evening)|Usage at cost: pay-per-use on the owner's invoice at cost, no markup, no limit, same billing cycle; trial follows the chosen plan. Every Zernio platform can be offered (Staff → Platforms), naming Zernio before a sign-in that shows it; Creators stays held|Febron (Jason and Walter to confirm)|
 |18 November 2026 (later)|Names: the $99 plan is shown as Team and the $199 plan as Business (ids unchanged); Business on sale from launch, monthly only; founding $79 stays on the $99 plan (Team); the trial starts at sign-up; ads say "Try it free for 7 days at gowaggle.ai". Jason's own copy of this bible was updated the same day and is the final word if they differ|Jason (via Atlas and Febron)|

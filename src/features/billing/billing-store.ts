@@ -7,9 +7,10 @@ import { monthStart } from "@/lib/llm/spend";
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { EXTRAS } from "./plans";
-import { earnsReferralReward } from "./referral-code";
+import { earnsReferralReward, referralPlanQualifies } from "./referral-code";
 import { markBankedUsed, markReferralRewardDue, queueReferralMonthsApplied } from "./referrals";
 import { billingFromSubscription, carriedReplies, planIsLive } from "./subscription";
+import { queueTrialReminder } from "./trial-reminder-send";
 
 // The organization's bill as Waggle stores it (org_billing, reply_top_ups), and the Stripe events
 // that keep it current. Database only: no calls to Stripe here.
@@ -213,6 +214,16 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
           }),
         );
       }
+      // Reminder before the first charge (Pricing Bible, 24 Nov): Stripe sends this 3 days before
+      // the trial ends. Stored only; the jobs route emails the Owner(s), once per subscription.
+      if (event.type === "customer.subscription.trial_will_end") {
+        const queued = await queueTrialReminder(db, orgId, sub);
+        if (queued) {
+          await auditOrg(db, orgId, "billing.trial_reminder_queued", "system", {
+            subscription: sub.id,
+          });
+        }
+      }
       if (before?.plan !== row.plan || before?.status !== row.status) {
         await auditOrg(db, orgId, "billing.subscription", "system", {
           plan: row.plan,
@@ -270,7 +281,11 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
       // month. Database only; the jobs route credits it.
       if (earnsReferralReward(inv)) {
         const payer = await orgForCustomer(db, undefined, customerId(inv.customer) ?? "");
-        return (payer && (await markReferralRewardDue(db, payer))) || "ignored";
+        if (!payer) return "ignored";
+        // The friend must be on Solo or Team (24 Nov): Business is set up on a call, not a referral.
+        const bill = await loadBilling(db, payer);
+        if (!referralPlanQualifies(bill?.plan)) return "ignored: plan not in the referral offer";
+        return (await markReferralRewardDue(db, payer)) || "ignored";
       }
       if (kind !== "auto_top_up" && kind !== "top_up_now") return "ignored";
       const orgId =

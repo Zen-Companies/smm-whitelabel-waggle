@@ -22,7 +22,8 @@ export function rowToPromotion(r: PromotionRow): Promotion {
   const audience: BarAudience = (BAR_AUDIENCES as readonly string[]).includes(r.audience)
     ? (r.audience as BarAudience)
     : "never_paid_owners";
-  const lastDayStarts = date(r.last_day_starts_at);
+  // countdown and the last-day columns stay in the table but are never shown (24 Nov: the app
+  // never states an end date).
   return {
     id: r.id,
     name: r.name,
@@ -31,7 +32,6 @@ export function rowToPromotion(r: PromotionRow): Promotion {
     startsAt: date(r.starts_at),
     endsAt: date(r.ends_at),
     trialDays: r.trial_days,
-    countdown: r.countdown,
     rewardMonths: r.reward_months,
     bar: {
       enabled: r.bar_enabled,
@@ -50,24 +50,10 @@ export function rowToPromotion(r: PromotionRow): Promotion {
       headline: r.headline,
       small: r.subline,
     },
-    lastDay: lastDayStarts
-      ? {
-          startsAt: lastDayStarts,
-          bar: {
-            label: r.last_bar_label,
-            lines: parseBarText(r.last_bar_text),
-            phoneLines: parseBarText(r.last_bar_phone_text),
-            cta: r.bar_cta,
-            phoneCta: r.bar_phone_cta,
-          },
-          pass: {
-            dayName: [r.last_day_name_1, r.last_day_name_2],
-            headline: r.last_headline,
-            small: r.last_subline,
-          },
-        }
-      : null,
   };
+}
+
+/** What staff edit  };
 }
 
 /** What staff edit: every column but the bookkeeping ones. */
@@ -94,7 +80,7 @@ export function promotionToFields(p: Promotion): PromotionFields {
     starts_at: iso(p.startsAt),
     ends_at: iso(p.endsAt),
     trial_days: p.trialDays,
-    countdown: p.countdown,
+    countdown: false,
     reward_months: p.rewardMonths,
     bar_enabled: p.bar.enabled,
     audience: p.bar.audience,
@@ -108,14 +94,14 @@ export function promotionToFields(p: Promotion): PromotionFields {
     day_name_2: p.pass.dayName[1],
     headline: p.pass.headline,
     subline: p.pass.small,
-    last_day_starts_at: iso(p.lastDay?.startsAt ?? null),
-    last_bar_label: p.lastDay?.bar.label ?? "",
-    last_bar_text: p.lastDay ? barTextOf(p.lastDay.bar.lines) : "",
-    last_bar_phone_text: p.lastDay ? barTextOf(p.lastDay.bar.phoneLines) : "",
-    last_day_name_1: p.lastDay?.pass.dayName[0] ?? "",
-    last_day_name_2: p.lastDay?.pass.dayName[1] ?? "",
-    last_headline: p.lastDay?.pass.headline ?? "",
-    last_subline: p.lastDay?.pass.small ?? "",
+    last_day_starts_at: null,
+    last_bar_label: "",
+    last_bar_text: "",
+    last_bar_phone_text: "",
+    last_day_name_1: "",
+    last_day_name_2: "",
+    last_headline: "",
+    last_subline: "",
   };
 }
 
@@ -130,7 +116,7 @@ export function newPromotionFields(kind: PromotionKind, id: string, name: string
     starts_at: null,
     ends_at: null,
     trial_days: 30,
-    countdown: seasonal,
+    countdown: false,
     reward_months: 1,
     bar_enabled: false,
     audience: seasonal ? "never_paid_owners" : "all_owners",
@@ -266,7 +252,6 @@ export const promotionFormSchema = z
     starts_at: when("Starts"),
     ends_at: when("Ends"),
     trial_days: whole(1, 90, "Trial days"),
-    countdown: on,
     reward_months: whole(0, 12, "Reward months"),
     bar_enabled: on,
     audience: z.enum(["never_paid_owners", "all_owners", "everyone"], {
@@ -288,27 +273,10 @@ export const promotionFormSchema = z
     day_name_2: text(20, "Day name, second line"),
     headline: text(80, "Headline"),
     subline: text(160, "Small line"),
-    last_day_starts_at: when("Last day starts"),
-    last_bar_label: text(40, "Last day bar label"),
-    last_bar_text: lines(400, "Last day bar lines"),
-    last_bar_phone_text: lines(200, "Last day phone lines"),
-    last_day_name_1: text(20, "Last day name, first line"),
-    last_day_name_2: text(20, "Last day name, second line"),
-    last_headline: text(80, "Last day headline"),
-    last_subline: text(160, "Last day small line"),
   })
   .superRefine((v, ctx) => {
     if (v.starts_at && v.ends_at && Date.parse(v.ends_at) <= Date.parse(v.starts_at)) {
       ctx.addIssue({ code: "custom", message: "Ends: must be after it starts." });
-    }
-    if (v.last_day_starts_at) {
-      const t = Date.parse(v.last_day_starts_at);
-      if (v.ends_at && t >= Date.parse(v.ends_at)) {
-        ctx.addIssue({ code: "custom", message: "Last day starts: must be before it ends." });
-      }
-      if (v.starts_at && t < Date.parse(v.starts_at)) {
-        ctx.addIssue({ code: "custom", message: "Last day starts: must be after it starts." });
-      }
     }
     if (v.bar_enabled && !v.bar_text) {
       ctx.addIssue({
@@ -335,7 +303,7 @@ export function parsePromotionForm(
 }
 
 /** The date fields: compared as instants ("…+00:00" from the table = "….000Z" from the form). */
-const DATE_FIELDS = new Set(["starts_at", "ends_at", "last_day_starts_at"]);
+const DATE_FIELDS = new Set(["starts_at", "ends_at"]);
 
 function sameValue(key: string, a: unknown, b: unknown): boolean {
   if (DATE_FIELDS.has(key) && typeof a === "string" && typeof b === "string") {

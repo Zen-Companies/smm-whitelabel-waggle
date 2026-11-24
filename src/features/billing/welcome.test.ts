@@ -5,13 +5,13 @@ import { welcomeFor } from "./welcome";
 const trial = { trial: true };
 
 describe("welcomeFor (Walter's flow, 20 Nov)", () => {
-  it("Free sells Solo, auto-reply first, 7 days free with the price a day", () => {
+  it("Free sells Solo, auto-reply first, first month free with the price a day", () => {
     const w = welcomeFor("free", PLANS, trial);
     expect(w.title).toBe("Let Waggle answer on its own");
-    expect(w.eyebrow).toBe("Solo · 7 days free");
+    expect(w.eyebrow).toBe("Solo · first month free");
     expect(w.offer?.next).toBe("solo");
-    expect(w.offer?.cta).toBe("Start 7 days free");
-    expect(w.offer?.day).toEqual({ amount: "$1.61", of: "$49 a month after 7 days free" });
+    expect(w.offer?.cta).toBe("Start your free month");
+    expect(w.offer?.day).toEqual({ amount: "$1.61", of: "$49 a month after your free month" });
     expect(w.perks[0].key).toBe("autoReply");
     expect(w.perks.map((p) => p.title)).toEqual([
       "Auto-reply",
@@ -41,9 +41,10 @@ describe("welcomeFor (Walter's flow, 20 Nov)", () => {
     const w = welcomeFor("business");
     expect(w.title).toBe("Run socials for your clients");
     expect(w.offer?.via).toBe("call");
-    expect(w.offer?.cta).toBe("Book a call");
+    expect(w.eyebrow).toBe("Business · custom price");
+    expect(w.offer?.cta).toBe("Talk to us");
     expect(w.offer?.day).toBeNull();
-    expect(w.perks[0].title).toBe("10+ accounts, 1,500 AI replies");
+    expect(w.perks[0].title).toBe("10+ accounts, about 1,500 AI replies");
     expect(w.team).toBe("note");
   });
 

@@ -8,7 +8,6 @@ const base: CrmSnapshot = {
   details: {},
   business: "Harbour Bean Café",
   planId: "business",
-  founding: true,
   status: "trialing",
   trialEndsAt: "2026-11-25T10:00:00Z",
   periodEnd: "2026-11-25T10:00:00Z",
@@ -30,13 +29,13 @@ describe("crmPlan", () => {
 });
 
 describe("crmFields", () => {
-  it("sends every field, every time, founding as true/false", () => {
+  it("sends every field, every time, founding always false (retired 24 Nov)", () => {
     const f = crmFields(base);
     expect(Object.keys(f).sort()).toEqual([...CRM_FIELDS].sort());
     expect(f).toMatchObject({
       waggle_event: "trial_started",
       waggle_plan: "team",
-      waggle_founding: "true",
+      waggle_founding: "false",
       waggle_trial_ends: "2026-11-25",
       waggle_ends_on: "",
       waggle_accounts_connected: "2",
@@ -45,7 +44,6 @@ describe("crmFields", () => {
       waggle_resets_on: "2026-12-01",
       waggle_business: "Harbour Bean Café",
     });
-    expect(crmFields({ ...base, founding: false }).waggle_founding).toBe("false");
   });
 
   it("event details: the plan before, the platform, days inactive", () => {

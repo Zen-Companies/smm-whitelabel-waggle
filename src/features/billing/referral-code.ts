@@ -43,6 +43,15 @@ export function isNewOrg(createdAt: string | null | undefined, now: Date): boole
 }
 
 /**
+ * Pure: whether the friend's plan is part of the offer (Pricing Bible, 24 Nov): Solo or Team
+ * (ids "solo" and "business"), taken with a card at checkout. Business is a custom price set on a
+ * call, never a checkout, so it never earns the referrer a month.
+ */
+export function referralPlanQualifies(plan: string | null | undefined): boolean {
+  return plan === "solo" || plan === "business";
+}
+
+/**
  * Pure: whether a paid invoice is the friend's first real payment, the moment the referrer earns
  * the month. A $0 invoice (the free month itself) doesn't count; top-ups don't count.
  */

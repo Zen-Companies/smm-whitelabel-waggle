@@ -105,7 +105,9 @@ select is_empty(
                                 -- Give a month, get a month (23 Nov): per organization, server-only.
                                 'referral_codes', 'referrals',
                                 -- Staff → Promotions (24 Nov): global, server-only.
-                                'promotions', 'promotion_changes')
+                                'promotions', 'promotion_changes',
+                                -- Reminder before the first charge (24 Nov): per organization, server-only.
+                                'trial_reminders')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

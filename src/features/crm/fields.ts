@@ -17,7 +17,6 @@ export interface CrmSnapshot {
   business: string;
   /** Waggle's plan id while the plan is live, else null. */
   planId: string | null;
-  founding: boolean;
   status: string | null;
   trialEndsAt: string | null;
   periodEnd: string | null;
@@ -30,7 +29,7 @@ export interface CrmSnapshot {
 }
 
 /**
- * HighLevel's plan words: solo, team ($99), business ($199). Careful: Waggle's ids are swapped
+ * HighLevel's plan words: solo, team ($99), business (custom price). Careful: Waggle's ids are swapped
  * for the two upper plans (id `business` is shown as Team, id `team` as Business), so the
  * name decides, never the id.
  */
@@ -78,7 +77,9 @@ export function crmFields(
       s.event === "referral_rewarded" && text(s.details.plan) ? text(s.details.plan) : s.planId,
     ),
     waggle_from_plan: crmPlan(text(s.details.from_plan)),
-    waggle_founding: s.founding ? "true" : "false",
+    // The founding offer is retired (Pricing Bible, 24 Nov): always "false", kept because
+    // Walter's workflow expects every field on every event.
+    waggle_founding: "false",
     waggle_trial_ends: day(s.trialEndsAt),
     waggle_ends_on: endsOn(s),
     waggle_platform: text(s.details.platform),
