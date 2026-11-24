@@ -128,7 +128,7 @@ export const PROMOTIONS: readonly Promotion[] = [
       lines: [
         { text: "Your first month is free on Solo and Team" },
         { text: "Card today, $0 for 30 days. We email you before the first charge" },
-        { text: "Give a month, get a month: ", honey: "refer a friend" },
+        // No "Give a month, get a month" here: referring is for paying Owners only (25 Nov).
       ],
       phoneLines: [{ text: "First month free on Solo and Team" }],
       cta: "Choose a plan →",
