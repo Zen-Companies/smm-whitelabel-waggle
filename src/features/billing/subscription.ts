@@ -87,6 +87,18 @@ export function planIsLive(status: string | null | undefined): boolean {
 }
 
 /**
+ * Pure: whether an organization is paying: a paid plan that's live (trialing, active or past due).
+ * A live Stripe subscription always has a card: checkout takes one. Free, cancelled or
+ * never-subscribed organizations aren't. Give a month, get a month is only for paying Owners
+ * (Pricing Bible: "Both sides need a card on a paid plan").
+ */
+export function isPayingBill(
+  bill: { plan: string | null; status: string | null } | null | undefined,
+): boolean {
+  return !!bill && isPaidPlanId(bill.plan) && planIsLive(bill.status);
+}
+
+/**
  * Pure: last month's unused top-up replies that carry into this month (they last one month).
  * Plan replies are used first, then top-ups.
  */

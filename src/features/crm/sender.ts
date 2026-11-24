@@ -94,7 +94,8 @@ async function referralGapWait(db: ServiceClient, row: Row, now: Date): Promise<
 
 /**
  * The Owner's own referral link (25 Nov), on every event about an Owner: the code is made if
- * missing. Nothing for teammates or a login with no organization.
+ * missing, for a paying organization only. A Free Owner's is sent empty (HighLevel emails branch
+ * on it). Nothing for teammates or a login with no organization.
  */
 async function ownerLink(
   db: ServiceClient,
@@ -109,7 +110,7 @@ async function ownerLink(
     .eq("user_id", userId)
     .maybeSingle();
   if (data?.role !== "owner") return {};
-  return referralLinkFields(await ownerReferralLink(db, orgId));
+  return referralLinkFields({ owner: true, link: await ownerReferralLink(db, orgId) });
 }
 
 /** A note queued with the event (details.note = { title, body }), if any. */

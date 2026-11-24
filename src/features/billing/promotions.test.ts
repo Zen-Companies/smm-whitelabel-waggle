@@ -30,9 +30,11 @@ const referralOpen: Promotion[] = PROMOTIONS.map((p) =>
 const DATE_WORDS =
   /\b(ends?|tonight|tomorrow|last day|by (mon|tue|wed|thu|fri|sat|sun)|nov|dec|\d{1,2}:\d{2})\b/i;
 
-const neverPaidOwner = { isOwner: true, neverPaid: true };
-const paidOwner = { isOwner: true, neverPaid: false };
-const member = { isOwner: false, neverPaid: true };
+const neverPaidOwner = { isOwner: true, neverPaid: true, paying: false };
+const paidOwner = { isOwner: true, neverPaid: false, paying: true };
+/** Had a plan once, back on Free now. */
+const lapsedOwner = { isOwner: true, neverPaid: false, paying: false };
+const member = { isOwner: false, neverPaid: true, paying: false };
 
 describe("days (the bar's × for the day)", () => {
   it("days are the viewer's zone's days", () => {
@@ -78,6 +80,20 @@ describe("the bar", () => {
     expect(audienceIncludes("everyone", member)).toBe(true);
     expect(audienceIncludes("all_owners", paidOwner)).toBe(true);
     expect(audienceIncludes("never_paid_owners", paidOwner)).toBe(false);
+  });
+  it("the referral bar is for paying Owners only (only they can refer)", () => {
+    const referral = PROMOTIONS.find((p) => p.kind === "referral")!;
+    expect(referral.bar.audience).toBe("paying_owners");
+    expect(audienceIncludes("paying_owners", paidOwner)).toBe(true);
+    expect(audienceIncludes("paying_owners", neverPaidOwner)).toBe(false);
+    expect(audienceIncludes("paying_owners", lapsedOwner)).toBe(false);
+    expect(audienceIncludes("paying_owners", { ...paidOwner, isOwner: false })).toBe(false);
+    const list: Promotion[] = referralOpen.map((p) =>
+      p.kind === "referral" ? { ...p, bar: { ...p.bar, enabled: true } } : p,
+    );
+    expect(activeBar(after, paidOwner, list)?.promotionId).toBe("give-a-month");
+    expect(activeBar(after, neverPaidOwner, list)).toBeNull();
+    expect(activeBar(after, lapsedOwner, list)).toBeNull();
   });
 });
 

@@ -6,6 +6,7 @@ import {
   carriedReplies,
   isExtraAccountKey,
   parsePlanKey,
+  isPayingBill,
   planIsLive,
   type SubscriptionLike,
 } from "./subscription";
@@ -125,5 +126,23 @@ describe("rules", () => {
     expect(autoTopUpAllowed(false, 0)).toBe(false);
     expect(autoTopUpAllowed(true, 1)).toBe(true);
     expect(autoTopUpAllowed(true, 2)).toBe(false);
+  });
+});
+
+describe("isPayingBill (Give a month, get a month: paying Owners only)", () => {
+  it("a paid plan that's live, with its card (trialing, active, past due)", () => {
+    for (const status of ["trialing", "active", "past_due"]) {
+      expect(isPayingBill({ plan: "solo", status })).toBe(true);
+      expect(isPayingBill({ plan: "business", status })).toBe(true);
+    }
+  });
+  it("Free, no bill, or a plan that ended isn't paying", () => {
+    expect(isPayingBill(null)).toBe(false);
+    expect(isPayingBill(undefined)).toBe(false);
+    expect(isPayingBill({ plan: "free", status: "active" })).toBe(false);
+    expect(isPayingBill({ plan: null, status: null })).toBe(false);
+    for (const status of ["canceled", "incomplete", "incomplete_expired", "unpaid", "paused"]) {
+      expect(isPayingBill({ plan: "solo", status })).toBe(false);
+    }
   });
 });

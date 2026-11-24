@@ -11,11 +11,15 @@
 
 export type PromotionKind = "seasonal" | "referral";
 
-/** Who sees a promotion's bar. */
-export type BarAudience = "never_paid_owners" | "all_owners" | "everyone";
+/**
+ * Who sees a promotion's bar. Paying Owners: a paid plan with its card, live (the referral bar:
+ * only they can refer, Pricing Bible).
+ */
+export type BarAudience = "never_paid_owners" | "paying_owners" | "all_owners" | "everyone";
 
 export const BAR_AUDIENCES: readonly BarAudience[] = [
   "never_paid_owners",
+  "paying_owners",
   "all_owners",
   "everyone",
 ];
@@ -148,10 +152,11 @@ export const PROMOTIONS: readonly Promotion[] = [
     endsAt: null,
     trialDays: 30,
     rewardMonths: 1,
-    // Its own bar, off for now: our team turns it on (and picks who sees it) when wanted.
+    // Its own bar, off for now: our team turns it on (and picks who sees it) when wanted. Paying
+    // Owners only: nobody else can refer.
     bar: {
       enabled: false,
-      audience: "all_owners",
+      audience: "paying_owners",
       startsAt: null,
       endsAt: null,
       link: "/plan#referral-title",
@@ -266,13 +271,17 @@ export interface Viewer {
   isOwner: boolean;
   /** The organization never had a paid plan. */
   neverPaid: boolean;
+  /** The organization is paying now (a paid plan with its card, live). */
+  paying: boolean;
 }
 
 /** Pure: whether a bar's audience includes this viewer. */
 export function audienceIncludes(audience: BarAudience, v: Viewer): boolean {
   if (audience === "everyone") return true;
   if (!v.isOwner) return false;
-  return audience === "all_owners" || v.neverPaid;
+  if (audience === "all_owners") return true;
+  if (audience === "paying_owners") return v.paying;
+  return v.neverPaid;
 }
 
 export interface ActiveBar {

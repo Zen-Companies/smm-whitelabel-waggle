@@ -15,6 +15,7 @@ vi.mock("@/lib/crm", () => ({
   queueForOwners: vi.fn(async () => undefined),
   queueQuietly: vi.fn(async () => undefined),
   referralDedupeKey: (id: string, role: string) => `referral_rewarded:${id}:${role}`,
+  referralLinkDedupeKey: (code: string) => `referral_link:${code}`,
   referralSendAfter: () => null,
 }));
 vi.mock("./promotions-store", async () => {
@@ -24,13 +25,22 @@ vi.mock("./promotions-store", async () => {
   return { loadPromotions: async () => PROMOTIONS.map((p) => ({ ...p, endsAt: end })) };
 });
 
-const { grantReferralRewards, markBankedUsed, markReferralRewardDue } = await import("./referrals");
+const {
+  claimReferral,
+  ensureReferralCode,
+  grantReferralRewards,
+  markBankedUsed,
+  markReferralRewardDue,
+  ownerReferralLink,
+  referrerForCode,
+} = await import("./referrals");
 
 // ---- A small fake of the Supabase query builder ----
 
 interface Call {
   table: string;
   op: "select" | "update" | "insert" | "upsert";
+  row?: Record<string, unknown>;
   patch?: Record<string, unknown>;
   filters: [string, string, unknown][];
 }
@@ -52,6 +62,16 @@ class Query implements PromiseLike<Res> {
   update(patch: Record<string, unknown>) {
     this.call.op = "update";
     this.call.patch = patch;
+    return this;
+  }
+  insert(row: Record<string, unknown>) {
+    this.call.op = "insert";
+    this.call.row = row;
+    return this;
+  }
+  upsert(row: Record<string, unknown>) {
+    this.call.op = "upsert";
+    this.call.row = row;
     return this;
   }
   eq(col: string, v: unknown) {
@@ -281,5 +301,70 @@ describe("the Stripe webhook's referral writes", () => {
       "system",
       expect.objectContaining({ referralId: row().id, checkoutSessionId: "cs_1" }),
     );
+  });
+});
+
+// ---- Give a month, get a month is for paying Owners only (Pricing Bible) ----
+
+const NOW = new Date("2026-11-25T12:00:00Z");
+const freeBill = { ...liveBill, plan: "free", status: "active", stripe_subscription_id: null };
+
+/** A referrer org with a code (or none yet) and a bill; a brand-new friend org. */
+function gateDb(opts: { bill: object | null; hasCode?: boolean }) {
+  const calls: Call[] = [];
+  const handler = (c: Call): Res => {
+    if (c.table === "org_billing") return { data: opts.bill, error: null };
+    if (c.table === "referral_codes") {
+      if (c.op === "insert") return { data: null, error: null };
+      return {
+        data: opts.hasCode === false ? null : { organization_id: "org-referrer", code: "abcd2345" },
+        error: null,
+      };
+    }
+    if (c.table === "organizations")
+      return { data: { created_at: NOW.toISOString() }, error: null };
+    if (c.table === "referrals" && c.op === "upsert") return { data: [{ id: "r1" }], error: null };
+    return { data: null, error: null };
+  };
+  const client = { from: (t: string) => new Query(t, handler, calls) };
+  return { client: client as unknown as ServiceClient, calls };
+}
+
+const wrote = (calls: Call[], table: string) =>
+  calls.some((c) => c.table === table && (c.op === "insert" || c.op === "upsert"));
+
+describe("only paying Owners can refer", () => {
+  it("a paying organization gets its code and link", async () => {
+    const d = gateDb({ bill: liveBill });
+    expect(await ensureReferralCode(d.client, "org-referrer", { syncCrm: false })).toBe("abcd2345");
+    expect(await ownerReferralLink(d.client, "org-referrer")).toMatch(/\/signup\?ref=abcd2345$/);
+  });
+
+  it("a trial with its card counts as paying", async () => {
+    const d = gateDb({ bill: { ...liveBill, status: "trialing" } });
+    expect(await ensureReferralCode(d.client, "org-referrer", { syncCrm: false })).toBe("abcd2345");
+  });
+
+  it("a Free organization has no link, and no code is made for it", async () => {
+    for (const bill of [freeBill, null, { ...liveBill, status: "canceled" }]) {
+      const d = gateDb({ bill, hasCode: false });
+      expect(await ensureReferralCode(d.client, "org-referrer")).toBeNull();
+      expect(await ownerReferralLink(d.client, "org-referrer")).toBeNull();
+      expect(wrote(d.calls, "referral_codes")).toBe(false);
+    }
+  });
+
+  it("a friend's code counts when its organization is paying at sign-up", async () => {
+    const d = gateDb({ bill: liveBill });
+    expect(await claimReferral(d.client, "org-friend", "abcd2345", NOW)).toBe("claimed");
+    expect(wrote(d.calls, "referrals")).toBe(true);
+    expect((await referrerForCode(d.client, "abcd2345")).known).toBe(true);
+  });
+
+  it("a code of an organization back on Free is ignored: no invite card, a normal sign-up", async () => {
+    const d = gateDb({ bill: freeBill });
+    expect(await claimReferral(d.client, "org-friend", "abcd2345", NOW)).toBe("skipped");
+    expect(wrote(d.calls, "referrals")).toBe(false);
+    expect(await referrerForCode(d.client, "abcd2345")).toEqual({ known: false, name: null });
   });
 });

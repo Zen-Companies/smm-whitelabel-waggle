@@ -226,6 +226,7 @@ function PassPreview({
 
 const AUDIENCE_LABELS = {
   never_paid_owners: "Owners who never paid",
+  paying_owners: "Paying Owners (paid plan with a card)",
   all_owners: "All Owners (paid too)",
   everyone: "Everyone signed in",
 } as const;

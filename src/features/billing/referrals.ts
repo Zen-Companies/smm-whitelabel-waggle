@@ -20,20 +20,35 @@ import { runningReferral, type Promotion } from "./promotions";
 import { loadPromotions } from "./promotions-store";
 import { codeFromBytes, isNewOrg, parseRefCode, referralLink } from "./referral-code";
 import { appUrl } from "./stripe-client";
-import { planIsLive } from "./subscription";
+import { isPayingBill } from "./subscription";
 
 // "Give a month, get a month" (Jason, 23 November 2026). See promo.ts for the free month itself.
 
 /**
+ * Whether the organization is paying now (a paid plan with its card, live). Give a month, get a
+ * month is only for paying Owners (Pricing Bible: "Both sides need a card on a paid plan").
+ */
+export async function orgIsPaying(db: ServiceClient, orgId: string): Promise<boolean> {
+  const { data, error } = await db
+    .from("org_billing")
+    .select("plan, status")
+    .eq("organization_id", orgId)
+    .maybeSingle();
+  if (error) throw new Error(`referrals: reading the bill failed: ${error.message}`);
+  return isPayingBill(data);
+}
+
+/**
  * The organization's referral code, made the first time it's needed. Its link goes to the Owners'
  * HighLevel contacts (25 Nov), once per code per Owner (`syncCrm: false` when the caller sends it
- * itself, like the CRM sender).
+ * itself, like the CRM sender). null for an organization that isn't paying: no link, no code made.
  */
 export async function ensureReferralCode(
   db: ServiceClient,
   orgId: string,
   opts: { syncCrm?: boolean } = {},
-): Promise<string> {
+): Promise<string | null> {
+  if (!(await orgIsPaying(db, orgId))) return null;
   const code = await findOrMakeCode(db, orgId);
   if (opts.syncCrm !== false) {
     await queueQuietly(() =>
@@ -46,9 +61,10 @@ export async function ensureReferralCode(
   return code;
 }
 
-/** The Owner's own link to share: https://app.gowaggle.ai/signup?ref=<code>. */
-export async function ownerReferralLink(db: ServiceClient, orgId: string): Promise<string> {
-  return referralLink(appUrl(""), await ensureReferralCode(db, orgId, { syncCrm: false }));
+/** The Owner's own link to share: https://app.gowaggle.ai/signup?ref=<code>. null when not paying. */
+export async function ownerReferralLink(db: ServiceClient, orgId: string): Promise<string | null> {
+  const code = await ensureReferralCode(db, orgId, { syncCrm: false });
+  return code ? referralLink(appUrl(""), code) : null;
 }
 
 async function findOrMakeCode(db: ServiceClient, orgId: string): Promise<string> {
@@ -75,7 +91,9 @@ async function findOrMakeCode(db: ServiceClient, orgId: string): Promise<string>
 
 /**
  * Sign-up (from the cookie the sign-up page keeps): credits a brand-new organization to the
- * organization whose link it came through. Never throws: a referral must not block a sign-up.
+ * organization whose link it came through, only if that one is paying now (an old link of an
+ * organization back on Free is ignored: a normal sign-up). Never throws: a referral must not
+ * block a sign-up.
  */
 export async function claimReferral(
   db: ServiceClient,
@@ -93,6 +111,7 @@ export async function claimReferral(
     if (!owner || owner.organization_id === orgId || !isNewOrg(org?.created_at, now)) {
       return "skipped";
     }
+    if (!(await orgIsPaying(db, owner.organization_id))) return "skipped";
     const { data, error } = await db
       .from("referrals")
       .upsert(
@@ -303,11 +322,7 @@ async function bankedOfLiveReferrers(db: ServiceClient): Promise<RewardRow[]> {
     .select("organization_id, plan, status")
     .in("organization_id", orgs);
   if (billsError) throw new Error(`referrals: reading bills failed: ${billsError.message}`);
-  const live = new Set(
-    (bills ?? [])
-      .filter((b) => isPaidPlanId(b.plan) && planIsLive(b.status))
-      .map((b) => b.organization_id),
-  );
+  const live = new Set((bills ?? []).filter((b) => isPayingBill(b)).map((b) => b.organization_id));
   return banked.filter((r) => live.has(r.referrer_org_id)).slice(0, 20);
 }
 
@@ -377,7 +392,7 @@ async function creditOne(
     .eq("organization_id", row.referrer_org_id)
     .maybeSingle();
   if (billError) throw new Error(`referrals: reading the bill failed: ${billError.message}`);
-  if (!bill || !isPaidPlanId(bill.plan) || !planIsLive(bill.status)) {
+  if (!bill || !isPaidPlanId(bill.plan) || !isPayingBill(bill)) {
     await settle(db, row.id, { status: "banked", rewarded_at: null });
     if (from === "banked") return "skipped";
     await auditOrg(db, row.referrer_org_id, "referral.banked", "system", { referralId: row.id });
@@ -442,7 +457,8 @@ async function creditOne(
 }
 
 export interface ReferralStats {
-  code: string;
+  /** null: the organization isn't paying, so it has no link. */
+  code: string | null;
   /** Friends who joined through the link. */
   joined: number;
   /** Months credited or used. */
@@ -451,7 +467,7 @@ export interface ReferralStats {
   banked: number;
 }
 
-/** Your plan: the link and how it's going. */
+/** Your plan: the link (paying organizations only) and how it's going. */
 export async function loadReferralStats(db: ServiceClient, orgId: string): Promise<ReferralStats> {
   const code = await ensureReferralCode(db, orgId);
   const { data } = await db.from("referrals").select("status").eq("referrer_org_id", orgId);
@@ -609,8 +625,9 @@ async function businessNameOf(db: ServiceClient, orgId: string): Promise<string 
 }
 
 /**
- * Sign-up for a friend's link: whether the code is a real one, and the referring organization's
- * business name (only that: never a person, email or anything else). Never throws.
+ * Sign-up for a friend's link: whether the code is a real one of a paying organization (else it's
+ * ignored: no invite card), and the referring organization's business name (only that: never a
+ * person, email or anything else). Never throws.
  */
 export async function referrerForCode(
   db: ServiceClient,
@@ -624,12 +641,14 @@ export async function referrerForCode(
       .select("organization_id")
       .eq("code", code)
       .maybeSingle();
-    if (!owner) return { known: false, name: null };
+    if (!owner || !(await orgIsPaying(db, owner.organization_id))) {
+      return { known: false, name: null };
+    }
     return { known: true, name: await businessNameOf(db, owner.organization_id) };
   } catch (e) {
     Sentry.captureException(e);
-    // Can't tell: keep the friend's card, without a name.
-    return { known: true, name: null };
+    // Can't tell if it counts: a normal sign-up (the claim would be skipped too).
+    return { known: false, name: null };
   }
 }
 

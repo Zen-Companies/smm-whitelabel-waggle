@@ -119,7 +119,7 @@ export function newPromotionFields(kind: PromotionKind, id: string, name: string
     countdown: false,
     reward_months: 1,
     bar_enabled: false,
-    audience: seasonal ? "never_paid_owners" : "all_owners",
+    audience: seasonal ? "never_paid_owners" : "paying_owners",
     bar_label: name,
     bar_text: "",
     bar_phone_text: "",
@@ -254,7 +254,7 @@ export const promotionFormSchema = z
     trial_days: whole(1, 90, "Trial days"),
     reward_months: whole(0, 12, "Reward months"),
     bar_enabled: on,
-    audience: z.enum(["never_paid_owners", "all_owners", "everyone"], {
+    audience: z.enum(["never_paid_owners", "paying_owners", "all_owners", "everyone"], {
       error: "Who sees the bar: pick one.",
     }),
     bar_label: text(40, "Bar label"),
