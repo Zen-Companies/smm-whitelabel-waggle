@@ -24,6 +24,8 @@ export const CRM_EVENTS = {
   usage_100: "AI replies reach 100%",
   account_limit: "A connect is blocked: the plan's accounts are all in use",
   founding_full: "The 50th founding spot is taken",
+  connect_failed:
+    "A connect failed, came back with no account, or was abandoned (2 h, no return); once per brand + platform per 6 h",
 } as const;
 
 export type CrmEvent = keyof typeof CRM_EVENTS;
@@ -60,6 +62,19 @@ export const CRM_FIELDS = [
   "waggle_business",
 ] as const;
 export type CrmField = (typeof CRM_FIELDS)[number];
+
+/**
+ * Sent with `connect_failed` only (Fix 1, 24 Nov), next to every field above. Walter creates them
+ * in HighLevel: platform id; Zernio's error code, or no_account / abandoned; yes / no / unknown;
+ * yes / no (the page was open inside Instagram's, Facebook's or TikTok's own browser).
+ */
+export const CRM_CONNECT_FIELDS = [
+  "waggle_connect_platform",
+  "waggle_connect_error",
+  "waggle_connect_fixable",
+  "waggle_connect_in_app",
+] as const;
+export type CrmConnectField = (typeof CRM_CONNECT_FIELDS)[number];
 
 /** Two events for the same person at least this far apart (the workflow clears the tag first). */
 export const CRM_MIN_GAP_MS = 30_000;

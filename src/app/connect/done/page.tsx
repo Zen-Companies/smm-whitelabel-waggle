@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
 import { StateMark } from "@/components/app/state-mark";
 import { buttonVariants } from "@/components/ui/button";
-import { connectionLabel, DEFAULT_RETURN, safeReturnPath } from "@/features/accounts";
+import { connectionLabel, ConnectTrace, DEFAULT_RETURN, safeReturnPath } from "@/features/accounts";
 import { TellOtherTab } from "./tell-other-tab";
 
 export const metadata = { title: "Connected" };
@@ -51,6 +51,7 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
         {ok ? `Back to ${where}` : "Try again"}
       </Link>
       <TellOtherTab id={id} ok={ok} />
+      <ConnectTrace always />
     </div>
   );
 }

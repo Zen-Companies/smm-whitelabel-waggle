@@ -2,7 +2,7 @@
 // (snapshot.ts) gathers the facts, this turns them into HighLevel's strings.
 
 import { PLANS, isPlanId } from "@/features/billing";
-import type { CrmEvent, CrmField } from "@/lib/crm";
+import type { CrmConnectField, CrmEvent, CrmField } from "@/lib/crm";
 
 export interface CrmSnapshot {
   event: CrmEvent;
@@ -50,8 +50,22 @@ function endsOn(s: CrmSnapshot): string {
 
 const text = (v: unknown) => (typeof v === "string" || typeof v === "number" ? String(v) : "");
 
-export function crmFields(s: CrmSnapshot): Record<CrmField, string> {
+/** `connect_failed` only (Fix 1, 24 Nov): what stopped the connect. */
+function connectFields(s: CrmSnapshot): Partial<Record<CrmConnectField, string>> {
+  if (s.event !== "connect_failed") return {};
   return {
+    waggle_connect_platform: text(s.details.connect_platform),
+    waggle_connect_error: text(s.details.connect_error),
+    waggle_connect_fixable: text(s.details.connect_fixable) || "unknown",
+    waggle_connect_in_app: text(s.details.connect_in_app) || "no",
+  };
+}
+
+export function crmFields(
+  s: CrmSnapshot,
+): Record<CrmField, string> & Partial<Record<CrmConnectField, string>> {
+  return {
+    ...connectFields(s),
     waggle_event: s.event,
     waggle_event_at: s.eventAt.toISOString(),
     waggle_plan: crmPlan(s.planId),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CRM_FIELDS } from "@/lib/crm";
+import { CRM_CONNECT_FIELDS, CRM_FIELDS } from "@/lib/crm";
 import { crmFields, crmPlan, type CrmSnapshot } from "./fields";
 
 const base: CrmSnapshot = {
@@ -67,5 +67,28 @@ describe("crmFields", () => {
     expect(crmFields({ ...base, event: "canceled", cancelAtPeriodEnd: true }).waggle_ends_on).toBe(
       "2026-11-25",
     );
+  });
+
+  it("connect_failed adds the waggle_connect_* fields; other events don't", () => {
+    const f = crmFields({
+      ...base,
+      event: "connect_failed",
+      details: {
+        platform: "facebook",
+        connect_platform: "facebook",
+        connect_error: "no_facebook_pages",
+        connect_fixable: "yes",
+        connect_in_app: "yes",
+      },
+    });
+    expect(f).toMatchObject({
+      waggle_event: "connect_failed",
+      waggle_platform: "facebook",
+      waggle_connect_platform: "facebook",
+      waggle_connect_error: "no_facebook_pages",
+      waggle_connect_fixable: "yes",
+      waggle_connect_in_app: "yes",
+    });
+    for (const k of CRM_CONNECT_FIELDS) expect(crmFields(base)).not.toHaveProperty(k);
   });
 });

@@ -1,6 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
-import { backfillComments, checkAccountsHealth, requestBackfillForAll } from "@/features/accounts";
+import {
+  backfillComments,
+  checkAccountsHealth,
+  requestBackfillForAll,
+  sweepAbandonedConnects,
+} from "@/features/accounts";
 import {
   deliverDueDigests,
   deliverPendingAlerts,
@@ -207,6 +212,11 @@ export async function POST(request: Request): Promise<Response> {
               return 0;
             }),
             usage: await sweepUsage(db).catch((e: unknown) => {
+              Sentry.captureException(e);
+              return 0;
+            }),
+            // Fix 1 (24 Nov): connects with no return after 2 hours are abandoned.
+            abandonedConnects: await sweepAbandonedConnects(db).catch((e: unknown) => {
               Sentry.captureException(e);
               return 0;
             }),
