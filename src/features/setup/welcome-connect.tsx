@@ -16,15 +16,19 @@ import {
 } from "@/lib/social/platforms";
 import { connectFirstAccount } from "./actions";
 import { ConnectTileSubmit } from "./connect-pending";
+import { usableHere, type Device, type InApp, type SwitchPlatform } from "./connect-help";
 import {
   BEFORE_CONNECT,
   BeforeConnect,
   ConnectProblemBox,
   FreeFullCard,
+  SwitchedConnect,
 } from "./connect-step-parts";
 import type { ConnectProblem } from "./first-connect";
 import { InAppGate } from "./in-app-gate";
+import { PhoneQr } from "./phone-qr";
 import { SetupStepper } from "./setup-frame";
+import { SwitchHelp } from "./switch-steps";
 
 // Setup step 1, Connect (/welcome; Walter's flow, approved 20 Nov): the 4 main places first,
 // Facebook and Instagram marked "Best results" (the only ones whose past DMs Zernio replays), then
@@ -159,6 +163,8 @@ export function WelcomeConnect({
   before,
   problem,
   inApp,
+  device,
+  desktop,
   invites,
   email,
 }: {
@@ -173,7 +179,11 @@ export function WelcomeConnect({
   /** "Before you connect" open for this platform (Instagram or Facebook). */
   before: string | null;
   problem: ConnectProblem | null;
-  inApp: string | null;
+  /** Inside Instagram's or Facebook's own browser: their tiles give way to the block card. */
+  inApp: InApp | null;
+  device: Device;
+  /** A computer: "Scan to finish on your phone" shows under the tiles. */
+  desktop: boolean;
   /** Team invites, shown on top (the welcome page's invite list). */
   invites: ReactNode;
   email: string | undefined;
@@ -183,10 +193,16 @@ export function WelcomeConnect({
   const soon = SWITCHABLE.filter(
     (p) => statusOf(statuses, p.id) === "soon" && wouldFillStepTwo(p.id),
   ).map((p) => p.id);
-  const main = MAIN.filter((id) => available.includes(id));
-  const others = available.filter((id) => !MAIN.includes(id));
+  const main = usableHere(
+    MAIN.filter((id) => available.includes(id)),
+    inApp,
+  );
+  const others = usableHere(
+    available.filter((id) => !MAIN.includes(id)),
+    inApp,
+  );
   const later = open.filter((id) => !fillsStepTwo(id));
-  const total = available.length + soon.length;
+  const total = usableHere(available, inApp).length + soon.length;
   const shown: { id: string; available: boolean }[] = [
     ...main.map((id) => ({ id, available: true })),
     ...(all
@@ -198,14 +214,31 @@ export function WelcomeConnect({
   ];
   const laterNames = later.slice(0, 3).map(labelOf);
   const beforeOpen =
+    !inApp &&
     before &&
     BEFORE_CONNECT.has(before) &&
     main.includes(before as PlatformId) &&
     !connected.includes(before)
       ? before
       : null;
+  // Connect fix 2: the rule above the Instagram and Facebook buttons, with their switch steps.
+  const meta = (["instagram", "facebook"] as const).filter(
+    (id) => main.includes(id) && !connected.includes(id),
+  );
+  const lastTapped = [before, problem?.kind === "cancelled" ? problem.platform : null].find(
+    (p): p is SwitchPlatform => p === "instagram" || p === "facebook",
+  );
   const tiles = (
     <div className="flex flex-col gap-3">
+      {meta.length > 0 && (
+        <SwitchHelp
+          platforms={[...meta]}
+          initial={lastTapped ?? null}
+          connect={Object.fromEntries(
+            meta.map((p) => [p, <SwitchedConnect key={p} platform={p} hasBrand={hasBrand} />]),
+          )}
+        />
+      )}
       <ul className="grid auto-rows-fr gap-3 sm:grid-cols-2" aria-label="Where to connect">
         {shown.map((f) => (
           <li key={f.id}>
@@ -242,6 +275,7 @@ export function WelcomeConnect({
           </span>
         </p>
       )}
+      {desktop && !inApp && <PhoneQr />}
     </div>
   );
 
@@ -273,7 +307,17 @@ export function WelcomeConnect({
         ) : problem?.kind === "instagram-personal" ? null : beforeOpen ? (
           <BeforeConnect platform={beforeOpen} hasBrand={hasBrand} />
         ) : inApp ? (
-          <InAppGate app={inApp}>{tiles}</InAppGate>
+          <>
+            <InAppGate app={inApp} device={device} />
+            {shown.length > 0 && (
+              <>
+                <h2 className="text-ink-3 -mb-2 text-[13px] font-semibold">
+                  Or connect these here
+                </h2>
+                {tiles}
+              </>
+            )}
+          </>
         ) : (
           tiles
         )}
