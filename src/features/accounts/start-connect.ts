@@ -1,6 +1,7 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
+import { headers } from "next/headers";
 import { orgOnFree, roomForAnotherAccount } from "@/features/billing";
 import { freeFullHref } from "./free-full";
 import { loadPlatformStatuses, recordSignin, statusOf } from "@/features/platforms";
@@ -20,6 +21,7 @@ import {
   safeReturnPath,
   withParams,
 } from "./connect-return";
+import { recordConnectStart, traceQuietly } from "./connect-trace-store";
 import { isFirstAccount } from "./first-account";
 
 // Connecting without losing your place (design "Your plan next to your profile, and connecting
@@ -135,6 +137,18 @@ export async function startConnect(
       actor: tenant.userId,
       details: { platform: id, mode },
     });
+    // Fix 1 (24 Nov): every connect is recorded, so a failed or abandoned one leaves a trace.
+    const userAgent = (await headers()).get("user-agent");
+    await traceQuietly(() =>
+      recordConnectStart(db, {
+        tenantId: tenant.id,
+        organizationId: tenant.organizationId,
+        userId: tenant.userId,
+        platform: id,
+        mode: mode,
+        userAgent,
+      }),
+    );
   } catch (error) {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform: id } });
     const planLimit = error instanceof SocialProviderError && error.details.status === 402;

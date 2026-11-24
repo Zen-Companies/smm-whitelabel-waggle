@@ -1,6 +1,7 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { orgOnFree, roomForAnotherAccount } from "@/features/billing";
@@ -18,6 +19,7 @@ import {
   DEFAULT_RETURN,
   firstConnectHref,
 } from "./connect-return";
+import { recordConnectStart, traceQuietly } from "./connect-trace-store";
 import { isFirstAccount } from "./first-account";
 import { freeFullHref } from "./free-full";
 import { SocialProviderError } from "@/lib/social/types";
@@ -95,6 +97,18 @@ export async function connectAccount(formData: FormData): Promise<void> {
       actor: tenant.userId,
       details: { platform },
     });
+    // Fix 1 (24 Nov): every connect is recorded, so a failed or abandoned one leaves a trace.
+    const userAgent = (await headers()).get("user-agent");
+    await traceQuietly(() =>
+      recordConnectStart(db, {
+        tenantId: tenant.id,
+        organizationId: tenant.organizationId,
+        userId: tenant.userId,
+        platform: platform,
+        mode: "form",
+        userAgent,
+      }),
+    );
   } catch (error) {
     // Visible in the server log even without Sentry (local dev). Our own and Zernio's error
     // text only, never customer text (rule 10).

@@ -523,6 +523,100 @@ export type Database = {
         }
         Relationships: []
       }
+      connect_attempts: {
+        Row: {
+          connect_token: string | null
+          error: string | null
+          error_message: string | null
+          error_reason: string | null
+          id: string
+          is_user_fixable: boolean | null
+          mode: string | null
+          organization_id: string | null
+          outcome: string | null
+          outcome_at: string | null
+          platform: string
+          platform_error: string | null
+          returned_at: string | null
+          stage: string | null
+          started_at: string
+          step: string | null
+          tenant_id: string
+          user_agent: string | null
+          user_agent_class: string | null
+          user_id: string | null
+          zernio_account_id: string | null
+          zernio_profile_id: string | null
+          zernio_request_id: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          connect_token?: string | null
+          error?: string | null
+          error_message?: string | null
+          error_reason?: string | null
+          id?: string
+          is_user_fixable?: boolean | null
+          mode?: string | null
+          organization_id?: string | null
+          outcome?: string | null
+          outcome_at?: string | null
+          platform: string
+          platform_error?: string | null
+          returned_at?: string | null
+          stage?: string | null
+          started_at?: string
+          step?: string | null
+          tenant_id: string
+          user_agent?: string | null
+          user_agent_class?: string | null
+          user_id?: string | null
+          zernio_account_id?: string | null
+          zernio_profile_id?: string | null
+          zernio_request_id?: string | null
+        }
+        Update: {
+          connect_token?: string | null
+          error?: string | null
+          error_message?: string | null
+          error_reason?: string | null
+          id?: string
+          is_user_fixable?: boolean | null
+          mode?: string | null
+          organization_id?: string | null
+          outcome?: string | null
+          outcome_at?: string | null
+          platform?: string
+          platform_error?: string | null
+          returned_at?: string | null
+          stage?: string | null
+          started_at?: string
+          step?: string | null
+          tenant_id?: string
+          user_agent?: string | null
+          user_agent_class?: string | null
+          user_id?: string | null
+          zernio_account_id?: string | null
+          zernio_profile_id?: string | null
+          zernio_request_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "connect_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "connect_attempts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           followed_up_at: string | null
