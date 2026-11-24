@@ -1,6 +1,6 @@
-// Decision 6 (Febron, 20 Nov): the business is named from the connected profile; when the
-// profile has no name, setup asks "What's your business called?" at the start of step 2. Never a
-// made-up "Fresh's business". Pure, tested.
+// Decision 6 (Febron, 20 Nov): the business is named from the connected profile; when nothing
+// gives a name, step 3's chat asks "What's your business called?" first (24 Nov: no name screen in
+// step 2 any more). Never a made-up "Fresh's business". Pure, tested.
 
 /** The name a brand made by the first Connect carries until it is named (never shown). */
 export const PENDING_BRAND_NAME = "My business";
@@ -32,29 +32,39 @@ const isJustHandle = (name: string, platform: string, handles: Set<string>): boo
 
 /**
  * A business name from the connected accounts' profiles: the first display name that isn't just
- * the account's @username or the platform's name. Null when there's none.
+ * the account's @username or the platform's name, with the platform it came from. Null when none.
  */
-export function profileBusinessName(
+export function profileBusinessNameFrom(
   profiles: readonly { name: string; platform: string }[],
   usernames: readonly (string | null)[],
-): string | null {
+): { name: string; platform: string } | null {
   const handles = new Set(usernames.filter((u): u is string => !!u).map(norm));
   for (const p of profiles) {
     const name = p.name.trim().replace(/\s+/g, " ");
     if (!name || name.length > 80) continue;
     if (isJustHandle(name, p.platform, handles) || norm(name) === norm(p.platform)) continue;
-    return name;
+    return { name, platform: p.platform };
   }
   return null;
 }
 
-// ---- the name, best source first (approved 24 Nov) -----------------------------------------------
+/** The display name alone (profileBusinessNameFrom's name). */
+export function profileBusinessName(
+  profiles: readonly { name: string; platform: string }[],
+  usernames: readonly (string | null)[],
+): string | null {
+  return profileBusinessNameFrom(profiles, usernames)?.name ?? null;
+}
+
+// ---- the name, best source first (approved 24 Nov; confirmed in step 3 since 24 Nov) ----------
 //
+// Right after connect the brand is named at once, from the best source:
 // 1. The platform's own page or location name (a Facebook Page's name, a Google Business location
-//    title): exact, so the brand is named with no question.
-// 2. Otherwise setup asks "Is this your business name?", never with an empty box when there is a
-//    guess: the AI profile's suggestion (read from the bio and page), else the profile's display
-//    name, else empty.
+//    title): exact, so the name is sure.
+// 2. The setup AI profile's suggestion (read from the bio and page): a guess.
+// 3. The profile's display name: a guess.
+// A guess shows in step 3's facts card as unchecked ("from Instagram", dashed hexagon) until the
+// owner taps "Looks good" or changes it. With no source at all, step 3 asks the name first.
 
 /** Where an exact name can come from: platforms whose page has its own business name. */
 export const EXACT_NAME_PLATFORMS: ReadonlySet<string> = new Set(["facebook", "googlebusiness"]);
@@ -80,20 +90,44 @@ export function exactPageName(
   return null;
 }
 
-/** The name screen's best guess: the AI suggestion, else the display name, else empty. */
-export function nameGuess(input: { ai: string | null; display: string | null }): string {
-  return cleanBusinessName(input.ai) ?? cleanBusinessName(input.display) ?? "";
+export type NameSource = "page" | "ai" | "profile";
+
+/**
+ * The brand's name from the best source: the exact page name (sure), else the AI profile's
+ * suggestion, else the display name (guesses). Null when none is usable.
+ */
+export function pickBrandName(input: {
+  exact: string | null;
+  ai: string | null;
+  display: string | null;
+}): { name: string; source: NameSource; sure: boolean } | null {
+  const exact = cleanBusinessName(input.exact);
+  if (exact) return { name: exact, source: "page", sure: true };
+  const ai = cleanBusinessName(input.ai);
+  if (ai) return { name: ai, source: "ai", sure: false };
+  const display = cleanBusinessName(input.display);
+  if (display) return { name: display, source: "profile", sure: false };
+  return null;
 }
 
 /**
- * What the field shows when a newer guess arrives (the AI profile came in while the screen was
- * open): the guess, unless the owner already typed.
+ * The AI profile's suggestion came in: the name it should take now, or null to leave it. Only a
+ * name nobody has checked changes: still pending (none at all) or still a guess (the display
+ * name, or an earlier suggestion), and only to a different usable name.
  */
-export function prefillValue(input: { typed: boolean; current: string; guess: string }): string {
-  return input.typed || !input.guess ? input.current : input.guess;
+export function nameFromLateAi(input: {
+  pending: boolean;
+  guessedFrom: string | null;
+  current: string;
+  ai: string | null;
+}): string | null {
+  const ai = cleanBusinessName(input.ai);
+  if (!ai) return null;
+  if (!input.pending && !input.guessedFrom) return null;
+  return !input.pending && ai === input.current ? null : ai;
 }
 
-/** The button: "Yes, that's it" while the field still shows the guess, else "Save name". */
-export function nameButtonLabel(input: { value: string; guess: string }): string {
-  return input.guess && input.value.trim() === input.guess ? "Yes, that’s it" : "Save name";
+/** The facts card's tag for a guessed name: "from Instagram" (null when the name is sure). */
+export function nameTag(guessedFrom: string | null, label: (p: string) => string): string | null {
+  return guessedFrom ? `from ${label(guessedFrom)}` : null;
 }

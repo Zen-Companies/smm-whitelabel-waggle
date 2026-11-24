@@ -7,12 +7,10 @@ import { getSocialProvider } from "@/lib/social";
 import { platformLabel } from "@/lib/social/platforms";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
-import { nameGuess } from "./brand-name";
 import { nameBrandFromProfile } from "./brand-name-server";
 import { upgradeHref } from "@/features/billing";
 import { firstNameOf } from "./copy";
-import { nextScreen, openScreen, setupEntry, stepPosition, stepsDone } from "./flow";
-import { NameScreen } from "./name-screen";
+import { nextScreen, openScreen, setupEntry, stepsDone } from "./flow";
 import { SetupChat } from "./setup-chat";
 import { flowFactsOf, loadSetupData } from "./setup-data";
 import { ReadingProvider, StartingRead } from "./reading-part";
@@ -59,11 +57,10 @@ export async function SetupView({
   if (setupEntry({ connected: d.connected, connecting: !!connecting }) === "welcome") {
     redirect("/welcome");
   }
-  // The exact page name names the brand; otherwise the display name is a guess for the name screen.
-  let displayName: string | null = null;
+  // Right after connect the brand is named from the best source (the exact page name, else the AI
+  // profile's suggestion or the display name as a guess step 3 confirms). No name screen (24 Nov).
   if (d.namePending && d.connected) {
     const naming = await nameBrandFromProfile({ db, social: getSocialProvider }, tenant.id);
-    displayName = naming.displayName;
     if (naming.named) {
       d = await loadSetupData(db, {
         tenantId: tenant.id,
@@ -96,7 +93,6 @@ export async function SetupView({
   }
 
   const screen = openScreen({ requested, saved: d.savedScreen, facts });
-  const pos = stepPosition(screen, facts);
   const after = nextScreen(screen, facts);
 
   // Step 2: the reading, then one Results card (board "Replica update", approved 23 Nov). One
@@ -118,7 +114,7 @@ export async function SetupView({
         <ReadingProvider initial={p} days={d.strip}>
           <Step2Story
             firstName={firstName}
-            brandName={d.brandName}
+            brandName={d.namePending ? null : d.brandName}
             platform={d.platform}
             handle={handle}
             progress={p}
@@ -162,6 +158,8 @@ export async function SetupView({
         <SetupChat
           firstName={firstName}
           brandName={d.brandName}
+          namePending={d.namePending}
+          nameTag={d.nameTag}
           tenantId={tenant.id}
           platformWord={d.platform}
           saved={saved}
@@ -191,22 +189,6 @@ export async function SetupView({
     );
   }
 
-  const step: 2 | 3 = pos.step;
-  const body: React.ReactNode =
-    screen === "name" ? (
-      <NameScreen
-        guess={nameGuess({ ai: d.aiName, display: displayName })}
-        waiting={!d.aiProfileReady}
-        count={pos.count}
-      />
-    ) : null;
-
-  return (
-    <SetupFrame step={step} done={done}>
-      {/* Each step 3 screen glides in (approved 21 Nov). */}
-      <div key={screen} className="part-in flex flex-1 flex-col gap-3.5">
-        {body}
-      </div>
-    </SetupFrame>
-  );
+  // Every screen opens as step 2's story or step 3's chat (old ones included).
+  redirect("/setup");
 }

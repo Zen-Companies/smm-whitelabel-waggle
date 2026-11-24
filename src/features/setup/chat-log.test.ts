@@ -6,6 +6,7 @@ import {
   closeAsks,
   entriesAt,
   kindChangedLine,
+  nameSavedLine,
   LOG_MAX,
   missingFields,
   missingNeedsAsking,
@@ -142,6 +143,12 @@ describe("changing an earlier answer (nothing cut)", () => {
       "Got it, Clinic or health. I’ve updated your business. I’ll also always check with you first about: Medical questions.",
     );
     expect(kindChangedLine("Shop", [])).toBe("Got it, Shop. I’ve updated your business.");
+  });
+
+  it("says when a new business name rewrites replies", () => {
+    expect(nameSavedLine(0)).toBe("Got it. That’s your business name now.");
+    expect(nameSavedLine(1)).toBe("Got it. I’m rewriting the 1 reply that used the old name.");
+    expect(nameSavedLine(3)).toBe("Got it. I’m rewriting the 3 replies that used the old name.");
   });
 });
 

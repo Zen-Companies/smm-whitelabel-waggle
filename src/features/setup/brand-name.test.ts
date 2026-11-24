@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   cleanBusinessName,
   exactPageName,
-  nameButtonLabel,
-  nameGuess,
-  prefillValue,
+  nameFromLateAi,
+  nameTag,
+  pickBrandName,
   profileBusinessName,
+  profileBusinessNameFrom,
 } from "./brand-name";
 
 describe("profileBusinessName", () => {
@@ -90,28 +91,60 @@ describe("the name, best source first (24 Nov)", () => {
     expect(exactPageName([])).toBeNull();
   });
 
-  it("nameGuess: AI suggestion, else display name, else empty", () => {
-    expect(nameGuess({ ai: "Wako Wako Corner", display: "WakoWakoCorner" })).toBe(
-      "Wako Wako Corner",
-    );
-    expect(nameGuess({ ai: null, display: "WakoWakoCorner" })).toBe("WakoWakoCorner");
-    expect(nameGuess({ ai: "x".repeat(90), display: null })).toBe("");
-    expect(nameGuess({ ai: null, display: null })).toBe("");
+  it("pickBrandName: exact page name (sure), else the AI suggestion, else the display name", () => {
+    expect(pickBrandName({ exact: "Wako Page", ai: "Wako AI", display: "wako" })).toEqual({
+      name: "Wako Page",
+      source: "page",
+      sure: true,
+    });
+    expect(pickBrandName({ exact: null, ai: " Wako  Wako ", display: "wako" })).toEqual({
+      name: "Wako Wako",
+      source: "ai",
+      sure: false,
+    });
+    expect(pickBrandName({ exact: "  ", ai: "x".repeat(90), display: "WakoCorner" })).toEqual({
+      name: "WakoCorner",
+      source: "profile",
+      sure: false,
+    });
+    expect(pickBrandName({ exact: null, ai: null, display: "Instagram" })).toBeNull();
   });
 
-  it("prefillValue fills a newer guess only while the owner hasn't typed", () => {
-    expect(prefillValue({ typed: false, current: "Wako", guess: "Wako Wako Corner" })).toBe(
-      "Wako Wako Corner",
+  it("nameFromLateAi: a late AI suggestion replaces only a name nobody checked", () => {
+    const ai = "Wako Wako Corner";
+    // Still a display-name guess: takes the suggestion.
+    expect(nameFromLateAi({ pending: false, guessedFrom: "instagram", current: "wako", ai })).toBe(
+      ai,
     );
-    expect(prefillValue({ typed: true, current: "Mine", guess: "Wako Wako Corner" })).toBe("Mine");
-    expect(prefillValue({ typed: false, current: "Wako", guess: "" })).toBe("Wako");
+    // No name at all yet: takes it.
+    expect(nameFromLateAi({ pending: true, guessedFrom: null, current: "My business", ai })).toBe(
+      ai,
+    );
+    // Sure (exact page name) or confirmed/edited by the owner: left alone.
+    expect(nameFromLateAi({ pending: false, guessedFrom: null, current: "Mine", ai })).toBeNull();
+    // Same name, or nothing usable: nothing to do.
+    expect(nameFromLateAi({ pending: false, guessedFrom: "instagram", current: ai, ai })).toBeNull();
+    expect(
+      nameFromLateAi({ pending: true, guessedFrom: null, current: "My business", ai: null }),
+    ).toBeNull();
   });
 
-  it("nameButtonLabel: Yes while the field shows the guess, Save name once edited", () => {
-    expect(nameButtonLabel({ value: "Wako Wako Corner", guess: "Wako Wako Corner" })).toBe(
-      "Yes, that’s it",
-    );
-    expect(nameButtonLabel({ value: "Wako Corner", guess: "Wako Wako Corner" })).toBe("Save name");
-    expect(nameButtonLabel({ value: "", guess: "" })).toBe("Save name");
+  it("nameTag: 'from Instagram' for a guess, nothing when sure", () => {
+    const label = (p: string) => (p === "facebook" ? "Facebook" : "Instagram");
+    expect(nameTag("instagram", label)).toBe("from Instagram");
+    expect(nameTag("facebook", label)).toBe("from Facebook");
+    expect(nameTag(null, label)).toBeNull();
+  });
+
+  it("profileBusinessNameFrom says which platform the display name came from", () => {
+    expect(
+      profileBusinessNameFrom(
+        [
+          { name: "sunnyside", platform: "instagram" },
+          { name: "Sunny Side Bakery", platform: "tiktok" },
+        ],
+        ["sunnyside"],
+      ),
+    ).toEqual({ name: "Sunny Side Bakery", platform: "tiktok" });
   });
 });

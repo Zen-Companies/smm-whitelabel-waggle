@@ -225,4 +225,12 @@ export function kindChangedLine(label: string, added: readonly string[]): string
   return `${lead} I’ll also always check with you first about: ${added.join(", ")}.`;
 }
 
+/** Pure: Waggle's line after the business name was saved (and replies that said the old one). */
+export function nameSavedLine(redrafted: number): string {
+  if (redrafted <= 0) return "Got it. That’s your business name now.";
+  return redrafted === 1
+    ? "Got it. I’m rewriting the 1 reply that used the old name."
+    : `Got it. I’m rewriting the ${redrafted} replies that used the old name.`;
+}
+
 export const BACK_LINE = "Back to where we were.";

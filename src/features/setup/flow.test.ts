@@ -12,7 +12,6 @@ import {
 } from "./flow";
 
 const full: FlowFacts = {
-  namePending: false,
   wanted: 35,
   lostDms: 37,
   drafted: 20,
@@ -26,13 +25,12 @@ describe("visibleScreens", () => {
     expect(visibleScreens(full)).toEqual(["missed", "chat"]);
   });
 
-  it("asks the name first while the brand has none", () => {
-    expect(visibleScreens({ ...full, namePending: true })[0]).toBe("name");
+  it("never shows the old name screen (the name is confirmed in step 3, 24 Nov)", () => {
+    expect(visibleScreens(full)).not.toContain("name");
   });
 
   it("shows both screens even when empty (each says so in place)", () => {
     const empty: FlowFacts = {
-      namePending: false,
       wanted: 0,
       lostDms: 0,
       drafted: 0,
@@ -66,9 +64,10 @@ describe("openScreen", () => {
     }
   });
 
-  it("asks the name first, whatever was asked", () => {
-    const facts = { ...full, namePending: true };
-    expect(openScreen({ requested: "how", saved: "quick", facts })).toBe("name");
+  it("an old link or saved screen 'name' opens step 2's results", () => {
+    expect(openScreen({ requested: "name", saved: "chat", facts: full })).toBe("missed");
+    expect(openScreen({ requested: null, saved: "name", facts: full })).toBe("missed");
+    expect(openScreen({ requested: "how", saved: "name", facts: full })).toBe("chat");
   });
 
   it("ignores junk", () => {

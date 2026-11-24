@@ -16,6 +16,7 @@ vi.mock("@/features/knowledge-base", () => ({ embedEntry: vi.fn(async () => unde
 vi.mock("@/lib/facts", () => ({ markFactChecked: vi.fn(async () => true) }));
 vi.mock("@/features/tenants", () => ({
   NOT_ALLOWED: "Not allowed.",
+  BRAND_NAME_MAX: 80,
   getTenantFor: vi.fn(async () => ({ id: "t1", userId: "u1", role: "owner" })),
 }));
 vi.mock("@/lib/audit", () => ({
@@ -42,7 +43,7 @@ const kb = [
 /** A chainable stand-in for the service client: every query resolves to the KB rows. */
 function fakeDb() {
   const chain: Record<string, unknown> = {};
-  for (const m of ["from", "select", "eq", "order", "limit", "update", "insert", "single"]) {
+  for (const m of ["from", "select", "eq", "not", "order", "limit", "update", "insert", "single"]) {
     chain[m] = () => chain;
   }
   chain.then = (resolve: (v: unknown) => void) => resolve({ data: kb, error: null });
