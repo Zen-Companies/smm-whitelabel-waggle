@@ -18,6 +18,10 @@ export const PERMISSIONS = [
   "brands.manage",
   /** Create and turn off beta codes, see who joined (admins only). */
   "beta.manage",
+  /** Staff → Customers: every business, where it stopped and why (admin, developer, support). */
+  "customers.view",
+  /** Act on a customer, e.g. send the confirm email again (admin, support). */
+  "customers.act",
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 

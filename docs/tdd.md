@@ -874,3 +874,18 @@ Spec "Walter's flow" (build B), boards "Walter's flow in Waggle" and "Setup step
 - **Migration** `20261121100000_walter_setup.sql` (additive): `tenants.name_pending`, `setup_screen`, `setup_done_at`, `ask_first_topics text[] default '{refunds}'`; `catch_ups.response_messages`, `response_answered`. No new grants (written with the service role). `database.types.ts` edited by hand (local Supabase wasn't running): run `pnpm gen:types` after `supabase migration up --local`.
 - **Contracts with the other builds.** Build A: `?upgrade=auto_reply|accounts` on a setup or dashboard page opens the offer in place; `/inbox?welcome=1` is the welcome pop-up (hard-coded here; swap for `upgradeHref(reason, here)` / `WELCOME_HREF` from `@/features/billing` at merge). Build C: `uncheckedFactsForDraft(db, draftId): Promise<UncheckedFact[]>` from `@/features/knowledge-base`, stubbed in `features/setup/unchecked-facts.ts` (returns [], same type); the money batch highlights each fact's `spans[].text` and shows "Highlighted facts came from your Instagram. Sending one counts as checking it." only when there are any.
 - **Retired.** `features/setup`: checklist, gate, gate-server, gate-watch, ready-data, stepper, step-form, kind-picker, questions-editor, suggest; `catch-up`: reveal-view, reveal-parts, reveal-actions, top-questions-wait. `starter.ts` (business kinds) and `first-connect.ts` (in-app browser, connect problems) stay.
+
+## Staff → Customers (board approved 24 Nov, built 25 Nov)
+
+- `/admin/customers` (first Staff tab) and `/admin/customers/[tenantId]`, in `features/customers`. Permissions
+  `customers.view` (admin, developer, support) and `customers.act` (admin, support; resend the confirm email),
+  migration `20261125100000_customers_permissions.sql`. Viewer gets neither.
+- Read with the service role after the permission check. "Stuck at" is derived (`derive.ts`, pure, tested): no live
+  account → Connect; setup not done → Step 2 / Step 3 from `setup_screen`; a `billing.checkout_started` audit row with
+  no later `checkout_returned` and no paying `org_billing` → Checkout; else Active.
+- Source comes from the `signed_up` CRM event's first-touch UTMs (`ref_code` → referral, paid medium or Meta/TikTok/
+  Google Ads source → ad, otherwise organic). No `signed_up` event (sign-ups before 18 Nov) → Unknown. Email bounces
+  aren't stored (no Resend delivery webhook), so only confirmed / not confirmed shows.
+- The list looks through the newest 1000 sign-ups (in the date range) and filters in memory.
+- Every look writes `staff.customer.viewed` to the business's audit_log; copy email, open Stripe / GoHighLevel and
+  resend write `staff.customer.*`. Timeline shows action names and counts only, never audit details or message text.
