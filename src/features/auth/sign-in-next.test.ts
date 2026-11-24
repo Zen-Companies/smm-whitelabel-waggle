@@ -26,3 +26,10 @@ it("sign-in goes back to an AI assistant's Add photos page", () => {
   expect(signInNext("/add-photos/not-a-uuid")).toBe("/settings");
   expect(signInNext(`//evil.com/add-photos/${id}`)).toBe("/settings");
 });
+
+it("sign-in goes back to HighLevel's checkout link (25 Nov), exactly", () => {
+  expect(signInNext("/plan?start=solo")).toBe("/plan?start=solo");
+  expect(signInNext("/plan?start=team")).toBe("/plan?start=team");
+  expect(signInNext("/plan?start=business")).toBe("/settings");
+  expect(signInNext("/plan?start=solo&x=//evil")).toBe("/settings");
+});

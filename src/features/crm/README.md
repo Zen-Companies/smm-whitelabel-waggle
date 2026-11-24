@@ -91,3 +91,12 @@ The pure rules (readable date, dedupe key, 30 s gap, friend's month applied) are
 `GHL_PRIVATE_TOKEN` (a Private Integration Token on the Waggle sub-account; scopes contacts.write,
 contacts.readonly) and `GHL_LOCATION_ID` (`k0lV8H3WuN9F6Yz0yl6I`). Without them nothing is sent and
 the queue waits, so local and staging are safe by default. Tests never call HighLevel.
+
+## Referral link, trial end and the checkout link (Walter, 25 Nov)
+
+| Field / link           | What HighLevel gets                                                                                                                                                                                                                                                                                        |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `waggle_referral_link` | The Owner's own link, `https://app.gowaggle.ai/signup?ref=<code>`, on every event about an Owner (the code is made if missing; never for teammates). Also `referral_link`, a fields-only event (no tag, no workflow), once per code per Owner when the code is made or first shown (`ensureReferralCode`). |
+| `waggle_trial_ends`    | The trial's end as "December 24" (US Eastern), on every event (was `2026-12-24` before 25 Nov).                                                                                                                                                                                                            |
+| `waggle_trial_ends_at` | The trial's end, ISO (`2026-12-24T15:00:00.000Z`), on every event.                                                                                                                                                                                                                                         |
+| Checkout link          | `https://app.gowaggle.ai/plan?start=solo` (or `start=team`): an Owner on Free goes straight to Stripe Checkout (first month free, card). Signed out: sign in, then back to the link. Teammates see a note to ask the Owner. Never Business. `src/lib/checkout-link.ts`.                                    |

@@ -7,6 +7,7 @@ import {
   queueForOwners,
   queueQuietly,
   referralDedupeKey,
+  referralLinkDedupeKey,
   referralSendAfter,
   type ReferralRole,
 } from "@/lib/crm";
@@ -17,13 +18,40 @@ import { checkoutTrialDays, isPaidPlanId, monthlyPrice } from "./plans";
 import { firstCheckoutTrial } from "./promo";
 import { runningReferral, type Promotion } from "./promotions";
 import { loadPromotions } from "./promotions-store";
-import { codeFromBytes, isNewOrg, parseRefCode } from "./referral-code";
+import { codeFromBytes, isNewOrg, parseRefCode, referralLink } from "./referral-code";
+import { appUrl } from "./stripe-client";
 import { planIsLive } from "./subscription";
 
 // "Give a month, get a month" (Jason, 23 November 2026). See promo.ts for the free month itself.
 
-/** The organization's referral code, made the first time it's needed. */
-export async function ensureReferralCode(db: ServiceClient, orgId: string): Promise<string> {
+/**
+ * The organization's referral code, made the first time it's needed. Its link goes to the Owners'
+ * HighLevel contacts (25 Nov), once per code per Owner (`syncCrm: false` when the caller sends it
+ * itself, like the CRM sender).
+ */
+export async function ensureReferralCode(
+  db: ServiceClient,
+  orgId: string,
+  opts: { syncCrm?: boolean } = {},
+): Promise<string> {
+  const code = await findOrMakeCode(db, orgId);
+  if (opts.syncCrm !== false) {
+    await queueQuietly(() =>
+      queueForOwners(db, orgId, {
+        event: "referral_link",
+        dedupeKey: referralLinkDedupeKey(code),
+      }),
+    );
+  }
+  return code;
+}
+
+/** The Owner's own link to share: https://app.gowaggle.ai/signup?ref=<code>. */
+export async function ownerReferralLink(db: ServiceClient, orgId: string): Promise<string> {
+  return referralLink(appUrl(""), await ensureReferralCode(db, orgId, { syncCrm: false }));
+}
+
+async function findOrMakeCode(db: ServiceClient, orgId: string): Promise<string> {
   const { data } = await db
     .from("referral_codes")
     .select("code")

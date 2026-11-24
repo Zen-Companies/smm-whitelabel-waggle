@@ -3,6 +3,7 @@
 
 import { PLANS, isPlanId } from "@/features/billing";
 import {
+  readableDay,
   referralRewardedFields,
   type CrmConnectField,
   type CrmEvent,
@@ -43,6 +44,12 @@ const day = (v: string | Date | null | undefined) => {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
 };
 
+const iso = (v: string | null) => {
+  if (!v) return "";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
+};
+
 /** When access ends: the period's (or trial's) end once a cancel is asked for or done. */
 function endsOn(s: CrmSnapshot): string {
   const ending = s.cancelAtPeriodEnd || s.status === "canceled" || s.event === "trial_expired";
@@ -80,7 +87,9 @@ export function crmFields(
     // The founding offer is retired (Pricing Bible, 24 Nov): always "false", kept because
     // Walter's workflow expects every field on every event.
     waggle_founding: "false",
-    waggle_trial_ends: day(s.trialEndsAt),
+    // "December 24" for an email, and the exact time for HighLevel's own reminder (25 Nov).
+    waggle_trial_ends: readableDay(s.trialEndsAt),
+    waggle_trial_ends_at: iso(s.trialEndsAt),
     waggle_ends_on: endsOn(s),
     waggle_platform: text(s.details.platform),
     waggle_accounts_connected: String(s.accountsConnected),

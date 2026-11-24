@@ -75,7 +75,14 @@ export { PLAN_HREF, PlanChip, PlanMenuRow, PlanMoreRow } from "./plan-chip";
 export type { PlanViewer } from "./plan-chip";
 export { blackFridayOn } from "./promo";
 export { REF_COOKIE, REF_COOKIE_MAX_AGE_S, parseRefCode } from "./referral-code";
-export { claimReferral, grantReferralRewards, loadReferralStats } from "./referrals";
+export {
+  claimReferral,
+  ensureReferralCode,
+  grantReferralRewards,
+  loadReferralStats,
+  ownerReferralLink,
+} from "./referrals";
 export { ReferralCard } from "./referral-card";
+export { StartCheckout } from "./start-checkout-section";
 export { InviteCard, InvitePanel, PromoBar, PromoPass } from "./promo-surfaces";
 export { RefCatcher } from "./ref-catcher";

@@ -109,3 +109,15 @@ export function signupReferralFields(
     ...(referral.referrerName?.trim() ? { referred_by: referral.referrerName.trim() } : {}),
   };
 }
+
+/** The Owner's referral link sync (25 Nov): once per code per Owner (the queue adds the user id). */
+export function referralLinkDedupeKey(code: string): string {
+  return `referral_link:${code}`;
+}
+
+/** `waggle_referral_link` for an Owner's contact; nothing without a link (teammates). */
+export function referralLinkFields(link: string | null | undefined): {
+  waggle_referral_link?: string;
+} {
+  return link ? { waggle_referral_link: link } : {};
+}

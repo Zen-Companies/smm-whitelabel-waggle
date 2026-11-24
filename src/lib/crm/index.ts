@@ -4,6 +4,8 @@ export {
   CRM_CONNECT_FIELDS,
   CRM_EVENTS,
   CRM_FIELDS,
+  CRM_FIELDS_ONLY,
+  CRM_OWNER_FIELDS,
   CRM_INACTIVE_AFTER_DAYS,
   CRM_MIN_GAP_MS,
   CRM_NOTE_ONLY,
@@ -11,7 +13,7 @@ export {
   CRM_TRIGGER_TAG,
   isCrmEvent,
 } from "./catalog";
-export type { CrmConnectField, CrmEvent, CrmField } from "./catalog";
+export type { CrmConnectField, CrmEvent, CrmField, CrmOwnerField } from "./catalog";
 export { lifecycleEvents } from "./lifecycle";
 export type { BillState, LifecycleEvent } from "./lifecycle";
 export {
@@ -27,6 +29,8 @@ export {
   friendMonthApplied,
   readableDay,
   referralDedupeKey,
+  referralLinkDedupeKey,
+  referralLinkFields,
   referralRewardedFields,
   referralSendAfter,
   signupReferralFields,
