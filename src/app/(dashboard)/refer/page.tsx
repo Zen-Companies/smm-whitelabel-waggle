@@ -23,7 +23,7 @@ async function Body() {
   }
   return (
     <>
-      <ReferralCard orgId={org.id} />
+      <ReferralCard orgId={org.id} page />
       <ActionLink href="/plan">Your plan</ActionLink>
     </>
   );

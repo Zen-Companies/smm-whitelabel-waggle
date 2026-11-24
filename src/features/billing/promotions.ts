@@ -278,6 +278,18 @@ export function activeSeasonal(
   return list.find((p) => p.kind === "seasonal" && promotionOn(p, now)) ?? null;
 }
 
+/**
+ * Pure: the referral program running at `at` (on, inside its dates), if any. Every referral
+ * decision reads this one: the friend's month, the pass, the invite card and the referrer's reward.
+ * `at` is now, or when the friend signed up (a friend who joined while it ran keeps the month).
+ */
+export function runningReferral(
+  at: Date,
+  list: readonly Promotion[] = PROMOTIONS,
+): Promotion | null {
+  return list.find((p) => p.kind === "referral" && promotionOn(p, at)) ?? null;
+}
+
 /** Pure: whether the last-day face shows. */
 export function isLastDay(p: Promotion, now: Date): boolean {
   return !!p.lastDay && now.getTime() >= p.lastDay.startsAt.getTime();
@@ -397,7 +409,13 @@ export interface PassView {
  * both, like the trial itself).
  */
 export function passFor(
-  input: { now: Date; referred: boolean; referrerName: string | null },
+  input: {
+    now: Date;
+    referred: boolean;
+    referrerName: string | null;
+    /** When the friend signed up: the referral program that ran then still gives the month. */
+    referredAt?: Date | null;
+  },
   list: readonly Promotion[] = PROMOTIONS,
 ): PassView | null {
   const { now } = input;
@@ -415,8 +433,9 @@ export function passFor(
       trialDays: season.trialDays,
     };
   }
-  const referral = list.find((p) => p.kind === "referral" && promotionOn(p, now));
-  if (!referral || !input.referred) return null;
+  if (!input.referred) return null;
+  const referral = runningReferral(input.referredAt ?? now, list);
+  if (!referral) return null;
   return {
     promotionId: referral.id,
     kind: "referral",
@@ -446,9 +465,8 @@ export function inviteState(
   list: readonly Promotion[] = PROMOTIONS,
 ): InviteState {
   if (!input.known) return { kind: "none" };
-  const referral = list.find((p) => p.kind === "referral");
   const name = input.name?.trim() || null;
-  if (!referral || !promotionOn(referral, input.now)) return { kind: "ended", name };
+  if (!runningReferral(input.now, list)) return { kind: "ended", name };
   return { kind: "invite", name };
 }
 

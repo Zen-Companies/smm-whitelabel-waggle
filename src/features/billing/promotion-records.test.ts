@@ -87,7 +87,10 @@ describe("the edit form", () => {
   it("accepts the Black Friday promotion and stores UTC", () => {
     const r = parsePromotionForm(form());
     expect("value" in r && r.value.ends_at).toBe("2026-12-01T04:59:59.000Z");
-    expect("value" in r && r.value.enabled).toBe(true);
+  });
+  it("leaves on/off to the switch: a stale form can't undo it", () => {
+    const r = parsePromotionForm(form({ enabled: "on" }));
+    expect("value" in r && "enabled" in r.value).toBe(false);
   });
   it("reads a missing switch as off", () => {
     const r = parsePromotionForm(form({ countdown: null }));
@@ -129,5 +132,19 @@ describe("the edit form", () => {
 describe("history", () => {
   it("lists only the fields that changed", () => {
     expect(changedFields({ a: 1, b: "x", c: null }, { a: 1, b: "y", c: null })).toEqual(["b"]);
+  });
+  it("compares dates as instants, so the table's format isn't a change", () => {
+    expect(
+      changedFields(
+        { ends_at: "2026-12-02T04:59:59+00:00", starts_at: null },
+        { ends_at: "2026-12-02T04:59:59.000Z", starts_at: null },
+      ),
+    ).toEqual([]);
+    expect(
+      changedFields(
+        { ends_at: "2026-12-02T04:59:59+00:00" },
+        { ends_at: "2026-12-03T04:59:59.000Z" },
+      ),
+    ).toEqual(["ends_at"]);
   });
 });

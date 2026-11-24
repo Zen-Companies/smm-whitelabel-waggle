@@ -1,7 +1,7 @@
 // Reading a Stripe subscription into Waggle's org_billing row. Pure: the shapes below are the
 // few fields used, so tests don't need Stripe.
 
-import { FOUNDING_COUPON, type Interval } from "./catalog";
+import { isFoundingCoupon, type Interval } from "./catalog";
 import { EXTRAS, isPaidPlanId, type PaidPlanId } from "./plans";
 
 /** Pure: a Waggle lookup key's plan and interval, or null for anything else (extras, top-ups). */
@@ -92,7 +92,7 @@ export function billingFromSubscription(sub: SubscriptionLike): BillingRow {
     current_period_end: iso(planItem?.current_period_end ?? sub.items.data[0]?.current_period_end),
     cancel_at_period_end: sub.cancel_at_period_end || !!sub.cancel_at,
     extra_accounts: extra,
-    founding: sub.metadata.founding === "1" || couponIds(sub).includes(FOUNDING_COUPON),
+    founding: sub.metadata.founding === "1" || couponIds(sub).some(isFoundingCoupon),
   };
 }
 

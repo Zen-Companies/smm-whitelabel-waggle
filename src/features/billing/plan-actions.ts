@@ -7,7 +7,7 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
-import { FOUNDING_COUPON, PRICE_KEYS, type Interval } from "./catalog";
+import { PRICE_KEYS, type Interval } from "./catalog";
 import {
   checkoutTrialDays,
   EXTRAS,
@@ -22,7 +22,7 @@ import { loadPlans } from "./usage";
 import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
-import { foundingSpotsLeft } from "./founding";
+import { ensureFoundingCoupon, foundingSpotsLeft } from "./founding";
 import { firstCheckoutTrial } from "./promo";
 import { loadPromotions } from "./promotions-store";
 import { loadReferralForCheckout } from "./referrals";
@@ -193,11 +193,12 @@ export async function choosePlan(
     // checkout, with nothing to type; banked referral months add to it.
     const ref = firstTime
       ? await loadReferralForCheckout(db, orgId)
-      : { referred: false, bankedIds: [] as string[] };
+      : { referred: false, referredAt: null, bankedIds: [] as string[] };
     const free = firstTime
       ? firstCheckoutTrial({
           now: new Date(),
           referred: ref.referred,
+          referredAt: ref.referredAt,
           bankedMonths: ref.bankedIds.length,
           baseDays: baseTrial,
           promotions: await loadPromotions(),
@@ -231,8 +232,10 @@ export async function choosePlan(
         metadata: { organization_id: orgId, ...(founding ? { founding: "1" } : {}), ...promoMeta },
         ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
+      // A repeating coupon's months start at checkout, trial included: a long trial gets a
+      // longer copy, so the founding price still covers 6 paid months (founding.ts).
       ...(founding
-        ? { discounts: [{ coupon: FOUNDING_COUPON }] }
+        ? { discounts: [{ coupon: await ensureFoundingCoupon(stripe, trialDays ?? 0) }] }
         : { allow_promotion_codes: false }),
       // Prices are in US dollars (Pricing Bible): no local-currency conversion at checkout.
       adaptive_pricing: { enabled: false },

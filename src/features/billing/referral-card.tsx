@@ -1,18 +1,60 @@
 import "server-only";
 import { getServiceClient } from "@/lib/supabase/service";
+import { runningReferral } from "./promotions";
+import { loadPromotions } from "./promotions-store";
 import { referralLink } from "./referral-code";
-import { loadReferralStats } from "./referrals";
+import { loadReferralStats, type ReferralStats } from "./referrals";
 import { ReferralShare } from "./referral-share";
 import { appUrl } from "./stripe-client";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
+async function loadCard(orgId: string): Promise<{ running: boolean; stats: ReferralStats }> {
+  const [list, stats] = await Promise.all([
+    loadPromotions(),
+    loadReferralStats(getServiceClient(), orgId),
+  ]);
+  return { running: runningReferral(new Date(), list) !== null, stats };
+}
+
 /**
  * Your plan: "Give a month, get a month" (Jason, 23 November 2026). The organization's link,
  * one tap to copy or share, and how it's going. The friend's link goes straight to sign-up.
+ * Only while the referral program runs (Staff → Promotions): Your plan then shows nothing, and the
+ * /refer page (`page`) says it isn't running. Never breaks the page: a failure shows nothing
+ * on Your plan and a quiet line on /refer.
  */
-export async function ReferralCard({ orgId }: { orgId: string }) {
-  const stats = await loadReferralStats(getServiceClient(), orgId);
+export async function ReferralCard({ orgId, page = false }: { orgId: string; page?: boolean }) {
+  const card = await loadCard(orgId).catch((e: unknown) => {
+    console.error("billing: referral card failed", {
+      orgId,
+      error: e instanceof Error ? e.message : "unknown",
+    });
+    return null;
+  });
+  if (!card) {
+    return page ? (
+      <section className="card flex max-w-[1100px] flex-col gap-2 p-6">
+        <h1 className="font-display text-[24px] leading-tight font-semibold">Refer a friend</h1>
+        <p className="text-ink-2 m-0" role="status">
+          Your link didn’t load. Refresh the page to try again.
+        </p>
+      </section>
+    ) : null;
+  }
+  const { stats } = card;
+  if (!card.running) {
+    if (!page) return null;
+    return (
+      <section className="card flex max-w-[1100px] flex-col gap-2 p-6">
+        <h1 className="font-display text-[24px] leading-tight font-semibold">Refer a friend</h1>
+        <p className="text-ink-2 m-0">
+          Give a month, get a month isn’t running right now. Months you already earned still count.
+        </p>
+        {stats.joined > 0 && <StatsLine stats={stats} />}
+      </section>
+    );
+  }
   const link = referralLink(appUrl(""), stats.code);
   return (
     <section
@@ -31,14 +73,18 @@ export async function ReferralCard({ orgId }: { orgId: string }) {
       </p>
       <ReferralShare link={link} />
       <p className="meta m-0">Your link shows your business name, nothing else.</p>
-      {stats.joined > 0 && (
-        <p className="meta" role="status">
-          {plural(stats.joined, "friend joined", "friends joined")} ·{" "}
-          {plural(stats.earned, "free month earned", "free months earned")}
-          {stats.banked > 0 &&
-            ` · ${plural(stats.banked, "free month", "free months")} waiting for your first plan`}
-        </p>
-      )}
+      {stats.joined > 0 && <StatsLine stats={stats} />}
     </section>
+  );
+}
+
+function StatsLine({ stats }: { stats: ReferralStats }) {
+  return (
+    <p className="meta" role="status">
+      {plural(stats.joined, "friend joined", "friends joined")} ·{" "}
+      {plural(stats.earned, "free month earned", "free months earned")}
+      {stats.banked > 0 &&
+        ` · ${plural(stats.banked, "free month", "free months")} waiting for your first plan`}
+    </p>
   );
 }

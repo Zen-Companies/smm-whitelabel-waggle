@@ -114,6 +114,10 @@ describe("the pass on Your plan", () => {
     // The campaign's default: the friend's month ends with Black Friday (Tue 1 Dec).
     expect(passFor({ now: after, referred: true, referrerName: "X" })).toBeNull();
   });
+  it("keeps the friend's month for a friend who joined while the program ran", () => {
+    const pass = passFor({ now: after, referred: true, referredAt: tuesday, referrerName: "X" });
+    expect(pass?.kind).toBe("referral");
+  });
   it("splits the honey word", () => {
     expect(splitLastWord("Your first month is free.")).toEqual(["Your first month is ", "free."]);
   });
@@ -132,6 +136,15 @@ describe("the invite card", () => {
       kind: "invite",
       name: null,
     });
+  });
+  it("reads the running referral program, not the first one listed", () => {
+    const list: Promotion[] = [
+      { ...PROMOTIONS[1], id: "old-referral", enabled: false },
+      ...PROMOTIONS,
+    ];
+    expect(inviteState({ known: true, name: "X", now: tuesday }, list).kind).toBe("invite");
+    const off = PROMOTIONS.map((p) => (p.kind === "referral" ? { ...p, enabled: false } : p));
+    expect(inviteState({ known: true, name: "X", now: tuesday }, off).kind).toBe("ended");
   });
   it("ended program", () => {
     const list: Promotion[] = PROMOTIONS.map((p) =>

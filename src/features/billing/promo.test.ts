@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { blackFridayOn, firstCheckoutTrial, referralsOn } from "./promo";
-import { PROMOTIONS, type Promotion } from "./promotions";
+import { bankedRewardDays, blackFridayOn, firstCheckoutTrial } from "./promo";
+import { PROMOTIONS, runningReferral, type Promotion } from "./promotions";
 import {
   codeFromBytes,
   earnsReferralReward,
@@ -22,15 +22,18 @@ describe("Black Friday", () => {
   });
 });
 
-describe("referrals window", () => {
-  it("is open when there is no end date", () => {
-    expect(referralsOn(after, null)).toBe(true);
+describe("the running referral program", () => {
+  const twoPrograms: Promotion[] = [
+    ...PROMOTIONS.filter((p) => p.kind === "seasonal"),
+    { ...PROMOTIONS[1], id: "old-referral", enabled: false, trialDays: 90 },
+    { ...PROMOTIONS[1], id: "new-referral", endsAt: null, trialDays: 21 },
+  ];
+  it("is the one on and inside its dates, not the first of its kind", () => {
+    expect(runningReferral(after, twoPrograms)?.id).toBe("new-referral");
   });
   it("closes after its end date", () => {
-    expect(referralsOn(after, new Date("2026-12-31T00:00:00Z"))).toBe(true);
-    expect(referralsOn(new Date("2027-01-01T00:00:00Z"), new Date("2026-12-31T00:00:00Z"))).toBe(
-      false,
-    );
+    expect(runningReferral(lastMinute)?.id).toBe("give-a-month");
+    expect(runningReferral(after)).toBeNull();
   });
 });
 
@@ -44,10 +47,35 @@ describe("first checkout trial", () => {
   it("gives one free month, not two, to a friend during Black Friday", () => {
     expect(firstCheckoutTrial({ now: during, referred: true, bankedMonths: 0 }).days).toBe(30);
   });
-  it("gives a friend the free month after Black Friday", () => {
+  it("gives a friend who joined while the referral program ran the month after it ended", () => {
     expect(
-      firstCheckoutTrial({ now: after, referred: true, bankedMonths: 0, referralEndsAt: null }),
+      firstCheckoutTrial({ now: after, referred: true, referredAt: during, bankedMonths: 0 }),
     ).toEqual({ days: 30, reasons: ["referral"] });
+  });
+  it("gives no month to a friend who joined after the referral program ended", () => {
+    expect(
+      firstCheckoutTrial({
+        now: after,
+        referred: true,
+        referredAt: after,
+        bankedMonths: 0,
+        baseDays: 7,
+      }),
+    ).toEqual({ days: 7, reasons: [] });
+  });
+  it("never shortens a longer usual trial", () => {
+    expect(
+      firstCheckoutTrial({ now: during, referred: false, bankedMonths: 0, baseDays: 45 }).days,
+    ).toBe(45);
+    expect(
+      firstCheckoutTrial({
+        now: after,
+        referred: true,
+        referredAt: during,
+        bankedMonths: 0,
+        baseDays: 40,
+      }).days,
+    ).toBe(40);
   });
   it("keeps the usual 7-day trial when nothing applies", () => {
     expect(
@@ -134,7 +162,20 @@ describe("first checkout trial from Staff → Promotions", () => {
   it("uses the referral program's days and reward months", () => {
     expect(
       firstCheckoutTrial({ now: after, referred: true, bankedMonths: 1, promotions: edited }).days,
-    ).toBe(14 + 60);
+    ).toBe(14 + 2 * 14);
+  });
+  it("values a banked month at the referral program's trial days", () => {
+    const month31 = PROMOTIONS.map((p) => (p.kind === "referral" ? { ...p, trialDays: 31 } : p));
+    expect(bankedRewardDays(after, month31)).toBe(31);
+    expect(
+      firstCheckoutTrial({
+        now: after,
+        referred: false,
+        bankedMonths: 2,
+        baseDays: 7,
+        promotions: month31,
+      }).days,
+    ).toBe(7 + 62);
   });
   it("gives nothing when staff switch the promotions off", () => {
     const off = PROMOTIONS.map((p) => ({ ...p, enabled: false }));
