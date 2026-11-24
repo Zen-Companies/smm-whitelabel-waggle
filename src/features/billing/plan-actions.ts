@@ -24,6 +24,7 @@ import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
 import { foundingSpotsLeft } from "./founding";
 import { firstCheckoutTrial } from "./promo";
+import { loadPromotions } from "./promotions-store";
 import { loadReferralForCheckout } from "./referrals";
 import {
   billingFromSubscription,
@@ -199,6 +200,7 @@ export async function choosePlan(
           referred: ref.referred,
           bankedMonths: ref.bankedIds.length,
           baseDays: baseTrial,
+          promotions: await loadPromotions(),
         })
       : null;
     const trialDays = free ? free.days : null;

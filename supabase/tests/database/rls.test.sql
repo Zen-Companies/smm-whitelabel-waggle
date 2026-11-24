@@ -99,7 +99,9 @@ select is_empty(
                                 -- Confirm later (hotfix 21 Nov): per login, server-written.
                                 'email_confirmations',
                                 -- Give a month, get a month (23 Nov): per organization, server-only.
-                                'referral_codes', 'referrals')
+                                'referral_codes', 'referrals',
+                                -- Staff → Promotions (24 Nov): global, server-only.
+                                'promotions', 'promotion_changes')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

@@ -8,7 +8,7 @@ import { Bell } from "@/features/alerts";
 
 import { FirstReplyTag, NEEDS_OWNER } from "@/features/approvals";
 
-import { BillingHost, PlanChip, PlanMenuRow } from "@/features/billing";
+import { BillingHost, PlanChip, PlanMenuRow, PromoBar } from "@/features/billing";
 
 import { touchActivity } from "@/features/crm";
 
@@ -82,6 +82,15 @@ async function PlanBanner() {
   );
 }
 
+/** The moving promotion bar above the navbar (approved 24 Nov); who sees it is per promotion. */
+async function TopPromo() {
+  const [tenant, orgs] = await Promise.all([getCurrentTenant(), listMyOrgs()]);
+  const org = orgs.find((o) => o.id === tenant.organizationId);
+  return (
+    <PromoBar orgId={tenant.organizationId} isOwner={!!org && can(org.role, "billing.view")} />
+  );
+}
+
 async function DashboardFeedback() {
   const tenant = await getCurrentTenant();
 
@@ -101,6 +110,10 @@ export default function DashboardLayout({ children }: LayoutProps<"/">) {
     // scrolls; its own areas scroll instead.
 
     <div className="flex min-h-dvh flex-col pb-16 md:pb-0 lg:has-[[data-fit-screen]]:h-dvh">
+      <Suspense fallback={null}>
+        <TopPromo />
+      </Suspense>
+
       <Suspense fallback={<div className="border-line h-14 border-b" />}>
         <Header />
       </Suspense>

@@ -60,6 +60,7 @@ export {
   roomForAnotherBrand,
 } from "./usage";
 export { PlansView } from "./plans-view";
+export { PromotionEditView, PromotionsView } from "./promotions-view";
 export type { OrgPlan } from "./usage";
 export { getStripe } from "./stripe-client";
 export { InvalidStripeWebhookError, receiveStripeEvent, verifyStripeEvent } from "./stripe-webhook";
@@ -76,5 +77,6 @@ export { FOUNDING_COUPON } from "./catalog";
 export { BLACK_FRIDAY, blackFridayOn } from "./promo";
 export { REF_COOKIE, REF_COOKIE_MAX_AGE_S, parseRefCode } from "./referral-code";
 export { claimReferral, grantReferralRewards, loadReferralStats } from "./referrals";
-export { BlackFridayNote, ReferralCard } from "./referral-card";
+export { ReferralCard } from "./referral-card";
+export { InviteCard, InvitePanel, PromoBar, PromoPass } from "./promo-surfaces";
 export { RefCatcher } from "./ref-catcher";

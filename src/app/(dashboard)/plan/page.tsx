@@ -1,8 +1,8 @@
 import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
 import {
-  BlackFridayNote,
   isUpgradeReason,
+  PromoPass,
   ReferralCard,
   TrialConversionTag,
   YourPlanSection,
@@ -36,7 +36,8 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
   const isOwner = can(org.role, "billing.view");
   return (
     <>
-      {isOwner && <BlackFridayNote orgId={org.id} />}
+      {/* Promotions (approved 24 Nov): Walter's pass, Black Friday or a friend's month. */}
+      {isOwner && <PromoPass orgId={org.id} />}
       <YourPlanSection
         org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}
         notice={notice}

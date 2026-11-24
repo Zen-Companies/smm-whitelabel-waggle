@@ -5,6 +5,7 @@ import type { Permission, StaffRole } from "./permissions";
 export const STAFF_PAGES = [
   { href: "/admin/costs", label: "Costs", permission: "admin.costs.view" },
   { href: "/admin/plans", label: "Plans", permission: "admin.caps.manage" },
+  { href: "/admin/promotions", label: "Promotions", permission: "admin.caps.manage" },
   { href: "/admin/platforms", label: "Platforms", permission: "admin.caps.manage" },
   { href: "/admin/lab", label: "Lab", permission: "admin.lab.use" },
   { href: "/admin/mcp-tools", label: "MCP tools", permission: "mcp.docs.view" },
@@ -27,7 +28,7 @@ export const firstStaffPage = (permissions: ReadonlySet<Permission>): string | n
 /** The permission matrix in plain words (Staff page). */
 export const PERMISSION_LABELS: Record<Permission, string> = {
   "admin.costs.view": "See costs",
-  "admin.caps.manage": "Change AI spending caps, plans and platforms",
+  "admin.caps.manage": "Change AI spending caps, plans, promotions and platforms",
   "admin.lab.use": "Use the lab",
   "mcp.docs.view": "Read MCP tool docs",
   "mcp.playground.run": "Run the Try it playground",

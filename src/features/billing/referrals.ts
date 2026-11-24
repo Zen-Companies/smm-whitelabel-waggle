@@ -5,6 +5,7 @@ import type { ServiceClient } from "@/lib/supabase/service";
 import { auditOrg } from "./billing-store";
 import { checkoutTrialDays, FOUNDING, isPaidPlanId, monthlyPrice } from "./plans";
 import { firstCheckoutTrial } from "./promo";
+import { loadPromotions } from "./promotions-store";
 import { codeFromBytes, isNewOrg, parseRefCode } from "./referral-code";
 import { planIsLive } from "./subscription";
 
@@ -140,6 +141,10 @@ export async function grantReferralRewards(deps: {
   const { db, stripe } = deps;
   const result = { credited: 0, banked: 0, failed: 0 };
   if (!stripe) return result;
+  // Months per friend: the referral program's reward (Staff → Promotions).
+  const rewardMonths =
+    (await loadPromotions()).find((p) => p.kind === "referral")?.rewardMonths ?? 1;
+  if (rewardMonths <= 0) return result;
   const { data: rows } = await db
     .from("referrals")
     .select("id, referrer_org_id, referred_org_id")
@@ -167,7 +172,7 @@ export async function grantReferralRewards(deps: {
         bill.founding && bill.plan === FOUNDING.plan
           ? FOUNDING.monthlyUsd
           : monthlyPrice(bill.plan, { yearly: bill.billing_interval === "year" });
-      const cents = Math.round(usd * 100);
+      const cents = Math.round(usd * 100 * rewardMonths);
       const txn = await stripe.customers.createBalanceTransaction(
         bill.stripe_customer_id,
         {
@@ -231,11 +236,70 @@ export async function offerTrialDays(
 ): Promise<number | null> {
   const base = checkoutTrialDays(bill);
   if (base === null) return null;
-  const ref = await loadReferralForCheckout(db, orgId);
+  const [ref, promotions] = await Promise.all([
+    loadReferralForCheckout(db, orgId),
+    loadPromotions(),
+  ]);
   return firstCheckoutTrial({
     now,
     referred: ref.referred,
     bankedMonths: ref.bankedIds.length,
     baseDays: base,
+    promotions,
   }).days;
+}
+
+/**
+ * The name a friend sees: the organization's first business (brand) name. Not the organization's
+ * own name, which starts as a person's ("Febron's Organization"). null when there is none yet.
+ */
+async function businessNameOf(db: ServiceClient, orgId: string): Promise<string | null> {
+  const { data } = await db
+    .from("tenants")
+    .select("name")
+    .eq("organization_id", orgId)
+    .eq("name_pending", false)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data?.name?.trim() || null;
+}
+
+/**
+ * Sign-up for a friend's link: whether the code is a real one, and the referring organization's
+ * business name (only that: never a person, email or anything else). Never throws.
+ */
+export async function referrerForCode(
+  db: ServiceClient,
+  rawCode: unknown,
+): Promise<{ known: boolean; name: string | null }> {
+  const code = parseRefCode(rawCode);
+  if (!code) return { known: false, name: null };
+  try {
+    const { data: owner } = await db
+      .from("referral_codes")
+      .select("organization_id")
+      .eq("code", code)
+      .maybeSingle();
+    if (!owner) return { known: false, name: null };
+    return { known: true, name: await businessNameOf(db, owner.organization_id) };
+  } catch (e) {
+    Sentry.captureException(e);
+    // Can't tell: keep the friend's card, without a name.
+    return { known: true, name: null };
+  }
+}
+
+/** The organization that referred this one, by display name (the friend's-month pass and success). */
+export async function referrerOf(
+  db: ServiceClient,
+  orgId: string,
+): Promise<{ referred: boolean; name: string | null }> {
+  const { data } = await db
+    .from("referrals")
+    .select("referrer_org_id")
+    .eq("referred_org_id", orgId)
+    .maybeSingle();
+  if (!data) return { referred: false, name: null };
+  return { referred: true, name: await businessNameOf(db, data.referrer_org_id) };
 }

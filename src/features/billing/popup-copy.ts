@@ -154,6 +154,9 @@ export interface PopupContent {
   closable: boolean;
   /** After Stripe's return: "You're on Solo. Free until November 30." */
   success: string;
+  /** The success moment (24 Nov): "Solo" and "$49 a month" (founding price when it applies). */
+  planName: string;
+  price: string;
 }
 
 export interface PopupInput {
@@ -194,19 +197,22 @@ export function payWords(
   now: Date,
   founding = false,
   trialDays: number = TRIAL.days,
-): { note: string; cardLabel: string; success: string } {
+): { note: string; cardLabel: string; success: string; price: string } {
   const end = trialEndLabel(now, trialDays);
   const offer = founding && plan.id === FOUNDING.plan;
   const price = offer
     ? `$${n(FOUNDING.monthlyUsd)} a month (founding price, locked for ${n(FOUNDING.months)} months)`
     : `$${n(plan.monthlyUsd)} a month`;
+  const perMonth = `$${n(offer ? FOUNDING.monthlyUsd : plan.monthlyUsd)} a month`;
   return trial
     ? {
+        price: perMonth,
         note: `Add a card, pay $0 today. Then ${price} from ${end}. Cancel before then and you pay nothing.`,
         cardLabel: "Start free with a card",
         success: `You’re on ${plan.name}. Free until ${end}.`,
       }
     : {
+        price: perMonth,
         note: offer
           ? `Pay $${n(FOUNDING.monthlyUsd)} today, then every month (founding price, locked for ${n(FOUNDING.months)} months). Cancel any time and you go back to ${free.name}.`
           : `Pay $${n(plan.monthlyUsd)} today, then every month. Cancel any time and you go back to ${free.name}.`,
@@ -325,6 +331,8 @@ export function popupContent(input: PopupInput): PopupContent {
     note: pay.note,
     cardLabel: pay.cardLabel,
     success: pay.success,
+    planName: plan.name,
+    price: pay.price,
     keep: keepFree,
     closable: true,
   };

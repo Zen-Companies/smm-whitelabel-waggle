@@ -77,7 +77,12 @@ export async function loadTrialConversion(
 export async function loadCheckoutReturn(
   sessionId: unknown,
   orgId: string,
-): Promise<{ conversion: TrialConversion; subscription: Stripe.Subscription } | null> {
+): Promise<{
+  conversion: TrialConversion;
+  subscription: Stripe.Subscription;
+  /** The session's own record of the free month (promo, banked_referrals), set at checkout. */
+  metadata: Record<string, string>;
+} | null> {
   if (!looksLikeSessionId(sessionId)) return null;
   const stripe = getStripe();
   if (!stripe) return null;
@@ -88,7 +93,7 @@ export async function loadCheckoutReturn(
     const conversion = trialFromSession(session, orgId);
     const sub = session.subscription;
     if (!conversion || !sub || typeof sub === "string") return null;
-    return { conversion, subscription: sub };
+    return { conversion, subscription: sub, metadata: session.metadata ?? {} };
   } catch (e) {
     console.error("billing: reading the checkout for the trial tag failed", {
       orgId,

@@ -1,8 +1,5 @@
 import "server-only";
 import { getServiceClient } from "@/lib/supabase/service";
-import { loadBilling } from "./billing-store";
-import { checkoutTrialDays } from "./plans";
-import { BLACK_FRIDAY, blackFridayOn } from "./promo";
 import { referralLink } from "./referral-code";
 import { loadReferralStats } from "./referrals";
 import { ReferralShare } from "./referral-share";
@@ -33,6 +30,7 @@ export async function ReferralCard({ orgId }: { orgId: string }) {
         your next month is free too, for every friend who joins.
       </p>
       <ReferralShare link={link} />
+      <p className="meta m-0">Your link shows your business name, nothing else.</p>
       {stats.joined > 0 && (
         <p className="meta" role="status">
           {plural(stats.joined, "friend joined", "friends joined")} ·{" "}
@@ -42,20 +40,5 @@ export async function ReferralCard({ orgId }: { orgId: string }) {
         </p>
       )}
     </section>
-  );
-}
-
-/** Your plan, during Black Friday: one line, only for organizations that never had a paid plan. */
-export async function BlackFridayNote({ orgId }: { orgId: string }) {
-  if (!blackFridayOn(new Date())) return null;
-  const bill = await loadBilling(getServiceClient(), orgId);
-  if (checkoutTrialDays(bill) === null) return null;
-  return (
-    <p
-      className="border-honey bg-honey-tint max-w-[1100px] rounded-xl border-2 px-4 py-3 text-[15px] font-semibold"
-      role="status"
-    >
-      {BLACK_FRIDAY.line}
-    </p>
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { blackFridayOn, firstCheckoutTrial, referralsOn } from "./promo";
+import { PROMOTIONS, type Promotion } from "./promotions";
 import {
   codeFromBytes,
   earnsReferralReward,
@@ -116,5 +117,34 @@ describe("when the referrer earns the month", () => {
         metadata: { kind: "auto_top_up" },
       }),
     ).toBe(false);
+  });
+});
+
+describe("first checkout trial from Staff → Promotions", () => {
+  const edited: Promotion[] = PROMOTIONS.map((p) =>
+    p.kind === "seasonal" ? { ...p, trialDays: 45 } : { ...p, trialDays: 14, rewardMonths: 2 },
+  );
+  it("uses the seasonal promotion's trial days", () => {
+    expect(
+      firstCheckoutTrial({ now: during, referred: false, bankedMonths: 0, promotions: edited }),
+    ).toEqual({ days: 45, reasons: ["black_friday"] });
+  });
+  it("uses the referral program's days and reward months", () => {
+    expect(
+      firstCheckoutTrial({ now: after, referred: true, bankedMonths: 1, promotions: edited }).days,
+    ).toBe(14 + 60);
+  });
+  it("gives nothing when staff switch the promotions off", () => {
+    const off = PROMOTIONS.map((p) => ({ ...p, enabled: false }));
+    expect(
+      firstCheckoutTrial({
+        now: during,
+        referred: true,
+        bankedMonths: 0,
+        baseDays: 7,
+        promotions: off,
+      }),
+    ).toEqual({ days: 7, reasons: [] });
+    expect(blackFridayOn(during, off)).toBe(false);
   });
 });

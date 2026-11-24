@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PlanBees, RestingBee } from "@/components/app/bee-plan";
 import { Button } from "@/components/ui/button";
-import type { ConversionTagProps } from "@/features/ad-tracking/client";
+import type { CheckoutSuccess } from "./popup-actions";
 import { NUDGE_EVERY_DAYS, nudgeDue, popupFor, STORAGE, type Popup } from "./banners";
 import { recordPlanNotice } from "./notice-actions";
 import { UpgradeDialog, WelcomeDialog, type OfferOrg } from "./offer-dialogs";
@@ -204,7 +204,7 @@ export function BillingPopups({
   // Stripe's return: asked once per session id.
   const [confirmed, setConfirmed] = useState<{
     id: string;
-    result: { tag: ConversionTagProps | null } | null;
+    result: CheckoutSuccess | null;
   } | null>(null);
   useEffect(() => {
     if (checkout !== "done" || !sessionId || confirmed?.id === sessionId) return;
