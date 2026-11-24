@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { legacyPath, PATH_HEADER } from "@/lib/routes";
+import { loginForStart } from "@/lib/checkout-link";
 import { UTM_COOKIE, UTM_COOKIE_MAX_AGE, utmFromParams } from "@/lib/crm/utm";
 
 // Refreshes the Supabase session cookie on page requests. Authorization happens close to the
@@ -32,7 +33,12 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getUser();
+  const { data } = await supabase.auth.getUser();
+  // HighLevel's checkout link (25 Nov) signed out: sign in, then back to the same link.
+  if (!data.user) {
+    const login = loginForStart(request.nextUrl.pathname, request.nextUrl.searchParams);
+    if (login) return NextResponse.redirect(new URL(login, request.url));
+  }
   // First-touch campaign (CRM, 18 Nov): the first link with UTMs wins, for 90 days.
   const utm = utmFromParams(request.nextUrl.searchParams);
   if (utm && !request.cookies.get(UTM_COOKIE)) {

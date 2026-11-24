@@ -36,7 +36,8 @@ describe("crmFields", () => {
       waggle_event: "trial_started",
       waggle_plan: "team",
       waggle_founding: "false",
-      waggle_trial_ends: "2026-11-25",
+      waggle_trial_ends: "November 25",
+      waggle_trial_ends_at: "2026-11-25T10:00:00.000Z",
       waggle_ends_on: "",
       waggle_accounts_connected: "2",
       waggle_replies_used: "12",
@@ -113,5 +114,19 @@ describe("crmFields", () => {
       waggle_connect_in_app: "yes",
     });
     for (const k of CRM_CONNECT_FIELDS) expect(crmFields(base)).not.toHaveProperty(k);
+  });
+});
+
+describe("trial end (Walter's own reminder, 25 Nov)", () => {
+  it("a readable day in US Eastern and the exact ISO time", () => {
+    const f = crmFields({ ...base, trialEndsAt: "2026-12-25T03:00:00Z" });
+    expect(f.waggle_trial_ends).toBe("December 24");
+    expect(f.waggle_trial_ends_at).toBe("2026-12-25T03:00:00.000Z");
+  });
+
+  it("blank without a trial", () => {
+    const f = crmFields({ ...base, trialEndsAt: null, status: "active" });
+    expect(f.waggle_trial_ends).toBe("");
+    expect(f.waggle_trial_ends_at).toBe("");
   });
 });

@@ -4,6 +4,8 @@ import {
   friendMonthApplied,
   readableDay,
   referralDedupeKey,
+  referralLinkDedupeKey,
+  referralLinkFields,
   referralRewardedFields,
   referralSendAfter,
   signupReferralFields,
@@ -139,5 +141,19 @@ describe("signupReferralFields", () => {
       ref_code: "abcd2345",
     });
     expect(signupReferralFields(null)).toEqual({});
+  });
+});
+
+describe("the Owner's referral link (25 Nov)", () => {
+  it("waggle_referral_link for an Owner, nothing without a link", () => {
+    expect(referralLinkFields("https://app.gowaggle.ai/signup?ref=abc123")).toEqual({
+      waggle_referral_link: "https://app.gowaggle.ai/signup?ref=abc123",
+    });
+    expect(referralLinkFields(null)).toEqual({});
+    expect(referralLinkFields("")).toEqual({});
+  });
+
+  it("synced once per code", () => {
+    expect(referralLinkDedupeKey("abc123")).toBe("referral_link:abc123");
   });
 });

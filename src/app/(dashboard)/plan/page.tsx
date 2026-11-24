@@ -4,6 +4,7 @@ import {
   isUpgradeReason,
   PromoPass,
   ReferralCard,
+  StartCheckout,
   TrialConversionTag,
   YourPlanSection,
 } from "@/features/billing";
@@ -37,6 +38,8 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       {/* Promotions (approved 24 Nov): Walter's pass, Black Friday or a friend's month. */}
+      {/* HighLevel's upgrade buttons (25 Nov): /plan?start=solo or start=team. */}
+      <StartCheckout orgId={org.id} isOwner={isOwner} start={params.start} />
       {isOwner && <PromoPass orgId={org.id} />}
       <YourPlanSection
         org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}

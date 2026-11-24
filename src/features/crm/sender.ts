@@ -5,7 +5,9 @@
 
 import * as Sentry from "@sentry/nextjs";
 import { GhlError, type GhlClient } from "@/lib/ghl/client";
+import { ownerReferralLink } from "@/features/billing";
 import {
+  CRM_FIELDS_ONLY,
   CRM_MIN_GAP_MS,
   CRM_NOTE_ONLY,
   CRM_EXTRA_TAGS,
@@ -14,6 +16,7 @@ import {
   parseUtmCookie,
   type Utm,
   isCrmEvent,
+  referralLinkFields,
   signupReferralFields,
 } from "@/lib/crm";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -87,6 +90,26 @@ async function referralGapWait(db: ServiceClient, row: Row, now: Date): Promise<
     .limit(1);
   const sentAt = data?.[0]?.sent_at;
   return sentAt ? new Date(new Date(sentAt).getTime() + CRM_MIN_GAP_MS) : null;
+}
+
+/**
+ * The Owner's own referral link (25 Nov), on every event about an Owner: the code is made if
+ * missing. Nothing for teammates or a login with no organization.
+ */
+async function ownerLink(
+  db: ServiceClient,
+  orgId: string | null,
+  userId: string,
+): Promise<{ waggle_referral_link?: string }> {
+  if (!orgId) return {};
+  const { data } = await db
+    .from("organization_members")
+    .select("role")
+    .eq("organization_id", orgId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (data?.role !== "owner") return {};
+  return referralLinkFields(await ownerReferralLink(db, orgId));
 }
 
 /** A note queued with the event (details.note = { title, body }), if any. */
@@ -174,6 +197,22 @@ export async function deliverCrmEvents(deps: {
           name: contact.name,
           fields: {},
         }));
+      } else if (CRM_FIELDS_ONLY.has(row.event)) {
+        // Fields only (the referral link): no trigger tag, so no workflow runs.
+        const fields = await ownerLink(db, row.organization_id, row.user_id);
+        if (!Object.keys(fields).length) {
+          await db
+            .from("crm_events")
+            .update({ status: "skipped", last_error: "not an Owner" })
+            .eq("id", row.id);
+          out.skipped += 1;
+          continue;
+        }
+        ({ contactId } = await client.upsertContact({
+          email: contact.email,
+          name: contact.name,
+          fields,
+        }));
       } else {
         const snapshot = await loadSnapshot(db, { ...row, event: row.event }, now);
         // Sign-up also carries the first campaign, never over one the contact already has.
@@ -183,11 +222,17 @@ export async function deliverCrmEvents(deps: {
         // A friend's link: its code and who sent them, always (the link is what brought them).
         const referral =
           row.event === "signed_up" ? await signupReferral(db, row.organization_id) : {};
+        const link = await ownerLink(db, row.organization_id, row.user_id);
         ({ contactId } = await client.upsertContact({
           email: contact.email,
           name: contact.name,
           companyName: snapshot.business || null,
-          fields: { ...crmFields(snapshot), ...(utm as Record<string, string>), ...referral },
+          fields: {
+            ...crmFields(snapshot),
+            ...(utm as Record<string, string>),
+            ...referral,
+            ...link,
+          },
         }));
         const extra = CRM_EXTRA_TAGS[row.event];
         await client.addTags(contactId, extra ? [CRM_TRIGGER_TAG, extra] : [CRM_TRIGGER_TAG]);
