@@ -11,6 +11,7 @@ const ALLOWED = [
   "src/features/platforms",
   "src/app/(dashboard)/admin",
   "src/features/billing/cost-view.tsx",
+  "src/features/customers",
   "src/features/lab",
   "src/features/offboarding",
   "src/features/staff",

@@ -25,4 +25,4 @@ export { ClosedBrandView } from "./closed-view";
 export { ReadOnlyNote, RoleGate } from "./role-gate";
 export { ForgotPasswordForm, NewPasswordForm } from "./password-forms";
 export { ConfirmEmailLine } from "./confirm-email-line";
-export { confirmEmailToken, emailConfirmState } from "./email-confirm";
+export { confirmEmailToken, emailConfirmState, sendEmailConfirmation } from "./email-confirm";

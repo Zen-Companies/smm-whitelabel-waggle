@@ -2,17 +2,27 @@
 -- server-only tables (staff, feature switches, MCP activity) hidden from owners. Rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(8);
+select plan(10);
 
 select results_eq(
   $$ select role, count(*)::int from public.staff_role_permissions group by role order by role $$,
-  $$ values ('admin', 10), ('developer', 5), ('support', 2), ('viewer', 3) $$,
+  $$ values ('admin', 12), ('developer', 6), ('support', 4), ('viewer', 3) $$,
   'each role has the approved number of permissions'
 );
 select results_eq(
   $$ select permission from public.staff_role_permissions where role = 'support' order by 1 $$,
-  $$ values ('mcp.audit.view'), ('mcp.docs.view') $$,
-  'support: docs and activity only'
+  $$ values ('customers.act'), ('customers.view'), ('mcp.audit.view'), ('mcp.docs.view') $$,
+  'support: customers, docs and activity'
+);
+select results_eq(
+  $$ select role from public.staff_role_permissions where permission = 'customers.view' order by 1 $$,
+  $$ values ('admin'), ('developer'), ('support') $$,
+  'Staff → Customers: admin, developer and support see customers; viewer does not'
+);
+select results_eq(
+  $$ select role from public.staff_role_permissions where permission = 'customers.act' order by 1 $$,
+  $$ values ('admin'), ('support') $$,
+  'only admin and support act on customers (resend the confirm email)'
 );
 select is_empty(
   $$ select 1 from public.staff_role_permissions
