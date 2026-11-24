@@ -14,13 +14,7 @@ import { headers } from "next/headers";
 import { connectBanner } from "@/features/accounts";
 import { freeAccountsFull, TrialConversionTag } from "@/features/billing";
 import { loadPlatformStatuses } from "@/features/platforms";
-import {
-  connectProblem,
-  deviceOf,
-  isDesktop,
-  isInAppBrowser,
-  WelcomeConnect,
-} from "@/features/setup";
+import { connectProblem, deviceOf, isInAppBrowser, WelcomeConnect } from "@/features/setup";
 import { AddBrandForm, getCurrentTenant, getOpenOrg } from "@/features/tenants";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -187,7 +181,6 @@ async function Content({
           problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
           inApp={isInAppBrowser(h.get("user-agent"))}
           device={deviceOf(h.get("user-agent"))}
-          desktop={isDesktop(h.get("user-agent"))}
           invites={<InviteList invites={invites} email={user.email} />}
           email={user.email}
         />

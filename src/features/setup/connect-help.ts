@@ -13,12 +13,6 @@ export function deviceOf(ua: string | null | undefined): Device {
   return "other";
 }
 
-/** Pure: a desktop browser (where "Scan to finish on your phone" shows). */
-export function isDesktop(ua: string | null | undefined): boolean {
-  if (!ua || /Mobi|Android|iPhone|iPad|iPod/i.test(ua)) return false;
-  return /Windows NT|Macintosh|X11|CrOS|Linux x86_64/i.test(ua);
-}
-
 /** The platforms that can't sign in inside Instagram's or Facebook's own browser. */
 export const BLOCKED_IN_APP = new Set<string>(["instagram", "facebook"]);
 
@@ -29,6 +23,20 @@ export const BLOCKED_IN_APP = new Set<string>(["instagram", "facebook"]);
  */
 export function usableHere<T extends string>(ids: readonly T[], inApp: InApp | null): T[] {
   return inApp ? ids.filter((id) => !BLOCKED_IN_APP.has(id)) : [...ids];
+}
+
+/**
+ * Pure: inside Instagram's or Facebook's browser, a problem with an Instagram or Facebook connect
+ * (personal Instagram, cancelled sign-in) shows the block card, never a Meta button that would
+ * fail here again.
+ */
+export function metaBlockedHere(
+  problem: { kind: string; platform?: string } | null,
+  inApp: InApp | null,
+): boolean {
+  if (!inApp || !problem) return false;
+  if (problem.kind === "instagram-personal") return true;
+  return problem.kind === "cancelled" && BLOCKED_IN_APP.has(problem.platform ?? "");
 }
 
 /** One drawn step: what the mini-phone shows and the line under it. */
@@ -119,6 +127,24 @@ export function switchNote(platform: SwitchPlatform): string {
   return platform === "facebook"
     ? "Free. Your own profile stays the same."
     : "Free. Your posts and followers stay the same.";
+}
+
+/**
+ * Pure: the address to copy or hand to Chrome: this page's plain address (keeping only `all=1`,
+ * the See all view). Nothing else from the address bar travels (no connect errors, no checkout
+ * session): over there the person signs in as usual and lands back on this step.
+ */
+export function plainPageUrl(href: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(href);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+  const out = new URL(u.pathname, u.origin);
+  if (u.searchParams.get("all") === "1") out.searchParams.set("all", "1");
+  return out.toString();
 }
 
 /**

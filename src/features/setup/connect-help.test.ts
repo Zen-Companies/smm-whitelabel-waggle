@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   blockedDetails,
   chromeIntentUrl,
+  plainPageUrl,
   deviceOf,
-  isDesktop,
   leaveSteps,
+  metaBlockedHere,
   switchNote,
   switchSteps,
   usableHere,
@@ -31,16 +32,6 @@ describe("deviceOf", () => {
   });
 });
 
-describe("isDesktop", () => {
-  it("is true only for computers", () => {
-    expect(isDesktop(UA.chromeDesktop)).toBe(true);
-    expect(isDesktop(UA.windows)).toBe(true);
-    expect(isDesktop(UA.instagramIos)).toBe(false);
-    expect(isDesktop(UA.facebookAndroid)).toBe(false);
-    expect(isDesktop(undefined)).toBe(false);
-  });
-});
-
 describe("usableHere", () => {
   const ids = ["facebook", "instagram", "tiktok", "linkedin"] as const;
   it("drops only Instagram and Facebook inside their in-app browsers", () => {
@@ -49,6 +40,21 @@ describe("usableHere", () => {
   });
   it("keeps every tile in a normal browser", () => {
     expect(usableHere(ids, null)).toEqual([...ids]);
+  });
+});
+
+describe("metaBlockedHere", () => {
+  it("blocks a personal-Instagram or cancelled Meta connect inside their browsers", () => {
+    expect(metaBlockedHere({ kind: "instagram-personal" }, "Instagram")).toBe(true);
+    expect(metaBlockedHere({ kind: "cancelled", platform: "facebook" }, "Instagram")).toBe(true);
+    expect(metaBlockedHere({ kind: "cancelled", platform: "instagram" }, "Facebook")).toBe(true);
+  });
+  it("leaves other problems and normal browsers alone", () => {
+    expect(metaBlockedHere({ kind: "cancelled", platform: "tiktok" }, "Instagram")).toBe(false);
+    const message = { kind: "message", text: "Something went wrong" };
+    expect(metaBlockedHere(message, "Instagram")).toBe(false);
+    expect(metaBlockedHere({ kind: "instagram-personal" }, null)).toBe(false);
+    expect(metaBlockedHere(null, "Facebook")).toBe(false);
   });
 });
 
@@ -78,11 +84,27 @@ describe("switchSteps", () => {
   });
 });
 
+describe("plainPageUrl", () => {
+  it("keeps the page and only its See all view, nothing else from the address", () => {
+    expect(plainPageUrl("https://app.waggle.test/welcome")).toBe("https://app.waggle.test/welcome");
+    expect(
+      plainPageUrl("https://app.waggle.test/welcome?all=1&error=cancelled&session_id=cs_1#x"),
+    ).toBe("https://app.waggle.test/welcome?all=1");
+    expect(plainPageUrl("https://app.waggle.test/welcome?before=instagram&trial=started")).toBe(
+      "https://app.waggle.test/welcome",
+    );
+  });
+  it("is null for anything that isn't an http(s) address", () => {
+    expect(plainPageUrl("javascript:alert(1)")).toBeNull();
+    expect(plainPageUrl("nope")).toBeNull();
+  });
+});
+
 describe("chromeIntentUrl", () => {
   it("hands the same page to Chrome, falling back to it in any browser", () => {
-    const url = "https://app.waggle.test/auth/handoff?id=abc&token_hash=xyz";
+    const url = "https://app.waggle.test/welcome?all=1";
     expect(chromeIntentUrl(url)).toBe(
-      "intent://app.waggle.test/auth/handoff?id=abc&token_hash=xyz#Intent;scheme=https;" +
+      "intent://app.waggle.test/welcome?all=1#Intent;scheme=https;" +
         "package=com.android.chrome;S.browser_fallback_url=" +
         encodeURIComponent(url) +
         ";end",

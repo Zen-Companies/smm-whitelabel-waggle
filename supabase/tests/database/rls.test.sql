@@ -107,9 +107,7 @@ select is_empty(
                                 -- Staff → Promotions (24 Nov): global, server-only.
                                 'promotions', 'promotion_changes',
                                 -- Reminder before the first charge (24 Nov): per organization, server-only.
-                                'trial_reminders',
-                                -- One-time sign-in links (Connect fix 2, 25 Nov): per login, server-only.
-                                'signin_links')
+                                'trial_reminders')
        and not exists (select 1 from information_schema.columns c
                        where c.table_schema = 'public' and c.table_name = t.table_name
                          and c.column_name = 'tenant_id') $$,

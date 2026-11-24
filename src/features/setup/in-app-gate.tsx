@@ -5,15 +5,14 @@ import { cn } from "cn";
 import { BeeBody } from "@/components/app/bee";
 import { buttonVariants } from "@/components/ui/button";
 import { recordConnectBlocked } from "./connect-help-actions";
-import { chromeIntentUrl, leaveSteps, type Device, type InApp } from "./connect-help";
+import { chromeIntentUrl, leaveSteps, plainPageUrl, type Device, type InApp } from "./connect-help";
 import { OkLine, PROGRESS_SAVED, StepRow } from "./step-drawings";
-import { useSigninLink } from "./use-signin-link";
 
 // Connect fix 2 (board approved 24 Nov): inside Instagram's or Facebook's own browser, signing in
 // with Meta stops halfway, so the Instagram and Facebook tiles give way to this card: only that
 // app's drawn steps out to Safari or Chrome, the bee, and "Your progress is saved". On Android one
-// big "Open in Chrome" hands the page over. No "Try here anyway". The link copied or opened signs
-// the person in once over there (one-time sign-in link, 10 minutes).
+// big "Open in Chrome" hands the page over. No "Try here anyway". The link copied or opened is this
+// page's plain address (no secrets): over there the person signs in as usual and lands here.
 
 const WIDE = "w-full min-h-11 text-sm rounded-xl";
 
@@ -59,7 +58,6 @@ function PasteHint({ browser }: { browser: string }) {
 }
 
 export function InAppGate({ app, device }: { app: InApp; device: Device }) {
-  const link = useSigninLink();
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
   const how = leaveSteps(device);
   const android = device === "android";
@@ -76,11 +74,11 @@ export function InAppGate({ app, device }: { app: InApp; device: Device }) {
     void recordConnectBlocked(app).catch(() => undefined);
   }, [app]);
 
-  const intent = android && link ? chromeIntentUrl(link) : null;
-
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(link ?? window.location.href);
+      await navigator.clipboard.writeText(
+        plainPageUrl(window.location.href) ?? window.location.href,
+      );
       setCopied("yes");
     } catch {
       setCopied("no");
@@ -114,13 +112,13 @@ export function InAppGate({ app, device }: { app: InApp; device: Device }) {
       {android ? (
         <>
           <a
-            href={intent ?? "#"}
+            href="#"
             onClick={(e) => {
-              // The sign-in link isn't ready yet: hand over the page as it is.
-              if (intent) return;
+              // Built on tap from this page's plain address (the server can't see it).
               e.preventDefault();
-              const now = chromeIntentUrl(window.location.href);
-              if (now) window.location.href = now;
+              const page = plainPageUrl(window.location.href);
+              const intent = page ? chromeIntentUrl(page) : null;
+              if (intent) window.location.href = intent;
             }}
             className={buttonVariants({ variant: "primary", className: cn(WIDE, "no-underline") })}
           >

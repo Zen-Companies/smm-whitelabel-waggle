@@ -16,7 +16,13 @@ import {
 } from "@/lib/social/platforms";
 import { connectFirstAccount } from "./actions";
 import { ConnectTileSubmit } from "./connect-pending";
-import { usableHere, type Device, type InApp, type SwitchPlatform } from "./connect-help";
+import {
+  metaBlockedHere,
+  usableHere,
+  type Device,
+  type InApp,
+  type SwitchPlatform,
+} from "./connect-help";
 import {
   BEFORE_CONNECT,
   BeforeConnect,
@@ -26,7 +32,6 @@ import {
 } from "./connect-step-parts";
 import type { ConnectProblem } from "./first-connect";
 import { InAppGate } from "./in-app-gate";
-import { PhoneQr } from "./phone-qr";
 import { SetupStepper } from "./setup-frame";
 import { SwitchHelp } from "./switch-steps";
 
@@ -164,7 +169,6 @@ export function WelcomeConnect({
   problem,
   inApp,
   device,
-  desktop,
   invites,
   email,
 }: {
@@ -182,8 +186,6 @@ export function WelcomeConnect({
   /** Inside Instagram's or Facebook's own browser: their tiles give way to the block card. */
   inApp: InApp | null;
   device: Device;
-  /** A computer: "Scan to finish on your phone" shows under the tiles. */
-  desktop: boolean;
   /** Team invites, shown on top (the welcome page's invite list). */
   invites: ReactNode;
   email: string | undefined;
@@ -228,6 +230,9 @@ export function WelcomeConnect({
   const lastTapped = [before, problem?.kind === "cancelled" ? problem.platform : null].find(
     (p): p is SwitchPlatform => p === "instagram" || p === "facebook",
   );
+  // Inside Instagram's or Facebook's browser, a problem with their connect (personal Instagram,
+  // cancelled sign-in) shows the block card, never a Meta button that would fail here again.
+  const metaProblemInApp = metaBlockedHere(problem, inApp);
   const tiles = (
     <div className="flex flex-col gap-3">
       {meta.length > 0 && (
@@ -275,7 +280,6 @@ export function WelcomeConnect({
           </span>
         </p>
       )}
-      {desktop && !inApp && <PhoneQr />}
     </div>
   );
 
@@ -299,13 +303,11 @@ export function WelcomeConnect({
           </p>
         </div>
 
-        {problem && problem.kind !== "free-full" && (
+        {problem && problem.kind !== "free-full" && !metaProblemInApp && (
           <ConnectProblemBox problem={problem} hasBrand={hasBrand} />
         )}
         {free && (free.full || problem?.kind === "free-full") ? (
           <FreeFullCard accounts={free.accounts} soloAccounts={free.soloAccounts} />
-        ) : problem?.kind === "instagram-personal" ? null : beforeOpen ? (
-          <BeforeConnect platform={beforeOpen} hasBrand={hasBrand} />
         ) : inApp ? (
           <>
             <InAppGate app={inApp} device={device} />
@@ -318,6 +320,8 @@ export function WelcomeConnect({
               </>
             )}
           </>
+        ) : problem?.kind === "instagram-personal" ? null : beforeOpen ? (
+          <BeforeConnect platform={beforeOpen} hasBrand={hasBrand} />
         ) : (
           tiles
         )}

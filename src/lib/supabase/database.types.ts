@@ -2647,45 +2647,6 @@ export type Database = {
         }
         Relationships: []
       }
-      signin_links: {
-        Row: {
-          created_at: string
-          expires_at: string
-          id: string
-          next: string
-          organization_id: string | null
-          used_at: string | null
-          user_id: string
-        }
-        ComputedFields: never
-        Insert: {
-          created_at?: string
-          expires_at: string
-          id?: string
-          next: string
-          organization_id?: string | null
-          used_at?: string | null
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          expires_at?: string
-          id?: string
-          next?: string
-          organization_id?: string | null
-          used_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "signin_links_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       social_accounts: {
         Row: {
           backfill_from: string | null

@@ -19,7 +19,6 @@ const LINK_ERRORS: Record<string, string> = {
   google_cancelled: "Google sign-in didn't finish. Try again, or use your email and password.",
   google: "We couldn't sign you in with Google just now. Try again in a minute.",
   confirm: "That confirmation link didn't work. It may be old or already used. Try signing in.",
-  link: "That sign-in link didn't work. It may be old or already used. Sign in to carry on.",
 };
 
 /**

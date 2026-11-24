@@ -71,7 +71,8 @@ export function SwitchHelp({
   connect: Partial<Record<SwitchPlatform, ReactNode>>;
 }) {
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState<SwitchPlatform>(initial ?? platforms[0] ?? "instagram");
+  const start = initial && platforms.includes(initial) ? initial : null;
+  const [tab, setTab] = useState<SwitchPlatform>(start ?? platforms[0] ?? "instagram");
   const panelId = useId();
   if (platforms.length === 0) return null;
   const pick = (p: SwitchPlatform) => {
@@ -86,7 +87,7 @@ export function SwitchHelp({
       aria-controls={panelId}
       onClick={() => {
         // Opens on the platform tapped last (remembered on this device).
-        if (!open && !initial) {
+        if (!open && !start) {
           const last = readTab();
           if (last && platforms.includes(last)) setTab(last);
         }
