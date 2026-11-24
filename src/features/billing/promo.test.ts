@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankedRewardDays, blackFridayOn, firstCheckoutTrial } from "./promo";
+import { bankedDaysOf, bankedRewardDays, blackFridayOn, firstCheckoutTrial } from "./promo";
 import { TRIAL } from "./plans";
 import { PROMOTIONS, runningReferral, type Promotion } from "./promotions";
 import {
@@ -228,5 +228,55 @@ describe("first checkout trial from Staff → Promotions", () => {
       }),
     ).toEqual({ days: 7, reasons: [] });
     expect(blackFridayOn(during, off)).toBe(false);
+  });
+});
+
+describe("a referral's stored terms (review of release #78)", () => {
+  /** The referral program switched off on Staff → Promotions (Black Friday off too). */
+  const OFF: Promotion[] = PROMOTIONS.map((p) => ({ ...p, enabled: false }));
+  it("the friend keeps the month stored at sign-up after the program is switched off", () => {
+    expect(
+      firstCheckoutTrial({
+        now: after,
+        referred: true,
+        referredAt: during,
+        referralTrialDays: 45,
+        bankedMonths: 0,
+        baseDays: BASE,
+        promotions: OFF,
+      }),
+    ).toEqual({ days: 45, reasons: ["referral"] });
+  });
+  it("0 stored (no program ran at sign-up) gives no referral month", () => {
+    expect(
+      firstCheckoutTrial({
+        now: after,
+        referred: true,
+        referralTrialDays: 0,
+        bankedMonths: 0,
+        baseDays: BASE,
+        promotions: PROMOTIONS.map((p) => (p.kind === "seasonal" ? { ...p, enabled: false } : p)),
+      }),
+    ).toEqual({ days: BASE, reasons: [] });
+  });
+  it("banked months count on their own terms, whatever the program says now", () => {
+    const rows = [
+      { reward_months: 1, trial_days: 30 },
+      { reward_months: 2, trial_days: 30 },
+      { reward_months: 0, trial_days: 0 },
+    ];
+    expect(bankedDaysOf(rows, after, OFF)).toBe(90);
+    expect(
+      firstCheckoutTrial({
+        now: after,
+        referred: false,
+        bankedMonths: 3,
+        bankedDays: bankedDaysOf(rows, after, OFF),
+        baseDays: BASE,
+        promotions: OFF,
+      }).days,
+    ).toBe(BASE + 90);
+    // A row from before the terms were stored: the program's month.
+    expect(bankedDaysOf([{ reward_months: null, trial_days: null }], during)).toBe(30);
   });
 });

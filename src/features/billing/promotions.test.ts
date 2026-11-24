@@ -229,3 +229,20 @@ describe("bar text", () => {
     expect(barTextOf(parseBarText(text))).toBe(text);
   });
 });
+
+describe("the friend's pass after the program is switched off (review of release #78)", () => {
+  const OFF = PROMOTIONS.map((p) => ({ ...p, enabled: false }));
+  it("still shows the month stored at sign-up", () => {
+    const pass = passFor(
+      { now: after, referred: true, referredAt: tuesday, referralTrialDays: 30, referrerName: "X" },
+      OFF,
+    );
+    expect(pass?.kind).toBe("referral");
+    expect(pass?.trialDays).toBe(30);
+  });
+  it("no pass when nothing was stored for it (no program at sign-up)", () => {
+    expect(
+      passFor({ now: after, referred: true, referralTrialDays: 0, referrerName: "X" }, OFF),
+    ).toBeNull();
+  });
+});

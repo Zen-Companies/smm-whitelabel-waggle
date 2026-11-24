@@ -24,7 +24,9 @@ import {
   planBullets,
   PLAN_IDS,
   PLANS,
+  storedTrialDays,
   TRIAL,
+  trialIsMonth,
   type PaidPlanId,
   type Plan,
   type PlanId,
@@ -323,6 +325,8 @@ export async function YourPlanSection({
   const firstCharge =
     price.chargeUsd +
     bill.extra_accounts * EXTRAS.accountUsd * (bill.billing_interval === "year" ? 12 : 1);
+  // A trial from before its length was stored is the old 7-day one, never the free month.
+  const trialLength = storedTrialDays(bill);
   // Pricing Bible (24 Nov): the billing date shown in the app, "First charge: December 24 ($49)".
   const chargeLine =
     bill.status === "trialing" && bill.trial_ends_at && !bill.cancel_at_period_end
@@ -379,17 +383,16 @@ export async function YourPlanSection({
       {bill.status === "trialing" && bill.trial_ends_at && (
         <section className="border-honey-border bg-honey-tint flex flex-wrap items-center gap-4 rounded-xl border px-4 py-3">
           {/* One hexagon a day fits a short trial; the free month says it in words only. */}
-          {(bill.trial_days ?? TRIAL.days) <= TRIAL_CELLS_MAX && (
+          {trialLength <= TRIAL_CELLS_MAX && (
             <TrialCells
-              day={trialDay(new Date(bill.trial_ends_at), now, bill.trial_days ?? TRIAL.days)}
-              of={bill.trial_days ?? TRIAL.days}
+              day={trialDay(new Date(bill.trial_ends_at), now, trialLength)}
+              of={trialLength}
             />
           )}
           <span className="min-w-[240px] flex-1 text-sm">
             <b>
-              Free month: day{" "}
-              {trialDay(new Date(bill.trial_ends_at), now, bill.trial_days ?? TRIAL.days)} of{" "}
-              {bill.trial_days ?? TRIAL.days}.
+              {trialIsMonth(trialLength) ? "Free month" : "Free trial"}: day{" "}
+              {trialDay(new Date(bill.trial_ends_at), now, trialLength)} of {trialLength}.
             </b>{" "}
             {bill.cancel_at_period_end ? (
               `It ends on ${day(bill.trial_ends_at)} and you won't be charged.`

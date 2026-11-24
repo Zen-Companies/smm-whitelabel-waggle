@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { unconfirmedUserIds } from "@/lib/email/confirmations";
 import type { Mailer } from "@/lib/email/mailer";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { storedTrialDays } from "./plans";
 import { billingFromSubscription } from "./subscription";
 import { reminderEmail, trialReminderRow } from "./trial-reminder";
 
@@ -68,6 +69,19 @@ async function settle(
   if (error) throw new Error(`trial reminder: saving failed: ${error.message}`);
 }
 
+/** A reminder not sent, and why, in the organization's audit (CLAUDE.md rule 11). */
+async function skip(db: ServiceClient, r: Reminder, reason: string): Promise<"skipped"> {
+  await settle(db, r.stripe_subscription_id, "queued", { status: "skipped", reason });
+  const { error } = await db.from("organization_audit").insert({
+    organization_id: r.organization_id,
+    action: "billing.trial_reminder_skipped",
+    actor: "system",
+    details: { subscription: r.stripe_subscription_id, reason },
+  });
+  if (error) throw new Error(`trial reminder: auditing the skip failed: ${error.message}`);
+  return "skipped";
+}
+
 async function handle(
   deps: TrialReminderDeps,
   r: Reminder,
@@ -78,7 +92,7 @@ async function handle(
   // Still the organization's running trial, not set to cancel, and not charged yet.
   const { data: bill, error: billErr } = await db
     .from("org_billing")
-    .select("stripe_subscription_id, status, cancel_at_period_end, trial_ends_at")
+    .select("stripe_subscription_id, status, cancel_at_period_end, trial_ends_at, trial_days")
     .eq("organization_id", r.organization_id)
     .maybeSingle();
   if (billErr) throw new Error(`trial reminder: reading the bill failed: ${billErr.message}`);
@@ -90,10 +104,7 @@ async function handle(
         : Date.parse(r.charge_at) <= now.getTime()
           ? "too_late"
           : null;
-  if (reason) {
-    await settle(db, id, "queued", { status: "skipped", reason });
-    return "skipped";
-  }
+  if (reason) return skip(db, r, reason);
 
   const [{ data: org }, { data: team, error: teamErr }] = await Promise.all([
     db.from("organizations").select("name").eq("id", r.organization_id).maybeSingle(),
@@ -106,10 +117,7 @@ async function handle(
     owners.map((o) => o.user_id),
   );
   const to = owners.filter((o) => !unconfirmed.has(o.user_id));
-  if (!to.length) {
-    await settle(db, id, "queued", { status: "skipped", reason: "no_owner" });
-    return "skipped";
-  }
+  if (!to.length) return skip(db, r, "no_owner");
 
   // Claim: one run sends it.
   const { data: claimed, error: claimErr } = await db
@@ -131,6 +139,7 @@ async function handle(
         amountCents: r.amount_cents,
         chargeAt: r.charge_at,
         appUrl: deps.appUrl,
+        trialDays: storedTrialDays(bill),
       });
       await deps.mailer.send({
         to: [owner.email],

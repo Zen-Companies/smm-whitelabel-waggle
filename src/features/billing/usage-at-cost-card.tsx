@@ -1,14 +1,14 @@
 import * as Sentry from "@sentry/nextjs";
 import { getSocialProvider } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
-import { TRIAL } from "./plans";
+import { storedTrialDays } from "./plans";
 import { usageParts, usageWindow, usd, type UsagePart } from "./usage-at-cost";
 import type { BillingRecord } from "./billing-store";
 
 /** The start of the cycle Stripe is in now: the trial's first day, else a month or year back. */
 function cycleStart(bill: BillingRecord): Date | null {
   if (bill.status === "trialing" && bill.trial_ends_at) {
-    const days = bill.trial_days ?? TRIAL.days;
+    const days = storedTrialDays(bill);
     return new Date(new Date(bill.trial_ends_at).getTime() - days * 24 * 60 * 60_000);
   }
   if (!bill.current_period_end) return null;

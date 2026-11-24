@@ -80,7 +80,13 @@ async function loadPass(orgId: string) {
   if (!(await neverPaid(orgId))) return null;
   const [ref, list] = await Promise.all([referrerOf(getServiceClient(), orgId), loadPromotions()]);
   return passFor(
-    { now: new Date(), referred: ref.referred, referredAt: ref.referredAt, referrerName: ref.name },
+    {
+      now: new Date(),
+      referred: ref.referred,
+      referredAt: ref.referredAt,
+      referralTrialDays: ref.trialDays,
+      referrerName: ref.name,
+    },
     list,
   );
 }

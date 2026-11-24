@@ -3,7 +3,7 @@
 // webhook stores, and the email the jobs route sends.
 
 import { brandedEmail, brandedText, detailRows, paragraph } from "@/lib/email/frame";
-import { isPaidPlanId, PLANS, type PaidPlanId } from "./plans";
+import { isPaidPlanId, PLANS, trialIsMonth, type PaidPlanId } from "./plans";
 import type { BillingRow } from "./subscription";
 
 /** "December 24": the day Stripe charges (dates are stored in UTC, like the rest of Your plan). */
@@ -87,6 +87,8 @@ export interface ReminderEmailInput {
   amountCents: number;
   chargeAt: string;
   appUrl: string;
+  /** The trial's length: "free month" at 28 days or more, else "free trial". */
+  trialDays: number;
 }
 
 /** Pure: the email to each Owner: plan, amount, the charge date, and how to change or cancel. */
@@ -99,9 +101,10 @@ export function reminderEmail(input: ReminderEmailInput): {
   const when = chargeDay(input.chargeAt);
   const amount = dollars(input.amountCents);
   const every = input.interval === "year" ? "year" : "month";
-  const subject = `Your free month ends soon: ${amount} on ${when}`;
+  const free = trialIsMonth(input.trialDays) ? "free month" : "free trial";
+  const subject = `Your ${free} ends soon: ${amount} on ${when}`;
   const hello = input.firstName ? `Hi ${input.firstName}.` : "Hi.";
-  const lead = `${hello} Your free month of Waggle ${planName} ends soon. On ${when} your card is charged ${amount}, then every ${every}.`;
+  const lead = `${hello} Your ${free} of Waggle ${planName} ends soon. On ${when} your card is charged ${amount}, then every ${every}.`;
   const keep = "Nothing to do to keep it: Waggle keeps answering as it does now.";
   const change = `To change your plan or cancel, open Your plan before ${when}. Cancel before then and you pay nothing.`;
   const base = input.appUrl.replace(/\/$/, "");

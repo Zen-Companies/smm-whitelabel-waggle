@@ -75,6 +75,7 @@ describe("the reminder email", () => {
     amountCents: 4900,
     chargeAt: TRIAL_END,
     appUrl: "https://app.example.com/",
+    trialDays: 30,
   });
   it("names the plan, the amount and the charge date", () => {
     expect(email.subject).toBe("Your free month ends soon: $49 on December 24");
@@ -102,9 +103,25 @@ describe("the reminder email", () => {
       amountCents: 99000,
       chargeAt: TRIAL_END,
       appUrl: "https://app.example.com",
+      trialDays: 37,
     });
     expect(e.text).toContain("Hi. Your free month of Waggle Team ends soon.");
     expect(e.text).toContain("then every year");
     expect(e.text).toContain("Plan: Team (yearly)");
+  });
+  it("a shorter trial is the free trial, never the free month", () => {
+    const e = reminderEmail({
+      firstName: null,
+      orgName: "X",
+      plan: "solo",
+      interval: "month",
+      amountCents: 4900,
+      chargeAt: TRIAL_END,
+      appUrl: "https://app.example.com",
+      trialDays: 7,
+    });
+    expect(e.subject).toBe("Your free trial ends soon: $49 on December 24");
+    expect(e.text).toContain("Hi. Your free trial of Waggle Solo ends soon.");
+    expect(e.text).not.toContain("free month");
   });
 });

@@ -22,7 +22,7 @@ import { loadPlans } from "./usage";
 import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
-import { firstCheckoutTrial } from "./promo";
+import { bankedDaysOf, firstCheckoutTrial } from "./promo";
 import { loadPromotions } from "./promotions-store";
 import { loadReferralForCheckout } from "./referrals";
 import {
@@ -191,25 +191,29 @@ export async function choosePlan(
     const firstTime = baseTrial !== null;
     // Black Friday and referrals (23 Nov): a promotion's trial when it is longer (never shorter),
     // with nothing to type; banked referral months add to it.
-    const ref = firstTime
-      ? await loadReferralForCheckout(db, orgId)
-      : { referred: false, referredAt: null, bankedIds: [] as string[] };
-    const free = firstTime
-      ? firstCheckoutTrial({
-          now: new Date(),
-          referred: ref.referred,
-          referredAt: ref.referredAt,
-          bankedMonths: ref.bankedIds.length,
-          baseDays: baseTrial,
-          promotions: await loadPromotions(),
-        })
-      : null;
+    const ref = firstTime ? await loadReferralForCheckout(db, orgId) : null;
+    const promotions = firstTime ? await loadPromotions() : null;
+    const now = new Date();
+    const free =
+      ref && promotions
+        ? firstCheckoutTrial({
+            now,
+            referred: ref.referred,
+            referredAt: ref.referredAt,
+            referralTrialDays: ref.referralTrialDays,
+            bankedMonths: ref.bankedIds.length,
+            bankedDays: bankedDaysOf(ref.banked, now, promotions),
+            baseDays: baseTrial ?? undefined,
+            promotions,
+          })
+        : null;
+    const bankedIds = ref?.bankedIds ?? [];
     const trialDays = free ? free.days : null;
     const promoMeta =
-      free && (free.reasons.length || ref.bankedIds.length)
+      free && (free.reasons.length || bankedIds.length)
         ? {
             promo: free.reasons.join(",") || "banked",
-            ...(ref.bankedIds.length ? { banked_referrals: ref.bankedIds.join(",") } : {}),
+            ...(bankedIds.length ? { banked_referrals: bankedIds.join(",") } : {}),
           }
         : {};
     const session = await stripe.checkout.sessions.create({

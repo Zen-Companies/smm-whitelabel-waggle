@@ -145,6 +145,19 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
       const row = billingFromSubscription(sub);
       const orgId = await orgForCustomer(db, sub.metadata.organization_id, row.stripe_customer_id);
       if (!orgId) return "ignored: no organization";
+      // Reminder before the first charge (Pricing Bible, 24 Nov): Stripe sends this 3 days before
+      // the trial ends. Stored only; the jobs route emails the Owner(s), once per subscription.
+      // Queued before the out-of-order checks below: a trial_will_end that lands after a newer
+      // event is still the only one Stripe sends. Once per subscription, and the send step checks
+      // the stored bill again (still trialing, not cancelling, not past the charge).
+      if (event.type === "customer.subscription.trial_will_end") {
+        const queued = await queueTrialReminder(db, orgId, sub);
+        if (queued) {
+          await auditOrg(db, orgId, "billing.trial_reminder_queued", "system", {
+            subscription: sub.id,
+          });
+        }
+      }
       const before = await loadBilling(db, orgId);
       const eventAt = new Date(event.created * 1000).toISOString();
       // Out of order: an older event never overwrites what a newer one stored.
@@ -213,16 +226,6 @@ export async function applyStripeEvent(db: ServiceClient, event: Stripe.Event): 
             plan: row.plan,
           }),
         );
-      }
-      // Reminder before the first charge (Pricing Bible, 24 Nov): Stripe sends this 3 days before
-      // the trial ends. Stored only; the jobs route emails the Owner(s), once per subscription.
-      if (event.type === "customer.subscription.trial_will_end") {
-        const queued = await queueTrialReminder(db, orgId, sub);
-        if (queued) {
-          await auditOrg(db, orgId, "billing.trial_reminder_queued", "system", {
-            subscription: sub.id,
-          });
-        }
       }
       if (before?.plan !== row.plan || before?.status !== row.status) {
         await auditOrg(db, orgId, "billing.subscription", "system", {

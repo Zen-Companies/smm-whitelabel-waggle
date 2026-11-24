@@ -103,6 +103,7 @@ const trialing = {
   status: "trialing",
   cancel_at_period_end: false,
   trial_ends_at: TRIAL_END,
+  trial_days: 30,
 };
 const owner = { user_id: "u-1", email: "owner@example.com", full_name: "Febron S", role: "owner" };
 const member = { user_id: "u-2", email: "member@example.com", full_name: "M", role: "member" };
@@ -206,6 +207,30 @@ describe("the jobs route emails the Owner(s) once", () => {
     await run(ended.client, m);
     expect(ended.reminders[0]).toMatchObject({ status: "skipped", reason: "not_trialing" });
     expect(sent).toHaveLength(0);
+    // Each skip is in the organization's audit, with its reason (CLAUDE.md rule 11).
+    expect(cancelling.audits).toEqual([
+      {
+        organization_id: "org-1",
+        action: "billing.trial_reminder_skipped",
+        actor: "system",
+        details: { subscription: "sub_1", reason: "cancelling" },
+      },
+    ]);
+    expect(ended.audits[0]).toMatchObject({
+      action: "billing.trial_reminder_skipped",
+      details: { reason: "not_trialing" },
+    });
+  });
+
+  it("a trial from before its length was stored is the old 7-day free trial", async () => {
+    const d = fakeDb({
+      reminders: [queued()],
+      bill: { ...trialing, trial_days: null },
+      team: [owner],
+    });
+    const { m, sent } = mailer();
+    await run(d.client, m);
+    expect(sent[0]?.subject).toBe("Your free trial ends soon: $49 on December 24");
   });
 
   it("never emails an address that isn't confirmed", async () => {
@@ -214,6 +239,10 @@ describe("the jobs route emails the Owner(s) once", () => {
     const { m, sent } = mailer();
     expect(await run(d.client, m)).toMatchObject({ skipped: 1 });
     expect(d.reminders[0]).toMatchObject({ status: "skipped", reason: "no_owner" });
+    expect(d.audits[0]).toMatchObject({
+      action: "billing.trial_reminder_skipped",
+      details: { reason: "no_owner" },
+    });
     expect(sent).toHaveLength(0);
   });
 
