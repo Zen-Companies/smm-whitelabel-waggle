@@ -18,6 +18,8 @@ export async function redraftAfterAnswerChange(
     tenantId: string;
     /** The changed or deleted answer; null for a new one. */
     kbEntryId: string | null;
+    /** A changed business name: only the drafts that say this (the old name) are written again. */
+    mentions?: string;
     actor: string;
     now?: Date;
   },
@@ -34,7 +36,7 @@ export async function redraftAfterAnswerChange(
   if (!items?.length) return 0;
   const { data: drafts, error: draftsError } = await db
     .from("drafts")
-    .select("id, item_id, kb_entry_ids, needs_human, created_at")
+    .select("id, item_id, body, edited_body, kb_entry_ids, needs_human, created_at")
     .eq("tenant_id", input.tenantId)
     .eq("status", "pending")
     .in(
@@ -50,8 +52,10 @@ export async function redraftAfterAnswerChange(
       kbEntryIds: d.kb_entry_ids,
       needsHuman: d.needs_human,
       createdAt: d.created_at,
+      body: d.edited_body ?? d.body,
     })),
     input.kbEntryId,
+    input.mentions,
   );
   let redrafted = 0;
   for (const p of picked) {
@@ -85,7 +89,7 @@ export async function redraftAfterAnswerChange(
       tenantId: input.tenantId,
       action: "catch_up_redraft",
       actor: input.actor,
-      details: { kbEntryId: input.kbEntryId, redrafted },
+      details: { kbEntryId: input.kbEntryId, redrafted, ...(input.mentions ? { why: "name" } : {}) },
     });
   }
   return redrafted;

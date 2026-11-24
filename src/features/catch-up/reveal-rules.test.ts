@@ -469,6 +469,16 @@ describe("pickRedrafts", () => {
     ).toEqual([{ id: "human", itemId: "item-human" }]);
   });
 
+  it("a changed business name rewrites only the drafts that say the old name", () => {
+    const drafts = [
+      { ...d("named", { h: 2 }), body: "Thanks from wako wako corner!" },
+      { ...d("human", { needsHuman: true }), body: "Someone will get back to you." },
+      { ...d("other", { kb: ["k1"] }), body: "We open at 8." },
+    ];
+    expect(pickRedrafts(drafts, null, "Wako Wako Corner").map((r) => r.id)).toEqual(["named"]);
+    expect(pickRedrafts(drafts, null, "  ").map((r) => r.id)).toEqual(["human"]);
+  });
+
   it("is bounded", () => {
     const many = Array.from({ length: 40 }, (_, i) => d(`h${i}`, { needsHuman: true, h: i }));
     const picked = pickRedrafts(many, null);

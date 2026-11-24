@@ -6,7 +6,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { redraftAfterAnswerChange } from "@/features/catch-up";
 import { embedEntry } from "@/features/knowledge-base";
-import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
+import { BRAND_NAME_MAX, getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
 import { markFactChecked } from "@/lib/facts";
@@ -16,7 +16,7 @@ import type { Json } from "@/lib/supabase/database.types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { ASK_FIRST_LABELS, askFirstFloor, withAskFirstFloor } from "@/lib/ask-first";
 import { chatSavedOf, kindAnswer, MISSING_FIELDS, type ChatSaved } from "./chat";
-import { chatLogSchema, kindChangedLine } from "./chat-log";
+import { chatLogSchema, kindChangedLine, nameSavedLine } from "./chat-log";
 import {
   FACT_FIELDS,
   FIELD_TITLE,
@@ -49,6 +49,11 @@ const KIND_KEYS = BUSINESS_KINDS.map((k) => k.key) as [string, ...string[]];
 const label = z.string().trim().max(1000).optional();
 
 const answerSchema = z.discriminatedUnion("step", [
+  z.object({
+    step: z.literal("name"),
+    name: z.string().trim().min(1).max(BRAND_NAME_MAX),
+    label,
+  }),
   z.object({
     step: z.literal("kind"),
     kind: z.enum(KIND_KEYS),
@@ -120,7 +125,41 @@ export async function saveChatAnswer(
   let details: Record<string, Json> = { step: a.step };
   let line: string | undefined;
 
-  if (a.step === "kind") {
+  if (a.step === "name") {
+    // The missing name asked first, or the Business line's "Save name" (24 Nov): the owner's
+    // words, so the name is checked. Unsent drafts that said the old name are written again.
+    const { data: t } = await db
+      .from("tenants")
+      .select("name, name_pending")
+      .eq("id", tenant.id)
+      .single();
+    const { error } = await db
+      .from("tenants")
+      .update({ name: a.name, name_pending: false, name_guessed_from: null })
+      .eq("id", tenant.id);
+    if (error) return { error: "Couldn’t save. Try again." };
+    await writeAudit(db, {
+      tenantId: tenant.id,
+      action: "brand_named",
+      actor: tenant.userId,
+      details: { from: "setup_chat", was: t?.name_pending ? "none" : "named" },
+    });
+    let redrafted = 0;
+    if (t && !t.name_pending && t.name !== a.name) {
+      try {
+        redrafted = await redraftAfterAnswerChange(db, {
+          tenantId: tenant.id,
+          kbEntryId: null,
+          actor: tenant.userId,
+          mentions: t.name,
+        });
+      } catch (err) {
+        Sentry.captureException(err, { extra: { tenantId: tenant.id, step: "name" } });
+      }
+    }
+    details = { ...details, redrafted };
+    line = nameSavedLine(redrafted);
+  } else if (a.step === "kind") {
     const words = a.kind === "other" ? (a.words ?? "") : "";
     next = { ...saved, kind: a.kind, kindWords: words };
     // The kind leads the business description Waggle sorts messages with (as setup always did).
@@ -154,7 +193,21 @@ export async function saveChatAnswer(
       );
     }
   } else if (a.step === "facts") {
-    // "Looks good": the facts shown are checked by the owner.
+    // "Looks good": the facts shown are checked by the owner, the business name too.
+    const { data: checkedName } = await db
+      .from("tenants")
+      .update({ name_guessed_from: null })
+      .eq("id", tenant.id)
+      .not("name_guessed_from", "is", null)
+      .select("id");
+    if (checkedName?.length) {
+      await writeAudit(db, {
+        tenantId: tenant.id,
+        action: "brand_name_checked",
+        actor: tenant.userId,
+        details: { via: "check_button" },
+      });
+    }
     for (const id of a.checked) {
       await markFactChecked(db, {
         tenantId: tenant.id,

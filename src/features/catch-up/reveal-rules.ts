@@ -550,7 +550,8 @@ export const REDRAFT_MAX = 25;
 /**
  * Which undecided pulled drafts an answer change could improve: drafts that used the changed (or
  * deleted) answer, and drafts that had no answer to go on (needs a human). A new answer has no
- * drafts using it yet, so only the second kind. Newest first, at most REDRAFT_MAX.
+ * drafts using it yet, so only the second kind. A changed business name (`mentions`, 24 Nov)
+ * picks only the drafts whose text says the old name. Newest first, at most REDRAFT_MAX.
  */
 export function pickRedrafts(
   drafts: {
@@ -559,12 +560,18 @@ export function pickRedrafts(
     kbEntryIds: string[];
     needsHuman: boolean;
     createdAt: string;
+    /** The draft's text as it would go out (the owner's edit, else Waggle's). */
+    body?: string;
   }[],
   changedEntryId: string | null,
+  mentions?: string,
 ): { id: string; itemId: string }[] {
+  const said = mentions?.trim().toLowerCase();
   return drafts
-    .filter(
-      (d) => d.needsHuman || (changedEntryId !== null && d.kbEntryIds.includes(changedEntryId)),
+    .filter((d) =>
+      said
+        ? !!d.body?.toLowerCase().includes(said)
+        : d.needsHuman || (changedEntryId !== null && d.kbEntryIds.includes(changedEntryId)),
     )
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, REDRAFT_MAX)

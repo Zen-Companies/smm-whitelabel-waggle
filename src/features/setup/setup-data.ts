@@ -21,13 +21,13 @@ import { askFirstTopicsFor, isCustomTopic } from "@/lib/ask-first";
 import { loadTenantAiSpend } from "@/lib/llm/spend";
 import { CONNECTABLE, hasLiveComments, platformLabel } from "@/lib/social/platforms";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { nameTag } from "./brand-name";
 import type { FlowFacts } from "./flow";
 import { chatSavedOf, type ChatSaved } from "./chat";
 import { chatLogOf, type ChatLog } from "./chat-log";
 import { knownFacts, type FactField, type KbRow, type KnownFact } from "./chat-fields";
 import {
   effectiveProfile,
-  profileName,
   storedProfile,
   wantedCounts,
   type WantedCount,
@@ -85,11 +85,13 @@ export interface WaitingMessage {
 export interface SetupData {
   tenantId: string;
   brandName: string;
+  /** No name at all yet (nothing gave one): step 3's chat asks it first (24 Nov). */
   namePending: boolean;
-  /** The AI profile's suggested business name (24 Nov), validated, or null. */
-  aiName: string | null;
-  /** The AI profile is made (when it isn't yet, the name screen looks again briefly). */
-  aiProfileReady: boolean;
+  /**
+   * The name is a guess (the AI profile's suggestion or the display name), not checked yet: the
+   * facts card's "from Instagram" tag. Null when the name is sure.
+   */
+  nameTag: string | null;
   savedScreen: string | null;
   finished: boolean;
   connected: boolean;
@@ -203,7 +205,6 @@ const waitingCategory = (c: string | null) => c === "faq" || c === "lead" || c =
 /** Pure: the screen facts (which screens show) from the loaded data. */
 export function flowFactsOf(d: SetupData): FlowFacts {
   return {
-    namePending: d.namePending,
     wanted: d.wanted.count,
     lostDms: d.wanted.lost.length,
     drafted: d.replies.drafted,
@@ -224,7 +225,7 @@ export async function loadSetupData(
       db
         .from("tenants")
         .select(
-          "name, name_pending, setup_screen, setup_done_at, ask_first_topics, business_profile, setup_chat, setup_chat_log, ai_profile",
+          "name, name_pending, name_guessed_from, setup_screen, setup_done_at, ask_first_topics, business_profile, setup_chat, setup_chat_log, ai_profile",
         )
         .eq("id", tenantId)
         .single(),
@@ -468,8 +469,7 @@ export async function loadSetupData(
     tenantId,
     brandName: tenant.name,
     namePending: tenant.name_pending,
-    aiName: profileName(aiProfile),
-    aiProfileReady: aiProfile !== null,
+    nameTag: tenant.name_pending ? null : nameTag(tenant.name_guessed_from, platformLabel),
     savedScreen: tenant.setup_screen,
     finished: tenant.setup_done_at !== null,
     connected: connectedPlatforms.size > 0,

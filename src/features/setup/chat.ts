@@ -3,13 +3,16 @@ import { BUSINESS_KINDS, CUSTOM_KIND_MAX } from "./starter";
 
 // Step 3 is a conversation with Waggle (boards "Step 3 is a conversation with Waggle" and
 // "Replica update", approved 23 Nov). One thread, questions in the replica's fixed order (our
-// cards, never the AI's): the kind of business (only when unknown) → the facts found → the replies
+// cards, never the AI's): the business's name (only when nothing gave one) → the kind of business
+// (only when unknown) → the facts found → the replies
 // Waggle wrote → the customers who need the owner → what to always check first → how replies go
 // out → done. Each answer is saved as it's tapped (tenants.setup_chat: choices only, never
 // customer text); everything else said in the thread is in chat-log.ts. A reload brings it all
 // back. Answers are never cleared: changing one asks again at the bottom (23 Nov). Pure, tested.
 
 export const CHAT_STEPS = [
+  // Only when nothing gave the business a name (24 Nov): asked first, no Skip.
+  "name",
   "kind",
   "facts",
   "missing",
@@ -50,7 +53,7 @@ export const chatSavedSchema = z
     skippedAnswers: z.literal(true),
     /** The owner's bubble as first answered (a later change shows at the bottom, not here). */
     labels: z.partialRecord(
-      z.enum(["kind", "facts", "replies", "topics", "mode"]),
+      z.enum(["name", "kind", "facts", "replies", "topics", "mode"]),
       z.string().max(1000),
     ),
   })
@@ -72,6 +75,8 @@ export function nextMissing(
 }
 
 export interface ChatFacts {
+  /** Nothing gave the business a name: Waggle asks it first, and nothing goes on without it. */
+  namePending?: boolean;
   /** The kind is known (saved, or the profile's guess): Waggle doesn't ask it. */
   kindKnown: boolean;
   /** Replies Waggle wrote that aren't sent yet. */
@@ -94,6 +99,7 @@ export function chatProgress(
 ): { answered: ChatStep[]; open: ChatStep | "done" } {
   const answered: ChatStep[] = [];
   const isAnswered: Record<ChatStep, boolean> = {
+    name: !f.namePending,
     kind: !!saved.kind || f.kindKnown,
     facts: saved.facts === "ok",
     // Only what was missing at "Looks good" is asked (a new kind's lines later show as "Not set
@@ -112,6 +118,9 @@ export function chatProgress(
   }
   return { answered, open: "done" };
 }
+
+/** The missing name, asked first (24 Nov: step 2's name screen moved here). */
+export const NAME_QUESTION = "First, what’s your business called?";
 
 /** Waggle's first words (the replica's). */
 export const GREETING = "Hi! I’m Waggle, your assistant. I’ll answer your customers for you.";
