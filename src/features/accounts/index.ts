@@ -4,6 +4,13 @@ export { AccountsCard, ConnectedCount } from "./accounts-card";
 export { connectAccount } from "./actions";
 export { NotConnectedYet } from "./not-connected";
 export { ConnectResult } from "./connect-result";
+export { ConnectTrace } from "./connect-trace-beacon";
+export {
+  markConnectConnected,
+  recordConnectReturn,
+  recordConnectStart,
+  sweepAbandonedConnects,
+} from "./connect-trace-store";
 export { connectBanner, connectionLabel } from "./connect-banner";
 export {
   connectErrorHref,

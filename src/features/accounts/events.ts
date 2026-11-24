@@ -6,6 +6,7 @@ import { markSetupPassed } from "@/lib/setup/passed";
 import { hasLiveComments } from "@/lib/social/platforms";
 import { isSocialPlatform, SOCIAL_PLATFORMS, type SocialPlatform } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { markConnectConnected, traceQuietly } from "./connect-trace-store";
 
 // account.connected / account.disconnected, called by the webhook mapping (T5) with a tenant it
 // has already verified. Both are safe to run twice for the same event.
@@ -34,6 +35,15 @@ export async function handleAccountConnected(
 
   // Another tenant's account id: never touch it (the caller records the event as an error).
   if (outcome === "foreign") return { accountId: row.account_id, outcome, resumedItems: 0 };
+
+  // Fix 1 (24 Nov): the brand's open connect attempt for this platform is now connected.
+  await traceQuietly(() =>
+    markConnectConnected(db, {
+      tenantId: input.tenantId,
+      platform: input.platform,
+      zernioAccountId: input.zernioAccountId,
+    }),
+  );
 
   if (outcome !== "existing" || row.previous_status !== "active") {
     // First connect (19 Nov): a catch-up of the last 30 days of comments and DMs replaces the
