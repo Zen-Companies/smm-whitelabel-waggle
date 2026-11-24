@@ -74,6 +74,7 @@ export { TrialConversionTag } from "./trial-tag";
 export { PLAN_HREF, PlanChip, PlanMenuRow, PlanMoreRow } from "./plan-chip";
 export type { PlanViewer } from "./plan-chip";
 export { FOUNDING_COUPON } from "./catalog";
+export { foundingRedeemed } from "./founding";
 export { BLACK_FRIDAY, blackFridayOn } from "./promo";
 export { REF_COOKIE, REF_COOKIE_MAX_AGE_S, parseRefCode } from "./referral-code";
 export { claimReferral, grantReferralRewards, loadReferralStats } from "./referrals";

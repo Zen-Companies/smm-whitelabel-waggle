@@ -261,7 +261,8 @@ const on = z
 export const promotionFormSchema = z
   .object({
     name: text(60, "Name").min(1, "Name: give it a name."),
-    enabled: on,
+    // No `enabled`: the on/off switch (setPromotionEnabled) owns it, so saving the form never
+    // undoes a switch flipped after the page loaded.
     starts_at: when("Starts"),
     ends_at: when("Ends"),
     trial_days: whole(1, 90, "Trial days"),
@@ -333,12 +334,22 @@ export function parsePromotionForm(
   return { value: r.data };
 }
 
+/** The date fields: compared as instants ("…+00:00" from the table = "….000Z" from the form). */
+const DATE_FIELDS = new Set(["starts_at", "ends_at", "last_day_starts_at"]);
+
+function sameValue(key: string, a: unknown, b: unknown): boolean {
+  if (DATE_FIELDS.has(key) && typeof a === "string" && typeof b === "string") {
+    const ta = Date.parse(a);
+    const tb = Date.parse(b);
+    if (!Number.isNaN(ta) && !Number.isNaN(tb)) return ta === tb;
+  }
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+}
+
 /** Pure: the fields that differ (for the history list: "what changed"). */
 export function changedFields(
   before: Partial<Record<string, unknown>>,
   after: Partial<Record<string, unknown>>,
 ): string[] {
-  return Object.keys(after).filter(
-    (k) => JSON.stringify(before[k] ?? null) !== JSON.stringify(after[k] ?? null),
-  );
+  return Object.keys(after).filter((k) => !sameValue(k, before[k], after[k]));
 }

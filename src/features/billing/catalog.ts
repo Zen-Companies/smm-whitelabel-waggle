@@ -17,6 +17,14 @@ export const PRICE_KEYS = {
 /** The founding Business discount: $79 instead of $99 for 6 months, first 50 businesses. */
 export const FOUNDING_COUPON = "waggle_founding_business";
 
+/**
+ * Pure: whether a coupon id is the founding coupon or one of its longer copies (made for a
+ * checkout with a long trial, founding.ts: "waggle_founding_business_7m").
+ */
+export function isFoundingCoupon(id: string): boolean {
+  return id === FOUNDING_COUPON || /^waggle_founding_business_\d+m$/.test(id);
+}
+
 export interface CatalogPrice {
   lookupKey: string;
   /** Cents. */

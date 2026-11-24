@@ -72,7 +72,10 @@ async function loadBar(orgId: string, isOwner: boolean) {
 async function loadPass(orgId: string) {
   if (!(await neverPaid(orgId))) return null;
   const [ref, list] = await Promise.all([referrerOf(getServiceClient(), orgId), loadPromotions()]);
-  return passFor({ now: new Date(), referred: ref.referred, referrerName: ref.name }, list);
+  return passFor(
+    { now: new Date(), referred: ref.referred, referredAt: ref.referredAt, referrerName: ref.name },
+    list,
+  );
 }
 
 export async function PromoPass({ orgId }: { orgId: string }) {

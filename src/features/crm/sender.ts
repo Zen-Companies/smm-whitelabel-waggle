@@ -4,7 +4,7 @@
 // trial_converted always lands before a later canceled.
 
 import * as Sentry from "@sentry/nextjs";
-import { FOUNDING, FOUNDING_COUPON, getStripe } from "@/features/billing";
+import { foundingRedeemed, getStripe } from "@/features/billing";
 import { GhlError, type GhlClient } from "@/lib/ghl/client";
 import {
   CRM_MIN_GAP_MS,
@@ -47,9 +47,9 @@ type Row = {
 async function checkFoundingFull(db: ServiceClient, row: Row): Promise<void> {
   const stripe = getStripe();
   if (!stripe) return;
-  const coupon = await stripe.coupons.retrieve(FOUNDING_COUPON).catch(() => null);
-  const max = coupon?.max_redemptions ?? FOUNDING.spots;
-  if (coupon && coupon.times_redeemed >= max) {
+  // Every founding coupon counts (the base one and its longer copies for long trials).
+  const spots = await foundingRedeemed(stripe).catch(() => null);
+  if (spots && spots.redeemed >= spots.max) {
     await queueCrmEvent(db, {
       event: "founding_full",
       userId: row.user_id,

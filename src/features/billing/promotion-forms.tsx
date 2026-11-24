@@ -254,8 +254,7 @@ export function PromotionEditForm({
     <K extends keyof Values>(k: K) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setV((o) => ({ ...o, [k]: e.target.value }));
-  const flip = (k: "enabled" | "countdown" | "bar_enabled") => () =>
-    setV((o) => ({ ...o, [k]: !o[k] }));
+  const flip = (k: "countdown" | "bar_enabled") => () => setV((o) => ({ ...o, [k]: !o[k] }));
 
   const text = (k: keyof Values, max: number, placeholder?: string) => (
     <Input
@@ -286,7 +285,7 @@ export function PromotionEditForm({
       className="tabular-nums"
     />
   );
-  const sw = (k: "enabled" | "countdown" | "bar_enabled", label: string) => (
+  const sw = (k: "countdown" | "bar_enabled", label: string) => (
     <span className="flex items-center gap-2 text-sm font-medium">
       {v[k] && <input type="hidden" name={k} value="on" />}
       <Switch type="button" on={v[k]} label={label} onClick={flip(k)} />
@@ -308,7 +307,7 @@ export function PromotionEditForm({
         <div className="flex flex-col">
           <div className={group}>
             <span className={head}>Promotion</span>
-            <div className="flex flex-wrap gap-6">{sw("enabled", "On")}</div>
+            {/* On/off is the switch above the form (it saves at once), not a form field. */}
             <Field label="Name">{text("name", 60)}</Field>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Starts (US Eastern)" hint={zones(v.starts_at)}>
