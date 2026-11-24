@@ -3,6 +3,7 @@ import type { Permission, StaffRole } from "./permissions";
 // The staff pages (design v3 "Staff pages"): one tab each, shown only to roles that may open it.
 
 export const STAFF_PAGES = [
+  { href: "/admin/customers", label: "Customers", permission: "customers.view" },
   { href: "/admin/costs", label: "Costs", permission: "admin.costs.view" },
   { href: "/admin/plans", label: "Plans", permission: "admin.caps.manage" },
   { href: "/admin/platforms", label: "Platforms", permission: "admin.caps.manage" },
@@ -36,6 +37,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "staff.manage": "Add or remove staff",
   "brands.manage": "Offboard, restore or mark test businesses",
   "beta.manage": "Create beta codes and see who joined",
+  "customers.view": "See customers",
+  "customers.act": "Act on customers",
 };
 
 export const ROLE_LABELS: Record<StaffRole, string> = {
