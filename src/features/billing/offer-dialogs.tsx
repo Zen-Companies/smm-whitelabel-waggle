@@ -42,10 +42,8 @@ export interface OfferOrg {
   plans: Record<PlanId, Plan>;
   /** Its first paid plan starts with a free trial. */
   trial: boolean;
-  /** How long: 7 days, or 30 with the Black Friday or referral month. */
+  /** How long: the first month (30 days), more with banked referral months. */
   trialDays?: number;
-  /** The founding offer applies to its first paid plan (spots left, checked with Stripe). */
-  founding: boolean;
   /** Stripe is set up on this server. */
   stripeReady: boolean;
   /** The interval a switch keeps. */

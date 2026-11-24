@@ -23,7 +23,6 @@ export const CRM_EVENTS = {
   usage_80: "AI replies reach 80% of the month's allowance",
   usage_100: "AI replies reach 100%",
   account_limit: "A connect is blocked: the plan's accounts are all in use",
-  founding_full: "The 50th founding spot is taken",
   referral_rewarded:
     "Give a month, get a month (24 Nov): this person's free month was applied in Stripe. The friend at their checkout (the 30-day trial starts), the referrer when the credit lands after the friend's first payment (or banked months start their first trial). Once per person per referral",
   connect_failed:

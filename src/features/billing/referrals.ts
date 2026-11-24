@@ -13,7 +13,7 @@ import {
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { auditOrg } from "./billing-store";
-import { checkoutTrialDays, FOUNDING, isPaidPlanId, monthlyPrice } from "./plans";
+import { checkoutTrialDays, isPaidPlanId, monthlyPrice } from "./plans";
 import { firstCheckoutTrial } from "./promo";
 import { runningReferral, type Promotion } from "./promotions";
 import { loadPromotions } from "./promotions-store";
@@ -344,7 +344,7 @@ async function creditOne(
   const { data: bill, error: billError } = await db
     .from("org_billing")
     .select(
-      "stripe_customer_id, stripe_subscription_id, plan, billing_interval, status, founding, current_period_end",
+      "stripe_customer_id, stripe_subscription_id, plan, billing_interval, status, current_period_end",
     )
     .eq("organization_id", row.referrer_org_id)
     .maybeSingle();
@@ -374,10 +374,7 @@ async function creditOne(
     }
   }
 
-  const usd =
-    bill.founding && bill.plan === FOUNDING.plan
-      ? FOUNDING.monthlyUsd
-      : monthlyPrice(bill.plan, { yearly: bill.billing_interval === "year" });
+  const usd = monthlyPrice(bill.plan, { yearly: bill.billing_interval === "year" });
   const cents = Math.round(usd * 100 * months);
   const txn =
     (await findReferralCredit(stripe, bill.stripe_customer_id, row.id)) ??
@@ -440,8 +437,8 @@ export async function loadReferralStats(db: ServiceClient, orgId: string): Promi
 }
 
 /**
- * How long the organization's first paid plan would be free if it chose one now: 7 days, or 30
- * with the Black Friday or referral month (plus banked months). null once it had a paid plan.
+ * How long the organization's first paid plan would be free if it chose one now: the first month
+ * (30 days, or a promotion's longer trial) plus banked months. null once it had a paid plan.
  * Shown on every offer, so what the owner reads is what checkout gives.
  */
 export async function offerTrialDays(

@@ -38,7 +38,6 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 | business_info_saved                                                                                      | `features/tenants/actions.ts` (first save of a business profile)                        |
 | usage_80, usage_100                                                                                      | `features/billing` reply limit (once per month each)                                    |
 | account_limit                                                                                            | `features/accounts` connect actions (once a day)                                        |
-| founding_full                                                                                            | `sender.ts`, after a founding trial takes the last spot                                 |
 | inactive, app_active                                                                                     | `activity.ts` (sweep in the jobs route; a visit)                                        |
 
 ## Failed connects (Fix 1, 24 Nov)
@@ -83,7 +82,7 @@ The pure rules (readable date, dedupe key, 30 s gap, friend's month applied) are
 
 - Plan words are `free` (no paid plan, 19 Nov), `solo`, `team` ($99), `business` (by call). Waggle's **ids are swapped** for the two
   upper plans, so `crmPlan()` uses the plan's name, never its id.
-- Every field on every event; `waggle_founding` is always `true` or `false`.
+- Every field on every event; `waggle_founding` is always `false` (founding offer retired, 24 Nov).
 - `trial_converted` always before a later `canceled` (the queue keeps order per person).
 - Only the owner's own account data. Never their customers' names, messages or contacts.
 

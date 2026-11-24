@@ -2,7 +2,7 @@
 // by these lookup keys, so no price id lives in the environment: `pnpm stripe:catalog` creates
 // them once per Stripe account (sandbox or live) and prints the ids.
 
-import { EXTRAS, FOUNDING, PAID_PLAN_IDS, PLANS, type PaidPlanId } from "./plans";
+import { EXTRAS, PAID_PLAN_IDS, PLANS, type PaidPlanId } from "./plans";
 
 export type Interval = "month" | "year";
 
@@ -13,17 +13,6 @@ export const PRICE_KEYS = {
     `waggle_extra_account_${interval === "year" ? "yearly" : "monthly"}`,
   topUp: "waggle_top_up_200",
 } as const;
-
-/** The founding Business discount: $79 instead of $99 for 6 months, first 50 businesses. */
-export const FOUNDING_COUPON = "waggle_founding_business";
-
-/**
- * Pure: whether a coupon id is the founding coupon or one of its longer copies (made for a
- * checkout with a long trial, founding.ts: "waggle_founding_business_7m").
- */
-export function isFoundingCoupon(id: string): boolean {
-  return id === FOUNDING_COUPON || /^waggle_founding_business_\d+m$/.test(id);
-}
 
 export interface CatalogPrice {
   lookupKey: string;
@@ -90,9 +79,4 @@ export function catalog(): CatalogProduct[] {
       prices: [{ lookupKey: PRICE_KEYS.topUp, amount: cents(EXTRAS.topUp.usd), interval: null }],
     },
   ];
-}
-
-/** Cents off a month for founding members (the Business monthly price minus the founding one). */
-export function foundingCentsOff(): number {
-  return cents(PLANS[FOUNDING.plan].monthlyUsd - FOUNDING.monthlyUsd);
 }

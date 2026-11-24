@@ -5,6 +5,9 @@
 // shaped like the records our team will edit later (admin, then a table): each promotion has its
 // own dates, texts and bar settings, so the referral program can run a bar on its own.
 // The free month itself (trial days at checkout) stays in promo.ts, which reads its dates here.
+//
+// Pricing Bible, 24 Nov (final): the offer never states an end date in public. A promotion's
+// end date only switches it off; no bar, pass or line ever shows a date or a countdown.
 
 export type PromotionKind = "seasonal" | "referral";
 
@@ -54,13 +57,6 @@ export interface PassCopy {
   small: string;
 }
 
-/** A different face for the last day (Cyber Monday): from `startsAt` to the promotion's end. */
-export interface LastDay {
-  startsAt: Date;
-  bar: BarCopy;
-  pass: PassCopy;
-}
-
 export interface Promotion {
   id: string;
   /** Staff's name for it ("Black Friday 2026"). */
@@ -69,20 +65,17 @@ export interface Promotion {
   enabled: boolean;
   /** null: already running. */
   startsAt: Date | null;
-  /** null: no end (the referral program until a date is set). */
+  /** null: no end. Only switches it off: never shown to owners (24 Nov). */
   endsAt: Date | null;
-  /** Days free on the first plan checkout. */
+  /** Days free on the first plan checkout (never fewer than the usual first month). */
   trialDays: number;
-  /** Your plan: show "Ends in N days". */
-  countdown: boolean;
   /** Referral program: months credited to the referrer per friend's first payment. */
   rewardMonths: number;
   bar: PromoBar;
   pass: PassCopy;
-  lastDay: LastDay | null;
 }
 
-/** US Eastern: the promotions' dates and "Ends in N days" count in it. */
+/** US Eastern: the promotions' dates are typed in it on Staff → Promotions. */
 export const PROMO_TIME_ZONE = "America/New_York";
 
 /** Sign-up for a friend's link, and the success line. `{name}` is the referrer's business name. */
@@ -92,12 +85,12 @@ export const REFERRAL_COPY = {
   panelTitle: "They let Waggle answer their DMs.",
   panelTitleHoney: "Your turn.",
   panelTitleUnknown: "Waggle answers your DMs.",
-  panelSub: "Start on Free. When you pick a plan, the first month is on them.",
+  panelSub: "Start on Free. When you pick Solo or Team, the first month is on them.",
   cardKicker: "Invited by {name}",
   cardKickerUnknown: "You’re invited",
   cardTitle: "{name} gave you a month of Waggle",
   cardTitleUnknown: "A friend gave you a month of Waggle",
-  cardOffer: "Your first month on any paid plan is free.",
+  cardOffer: "Your first month on Solo or Team is free.",
   cardApplied: "Applied automatically at checkout",
   endedTitle: "{name} invited you",
   endedTitleUnknown: "A friend invited you",
@@ -116,11 +109,10 @@ export const PROMOTIONS: readonly Promotion[] = [
     kind: "seasonal",
     enabled: true,
     startsAt: null,
-    // Tuesday 1 December 2026, 11:59 pm Eastern (= 2 December 04:59:59 UTC): extended a day
-    // for Walter's GHL campaign (24 Nov), the same end as the referral offer.
-    endsAt: new Date("2026-12-02T04:59:59Z"),
+    // No end date (Pricing Bible, 24 Nov): the offer runs until our team switches it off, and the
+    // app never says when it ends. A date set on Staff → Promotions only switches it off.
+    endsAt: null,
     trialDays: 30,
-    countdown: true,
     rewardMonths: 1,
     bar: {
       enabled: true,
@@ -130,38 +122,19 @@ export const PROMOTIONS: readonly Promotion[] = [
       link: "plan-popup",
       label: "Black Friday",
       lines: [
-        { text: "Your first month on any plan is free" },
-        { text: "Choose a plan by Tue 1 Dec, 11:59 pm ET" },
+        { text: "Your first month is free on Solo and Team" },
+        { text: "Card today, $0 for 30 days. We email you before the first charge" },
         { text: "Give a month, get a month: ", honey: "refer a friend" },
       ],
-      phoneLines: [{ text: "First month free on any plan" }, { text: "Ends Tue 1 Dec" }],
+      phoneLines: [{ text: "First month free on Solo and Team" }],
       cta: "Choose a plan →",
       phoneCta: "Plans →",
     },
     pass: {
       dayName: ["Black", "Friday"],
       headline: "Your first month is free.",
-      small: "Choose any plan by Tuesday, 1 Dec · 11:59 pm ET. Card today, $0 until 30 days later.",
-    },
-    lastDay: {
-      // Tuesday 1 December, 00:00 Eastern: the last day since the extension (24 Nov).
-      startsAt: new Date("2026-12-01T05:00:00Z"),
-      bar: {
-        label: "Last day",
-        lines: [
-          { text: "Last day: your first month on any plan is free" },
-          { text: "Ends tonight, 11:59 pm ET" },
-          { text: "Give a month, get a month: ", honey: "refer a friend" },
-        ],
-        phoneLines: [{ text: "Last day: first month free" }, { text: "Ends tonight" }],
-        cta: "Choose a plan →",
-        phoneCta: "Plans →",
-      },
-      pass: {
-        dayName: ["Last", "Day"],
-        headline: "Last day: your first month is free.",
-        small: "Choose any plan before 11:59 pm ET tonight.",
-      },
+      small:
+        "Black Friday: your first month is free on Solo and Team. Card today, $0 for 30 days, and we email you before the first charge.",
     },
   },
   {
@@ -170,11 +143,10 @@ export const PROMOTIONS: readonly Promotion[] = [
     kind: "referral",
     enabled: true,
     startsAt: null,
-    // Walter's GHL campaign (24 Nov): "give a month, get a month" runs through Tuesday 1 December,
-    // 11:59 pm Eastern. null would keep it running (Staff → Promotions can move it).
-    endsAt: new Date("2026-12-02T04:59:59Z"),
+    // Pricing Bible, 24 Nov: give a month, get a month runs everyday, with no end date shown
+    // (Staff → Promotions can still set one to switch it off).
+    endsAt: null,
     trialDays: 30,
-    countdown: false,
     rewardMonths: 1,
     // Its own bar, off for now: our team turns it on (and picks who sees it) when wanted.
     bar: {
@@ -195,9 +167,8 @@ export const PROMOTIONS: readonly Promotion[] = [
     pass: {
       dayName: ["A friend’s", "month"],
       headline: "Your first month is free.",
-      small: "{name} sent you. It’s on any paid plan you choose, no code needed.",
+      small: "{name} sent you. It’s on Solo or Team, no code needed.",
     },
-    lastDay: null,
   },
 ];
 
@@ -290,11 +261,6 @@ export function runningReferral(
   return list.find((p) => p.kind === "referral" && promotionOn(p, at)) ?? null;
 }
 
-/** Pure: whether the last-day face shows. */
-export function isLastDay(p: Promotion, now: Date): boolean {
-  return !!p.lastDay && now.getTime() >= p.lastDay.startsAt.getTime();
-}
-
 export interface Viewer {
   /** Manages the bill (billing.view). */
   isOwner: boolean;
@@ -325,7 +291,7 @@ export function activeBar(
     if (!promotionOn(p, now) || !p.bar.enabled) continue;
     if (!within(now, p.bar.startsAt, p.bar.endsAt)) continue;
     if (!audienceIncludes(p.bar.audience, viewer)) continue;
-    const copy = isLastDay(p, now) && p.lastDay ? p.lastDay.bar : p.bar;
+    const copy = p.bar;
     return {
       promotionId: p.id,
       link: p.bar.link,
@@ -353,21 +319,6 @@ export function dayKey(now: Date, timeZone: string): string {
   } catch {
     return now.toISOString().slice(0, 10);
   }
-}
-
-/** Pure: whole calendar days from `now` to `endsAt`, counted in `timeZone` (0 on the last day). */
-export function daysLeft(now: Date, endsAt: Date, timeZone: string = PROMO_TIME_ZONE): number {
-  const a = Date.parse(`${dayKey(now, timeZone)}T00:00:00Z`);
-  const b = Date.parse(`${dayKey(endsAt, timeZone)}T00:00:00Z`);
-  return Math.max(0, Math.round((b - a) / 86_400_000));
-}
-
-/** Pure: the countdown chip: "Ends in 6 days", "Ends tomorrow", "Ends tonight". */
-export function endsInLabel(now: Date, endsAt: Date, timeZone: string = PROMO_TIME_ZONE): string {
-  const d = daysLeft(now, endsAt, timeZone);
-  if (d <= 0) return "Ends tonight";
-  if (d === 1) return "Ends tomorrow";
-  return `Ends in ${d} days`;
 }
 
 // The bar's × hides it for the rest of the viewer's day: a cookie the server reads, so a hidden
@@ -398,8 +349,6 @@ export interface PassView {
   dayName: [string, string];
   headline: string;
   small: string;
-  /** "Ends in 6 days" / "Ends tonight", or none. */
-  chip: string | null;
   trialDays: number;
 }
 
@@ -421,15 +370,13 @@ export function passFor(
   const { now } = input;
   const season = activeSeasonal(now, list);
   if (season) {
-    const last = isLastDay(season, now) && season.lastDay ? season.lastDay.pass : null;
-    const copy = last ?? season.pass;
+    // Never a date or a countdown (24 Nov), even when the promotion has an end date.
     return {
       promotionId: season.id,
       kind: "seasonal",
-      dayName: copy.dayName,
-      headline: copy.headline,
-      small: copy.small,
-      chip: season.countdown && season.endsAt ? endsInLabel(now, season.endsAt) : null,
+      dayName: season.pass.dayName,
+      headline: season.pass.headline,
+      small: season.pass.small,
       trialDays: season.trialDays,
     };
   }
@@ -442,7 +389,6 @@ export function passFor(
     dayName: referral.pass.dayName,
     headline: referral.pass.headline,
     small: fill(referral.pass.small, { name: input.referrerName ?? "A friend" }),
-    chip: null,
     trialDays: referral.trialDays,
   };
 }

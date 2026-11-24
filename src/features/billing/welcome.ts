@@ -120,7 +120,7 @@ function teamToBusiness(team: Plan, biz: Plan): Omit<WelcomeContent, "offer" | "
     perks: [
       {
         key: "room",
-        title: `${n(biz.accounts)}+ accounts, ${n(biz.replies)} AI replies`,
+        title: `${n(biz.accounts)}+ accounts, about ${n(biz.replies)} AI replies`,
         body: `Up from ${n(team.accounts)} and ${n(team.replies)} on ${team.name}.`,
       },
       // Separate businesses only when Team really limits them (Staff → Plans can change both).
@@ -136,7 +136,7 @@ function teamToBusiness(team: Plan, biz: Plan): Omit<WelcomeContent, "offer" | "
       {
         key: "setup",
         title: "Set up with you",
-        body: `We set ${biz.name} up with you on a short call, priced for how many clients you run.`,
+        body: `Custom price: we set ${biz.name} up with you on a short call, priced for how many clients you run.`,
       },
     ],
     now: `You’re on ${team.name}: ${accounts(team.accounts)}, ${n(team.replies)} AI replies${team.features.team ? ", your team" : ""}.`,
@@ -191,7 +191,7 @@ function businessPerks(biz: Plan): WelcomePerk[] {
   ];
 }
 
-/** Pure: the welcome pop-up for the organization's plan. `trial`: its first paid plan is free for 7 days. */
+/** Pure: the welcome pop-up for the organization's plan. `trial`: its first paid plan starts with its first month free. */
 export function welcomeFor(
   current: PlanId,
   plans: Record<PlanId, Plan> = PLANS,
@@ -214,9 +214,9 @@ export function welcomeFor(
   const eyebrow = !next
     ? ""
     : offer.via === "trial"
-      ? `${next.name} · ${ctx.trialDays ?? TRIAL.days} days free`
+      ? `${next.name} · ${(ctx.trialDays ?? TRIAL.days) === TRIAL.days ? "first month free" : `${ctx.trialDays} days free`}`
       : offer.via === "call"
-        ? `${next.name} · for agencies`
+        ? `${next.name} · custom price`
         : `${next.name} · $${next.monthlyUsd} a month`;
   if (current === "free") {
     return { ...freeToSolo(plans.free, plans.solo), eyebrow, offer, team: null };

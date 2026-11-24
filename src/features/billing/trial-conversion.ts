@@ -1,6 +1,6 @@
 import "server-only";
 import type Stripe from "stripe";
-import { FOUNDING, isPaidPlanId, PLANS, type PaidPlanId } from "./plans";
+import { isPaidPlanId, PLANS, type PaidPlanId } from "./plans";
 import { getStripe } from "./stripe-client";
 import { parsePlanKey } from "./subscription";
 
@@ -10,7 +10,7 @@ export interface TrialConversion {
   /** A trial (old checkouts) or a paid plan straight away (moving up from Free, 19 Nov). */
   kind: "trial" | "paid";
   plan: PaidPlanId;
-  /** The monthly price the trial turns into, in US dollars (founding price when it applies). */
+  /** The monthly price the trial turns into, in US dollars. */
   valueUsd: number;
   /** The organization's first plan checkout (marked when it was made): only this tells the ads. */
   first: boolean;
@@ -43,11 +43,9 @@ export function trialFromSession(
   if (!trial && sub.status !== "active") return null;
   const key = sub.items.data.map((i) => parsePlanKey(i.price.lookup_key)).find((k) => k !== null);
   if (!key || !isPaidPlanId(key.plan)) return null;
-  const founding = sub.metadata?.founding === "1" && key.plan === FOUNDING.plan;
   const p = PLANS[key.plan];
-  const valueUsd = founding
-    ? FOUNDING.monthlyUsd
-    : key.interval === "year" && p.yearlyUsd !== null
+  const valueUsd =
+    key.interval === "year" && p.yearlyUsd !== null
       ? Math.round((p.yearlyUsd / 12) * 100) / 100
       : p.monthlyUsd;
   return {

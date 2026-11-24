@@ -19,7 +19,9 @@ vi.mock("@/lib/crm", () => ({
 }));
 vi.mock("./promotions-store", async () => {
   const { PROMOTIONS } = await import("./promotions");
-  return { loadPromotions: async () => PROMOTIONS };
+  // An end date set on Staff → Promotions (the code defaults have none since 24 Nov).
+  const end = new Date("2026-12-02T04:59:59Z");
+  return { loadPromotions: async () => PROMOTIONS.map((p) => ({ ...p, endsAt: end })) };
 });
 
 const { grantReferralRewards, markBankedUsed, markReferralRewardDue } = await import("./referrals");
@@ -100,7 +102,6 @@ const liveBill = {
   plan: "solo",
   billing_interval: "month",
   status: "active",
-  founding: false,
   current_period_end: "2026-12-20T00:00:00Z",
 };
 

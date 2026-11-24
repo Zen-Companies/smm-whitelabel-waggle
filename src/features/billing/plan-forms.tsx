@@ -7,7 +7,14 @@ import { BeeDance } from "@/components/app/bee-setup";
 import { Button, buttonVariants } from "@/components/ui/button";
 import type { PlanActionState } from "./plan-actions";
 import { DayPill } from "./day-price";
-import { BUSINESS_CALL_URL, dailyAmount, PROMOTED_PLAN, TRIAL, type PlanId } from "./plans";
+import {
+  BUSINESS_CALL_URL,
+  dailyAmount,
+  isCustomPrice,
+  PROMOTED_PLAN,
+  TRIAL,
+  type PlanId,
+} from "./plans";
 
 type Action = (prev: PlanActionState, formData: FormData) => Promise<PlanActionState>;
 
@@ -53,13 +60,6 @@ export function PlanButton({
   );
 }
 
-export interface FoundingOffer {
-  plan: PlanId;
-  monthlyUsd: number;
-  months: number;
-  spots: number;
-}
-
 export interface PlanCardData {
   id: PlanId;
   name: string;
@@ -67,14 +67,16 @@ export interface PlanCardData {
   yearlyUsd: number | null;
   forSale: boolean;
   bullets: string[];
+  /** Business's line: "Custom price · 10+ accounts · about 1,500 replies". */
+  customLine?: string;
 }
 
 /**
- * The plans (Walter's flow, 20 Nov): Free as a wide row on top, then Solo ("Most popular",
- * PROMOTED_PLAN), Team and Business, each with its price a day. Business is by call only: its
- * button opens Jason's booking page. The founding offer stays highlighted (decision 3). The
- * current plan is in honey. Monthly or yearly is picked once above the cards. `trial`: the first
- * paid plan starts with 7 days free, with a card.
+ * The plans (Walter's flow, 20 Nov; Pricing Bible, 24 Nov): Free as a wide row on top, then Solo
+ * ("Most popular", PROMOTED_PLAN), Team and Business. Solo and Team show their price a day;
+ * Business is a custom price set on a call: "Talk to us" opens Jason's booking page, never a
+ * checkout. The current plan is in honey. Monthly or yearly is picked once above the cards.
+ * `trial`: the first paid plan starts with its first month free, with a card.
  */
 export function PlanCards({
   orgId,
@@ -83,8 +85,7 @@ export function PlanCards({
   currentInterval,
   live,
   mayChange,
-  foundingNote,
-  founding = null,
+  note = null,
   trial = false,
   trialDays = TRIAL.days,
   freeLine = null,
@@ -98,19 +99,17 @@ export function PlanCards({
   /** On a paid plan (moves are prorated in place). */
   live: boolean;
   mayChange: boolean;
-  foundingNote: string | null;
-  /** The founding offer, while spots are left, for owners who never had a paid plan. */
-  founding?: FoundingOffer | null;
+  /** A line next to Monthly / Yearly. */
+  note?: string | null;
   /** The organization's first paid plan starts with a free trial. */
   trial?: boolean;
-  /** How long: 7 days, or 30 with the Black Friday or referral month. */
+  /** How long: the first month (30 days), more with banked referral months. */
   trialDays?: number;
   /** Free's row when it's the plan: "12 of 100 AI replies used this month". */
   freeLine?: string | null;
   action: Action;
 }) {
   const [interval, setInterval] = useState<"month" | "year">(currentInterval ?? "month");
-  const offerPlan = founding ? plans.find((p) => p.id === founding.plan) : undefined;
   const free = plans.find((p) => p.id === "free");
   const paid = plans.filter((p) => p.id !== "free");
   return (
@@ -173,63 +172,25 @@ export function PlanCards({
             </button>
           ))}
         </div>
-        {foundingNote && <span className="meta">{foundingNote}</span>}
+        {note && <span className="meta">{note}</span>}
       </div>
-      {founding && offerPlan && (
-        // Founding offer, highlighted (approved 20 Nov, canvas "Founding offer, highlighted").
-        <div className="border-honey bg-honey-tint flex flex-wrap items-center justify-between gap-4 rounded-2xl border-[1.5px] px-5 py-4">
-          <span className="flex min-w-[200px] flex-1 flex-wrap items-center gap-3.5">
-            <span className="bg-honey text-ink rounded-full px-2.5 py-1 text-xs font-bold tracking-wide uppercase">
-              Founding offer
-            </span>
-            <span className="flex min-w-[200px] flex-1 flex-col gap-0.5">
-              <b className="font-display text-lg font-semibold">
-                {offerPlan.name} for ${founding.monthlyUsd} a month, your first {founding.months}{" "}
-                months
-              </b>
-              <span className="text-ink-2 text-sm">
-                Then ${offerPlan.monthlyUsd}. Only for the first {founding.spots} businesses.
-                {trial && ` Starts with ${trialDays} days free.`}
-              </span>
-            </span>
-          </span>
-          {interval === "year" ? (
-            <button
-              type="button"
-              onClick={() => setInterval("month")}
-              className="action-link with-arrow text-sm"
-            >
-              Monthly only. Switch to Monthly
-            </button>
-          ) : (
-            mayChange && (
-              <PlanButton
-                action={action}
-                fields={{ orgId, plan: offerPlan.id, interval: "month" }}
-                label={`Get ${offerPlan.name} at $${founding.monthlyUsd}`}
-              />
-            )
-          )}
-        </div>
-      )}
       <div className="grid gap-4 pt-3 md:grid-cols-3">
         {paid.map((p) => {
-          const byCall = !p.forSale && p.id === "team";
-          const isCurrent = live && current === p.id && currentInterval === interval;
+          // Business: a custom price set on a call, never a checkout (24 Nov).
+          const byCall = isCustomPrice(p.id);
+          const isCurrent = live && current === p.id && (byCall || currentInterval === interval);
           const yearly = interval === "year" && p.yearlyUsd !== null;
           const noYearly = interval === "year" && p.yearlyUsd === null;
           const promoted = p.id === PROMOTED_PLAN && !live;
-          const offer = !!founding && founding.plan === p.id && interval === "month";
           // What the card says it costs, and the same as a price a day (decision 4).
-          const shownUsd =
-            offer && founding ? founding.monthlyUsd : yearly ? p.yearlyUsd! : p.monthlyUsd;
+          const shownUsd = yearly ? p.yearlyUsd! : p.monthlyUsd;
           const price = yearly ? `$${shownUsd} a year` : `$${shownUsd} a month`;
           return (
             <div
               key={p.id}
               className={cn(
                 "bg-surface relative flex flex-col gap-2.5 rounded-2xl border p-5",
-                isCurrent || offer || promoted
+                isCurrent || promoted
                   ? "border-honey border-2 shadow-[0_6px_24px_rgba(246,178,27,0.18)]"
                   : "border-line",
               )}
@@ -237,10 +198,6 @@ export function PlanCards({
               {isCurrent ? (
                 <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
                   Your plan
-                </span>
-              ) : offer ? (
-                <span className="bg-honey text-ink absolute -top-3 left-5 rounded-full px-2.5 py-0.5 text-xs font-semibold">
-                  Founding price
                 </span>
               ) : (
                 promoted && (
@@ -253,17 +210,9 @@ export function PlanCards({
               <b className="font-display text-[22px] font-semibold">{p.name}</b>
               {byCall ? (
                 <span className="flex flex-col">
-                  <b className="text-lg font-semibold">Custom</b>
-                  <span className="meta">10 or more accounts, priced after a short call</span>
-                </span>
-              ) : offer && founding ? (
-                <span className="flex flex-col gap-0.5">
-                  <span className="flex items-baseline gap-2">
-                    <b className="text-lg font-semibold">${founding.monthlyUsd} a month</b>
-                    <s className="text-ink-3 text-[15px]">${p.monthlyUsd}</s>
-                  </span>
+                  <b className="text-lg font-semibold">Custom price</b>
                   <span className="meta">
-                    First {founding.months} months, then ${p.monthlyUsd}
+                    {p.customLine ?? "Custom price, set with you on a short call"}
                   </span>
                 </span>
               ) : (
@@ -272,7 +221,8 @@ export function PlanCards({
               {!byCall && <DayPill amount={dailyAmount(shownUsd, yearly ? "year" : "month")} />}
               {!byCall && trial && !live && p.forSale && !noYearly && (
                 <span className="meta">
-                  {trialDays} days free, then {price}
+                  {trialDays === TRIAL.days ? "First month free" : `${trialDays} days free`}, then{" "}
+                  {price}
                 </span>
               )}
               <ul className="flex flex-col gap-2 text-sm">
@@ -295,7 +245,7 @@ export function PlanCards({
                     rel="noopener noreferrer"
                     className={buttonVariants({ variant: "secondary" })}
                   >
-                    Book a call
+                    Talk to us
                   </a>
                 ) : !p.forSale ? (
                   <span className="meta">Not for sale right now.</span>
@@ -309,7 +259,9 @@ export function PlanCards({
                       live
                         ? `Move to ${p.name}`
                         : trial
-                          ? `Start ${trialDays} days free`
+                          ? trialDays === TRIAL.days
+                            ? "Start your free month"
+                            : `Start ${trialDays} days free`
                           : `Upgrade to ${p.name}`
                     }
                     pendingLabel={live ? "Switching…" : "Starting…"}
@@ -326,8 +278,10 @@ export function PlanCards({
       </div>
       {trial && !live && (
         <p className="meta">
-          Paid plans start with {trialDays} days free. A card starts your trial; cancel before day{" "}
-          {trialDays} and you pay nothing.
+          Solo and Team start with{" "}
+          {trialDays === TRIAL.days ? "your first month free" : `${trialDays} days free`}. A card
+          starts it; we email you 3 days before the first charge, and if you cancel before then you
+          pay nothing.
         </p>
       )}
     </div>

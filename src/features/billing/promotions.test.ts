@@ -6,8 +6,6 @@ import {
   barHiddenValue,
   barTextOf,
   dayKey,
-  daysLeft,
-  endsInLabel,
   inviteState,
   parseBarText,
   passFor,
@@ -19,29 +17,24 @@ import {
 } from "./promotions";
 
 const tuesday = new Date("2026-11-24T15:00:00Z");
-const sunday = new Date("2026-11-29T15:00:00Z");
-const cyberMonday = new Date("2026-11-30T15:00:00Z");
-// Extended to Tuesday 1 Dec, 11:59 pm ET (Walter's GHL campaign, 24 Nov).
 const lastDay = new Date("2026-12-01T15:00:00Z");
-const lastMinute = new Date("2026-12-02T04:59:00Z");
 const after = new Date("2026-12-02T05:00:00Z");
-/** The referral program kept running after Black Friday (its end is editable). */
+const nextYear = new Date("2027-03-01T15:00:00Z");
+/** Staff set an end date on Staff → Promotions (it only switches the offer off). */
+const END = new Date("2026-12-02T04:59:59Z");
+const withEnds: Promotion[] = PROMOTIONS.map((p) => ({ ...p, endsAt: END }));
+/** Black Friday over (switched off), the referral program still running. */
 const referralOpen: Promotion[] = PROMOTIONS.map((p) =>
-  p.kind === "referral" ? { ...p, endsAt: null } : p,
+  p.kind === "seasonal" ? { ...p, endsAt: END } : p,
 );
+const DATE_WORDS =
+  /\b(ends?|tonight|tomorrow|last day|by (mon|tue|wed|thu|fri|sat|sun)|nov|dec|\d{1,2}:\d{2})\b/i;
 
 const neverPaidOwner = { isOwner: true, neverPaid: true };
 const paidOwner = { isOwner: true, neverPaid: false };
 const member = { isOwner: false, neverPaid: true };
 
-describe("days left (US Eastern)", () => {
-  it("counts calendar days to Monday 30 Nov", () => {
-    expect(daysLeft(tuesday, new Date("2026-12-01T04:59:59Z"))).toBe(6);
-    expect(endsInLabel(tuesday, new Date("2026-12-01T04:59:59Z"))).toBe("Ends in 6 days");
-    expect(endsInLabel(sunday, new Date("2026-12-01T04:59:59Z"))).toBe("Ends tomorrow");
-    expect(endsInLabel(cyberMonday, new Date("2026-12-01T04:59:59Z"))).toBe("Ends tonight");
-    expect(endsInLabel(lastMinute, new Date("2026-12-01T04:59:59Z"))).toBe("Ends tonight");
-  });
+describe("days (the bar's × for the day)", () => {
   it("days are the viewer's zone's days", () => {
     expect(dayKey(new Date("2026-11-24T20:00:00Z"), "Asia/Manila")).toBe("2026-11-25");
     expect(dayKey(new Date("2026-11-24T20:00:00Z"), "America/New_York")).toBe("2026-11-24");
@@ -55,11 +48,21 @@ describe("the bar", () => {
     expect(activeBar(tuesday, paidOwner)).toBeNull();
     expect(activeBar(tuesday, member)).toBeNull();
   });
-  it("says Last day on Tuesday 1 Dec and goes after 11:59 pm ET", () => {
-    expect(activeBar(cyberMonday, neverPaidOwner)?.copy.label).toBe("Black Friday");
-    expect(activeBar(lastDay, neverPaidOwner)?.copy.label).toBe("Last day");
-    expect(activeBar(lastMinute, neverPaidOwner)).not.toBeNull();
-    expect(activeBar(after, neverPaidOwner)).toBeNull();
+  it("never states an end date: no date, countdown or last-day words (Pricing Bible, 24 Nov)", () => {
+    for (const now of [tuesday, lastDay, nextYear]) {
+      const bar = activeBar(now, neverPaidOwner);
+      expect(bar?.copy.label).toBe("Black Friday");
+      for (const l of [...bar!.copy.lines, ...bar!.copy.phoneLines]) {
+        expect(`${l.text}${l.honey ?? ""}`).not.toMatch(DATE_WORDS);
+      }
+    }
+    expect(activeBar(tuesday, neverPaidOwner)?.copy.lines[0]?.text).toBe(
+      "Your first month is free on Solo and Team",
+    );
+  });
+  it("an end date set by staff only switches it off, and is never said", () => {
+    expect(activeBar(lastDay, neverPaidOwner, withEnds)?.copy.label).toBe("Black Friday");
+    expect(activeBar(after, neverPaidOwner, withEnds)).toBeNull();
   });
   it("each promotion's bar has its own switch and audience", () => {
     const list: Promotion[] = referralOpen.map((p) =>
@@ -94,13 +97,19 @@ describe("hiding the bar for the day", () => {
 });
 
 describe("the pass on Your plan", () => {
-  it("Black Friday with the countdown, then the last day", () => {
+  it("Black Friday with no date or countdown, even on its last day", () => {
     const bf = passFor({ now: tuesday, referred: false, referrerName: null });
     expect(bf?.dayName).toEqual(["Black", "Friday"]);
-    expect(bf?.chip).toBe("Ends in 7 days");
-    const last = passFor({ now: lastDay, referred: true, referrerName: "Harbour Bean Café" });
-    expect(last?.dayName).toEqual(["Last", "Day"]);
-    expect(last?.chip).toBe("Ends tonight");
+    expect(bf?.small).toBe(
+      "Black Friday: your first month is free on Solo and Team. Card today, $0 for 30 days, and we email you before the first charge.",
+    );
+    expect(bf).not.toHaveProperty("chip");
+    const last = passFor(
+      { now: lastDay, referred: true, referrerName: "Harbour Bean Café" },
+      withEnds,
+    );
+    expect(last?.dayName).toEqual(["Black", "Friday"]);
+    expect(`${last?.headline} ${last?.small}`).not.toMatch(DATE_WORDS);
   });
   it("after Black Friday: the friend's month, only when referred", () => {
     const friend = passFor(
@@ -108,14 +117,18 @@ describe("the pass on Your plan", () => {
       referralOpen,
     );
     expect(friend?.kind).toBe("referral");
-    expect(friend?.small).toContain("Harbour Bean Café sent you.");
-    expect(friend?.chip).toBeNull();
+    expect(friend?.small).toBe("Harbour Bean Café sent you. It’s on Solo or Team, no code needed.");
     expect(passFor({ now: after, referred: false, referrerName: null }, referralOpen)).toBeNull();
-    // The campaign's default: the friend's month ends with Black Friday (Tue 1 Dec).
-    expect(passFor({ now: after, referred: true, referrerName: "X" })).toBeNull();
+    // Both ended (staff set end dates): no pass.
+    expect(passFor({ now: after, referred: true, referrerName: "X" }, withEnds)).toBeNull();
   });
   it("keeps the friend's month for a friend who joined while the program ran", () => {
-    const pass = passFor({ now: after, referred: true, referredAt: tuesday, referrerName: "X" });
+    const pass = passFor(
+      { now: after, referred: true, referredAt: tuesday, referrerName: "X" },
+      PROMOTIONS.map((p) =>
+        p.kind === "seasonal" ? { ...p, enabled: false } : { ...p, endsAt: END },
+      ),
+    );
     expect(pass?.kind).toBe("referral");
   });
   it("splits the honey word", () => {

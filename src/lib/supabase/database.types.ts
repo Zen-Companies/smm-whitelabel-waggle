@@ -2922,6 +2922,53 @@ export type Database = {
           },
         ]
       }
+      trial_reminders: {
+        Row: {
+          amount_cents: number
+          billing_interval: string
+          charge_at: string
+          created_at: string
+          organization_id: string
+          plan: string
+          reason: string | null
+          sent_at: string | null
+          status: string
+          stripe_subscription_id: string
+        }
+        Insert: {
+          amount_cents: number
+          billing_interval?: string
+          charge_at: string
+          created_at?: string
+          organization_id: string
+          plan: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          stripe_subscription_id: string
+        }
+        Update: {
+          amount_cents?: number
+          billing_interval?: string
+          charge_at?: string
+          created_at?: string
+          organization_id?: string
+          plan?: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          stripe_subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trial_reminders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       usage_charges: {
         Row: {
           amount_cents: number | null

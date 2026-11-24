@@ -4,7 +4,6 @@
 // trial_converted always lands before a later canceled.
 
 import * as Sentry from "@sentry/nextjs";
-import { foundingRedeemed, getStripe } from "@/features/billing";
 import { GhlError, type GhlClient } from "@/lib/ghl/client";
 import {
   CRM_MIN_GAP_MS,
@@ -15,7 +14,6 @@ import {
   parseUtmCookie,
   type Utm,
   isCrmEvent,
-  queueCrmEvent,
   signupReferralFields,
 } from "@/lib/crm";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -42,22 +40,6 @@ type Row = {
   attempts: number;
   created_at: string;
 };
-
-/** After the founding trial that took the last spot: tell the team (founding_full), once. */
-async function checkFoundingFull(db: ServiceClient, row: Row): Promise<void> {
-  const stripe = getStripe();
-  if (!stripe) return;
-  // Every founding coupon counts (the base one and its longer copies for long trials).
-  const spots = await foundingRedeemed(stripe).catch(() => null);
-  if (spots && spots.redeemed >= spots.max) {
-    await queueCrmEvent(db, {
-      event: "founding_full",
-      userId: row.user_id,
-      orgId: row.organization_id,
-      dedupeKey: "founding_full",
-    });
-  }
-}
 
 /**
  * Sign-up through a friend's link (24 Nov): the code and the referrer's business name, read at
@@ -185,7 +167,6 @@ export async function deliverCrmEvents(deps: {
       }
       const note = noteOf(row.details);
       let contactId: string;
-      let founding = false;
       if (CRM_NOTE_ONLY.has(row.event)) {
         // A note only (feedback, page ratings): the contact by email, no fields, no tag.
         ({ contactId } = await client.upsertContact({
@@ -195,7 +176,6 @@ export async function deliverCrmEvents(deps: {
         }));
       } else {
         const snapshot = await loadSnapshot(db, { ...row, event: row.event }, now);
-        founding = snapshot.founding;
         // Sign-up also carries the first campaign, never over one the contact already has.
         const raw = (row.details as { utm?: unknown } | null)?.utm;
         const visit: Utm | null = parseUtmCookie(typeof raw === "string" ? raw : null);
@@ -223,9 +203,6 @@ export async function deliverCrmEvents(deps: {
         })
         .eq("id", row.id);
       out.sent += 1;
-      if (row.event === "trial_started" && founding) {
-        await checkFoundingFull(db, row).catch((e: unknown) => Sentry.captureException(e));
-      }
     } catch (err) {
       const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
       const attempts = row.attempts + 1;

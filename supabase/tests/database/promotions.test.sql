@@ -10,10 +10,10 @@ select ok((select relrowsecurity from pg_class where oid = 'public.promotion_cha
   'promotion_changes: RLS on');
 
 select results_eq(
-  $$ select id, trial_days, ends_at from public.promotions order by id $$,
-  $$ values ('black-friday-2026'::text, 30, '2026-12-02T04:59:59Z'::timestamptz),
-            ('give-a-month'::text, 30, '2026-12-02T04:59:59Z'::timestamptz) $$,
-  'seeded with the code defaults (both end Tue 1 Dec, 11:59 pm ET)');
+  $$ select id, trial_days, ends_at, countdown, last_day_starts_at from public.promotions order by id $$,
+  $$ values ('black-friday-2026'::text, 30, null::timestamptz, false, null::timestamptz),
+            ('give-a-month'::text, 30, null::timestamptz, false, null::timestamptz) $$,
+  'the code defaults: no end date, no countdown, no last day (Pricing Bible, 24 Nov)');
 
 select throws_ok(
   $$ insert into public.promotions (id, name, kind, trial_days) values ('too-long', 'X', 'seasonal', 91) $$,

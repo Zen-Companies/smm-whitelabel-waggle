@@ -97,22 +97,12 @@ export async function PromoPass({ orgId }: { orgId: string }) {
             <span className="block">{pass.dayName[0]}</span>
             <span className="promo-outline block">{pass.dayName[1]}</span>
           </span>
-          {pass.chip && (
-            <span className="bg-honey text-ink rounded-full px-[9px] py-[3px] text-[10.5px] font-bold tracking-[1px] uppercase sm:hidden">
-              {pass.chip}
-            </span>
-          )}
         </div>
         <span
           aria-hidden
           className="hidden h-[70px] w-0 shrink-0 border-l-2 border-dashed border-[rgba(246,178,27,0.4)] sm:block"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          {pass.chip && (
-            <span className="bg-honey text-ink hidden self-start rounded-full px-[9px] py-[3px] text-[10.5px] font-bold tracking-[1px] uppercase sm:inline">
-              {pass.chip}
-            </span>
-          )}
           <h2 className="font-display m-0 text-[20px] leading-[1.2] font-bold sm:text-[22px]">
             {lead}
             <span className="text-honey">{honey}</span>

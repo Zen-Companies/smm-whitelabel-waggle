@@ -31,9 +31,19 @@ describe("rows and the app's promotions", () => {
     const f = promotionToFields(PROMOTIONS[0]);
     expect(f.bar_text.split("\n")[2]).toBe("Give a month, get a month: *refer a friend*");
   });
-  it("has no last day when its start is empty", () => {
-    const f = { ...promotionToFields(PROMOTIONS[0]), last_day_starts_at: null };
-    expect(rowToPromotion(asRow(f)).lastDay).toBeNull();
+  it("never shows a countdown or a last-day face, even when the row still has them (24 Nov)", () => {
+    const f = {
+      ...promotionToFields(PROMOTIONS[0]),
+      countdown: true,
+      last_day_starts_at: "2026-12-01T05:00:00Z",
+      last_headline: "Last day: your first month is free.",
+    };
+    const p = rowToPromotion(asRow(f));
+    expect(p).not.toHaveProperty("lastDay");
+    expect(p).not.toHaveProperty("countdown");
+  });
+  it("the code defaults have no end date (Pricing Bible, 24 Nov)", () => {
+    for (const p of PROMOTIONS) expect(p.endsAt).toBeNull();
   });
   it("treats an unknown audience as never-paid Owners", () => {
     const f = { ...promotionToFields(PROMOTIONS[0]), audience: "martians" };
@@ -93,8 +103,13 @@ describe("the edit form", () => {
     expect("value" in r && "enabled" in r.value).toBe(false);
   });
   it("reads a missing switch as off", () => {
-    const r = parsePromotionForm(form({ countdown: null }));
-    expect("value" in r && r.value.countdown).toBe(false);
+    const r = parsePromotionForm(form({ bar_enabled: null, bar_text: "" }));
+    expect("value" in r && r.value.bar_enabled).toBe(false);
+  });
+  it("has no countdown or last-day fields any more (24 Nov)", () => {
+    const r = parsePromotionForm(form({ countdown: "on" }));
+    expect("value" in r && "countdown" in r.value).toBe(false);
+    expect("value" in r && "last_day_starts_at" in r.value).toBe(false);
   });
   it("wants the end after the start", () => {
     expect(parsePromotionForm(form({ ends_at: "2026-11-19T00:00" }))).toEqual({
@@ -121,11 +136,9 @@ describe("the edit form", () => {
     expect(parsePromotionForm(form({ bar_link: "https://evil.example" }))).toHaveProperty("error");
     expect(parsePromotionForm(form({ bar_link: "/plan#referral-title" }))).toHaveProperty("value");
   });
-  it("refuses a date it can't read and a last day after the end", () => {
+  it("refuses a date it can't read", () => {
     expect(parsePromotionForm(form({ starts_at: "soon" }))).toHaveProperty("error");
-    expect(parsePromotionForm(form({ last_day_starts_at: "2026-12-02T00:00" }))).toHaveProperty(
-      "error",
-    );
+    expect(parsePromotionForm(form({ ends_at: "Tue 1 Dec" }))).toHaveProperty("error");
   });
 });
 

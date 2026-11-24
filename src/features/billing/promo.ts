@@ -1,38 +1,21 @@
 // Black Friday and "give a month, get a month" (Jason, 23 November 2026). Pure.
 //
-// The free month is a 30-day trial on the organization's first plan checkout (instead of the
-// usual 7 days), with the card taken up front (Stripe Checkout). Nothing to type: it's applied
-// when the checkout is made.
-// A trial (not a coupon) so the founding price still applies from the first paid month: the
-// founding coupon is lengthened by the trial's months at checkout (founding.ts), since Stripe counts
-// a repeating coupon's months from when it is applied.
+// Since the Pricing Bible of 24 Nov every first plan checkout (Solo or Team) gets its first month
+// free (TRIAL, 30 days), with the card taken up front (Stripe Checkout). A promotion can only give
+// more, never less; banked referral months add to it. Nothing to type: it's applied when the
+// checkout is made.
 
-import {
-  activeSeasonal,
-  promotionOfKind,
-  PROMOTIONS,
-  runningReferral,
-  type Promotion,
-} from "./promotions";
+import { activeSeasonal, PROMOTIONS, runningReferral, type Promotion } from "./promotions";
 
 // The dates and days come from the promotions list: our team edits it on Staff → Promotions
 // (table `promotions`, loaded by promotions-store.ts); the code's list (promotions.ts) is the
 // fallback and these defaults. Every function takes the list, so callers pass what they loaded.
-const SEASONAL = promotionOfKind("seasonal");
 
 /** A banked referral month, in trial days, when no referral program is on the list. */
 export const MONTH_DAYS = 30;
 
-export const FREE_MONTH_DAYS = SEASONAL.trialDays;
-
 /** Stripe's limit on a subscription trial. */
 export const MAX_TRIAL_DAYS = 730;
-
-/** The code's default (Staff → Promotions may move it). */
-export const BLACK_FRIDAY = {
-  /** Tuesday 1 December 2026, 11:59 pm Eastern (= 2 December 04:59:59 UTC). */
-  endsAt: SEASONAL.endsAt ?? new Date(8.64e15),
-} as const;
 
 /** Pure: whether a seasonal free month (Black Friday) is on at `now`. */
 export function blackFridayOn(now: Date, list: readonly Promotion[] = PROMOTIONS): boolean {
@@ -54,7 +37,7 @@ export function bankedRewardDays(now: Date, list: readonly Promotion[] = PROMOTI
 
 /**
  * Pure: the trial days a first plan checkout gets, and why. The free month (a seasonal promotion
- * or a friend's link, never both) replaces the usual 7-day trial (`baseDays`) with the
+ * or a friend's link, never both) replaces the usual first month (`baseDays`) with the
  * promotion's trial days, never shortening it; each banked referral reward adds its days.
  * Capped at Stripe's 730 days.
  * A friend keeps the month when the referral program ran when they signed up (`referredAt`),
