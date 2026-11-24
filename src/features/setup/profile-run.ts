@@ -11,6 +11,7 @@ import {
   type SocialProvider,
 } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { cleanBusinessName } from "./brand-name";
 import {
   aiProfileSchema,
   PROFILE_CAPS,
@@ -150,6 +151,7 @@ async function buildOne(
     system: profileSystemPrompt(),
     prompt: profileUserPrompt({
       kindLabel: kind?.label ?? null,
+      pageName: row.handle?.replace(/^@/, "") ?? null,
       bio,
       captions: [...new Set((captions ?? []).map((c) => c.post_caption ?? ""))],
       messages: (messages ?? []).map((m) => m.text),
@@ -157,7 +159,12 @@ async function buildOne(
   });
   const { error } = await db
     .from("tenants")
-    .update({ ai_profile: result.object as unknown as Json })
+    .update({
+      ai_profile: {
+        ...result.object,
+        businessName: cleanBusinessName(result.object.businessName),
+      } as unknown as Json,
+    })
     .eq("id", tenantId);
   if (error) throw new Error(`saving the business profile failed: ${error.message}`);
   await writeAudit(db, {
@@ -321,6 +328,7 @@ async function buildAtConnect(
     system: profileSystemPrompt(),
     prompt: profileUserPrompt({
       kindLabel: kindOf(kind)?.label ?? null,
+      pageName: info.name ?? row.username?.replace(/^@/, "") ?? null,
       category: info.category,
       bio,
       captions: [...new Set(captions)],
@@ -328,7 +336,12 @@ async function buildAtConnect(
     }),
   });
   // A kind the owner or the category gave stays: the profile's own guess only fills a gap.
-  const profile = { ...result.object, kind: kind ?? result.object.kind };
+  // The suggested name is kept only when it's a usable one (the name screen's best guess).
+  const profile = {
+    ...result.object,
+    kind: kind ?? result.object.kind,
+    businessName: cleanBusinessName(result.object.businessName),
+  };
   const { error } = await db
     .from("tenants")
     .update({ ai_profile: profile as unknown as Json })

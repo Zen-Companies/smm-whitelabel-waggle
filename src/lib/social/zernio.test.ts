@@ -224,7 +224,7 @@ describe("ZernioSocialProvider", () => {
     expect(captured).toHaveLength(0);
   });
 
-  it("getAccountCategory reads the selected Facebook Page's category (setup item G)", async () => {
+  it("getAccountCategory reads the selected Facebook Page's name and category (setup item G)", async () => {
     respond = () =>
       json({
         pages: [
@@ -236,7 +236,13 @@ describe("ZernioSocialProvider", () => {
       });
     await expect(
       provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),
-    ).resolves.toEqual({ category: "Coffee Shop", bio: null, website: null, description: null });
+    ).resolves.toEqual({
+      name: "Harbour Bean",
+      category: "Coffee Shop",
+      bio: null,
+      website: null,
+      description: null,
+    });
     expect(captured[0].url.pathname).toBe("/api/v1/accounts/acc_fb/facebook-page");
   });
 
@@ -246,6 +252,7 @@ describe("ZernioSocialProvider", () => {
     await expect(
       provider.getAccountCategory({ accountId: "acc_ig", platform: "instagram", username: "@q" }),
     ).resolves.toEqual({
+      name: null,
       category: null,
       bio: "Plumbers in QC",
       website: "https://x.ph",
@@ -262,6 +269,7 @@ describe("ZernioSocialProvider", () => {
     await expect(
       provider.getAccountCategory({ accountId: "acc_g", platform: "googlebusiness" }),
     ).resolves.toEqual({
+      name: "QC Plumbing",
       category: "Plumber",
       bio: null,
       website: null,
@@ -272,7 +280,7 @@ describe("ZernioSocialProvider", () => {
   });
 
   it("getAccountCategory never throws: failures and other platforms give the empty info", async () => {
-    const empty = { category: null, bio: null, website: null, description: null };
+    const empty = { name: null, category: null, bio: null, website: null, description: null };
     respond = () => json({ error: "nope" }, 400);
     await expect(
       provider.getAccountCategory({ accountId: "acc_fb", platform: "facebook" }),

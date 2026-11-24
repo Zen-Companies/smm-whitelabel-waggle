@@ -7,6 +7,7 @@ import { getSocialProvider } from "@/lib/social";
 import { platformLabel } from "@/lib/social/platforms";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
+import { nameGuess } from "./brand-name";
 import { nameBrandFromProfile } from "./brand-name-server";
 import { upgradeHref } from "@/features/billing";
 import { firstNameOf } from "./copy";
@@ -58,16 +59,18 @@ export async function SetupView({
   if (setupEntry({ connected: d.connected, connecting: !!connecting }) === "welcome") {
     redirect("/welcome");
   }
-  if (
-    d.namePending &&
-    d.connected &&
-    (await nameBrandFromProfile({ db, social: getSocialProvider }, tenant.id))
-  ) {
-    d = await loadSetupData(db, {
-      tenantId: tenant.id,
-      organizationId: tenant.organizationId,
-      now,
-    });
+  // The exact page name names the brand; otherwise the display name is a guess for the name screen.
+  let displayName: string | null = null;
+  if (d.namePending && d.connected) {
+    const naming = await nameBrandFromProfile({ db, social: getSocialProvider }, tenant.id);
+    displayName = naming.displayName;
+    if (naming.named) {
+      d = await loadSetupData(db, {
+        tenantId: tenant.id,
+        organizationId: tenant.organizationId,
+        now,
+      });
+    }
   }
   const firstName = firstNameOf(user.user_metadata?.full_name, user.email);
   const facts = flowFactsOf(d);
@@ -190,7 +193,13 @@ export async function SetupView({
 
   const step: 2 | 3 = pos.step;
   const body: React.ReactNode =
-    screen === "name" ? <NameScreen platform={d.platform} count={pos.count} /> : null;
+    screen === "name" ? (
+      <NameScreen
+        guess={nameGuess({ ai: d.aiName, display: displayName })}
+        waiting={!d.aiProfileReady}
+        count={pos.count}
+      />
+    ) : null;
 
   return (
     <SetupFrame step={step} done={done}>

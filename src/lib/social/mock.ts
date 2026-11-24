@@ -1797,6 +1797,7 @@ export class MockSocialProvider implements SocialProvider {
     if (input.platform === "facebook" || input.platform === "googlebusiness") {
       return {
         ...EMPTY_ACCOUNT_CATEGORY,
+        name: "Harbour Bean Café",
         category: "Coffee Shop",
         description: "Small-batch coffee and fresh pastries, baked every morning.",
       };
