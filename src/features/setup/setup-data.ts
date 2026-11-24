@@ -25,7 +25,13 @@ import type { FlowFacts } from "./flow";
 import { chatSavedOf, type ChatSaved } from "./chat";
 import { chatLogOf, type ChatLog } from "./chat-log";
 import { knownFacts, type FactField, type KbRow, type KnownFact } from "./chat-fields";
-import { effectiveProfile, storedProfile, wantedCounts, type WantedCount } from "./profile";
+import {
+  effectiveProfile,
+  profileName,
+  storedProfile,
+  wantedCounts,
+  type WantedCount,
+} from "./profile";
 import { customKindFromProfile, kindFromProfile } from "./starter";
 import {
   batchReplies,
@@ -80,6 +86,10 @@ export interface SetupData {
   tenantId: string;
   brandName: string;
   namePending: boolean;
+  /** The AI profile's suggested business name (24 Nov), validated, or null. */
+  aiName: string | null;
+  /** The AI profile is made (when it isn't yet, the name screen looks again briefly). */
+  aiProfileReady: boolean;
   savedScreen: string | null;
   finished: boolean;
   connected: boolean;
@@ -458,6 +468,8 @@ export async function loadSetupData(
     tenantId,
     brandName: tenant.name,
     namePending: tenant.name_pending,
+    aiName: profileName(aiProfile),
+    aiProfileReady: aiProfile !== null,
     savedScreen: tenant.setup_screen,
     finished: tenant.setup_done_at !== null,
     connected: connectedPlatforms.size > 0,

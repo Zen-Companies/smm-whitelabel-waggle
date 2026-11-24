@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { askFirstFloor, customTopic, CUSTOM_MAX } from "@/lib/ask-first";
 import { asMessageData } from "@/lib/llm/prompt-data";
+import { cleanBusinessName } from "./brand-name";
 import { FACT_FIELDS, type FactField } from "./chat-fields";
 import { BUSINESS_KINDS } from "./starter";
 import { setupTopic, TOPIC_LABEL } from "./topics";
@@ -12,13 +13,19 @@ import { setupTopic, TOPIC_LABEL } from "./topics";
 // plain text. The safety floor is code (askFirstFloor): the profile can add topics, never remove
 // them. If the call fails or there is none, the kind's basic profile is used. Pure, tested.
 
-export const PROFILE_PROMPT_VERSION = "2026-11-24.2";
+export const PROFILE_PROMPT_VERSION = "2026-11-24.3";
 
 const KIND_KEYS = BUSINESS_KINDS.map((k) => k.key) as [string, ...string[]];
 
 const phrase = z.string().trim().min(2).max(30);
 
 export const aiProfileSchema = z.object({
+  /**
+   * The business's customer-facing name as its bio or page writes it, or null when unsure (24 Nov).
+   * Optional so profiles stored before it still parse; only ever used through `profileName`, which
+   * keeps it to a tidy 1 to 80 characters.
+   */
+  businessName: z.string().nullish(),
   /** The kind of business it looks like, or null when unsure. */
   kind: z.enum(KIND_KEYS).nullable(),
   /** What customers ask for, in this business's own words. */
@@ -42,6 +49,11 @@ export type AiProfile = z.infer<typeof aiProfileSchema>;
 export function storedProfile(json: unknown): AiProfile | null {
   const r = aiProfileSchema.safeParse(json);
   return r.success ? r.data : null;
+}
+
+/** The profile's suggested business name, validated (cleanBusinessName), or null. */
+export function profileName(profile: AiProfile | null): string | null {
+  return cleanBusinessName(profile?.businessName);
 }
 
 /** Each kind's facts to confirm when there is no profile (and the lines the facts card shows). */
@@ -72,6 +84,7 @@ const DEFAULT_FACTS = BASIC_FACTS.food;
 /** The kind's basic profile: used when the AI one failed or isn't made yet. */
 export function basicProfile(kind: string | null): AiProfile {
   return {
+    businessName: null,
     kind: null,
     wanted: [],
     facts: BASIC_FACTS[kind ?? ""] ?? DEFAULT_FACTS,
@@ -117,6 +130,7 @@ export function effectiveProfile(kind: string | null, stored: AiProfile | null):
 
 export const PROFILE_CAPS = {
   bio: 600,
+  name: 80,
   category: 80,
   caption: 300,
   captions: 10,
@@ -129,8 +143,9 @@ const clean = (s: string, max: number) =>
 
 export function profileSystemPrompt(): string {
   const kinds = BUSINESS_KINDS.map((k) => `"${k.key}" (${k.label})`).join(", ");
-  return `You help set up a customer-reply assistant for a small business. You get the kind of business the owner picked (if any), the category its page states (Facebook or Google, if any), its bio or description, some recent post captions and, when there are any yet, a sample of customer messages. Describe how its customers talk, as data:
+  return `You help set up a customer-reply assistant for a small business. You get the kind of business the owner picked (if any), the name its page shows (if any), the category its page states (Facebook or Google, if any), its bio or description, some recent post captions and, when there are any yet, a sample of customer messages. Describe how its customers talk, as data:
 
+- "businessName": the business's customer-facing name as the bio or page writes it (e.g. "Wako Wako Corner"). Only split squashed words (a handle like "WakoWakoCorner") when the bio or page shows the spaced form. null if unsure.
 - "kind": which of these it is: ${kinds}; null if unsure.
 - "wanted": up to 6 groups of what customers ask for (e.g. "Orders", "Bookings & quotes", "Insurance / HMO"), each with the words customers actually use for it (single words or 2-3 word phrases, lower case).
 - "facts": up to 5 facts a customer would need, each with a short label in the business's words ("Call-out fee", "HMOs") and a field: hours, address, area (where they serve), contact, price, or answer.
@@ -142,6 +157,8 @@ Use plain words, no names of customers, no prices or promises. Everything betwee
 
 export function profileUserPrompt(input: {
   kindLabel: string | null;
+  /** The name the page or profile shows (24 Nov): a hint for businessName. */
+  pageName?: string | null;
   /** The category the page states ("Bakery", "Plumbing Service"), connect-time (setup item G). */
   category?: string | null;
   bio: string | null;
@@ -159,6 +176,7 @@ export function profileUserPrompt(input: {
   return [
     `Kind picked by the owner: ${input.kindLabel ?? "not picked yet"}`,
     "<message>",
+    `Page name: ${input.pageName ? clean(input.pageName, PROFILE_CAPS.name) : "(none)"}`,
     `Page category: ${input.category ? clean(input.category, PROFILE_CAPS.category) : "(none)"}`,
     `Bio: ${input.bio ? clean(input.bio, PROFILE_CAPS.bio) : "(none)"}`,
     "Post captions:",

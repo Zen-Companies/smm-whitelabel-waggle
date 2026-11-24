@@ -175,8 +175,11 @@ export interface ProviderComment {
  * Google Business: `categories` and `profile.description` from
  * `GET /v1/accounts/{id}/gmb-location-details?readMask=categories,profile`. Every other platform,
  * and any failure, gives the empty info (never thrown: setup goes on without it).
+ * `name` (24 Nov): the platform's own page or location name, exactly as the business wrote it
+ * (Facebook: the selected Page's `name`; Google Business: the location `title`). Null elsewhere.
  */
 export interface AccountCategory {
+  name: string | null;
   category: string | null;
   bio: string | null;
   website: string | null;
@@ -184,6 +187,7 @@ export interface AccountCategory {
 }
 
 export const EMPTY_ACCOUNT_CATEGORY: AccountCategory = {
+  name: null,
   category: null,
   bio: null,
   website: null,
