@@ -10,7 +10,16 @@ it("a role sees only the tabs it may open, in order", () => {
     "MCP tools",
     "MCP activity",
   ]);
-  expect(staffPagesFor(set(...PERMISSIONS))).toHaveLength(10);
+  expect(staffPagesFor(set(...PERMISSIONS))).toHaveLength(11);
+});
+
+it("Customers is the first tab, for roles that may see customers", () => {
+  expect(staffPagesFor(set("customers.view", "admin.costs.view")).map((p) => p.label)).toEqual([
+    "Customers",
+    "Costs",
+  ]);
+  expect(staffPagesFor(set("customers.act")).map((p) => p.label)).toEqual([]);
+  expect(firstStaffPage(set("customers.view", "mcp.audit.view"))).toBe("/admin/customers");
 });
 
 it("the top bar's Staff link goes to the first page, or nowhere for owners", () => {
