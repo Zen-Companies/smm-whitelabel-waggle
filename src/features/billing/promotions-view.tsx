@@ -18,6 +18,7 @@ const STATUS: Record<PromotionStatus, { label: string; cls: string }> = {
 
 const AUDIENCE: Record<string, string> = {
   never_paid_owners: "Owners who never paid",
+  paying_owners: "Paying Owners",
   all_owners: "All Owners",
   everyone: "Everyone",
 };

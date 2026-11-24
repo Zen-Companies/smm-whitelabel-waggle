@@ -56,7 +56,7 @@ describe("rows and the app's promotions", () => {
   });
   it("starts a new promotion off", () => {
     expect(newPromotionFields("seasonal", "xmas-2026", "Christmas").enabled).toBe(false);
-    expect(newPromotionFields("referral", "ref-2", "Ref").audience).toBe("all_owners");
+    expect(newPromotionFields("referral", "ref-2", "Ref").audience).toBe("paying_owners");
   });
 });
 

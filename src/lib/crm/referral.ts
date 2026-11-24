@@ -115,9 +115,13 @@ export function referralLinkDedupeKey(code: string): string {
   return `referral_link:${code}`;
 }
 
-/** `waggle_referral_link` for an Owner's contact; nothing without a link (teammates). */
-export function referralLinkFields(link: string | null | undefined): {
+/**
+ * `waggle_referral_link` for an Owner's contact: their link while their organization is paying,
+ * empty while it's on Free (so HighLevel emails can branch on it). Nothing for teammates.
+ */
+export function referralLinkFields(input: { owner: boolean; link: string | null | undefined }): {
   waggle_referral_link?: string;
 } {
-  return link ? { waggle_referral_link: link } : {};
+  if (!input.owner) return {};
+  return { waggle_referral_link: input.link || "" };
 }

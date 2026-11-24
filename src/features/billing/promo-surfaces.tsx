@@ -6,6 +6,7 @@ import { getServiceClient } from "@/lib/supabase/service";
 import { TZ_COOKIE, validTimeZone } from "@/lib/time/zone";
 import { loadBilling } from "./billing-store";
 import { checkoutTrialDays } from "./plans";
+import { isPayingBill } from "./subscription";
 import { PromoBarView } from "./promo-bar-view";
 import {
   activeBar,
@@ -53,12 +54,18 @@ async function loadBar(orgId: string, isOwner: boolean) {
       audienceIncludes(p.bar.audience, {
         isOwner,
         neverPaid: true,
+        paying: true,
       }),
   );
   if (!live) return null;
+  const bill = isOwner ? await loadBilling(getServiceClient(), orgId) : null;
   const bar = activeBar(
     now,
-    { isOwner, neverPaid: isOwner ? await neverPaid(orgId) : false },
+    {
+      isOwner,
+      neverPaid: isOwner && checkoutTrialDays(bill) !== null,
+      paying: isOwner && isPayingBill(bill),
+    },
     list,
   );
   if (!bar) return null;

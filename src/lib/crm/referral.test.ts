@@ -145,12 +145,13 @@ describe("signupReferralFields", () => {
 });
 
 describe("the Owner's referral link (25 Nov)", () => {
-  it("waggle_referral_link for an Owner, nothing without a link", () => {
-    expect(referralLinkFields("https://app.gowaggle.ai/signup?ref=abc123")).toEqual({
-      waggle_referral_link: "https://app.gowaggle.ai/signup?ref=abc123",
-    });
-    expect(referralLinkFields(null)).toEqual({});
-    expect(referralLinkFields("")).toEqual({});
+  it("waggle_referral_link: the link for a paying Owner, empty for a Free Owner, nothing for teammates", () => {
+    expect(
+      referralLinkFields({ owner: true, link: "https://app.gowaggle.ai/signup?ref=abc123" }),
+    ).toEqual({ waggle_referral_link: "https://app.gowaggle.ai/signup?ref=abc123" });
+    expect(referralLinkFields({ owner: true, link: null })).toEqual({ waggle_referral_link: "" });
+    expect(referralLinkFields({ owner: true, link: "" })).toEqual({ waggle_referral_link: "" });
+    expect(referralLinkFields({ owner: false, link: "https://x/signup?ref=abc123" })).toEqual({});
   });
 
   it("synced once per code", () => {
