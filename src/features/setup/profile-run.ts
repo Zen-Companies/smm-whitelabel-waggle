@@ -11,6 +11,8 @@ import {
   type SocialProvider,
 } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { cleanBusinessName } from "./brand-name";
+import { nameFromAiProfile } from "./brand-name-server";
 import {
   aiProfileSchema,
   PROFILE_CAPS,
@@ -150,16 +152,19 @@ async function buildOne(
     system: profileSystemPrompt(),
     prompt: profileUserPrompt({
       kindLabel: kind?.label ?? null,
+      pageName: row.handle?.replace(/^@/, "") ?? null,
       bio,
       captions: [...new Set((captions ?? []).map((c) => c.post_caption ?? ""))],
       messages: (messages ?? []).map((m) => m.text),
     }),
   });
+  const businessName = cleanBusinessName(result.object.businessName);
   const { error } = await db
     .from("tenants")
-    .update({ ai_profile: result.object as unknown as Json })
+    .update({ ai_profile: { ...result.object, businessName } as unknown as Json })
     .eq("id", tenantId);
   if (error) throw new Error(`saving the business profile failed: ${error.message}`);
+  await nameAfterProfile(db, { tenantId, ai: businessName, platform: row.platform });
   await writeAudit(db, {
     tenantId,
     action: "business_profile_made",
@@ -321,6 +326,7 @@ async function buildAtConnect(
     system: profileSystemPrompt(),
     prompt: profileUserPrompt({
       kindLabel: kindOf(kind)?.label ?? null,
+      pageName: info.name ?? row.username?.replace(/^@/, "") ?? null,
       category: info.category,
       bio,
       captions: [...new Set(captions)],
@@ -328,12 +334,19 @@ async function buildAtConnect(
     }),
   });
   // A kind the owner or the category gave stays: the profile's own guess only fills a gap.
-  const profile = { ...result.object, kind: kind ?? result.object.kind };
+  // The suggested name is kept only when it's a usable one (it names a brand still unnamed or
+  // only guessed: nameAfterProfile).
+  const profile = {
+    ...result.object,
+    kind: kind ?? result.object.kind,
+    businessName: cleanBusinessName(result.object.businessName),
+  };
   const { error } = await db
     .from("tenants")
     .update({ ai_profile: profile as unknown as Json })
     .eq("id", tenantId);
   if (error) throw new Error(`saving the business profile failed: ${error.message}`);
+  await nameAfterProfile(db, { tenantId, ai: profile.businessName, platform: row.platform });
   await writeAudit(db, {
     tenantId,
     action: "business_profile_made",
@@ -348,4 +361,24 @@ async function buildAtConnect(
     },
   });
   return { kind: kindSaved, made: true };
+}
+
+/**
+ * The suggestion names the brand when its name is still pending or an unchecked guess (24 Nov:
+ * step 3's facts card confirms it). Never fails the profile: the name stays as it was.
+ */
+async function nameAfterProfile(
+  db: ServiceClient,
+  input: { tenantId: string; ai: string | null; platform: string | null },
+): Promise<void> {
+  if (!input.ai) return;
+  try {
+    await nameFromAiProfile(db, {
+      tenantId: input.tenantId,
+      ai: input.ai,
+      platform: input.platform ?? "instagram",
+    });
+  } catch (err) {
+    Sentry.captureException(err, { extra: { tenantId: input.tenantId, step: "name" } });
+  }
 }

@@ -12,7 +12,6 @@ import { addAnswerNow } from "@/features/knowledge-base";
 import { can } from "@/features/orgs";
 import {
   type CurrentTenant,
-  BRAND_NAME_MAX,
   ensureZernioProfile,
   getOpenOrg,
   getTenantFor,
@@ -65,37 +64,6 @@ export async function saveSetupScreen(screen: unknown): Promise<void> {
   if (!isSetupScreen(screen)) return;
   const tenant = await getTenantFor("brand.settings");
   if (tenant) await saveScreen(tenant.id, tenant.userId, screen);
-}
-
-export type NameState = { error?: string; name?: string };
-
-const nameSchema = z
-  .string()
-  .trim()
-  .min(1, "Enter your business’s name.")
-  .max(BRAND_NAME_MAX, `Keep the name under ${BRAND_NAME_MAX} characters.`);
-
-/** Decision 6: "What's your business called?" when the connected profile had no name. */
-export async function saveBusinessName(_prev: NameState, formData: FormData): Promise<NameState> {
-  const raw = String(formData.get("name") ?? "");
-  const parsed = nameSchema.safeParse(raw);
-  if (!parsed.success) return { error: parsed.error.issues[0].message, name: raw };
-  const tenant = await getTenantFor("brand.settings");
-  if (!tenant) return { error: NOT_ALLOWED, name: raw };
-  const db = getServiceClient();
-  const { error } = await db
-    .from("tenants")
-    .update({ name: parsed.data, name_pending: false })
-    .eq("id", tenant.id);
-  if (error) return { error: "Couldn’t save. Try again.", name: raw };
-  await writeAudit(db, {
-    tenantId: tenant.id,
-    action: "brand_named",
-    actor: tenant.userId,
-    details: { from: "setup" },
-  });
-  revalidatePath("/", "layout");
-  redirect("/setup");
 }
 
 /**

@@ -28,6 +28,7 @@ import {
   factsIntro,
   GREETING,
   kindAnswer,
+  NAME_QUESTION,
   needYouLine,
   nextMissing,
   repliesQuestion,
@@ -115,6 +116,8 @@ import { useHoldWayOut } from "./way-out";
 const UNDO_MS = 8_000;
 const WRITING_POLL_MS = 5_000;
 const FINISH_FORM = "setup-chat-finish";
+/** The business name's longest (BRAND_NAME_MAX, checked again on the server). */
+const BUSINESS_NAME_MAX = 80;
 /** The facts card's lines when the profile gives none (the kind sits on the Business line). */
 const FACT_ROWS: { field: FactField; label: string }[] = [
   { field: "hours", label: "Hours" },
@@ -125,6 +128,10 @@ const FACT_ROWS: { field: FactField; label: string }[] = [
 export interface SetupChatProps {
   firstName: string;
   brandName: string;
+  /** Nothing gave the business a name: asked first, no Skip (24 Nov). */
+  namePending: boolean;
+  /** The name is a guess not checked yet: "from Instagram" on the Business line. */
+  nameTag: string | null;
   tenantId: string;
   platformWord: string;
   saved: ChatSaved;
@@ -231,6 +238,10 @@ export function SetupChat(p: SetupChatProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [otherWords, setOtherWords] = useState<string | null>(null);
+  // The business name: asked first when missing, or changed from the Business line (24 Nov).
+  const [nameDraft, setNameDraft] = useState(p.namePending ? "" : p.brandName);
+  const [nameSaved, setNameSaved] = useState(false);
+  const [nameChecked, setNameChecked] = useState(false);
   const [text, setText] = useState("");
   const [target, setTarget] = useState<{ field: FactField; id: string | null } | null>(null);
   const [misses, setMisses] = useState(0);
@@ -315,6 +326,7 @@ export function SetupChat(p: SetupChatProps) {
   const needHere = Object.keys(need).length > 0;
   const writingNow = p.writing.of > 0 && p.writing.done < p.writing.of;
   const progress = chatProgress(saved, {
+    namePending: p.namePending && !nameSaved,
     kindKnown: !!p.kind,
     toSend: toSend.length,
     writing: writingNow,
@@ -384,6 +396,9 @@ export function SetupChat(p: SetupChatProps) {
   async function answer(a: ChatAnswer): Promise<{ error?: string; line?: string }> {
     setError(null);
     setSaved((s) => {
+      if (a.step === "name") {
+        return a.label && !s.labels?.name ? { ...s, labels: { ...s.labels, name: a.label } } : s;
+      }
       if (a.step === "kind") return { ...s, kind: a.kind, kindWords: a.words ?? "" };
       if (a.step === "facts") return { ...s, facts: "ok", toAsk: s.toAsk ?? a.toAsk };
       if (a.step === "missing") return { ...s, missing: { ...s.missing, [a.field]: a.outcome } };
@@ -394,8 +409,8 @@ export function SetupChat(p: SetupChatProps) {
     });
     const r = await saveChatAnswer(a);
     if (r.error) setError(r.error);
-    // A new kind: the page reads its facts lines and topics again.
-    else if (a.step === "kind") router.refresh();
+    // A new kind: the page reads its facts lines and topics again (a new name: the card's line).
+    else if (a.step === "kind" || a.step === "name") router.refresh();
     return r;
   }
 
@@ -414,6 +429,12 @@ export function SetupChat(p: SetupChatProps) {
       return;
     }
     setLog((l) => askAgain(l, what, here));
+  }
+
+  /** The Business line (or an earlier name or kind answer) tapped: its name and kind editor. */
+  function changeBusiness() {
+    setNameDraft(p.brandName);
+    ask("kind");
   }
 
   /** The owner answered (or left) the question asked again: it closes with their words. */
@@ -491,6 +512,8 @@ export function SetupChat(p: SetupChatProps) {
       main: true,
       onClick: () => {
         setTarget(null);
+        // The business name shown is checked too.
+        setNameChecked(true);
         void answer({
           step: "facts",
           checked: factRows
@@ -896,6 +919,53 @@ export function SetupChat(p: SetupChatProps) {
     })),
     ...(again ? [{ key: "keep", label: "Keep it", onClick: () => closeWith("Keep it") }] : []),
   ];
+  /**
+   * The business name saved (24 Nov): asked first when missing (no Skip), or "Save name" on the
+   * Business line's editor. Changing it rewrites unsent replies that used the old name.
+   */
+  const saveName = async (again: boolean) => {
+    const name = nameDraft.replace(/\s+/g, " ").trim();
+    if (!name || busy) return;
+    if (again && name === p.brandName) {
+      closeWith("Keep it");
+      return;
+    }
+    setBusy(true);
+    if (again) closeWith(savedBubble("Business name", name));
+    const r = await answer(again ? { step: "name", name } : { step: "name", name, label: name });
+    setBusy(false);
+    if (r.error) return;
+    setNameSaved(true);
+    setNameChecked(true);
+    if (again) sayAfter({ who: "waggle", text: r.line ?? "Got it." });
+  };
+  const nameForm = (again: boolean) => (
+    <form
+      className="ml-9 flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void saveName(again);
+      }}
+    >
+      <label className="sr-only" htmlFor={again ? "business-name-again" : "business-name"}>
+        Business name
+      </label>
+      <input
+        id={again ? "business-name-again" : "business-name"}
+        value={nameDraft}
+        maxLength={BUSINESS_NAME_MAX}
+        required
+        onChange={(e) => setNameDraft(e.target.value)}
+        placeholder="Business name"
+        autoComplete="organization"
+        className="field min-w-0 flex-1"
+        autoFocus={!again}
+      />
+      <button type="submit" className={BTN_PRIMARY} disabled={!nameDraft.trim() || busy}>
+        {busy ? "Saving…" : "Save name"}
+      </button>
+    </form>
+  );
   const kindPicker = (again: boolean) =>
     otherWords !== null ? (
       <form
@@ -1307,7 +1377,7 @@ export function SetupChat(p: SetupChatProps) {
   };
 
   const ASK_LINE: Record<AskWhat, string> = {
-    kind: "Change your business type? Tap one:",
+    kind: "Change your business name or type?",
     facts: "Sure. What should I change?",
     replies: repliesQuestion(toSend.length),
     topics: "A few things I’ll always check with you first, even later on. Change any?",
@@ -1327,6 +1397,7 @@ export function SetupChat(p: SetupChatProps) {
       return (
         <div key={e.id} className="flex flex-col gap-1.5">
           <Waggle>{ASK_LINE.kind}</Waggle>
+          {live && nameForm(true)}
           {live && kindPicker(true)}
         </div>
       );
@@ -1482,13 +1553,29 @@ export function SetupChat(p: SetupChatProps) {
         <Divider label="Your business" />
         <Waggle>{GREETING}</Waggle>
 
-        {/* 1. The kind of business, only when Waggle can't tell. */}
-        {kindAsked && (
+        {/* 0. The business's name, only when nothing gave one (24 Nov): asked first, no Skip. */}
+        {(open === "name" || !!saved.labels?.name) && (
           <>
-            <Waggle>First, what kind of business is this?</Waggle>
+            <Waggle>{NAME_QUESTION}</Waggle>
+            {open === "name" ? (
+              !asking && nameForm(false)
+            ) : (
+              <Mine onChange={() => changeBusiness()}>{saved.labels?.name}</Mine>
+            )}
+          </>
+        )}
+
+        {/* 1. The kind of business, only when Waggle can't tell. */}
+        {kindAsked && answered("name") && (
+          <>
+            <Waggle>
+              {saved.labels?.name
+                ? "And what kind of business is it?"
+                : "First, what kind of business is this?"}
+            </Waggle>
             {answered("kind") && kindNow ? (
               <>
-                <Mine onChange={() => ask("kind")}>{saved.labels?.kind ?? kindNow}</Mine>
+                <Mine onChange={() => changeBusiness()}>{saved.labels?.kind ?? kindNow}</Mine>
                 <Waggle>Got it.</Waggle>
               </>
             ) : (
@@ -1508,7 +1595,8 @@ export function SetupChat(p: SetupChatProps) {
                     kind="business"
                     label="Business"
                     value={`${p.brandName}${kindNow ? ` · ${kindNow}` : ""}`}
-                    onClick={() => ask("kind")}
+                    tag={nameChecked ? null : p.nameTag}
+                    onClick={() => changeBusiness()}
                   />
                   {factRows.map((f) => (
                     <FactLine

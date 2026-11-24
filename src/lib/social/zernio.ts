@@ -3727,14 +3727,16 @@ export class ZernioSocialProvider implements SocialProvider {
       .transform((v) => v?.trim() || null);
     if (input.platform === "facebook") {
       return call("getAccountCategory", async (withFetch) => {
-        // docs.zernio.com: GET /v1/accounts/{accountId}/facebook-page (pages[].category,
-        // selectedPageId).
+        // docs.zernio.com: GET /v1/accounts/{accountId}/facebook-page (pages[].name,
+        // pages[].category, selectedPageId).
         const { data } = await this.zernio.connect.getFacebookPages(
           withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
         );
         const found = parse(
           z.object({
-            pages: z.array(z.object({ id: z.string().nullish(), category: text })).nullish(),
+            pages: z
+              .array(z.object({ id: z.string().nullish(), name: text, category: text }))
+              .nullish(),
             selectedPageId: z.string().nullish(),
           }),
           data,
@@ -3744,7 +3746,11 @@ export class ZernioSocialProvider implements SocialProvider {
         const page =
           pages.find((p) => !!found.selectedPageId && p.id === found.selectedPageId) ??
           (pages.length === 1 ? pages[0] : undefined);
-        return { ...EMPTY_ACCOUNT_CATEGORY, category: page?.category ?? null };
+        return {
+          ...EMPTY_ACCOUNT_CATEGORY,
+          name: page?.name ?? null,
+          category: page?.category ?? null,
+        };
       });
     }
     if (input.platform === "instagram" && input.username) {
@@ -3775,7 +3781,7 @@ export class ZernioSocialProvider implements SocialProvider {
       return call("getAccountCategory", async (withFetch) => {
         // docs.zernio.com: GET /v1/accounts/{accountId}/gmb-location-details
         // ?readMask=categories,profile (categories.primaryCategory.displayName,
-        // profile.description).
+        // profile.description; `title`, the business name, always comes back).
         const { data } = await this.zernio.gmblocationdetails.getGoogleBusinessLocationDetails(
           withFetch({
             signal: input.signal,
@@ -3785,6 +3791,8 @@ export class ZernioSocialProvider implements SocialProvider {
         );
         const found = parse(
           z.object({
+            title: text,
+            location: z.object({ name: text }).nullish(),
             categories: z
               .object({ primaryCategory: z.object({ displayName: text }).nullish() })
               .nullish(),
@@ -3796,6 +3804,7 @@ export class ZernioSocialProvider implements SocialProvider {
         );
         return {
           ...EMPTY_ACCOUNT_CATEGORY,
+          name: found.title ?? found.location?.name ?? null,
           category: found.categories?.primaryCategory?.displayName ?? null,
           description: found.profile?.description ?? null,
           website: found.websiteUri,

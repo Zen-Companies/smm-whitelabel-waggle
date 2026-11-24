@@ -44,6 +44,15 @@ describe("chatProgress", () => {
     expect(chatProgress({ ...upToTopics, topics: ["refunds"] }, facts).open).toBe("mode");
   });
 
+  it("asks the business name first when nothing gave one, and nothing goes on without it", () => {
+    const noName = { ...facts, namePending: true, kindKnown: true };
+    expect(chatProgress({}, noName).open).toBe("name");
+    // Later answers saved don't skip it (no Skip for the name).
+    expect(chatProgress({ kind: "food", facts: "ok" }, noName).open).toBe("name");
+    expect(chatProgress({}, { ...noName, namePending: false }).open).toBe("facts");
+    expect(chatProgress({}, noName).answered).toEqual([]);
+  });
+
   it("doesn't ask the kind when it's known", () => {
     expect(chatProgress({}, { ...facts, kindKnown: true }).open).toBe("facts");
   });
