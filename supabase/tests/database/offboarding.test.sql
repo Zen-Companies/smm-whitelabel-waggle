@@ -33,6 +33,8 @@ select is(
        -- deleted by the tenants_forget_purged_catch_ups trigger (20 Nov: a catch-up outlives
        -- its account row, keyed on the real account, until the brand is purged)
        'catch_ups',
+       -- deleted by the tenants_forget_purged_connect_attempts trigger (Fix 1, 24 Nov)
+       'connect_attempts',
        -- kept: costs and the audit trail
        'ai_usage', 'audit_log',
        -- kept: feedback stays with the person (its tenant_id is set null if the brand row goes)

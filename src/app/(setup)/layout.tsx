@@ -2,7 +2,7 @@ import { LogOut } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
-import { connectAccount } from "@/features/accounts";
+import { ConnectTrace, connectAccount } from "@/features/accounts";
 import { BillingHost, PromoBar } from "@/features/billing";
 import { Feedback } from "@/features/feedback";
 import { can, listMyOrgs, OrgMenu } from "@/features/orgs";
@@ -71,6 +71,10 @@ export default function SetupLayout({ children }: LayoutProps<"/">) {
       {/* Confirm later's line shows in the app only, once setup is done (21 Nov): during
           onboarding "Wrong email?" led to Settings, which sends you back to setup. */}
       {children}
+      {/* Fix 1 (24 Nov): a connect that came back here is recorded (renders nothing). */}
+      <Suspense fallback={null}>
+        <ConnectTrace />
+      </Suspense>
       <Suspense fallback={null}>
         <SetupOffers />
       </Suspense>

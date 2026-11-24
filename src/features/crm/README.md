@@ -41,6 +41,22 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 | founding_full                                                                                            | `sender.ts`, after a founding trial takes the last spot                                 |
 | inactive, app_active                                                                                     | `activity.ts` (sweep in the jobs route; a visit)                                        |
 
+## Failed connects (Fix 1, 24 Nov)
+
+`connect_failed` is queued for the person who tried (`features/accounts/connect-trace-store.ts`) when a
+connect comes back with an error, comes back with no account, or has no return after 2 hours (the jobs
+route's 15-minute sweep). At most once per brand + platform per 6 hours. Besides every usual field
+(`waggle_platform` too) it sends four more, which must exist in HighLevel:
+
+| Field                     | Value                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `waggle_connect_platform` | the platform id (`instagram`, `facebook`, …)                                 |
+| `waggle_connect_error`    | Zernio's `error` code, or `no_account` / `abandoned`                         |
+| `waggle_connect_fixable`  | `yes` / `no` / `unknown` (Zernio's `is_user_fixable`)                        |
+| `waggle_connect_in_app`   | `yes` / `no`: started inside Instagram's, Facebook's or TikTok's own browser |
+
+Every attempt, with all of Zernio's error fields, is kept in `connect_attempts`.
+
 ## Sign-up, feedback and first-touch UTM (18 Nov)
 
 | Event       | What HighLevel gets                                                                                                                                                                                                                                                                 | Queued from                                                                          |

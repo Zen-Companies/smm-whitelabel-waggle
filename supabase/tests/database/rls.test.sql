@@ -2,7 +2,7 @@
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(65);
+select plan(70);
 
 -- Fixtures, as postgres (bypasses RLS) ---------------------------------------------------------
 
@@ -67,6 +67,10 @@ insert into public.post_metrics (tenant_id, provider_post_id, platform, caption)
 
 insert into public.webhook_events (id, source, event_type, payload)
 values ('evt_1', 'zernio', 'message.received', '{}');
+
+insert into public.connect_attempts (tenant_id, user_id, platform, outcome, error) values
+  ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'instagram', 'failed', 'error_a'),
+  ('b1000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'facebook', 'failed', 'error_b');
 
 -- Schema rules (CLAUDE.md rule 9) -------------------------------------------------------------
 
@@ -151,6 +155,7 @@ select throws_ok($$ select * from public.lab_runs $$, '42501', null, 'lab_runs: 
 select results_eq($$ select title from public.kb_suggestions $$, $$ values ('Parking A') $$, 'kb_suggestions: only A');
 select results_eq($$ select data->>'who' from public.analytics_snapshots $$, $$ values ('A') $$, 'analytics_snapshots: only A');
 select results_eq($$ select caption from public.post_metrics $$, $$ values ('Post A') $$, 'post_metrics: only A');
+select results_eq($$ select error from public.connect_attempts $$, $$ values ('error_a') $$, 'connect_attempts: only A');
 
 -- Writes on B's rows: updates and deletes match nothing, inserts are refused.
 
@@ -211,6 +216,10 @@ select throws_ok($$ update public.posts set status = 'published' $$, '42501', nu
 select throws_ok($$ insert into public.post_metrics (tenant_id, provider_post_id, platform) values ('a1000000-0000-4000-8000-000000000001', 'x', 'instagram') $$,
   '42501', null, 'cannot insert post_metrics');
 select throws_ok($$ update public.analytics_snapshots set data = '{}' $$, '42501', null, 'cannot update analytics_snapshots');
+select throws_ok($$ insert into public.connect_attempts (tenant_id, platform) values ('a1000000-0000-4000-8000-000000000001', 'instagram') $$,
+  '42501', null, 'cannot insert connect_attempts');
+select throws_ok($$ update public.connect_attempts set outcome = 'connected' $$, '42501', null, 'cannot update connect_attempts');
+select throws_ok($$ delete from public.connect_attempts $$, '42501', null, 'cannot delete connect_attempts');
 
 -- Allowed writes in A's own tenant.
 
@@ -249,6 +258,7 @@ set local role anon;
 select throws_ok($$ select * from public.tenants $$, '42501', null, 'anon cannot read tenants');
 select throws_ok($$ select * from public.inbound_items $$, '42501', null, 'anon cannot read inbound items');
 select throws_ok($$ select * from public.kb_entries $$, '42501', null, 'anon cannot read kb entries');
+select throws_ok($$ select * from public.connect_attempts $$, '42501', null, 'anon cannot read connect_attempts');
 reset role;
 
 select * from finish();
