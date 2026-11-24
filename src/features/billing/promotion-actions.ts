@@ -10,6 +10,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import {
   changedFields,
+  HISTORY_FAILED,
   newPromotionFields,
   parsePromotionForm,
   PROMOTION_ID,
@@ -34,9 +35,6 @@ function refresh(id: string) {
   revalidatePath(`${PATH}/${id}`);
   revalidatePath("/", "layout");
 }
-
-/** Said in place when the change is saved but its history entry isn't (staff should know). */
-export const HISTORY_FAILED = "Saved, but the history entry failed.";
 
 /**
  * Keeps one change in promotion_changes. false when that fails: reported to Sentry (ids only)

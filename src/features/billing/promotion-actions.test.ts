@@ -18,8 +18,9 @@ vi.mock("@sentry/nextjs", () => ({
   captureException: (...a: unknown[]) => captureException(...a),
 }));
 
-const { createPromotion, HISTORY_FAILED, setPromotionEnabled, updatePromotion } =
+const { createPromotion, setPromotionEnabled, updatePromotion } =
   await import("./promotion-actions");
+const { HISTORY_FAILED } = await import("./promotion-records");
 
 function fd(values: Record<string, string>) {
   const f = new FormData();

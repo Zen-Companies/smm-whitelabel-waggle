@@ -321,3 +321,6 @@ export function changedFields(
 ): string[] {
   return Object.keys(after).filter((k) => !sameValue(k, before[k], after[k]));
 }
+
+/** Said in place when a promotion change is saved but its history entry isn't. */
+export const HISTORY_FAILED = "Saved, but the history entry failed.";
