@@ -2526,6 +2526,7 @@ export type Database = {
           ai_profile: Json | null
           ai_profile_at: string | null
           name_pending: boolean
+          name_guessed_from: string | null
           ask_first_topics: string[]
           setup_passed_by: string | null
           setup_passed_how: string | null
@@ -2569,6 +2570,7 @@ export type Database = {
           ai_profile?: Json | null
           ai_profile_at?: string | null
           name_pending?: boolean
+          name_guessed_from?: string | null
           ask_first_topics?: string[]
           setup_passed_by?: string | null
           setup_passed_how?: string | null
@@ -2611,6 +2613,7 @@ export type Database = {
           ai_profile?: Json | null
           ai_profile_at?: string | null
           name_pending?: boolean
+          name_guessed_from?: string | null
           ask_first_topics?: string[]
           setup_passed_by?: string | null
           setup_passed_how?: string | null

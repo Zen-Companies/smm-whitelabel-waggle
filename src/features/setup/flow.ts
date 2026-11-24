@@ -42,8 +42,6 @@ export const STEP_SUBLABEL: Record<2 | 3, string> = {
 
 /** What decides which screens have something to show. */
 export interface FlowFacts {
-  /** The brand has no real name yet: "What's your business called?" first. */
-  namePending: boolean;
   /** People who wanted to buy or order (2.2's big number). */
   wanted: number;
   /** DMs past the 24-hour window (2.2's list). */
@@ -66,11 +64,17 @@ export interface FlowFacts {
  * them open it. The facts no longer hide screens; each screen says what's empty in place.
  */
 export function visibleScreens(f: FlowFacts): SetupScreen[] {
-  return f.namePending ? ["name", "missed", "chat"] : ["missed", "chat"];
+  // Kept for callers: no fact hides a screen any more (the name screen is gone, 24 Nov).
+  void f;
+  return ["missed", "chat"];
 }
 
-/** Old screens and where they open now. */
+/**
+ * Old screens and where they open now. "name" (step 2's business-name screen) is gone (24 Nov):
+ * the name is confirmed in step 3's facts card, so old links and saved screens open step 2.
+ */
 const OPENS_AS: Partial<Record<SetupScreen, SetupScreen>> = {
+  name: "missed",
   wanted: "missed",
   replies: "missed",
   money: "chat",
@@ -87,8 +91,7 @@ function atOrAfter(from: SetupScreen, visible: SetupScreen[]): SetupScreen {
 
 /**
  * The screen to open: the one asked for (a link, Back/Next), else the one saved when the owner
- * left, else the first. A screen that is empty now opens the next one that isn't. While the brand
- * has no name, the name question comes first whatever was asked.
+ * left, else the first. A screen that is empty now opens the next one that isn't.
  */
 export function openScreen(input: {
   requested: unknown;
@@ -96,19 +99,14 @@ export function openScreen(input: {
   facts: FlowFacts;
 }): SetupScreen {
   const visible = visibleScreens(input.facts);
-  if (input.facts.namePending) return "name";
-  if (isSetupScreen(input.requested) && input.requested !== "name") {
-    return atOrAfter(input.requested, visible);
-  }
-  if (isSetupScreen(input.saved) && input.saved !== "name") {
-    return atOrAfter(input.saved, visible);
-  }
+  if (isSetupScreen(input.requested)) return atOrAfter(input.requested, visible);
+  if (isSetupScreen(input.saved)) return atOrAfter(input.saved, visible);
   return visible[0];
 }
 
 /** The screen after `current`, or null when setup is done. */
 export function nextScreen(current: SetupScreen, f: FlowFacts): SetupScreen | null {
-  const visible = visibleScreens(f).filter((s) => s !== "name");
+  const visible = visibleScreens(f);
   const at = SETUP_SCREENS.indexOf(current);
   return visible.find((s) => SETUP_SCREENS.indexOf(s) > at) ?? null;
 }
@@ -119,7 +117,7 @@ export function nextScreen(current: SetupScreen, f: FlowFacts): SetupScreen | nu
  * sent).
  */
 export function previousScreen(current: SetupScreen, f: FlowFacts): SetupScreen | null {
-  const visible = visibleScreens(f).filter((s) => s !== "name");
+  const visible = visibleScreens(f);
   const at = SETUP_SCREENS.indexOf(current);
   const before = visible.filter((s) => SETUP_SCREENS.indexOf(s) < at);
   const prev = before[before.length - 1];

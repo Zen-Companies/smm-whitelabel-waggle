@@ -60,7 +60,8 @@ export interface MorePlace {
 
 export interface Step2StoryProps {
   firstName: string;
-  brandName: string;
+  /** Null while the business has no name yet (step 3 asks it): "On your Instagram". */
+  brandName: string | null;
   platform: string;
   /** "@sunnyside", else the platform. */
   handle: string;
@@ -231,7 +232,7 @@ function Results({
           {props.firstName}, here’s what you missed in the last 30 days
         </h1>
         <p className="text-ink-2 text-[14px]">
-          On {props.brandName}’s {props.platform}.
+          On {props.brandName ? `${props.brandName}’s` : "your"} {props.platform}.
         </p>
       </div>
       {strip}
