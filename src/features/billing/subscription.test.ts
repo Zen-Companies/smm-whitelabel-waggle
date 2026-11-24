@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalog, foundingCentsOff, PRICE_KEYS } from "./catalog";
+import { catalog, PRICE_KEYS } from "./catalog";
 import {
   autoTopUpAllowed,
   billingFromSubscription,
@@ -46,7 +46,6 @@ describe("catalog", () => {
     expect(prices.waggle_extra_account_yearly.amount).toBe(12000);
     expect(prices.waggle_top_up_200).toMatchObject({ amount: 1500, interval: null });
   });
-  it("founding takes $20 off Business", () => expect(foundingCentsOff()).toBe(2000));
   it("keys round-trip", () => {
     expect(parsePlanKey(PRICE_KEYS.plan("solo", "year"))).toEqual({
       plan: "solo",
@@ -68,17 +67,22 @@ describe("billingFromSubscription", () => {
       billing_interval: "month",
       status: "trialing",
       trial_ends_at: new Date(1_795_000_000_000).toISOString(),
+      trial_days: null,
       current_period_end: new Date(1_797_000_000_000).toISOString(),
       cancel_at_period_end: false,
       extra_accounts: 0,
-      founding: false,
     });
   });
-  it("counts extra accounts and spots the founding coupon", () => {
+  it("keeps how long the trial is (30 days with the free month)", () => {
+    const row = billingFromSubscription(
+      sub({ trial_start: 1_795_000_000 - 30 * 86_400, trial_end: 1_795_000_000 }),
+    );
+    expect(row.trial_days).toBe(30);
+  });
+  it("counts extra accounts", () => {
     const row = billingFromSubscription(
       sub({
         customer: { id: "cus_2" },
-        discounts: [{ source: { coupon: "waggle_founding_business" } }],
         items: {
           data: [
             {
@@ -95,25 +99,13 @@ describe("billingFromSubscription", () => {
         },
       }),
     );
-    expect(row).toMatchObject({ stripe_customer_id: "cus_2", extra_accounts: 2, founding: true });
-  });
-  it("founding marked in the subscription's metadata (events list discounts by id only)", () => {
-    const row = billingFromSubscription(
-      sub({ metadata: { organization_id: "org-1", founding: "1" }, discounts: ["di_123"] }),
-    );
-    expect(row.founding).toBe(true);
+    expect(row).toMatchObject({ stripe_customer_id: "cus_2", extra_accounts: 2 });
   });
   it("a cancel by date counts as ending (the portal's cancel)", () => {
     expect(billingFromSubscription(sub({ cancel_at: 1_795_516_695 })).cancel_at_period_end).toBe(
       true,
     );
     expect(billingFromSubscription(sub({ cancel_at: null })).cancel_at_period_end).toBe(false);
-  });
-  it("older discount shape (coupon on the discount) works too", () => {
-    expect(
-      billingFromSubscription(sub({ discounts: [{ coupon: { id: "waggle_founding_business" } }] }))
-        .founding,
-    ).toBe(true);
   });
 });
 

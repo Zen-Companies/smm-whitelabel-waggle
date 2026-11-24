@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
 import { ConnectTrace, connectAccount } from "@/features/accounts";
-import { BillingHost } from "@/features/billing";
+import { BillingHost, PromoBar } from "@/features/billing";
 import { Feedback } from "@/features/feedback";
 import { can, listMyOrgs, OrgMenu } from "@/features/orgs";
 import { getOpenOrg, signOut } from "@/features/tenants";
@@ -28,6 +28,13 @@ async function SetupOffers() {
   );
 }
 
+/** The moving promotion bar above the header (approved 24 Nov). */
+async function SetupPromo() {
+  const open = await getOpenOrg();
+  if (!open) return null;
+  return <PromoBar orgId={open.id} isOwner={can(open.role, "billing.view")} />;
+}
+
 async function SetupFeedback() {
   const open = await getOpenOrg();
   return <Feedback orgId={open?.id ?? null} tenantId={null} />;
@@ -38,6 +45,9 @@ async function SetupFeedback() {
 export default function SetupLayout({ children }: LayoutProps<"/">) {
   return (
     <div className="bg-page flex min-h-dvh flex-col">
+      <Suspense fallback={null}>
+        <SetupPromo />
+      </Suspense>
       <header className="border-line bg-surface border-b">
         <div className="mx-auto flex min-h-14 max-w-[1240px] items-center gap-4 px-4 md:px-8">
           <Link href="/welcome" className="flex min-h-14 items-center" aria-label="Waggle">

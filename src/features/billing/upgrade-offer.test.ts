@@ -22,16 +22,23 @@ describe("the ladder", () => {
 });
 
 describe("upgradeOffer", () => {
-  it("Free: Solo with 7 days free and a card, no extras", () => {
+  it("Free: Solo with the first month free and a card, no extras (24 Nov)", () => {
     const o = upgradeOffer("free", "accounts", PLANS, trial);
     expect(o.next).toBe("solo");
     expect(o.via).toBe("trial");
-    expect(o.cta).toBe("Start 7 days free");
+    expect(o.cta).toBe("Start your free month");
     expect(o.title).toBe("Free includes 1 account.");
     expect(o.body).toBe("Upgrade to Solo to connect 3.");
     expect(o.extra).toBeNull();
-    expect(o.day).toEqual({ amount: "$1.61", of: "$49 a month after 7 days free" });
-    expect(o.footnote).toContain("A card starts your trial");
+    expect(o.day).toEqual({ amount: "$1.61", of: "$49 a month after your free month" });
+    expect(o.footnote).toBe(
+      "A card starts it. We email you 3 days before the first charge; cancel before then and you pay nothing.",
+    );
+  });
+  it("a longer trial (banked referral months) says its days", () => {
+    const o = upgradeOffer("free", "nudge", PLANS, { trial: true, trialDays: 60 });
+    expect(o.cta).toBe("Start 60 days free");
+    expect(o.title).toBe("Try Solo free for 60 days.");
   });
 
   it("Free again after a paid plan: no second trial, paid at checkout", () => {
@@ -58,13 +65,21 @@ describe("upgradeOffer", () => {
     expect(o.body).toBe("Add one more for $10 a month. Team has 6.");
   });
 
-  it("Team: Business is a call (Book a call, no price), with extras still offered", () => {
+  it("Team: Business is a custom price by call (Talk to us, no price), with extras still offered", () => {
     const o = upgradeOffer("business", "replies");
     expect(o.next).toBe("team");
     expect(o.via).toBe("call");
-    expect(o.cta).toBe("Book a call");
+    expect(o.cta).toBe("Talk to us");
     expect(o.extra).toBe("topUp");
     expect(o.day).toBeNull();
+    expect(o.line).toBe("Custom price · 10+ accounts · about 1,500 replies");
+    expect(JSON.stringify(o)).not.toMatch(/\$199/);
+  });
+  it("Business stays a call even if staff put it on sale (never a checkout)", () => {
+    const plans = { ...PLANS, team: { ...PLANS.team, forSale: true } };
+    const o = upgradeOffer("business", "nudge", plans);
+    expect(o.via).toBe("call");
+    expect(o.cta).toBe("Talk to us");
   });
 
   it("Business: no plan above, only extras", () => {

@@ -4,10 +4,12 @@ import {
   applyPlanSettings,
   canAddBrand,
   canConnectAnother,
+  checkoutAllowed,
   checkoutTrialDays,
+  customPriceLine,
   dailyAmount,
   EXTRAS,
-  FOUNDING,
+  isCustomPrice,
   monthlyPrice,
   parsePlanSettings,
   planBullets,
@@ -21,10 +23,10 @@ import {
 } from "./plans";
 import { limitEmailDue, NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 
-describe("the first paid plan starts with 7 days free (20 Nov)", () => {
+describe("the first paid plan starts with its first month free (Pricing Bible, 24 Nov)", () => {
   it("only for an organization that never had a subscription or a trial", () => {
-    expect(checkoutTrialDays(null)).toBe(7);
-    expect(checkoutTrialDays({ trial_ends_at: null, stripe_subscription_id: null })).toBe(7);
+    expect(checkoutTrialDays(null)).toBe(30);
+    expect(checkoutTrialDays({ trial_ends_at: null, stripe_subscription_id: null })).toBe(30);
     expect(checkoutTrialDays({ trial_ends_at: null, stripe_subscription_id: "sub_1" })).toBeNull();
     expect(
       checkoutTrialDays({ trial_ends_at: "2026-11-01T00:00:00Z", stripe_subscription_id: null }),
@@ -36,7 +38,6 @@ describe("price a day (Walter, 20 Nov)", () => {
   it("a month is a twelfth of a year: price × 12 ÷ 365", () => {
     expect(perDay(PLANS.solo.monthlyUsd)).toBe("about $1.61 a day");
     expect(perDay(PLANS.business.monthlyUsd)).toBe("about $3.25 a day");
-    expect(perDay(FOUNDING.monthlyUsd)).toBe("about $2.60 a day");
   });
 
   it("a yearly price is ÷ 365", () => {
@@ -103,27 +104,31 @@ describe("plans match the Pricing Bible (Free plan, 19 Nov 2026)", () => {
     expect(PLANS.team.features.team).toBe(true);
   });
 
-  it("trial, extras and the founding offer", () => {
-    // The trial is back, with a card (Febron, 20 Nov).
-    expect(TRIAL).toEqual({ days: 7, cardRequired: true });
+  it("trial and extras", () => {
+    // First month free with a card, everyday (Pricing Bible, 24 Nov).
+    expect(TRIAL).toEqual({ days: 30, cardRequired: true });
     expect(trialEndsAt(new Date("2026-11-18T10:00:00Z")).toISOString()).toBe(
-      "2026-11-25T10:00:00.000Z",
+      "2026-12-18T10:00:00.000Z",
     );
     expect(EXTRAS.accountUsd).toBe(10);
     expect(EXTRAS.topUp).toMatchObject({ usd: 15, replies: 200 });
     expect(EXTRAS.autoTopUp.maxPerMonth).toBe(2);
-    expect(FOUNDING).toMatchObject({ plan: "business", monthlyUsd: 79, months: 6, spots: 50 });
   });
 
-  it("monthly price: founding for 6 months, then $99; yearly as its monthly share", () => {
-    const since = new Date("2026-11-20T00:00:00Z");
-    expect(
-      monthlyPrice("business", { founding: { since, now: new Date("2027-05-19T00:00:00Z") } }),
-    ).toBe(79);
-    expect(
-      monthlyPrice("business", { founding: { since, now: new Date("2027-05-20T00:00:00Z") } }),
-    ).toBe(99);
-    expect(monthlyPrice("solo", { founding: { since, now: since } })).toBe(49);
+  it("Business is a custom price by call: never a checkout, even if staff put it on sale", () => {
+    expect(isCustomPrice("team")).toBe(true);
+    expect(isCustomPrice("business")).toBe(false);
+    expect(checkoutAllowed(PLANS.solo)).toBe(true);
+    expect(checkoutAllowed(PLANS.business)).toBe(true);
+    expect(checkoutAllowed(PLANS.free)).toBe(false);
+    expect(checkoutAllowed(PLANS.team)).toBe(false);
+    expect(checkoutAllowed({ ...PLANS.team, forSale: true })).toBe(false);
+    expect(checkoutAllowed({ ...PLANS.solo, forSale: false })).toBe(false);
+    expect(customPriceLine(PLANS.team)).toBe("Custom price · 10+ accounts · about 1,500 replies");
+  });
+
+  it("monthly price: yearly as its monthly share", () => {
+    expect(monthlyPrice("business")).toBe(99);
     expect(monthlyPrice("solo", { yearly: true })).toBe(40.83);
     expect(monthlyPrice("business", { yearly: true })).toBe(82.5);
     expect(monthlyPrice("team", { yearly: true })).toBe(199);

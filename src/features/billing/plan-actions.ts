@@ -7,11 +7,11 @@ import { z } from "zod";
 import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
-import { FOUNDING_COUPON, PRICE_KEYS, type Interval } from "./catalog";
+import { PRICE_KEYS, type Interval } from "./catalog";
 import {
+  checkoutAllowed,
   checkoutTrialDays,
   EXTRAS,
-  FOUNDING,
   PLANS,
   isPaidPlanId,
   type PaidPlanId,
@@ -22,7 +22,9 @@ import { loadPlans } from "./usage";
 import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
-import { foundingSpotsLeft } from "./founding";
+import { firstCheckoutTrial } from "./promo";
+import { loadPromotions } from "./promotions-store";
+import { loadReferralForCheckout } from "./referrals";
 import {
   billingFromSubscription,
   isExtraAccountKey,
@@ -119,17 +121,18 @@ function readChoice(
 ): { plan: PaidPlanId; interval: Interval } | null {
   const plan = formData.get("plan");
   const interval = formData.get("interval") === "year" ? "year" : "month";
-  // "For sale" as staff set it on Staff → Plans.
-  // Free is no checkout; Business is by call only (19 Nov).
-  if (!isPaidPlanId(plan) || !plans[plan].forSale) return null;
+  // "For sale" as staff set it on Staff → Plans. Free is no checkout; Business is a custom price
+  // set on a call (Pricing Bible, 24 Nov), never a checkout or a switch, whatever staff set. So a
+  // friend from a referral link can only take Solo or Team.
+  if (!isPaidPlanId(plan) || !checkoutAllowed(plans[plan])) return null;
   if (interval === "year" && PLANS[plan].yearlyUsd === null) return null;
   return { plan, interval };
 }
 
 /**
- * Choose a plan. From Free: Stripe Checkout with a card; the organization's first paid plan
- * starts with 7 days free (trial back, 20 Nov), with the founding price on Team monthly while
- * spots last. With a paid plan: switch it in place, prorated.
+ * Choose a plan (Solo or Team). From Free: Stripe Checkout with a card; the organization's first
+ * paid plan starts with its first month free (Pricing Bible, 24 Nov). With a paid plan: switch it
+ * in place, prorated.
  */
 export async function choosePlan(
   _prev: PlanActionState,
@@ -183,14 +186,32 @@ export async function choosePlan(
     }
 
     const customer = await ensureCustomer(stripe, db, orgId, user.email, bill);
-    // The first paid plan starts with 7 days free, with a card (trial back, 20 Nov).
-    const trialDays = checkoutTrialDays(bill);
-    const firstTime = trialDays !== null;
-    const founding =
-      choice.plan === FOUNDING.plan &&
-      choice.interval === "month" &&
-      firstTime &&
-      (await foundingSpotsLeft(stripe));
+    // The first paid plan starts with its first month free, with a card (24 Nov).
+    const baseTrial = checkoutTrialDays(bill);
+    const firstTime = baseTrial !== null;
+    // Black Friday and referrals (23 Nov): a promotion's trial when it is longer (never shorter),
+    // with nothing to type; banked referral months add to it.
+    const ref = firstTime
+      ? await loadReferralForCheckout(db, orgId)
+      : { referred: false, referredAt: null, bankedIds: [] as string[] };
+    const free = firstTime
+      ? firstCheckoutTrial({
+          now: new Date(),
+          referred: ref.referred,
+          referredAt: ref.referredAt,
+          bankedMonths: ref.bankedIds.length,
+          baseDays: baseTrial,
+          promotions: await loadPromotions(),
+        })
+      : null;
+    const trialDays = free ? free.days : null;
+    const promoMeta =
+      free && (free.reasons.length || ref.bankedIds.length)
+        ? {
+            promo: free.reasons.join(",") || "banked",
+            ...(ref.bankedIds.length ? { banked_referrals: ref.bankedIds.join(",") } : {}),
+          }
+        : {};
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer,
@@ -202,17 +223,19 @@ export async function choosePlan(
       ],
       payment_method_collection: "always",
       subscription_data: {
-        // Stripe's subscription events list discounts by id only, so founding is marked here too.
-        metadata: { organization_id: orgId, ...(founding ? { founding: "1" } : {}) },
+        metadata: { organization_id: orgId, ...promoMeta },
         ...(trialDays ? { trial_period_days: trialDays } : {}),
       },
-      ...(founding
-        ? { discounts: [{ coupon: FOUNDING_COUPON }] }
-        : { allow_promotion_codes: false }),
+      allow_promotion_codes: false,
       // Prices are in US dollars (Pricing Bible): no local-currency conversion at checkout.
       adaptive_pricing: { enabled: false },
       // "first": only a first-time checkout tells the ads (StartTrial / Subscribe) on return.
-      metadata: { organization_id: orgId, kind: "plan", ...(firstTime ? { first: "1" } : {}) },
+      metadata: {
+        organization_id: orgId,
+        kind: "plan",
+        ...(firstTime ? { first: "1" } : {}),
+        ...promoMeta,
+      },
       client_reference_id: orgId,
       // A first checkout comes back with its session id, so Your plan can ask Stripe what it
       // started and tell the ads (TrialConversionTag). Stripe fills {CHECKOUT_SESSION_ID}.
@@ -231,7 +254,6 @@ export async function choosePlan(
     await auditOrg(db, orgId, "billing.checkout_started", user.id, {
       plan: choice.plan,
       interval: choice.interval,
-      founding,
       trialDays,
     });
     url = session.url;

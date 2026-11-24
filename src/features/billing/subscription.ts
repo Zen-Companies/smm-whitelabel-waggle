@@ -1,7 +1,7 @@
 // Reading a Stripe subscription into Waggle's org_billing row. Pure: the shapes below are the
 // few fields used, so tests don't need Stripe.
 
-import { FOUNDING_COUPON, type Interval } from "./catalog";
+import type { Interval } from "./catalog";
 import { EXTRAS, isPaidPlanId, type PaidPlanId } from "./plans";
 
 /** Pure: a Waggle lookup key's plan and interval, or null for anything else (extras, top-ups). */
@@ -26,14 +26,9 @@ export interface SubscriptionLike {
   /** Newer API versions cancel by date (the portal sets this, not cancel_at_period_end). */
   cancel_at?: number | null;
   trial_end: number | null;
+  /** When the trial started (absent on old fixtures). */
+  trial_start?: number | null;
   metadata: Record<string, string>;
-  discounts?: Array<
-    | string
-    | {
-        coupon?: { id: string } | null;
-        source?: { coupon?: string | { id: string } | null } | null;
-      }
-  >;
   items: {
     data: Array<{
       quantity?: number | null;
@@ -50,22 +45,14 @@ export interface BillingRow {
   billing_interval: Interval | null;
   status: string;
   trial_ends_at: string | null;
+  /** How long the trial is: 30 days (the first month free), more with banked referral months. */
+  trial_days: number | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   extra_accounts: number;
-  founding: boolean;
 }
 
 const iso = (s: number | null | undefined) => (s ? new Date(s * 1000).toISOString() : null);
-
-function couponIds(sub: SubscriptionLike): string[] {
-  return (sub.discounts ?? []).flatMap((d) => {
-    if (typeof d === "string") return [];
-    const c = d.source?.coupon ?? d.coupon;
-    if (!c) return [];
-    return [typeof c === "string" ? c : c.id];
-  });
-}
 
 /** Pure: the org_billing fields a subscription sets. */
 export function billingFromSubscription(sub: SubscriptionLike): BillingRow {
@@ -81,10 +68,13 @@ export function billingFromSubscription(sub: SubscriptionLike): BillingRow {
     billing_interval: parsed?.interval ?? null,
     status: sub.status,
     trial_ends_at: iso(sub.trial_end),
+    trial_days:
+      sub.trial_start && sub.trial_end
+        ? Math.max(1, Math.round((sub.trial_end - sub.trial_start) / 86_400))
+        : null,
     current_period_end: iso(planItem?.current_period_end ?? sub.items.data[0]?.current_period_end),
     cancel_at_period_end: sub.cancel_at_period_end || !!sub.cancel_at,
     extra_accounts: extra,
-    founding: sub.metadata.founding === "1" || couponIds(sub).includes(FOUNDING_COUPON),
   };
 }
 

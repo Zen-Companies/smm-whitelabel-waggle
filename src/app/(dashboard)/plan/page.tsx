@@ -1,6 +1,12 @@
 import { LOADING_WORDS, PageLoading } from "@/components/app/page-loading";
 import { Suspense } from "react";
-import { isUpgradeReason, TrialConversionTag, YourPlanSection } from "@/features/billing";
+import {
+  isUpgradeReason,
+  PromoPass,
+  ReferralCard,
+  TrialConversionTag,
+  YourPlanSection,
+} from "@/features/billing";
 import { can, listMyOrgs } from "@/features/orgs";
 import { getCurrentTenant } from "@/features/tenants";
 
@@ -27,13 +33,18 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
   const org = orgs.find((o) => o.id === tenant.organizationId);
   if (!org) return null;
   const notice = planNotice(params);
+  const isOwner = can(org.role, "billing.view");
   return (
     <>
+      {/* Promotions (approved 24 Nov): Walter's pass, Black Friday or a friend's month. */}
+      {isOwner && <PromoPass orgId={org.id} />}
       <YourPlanSection
         org={{ id: org.id, name: org.name, isOwner: can(org.role, "billing.view") }}
         notice={notice}
         upgrade={isUpgradeReason(params.upgrade) ? params.upgrade : undefined}
       />
+      {/* Give a month, get a month (23 Nov): the link right under the plan, one tap to share. */}
+      {isOwner && <ReferralCard orgId={org.id} />}
       {notice === "done" && (
         <Suspense fallback={null}>
           <TrialConversionTag

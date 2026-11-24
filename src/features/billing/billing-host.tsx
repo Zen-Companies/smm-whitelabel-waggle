@@ -1,10 +1,10 @@
 import "server-only";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
+import { offerTrialDays } from "./referrals";
 import { billingBanner } from "./banners";
 import { loadBilling } from "./billing-store";
 import { BillingPopups, type OutOfReplies, type ReplyUsage } from "./billing-popups";
 import type { OfferOrg } from "./offer-dialogs";
-import { foundingSpotsLeftCached } from "./founding";
 import { checkoutTrialDays } from "./plans";
 import { perDayFromWeek, type ReplyPain } from "./reply-pain";
 import { getStripe } from "./stripe-client";
@@ -62,12 +62,11 @@ async function loadHostProps(input: {
     loadPlans(db),
     planLimitsOn(db),
   ]);
-  // Founding, as Your plan and checkout decide it: the first paid plan, while Stripe has spots
-  // (cached for a few minutes: this runs on every dashboard and setup page).
+  // The first paid plan starts with its first month free (24 Nov), as checkout decides it.
   const trial = checkoutTrialDays(bill) !== null;
   const stripe = getStripe();
-  const founding = trial && !!stripe && (await foundingSpotsLeftCached(stripe));
   const status = limitsOn ? await loadReplyLimit(db, orgId, now) : null;
+  const offerDays = await offerTrialDays(db, orgId, bill, now);
   const banner = billingBanner({
     limitsOn,
     plan: status?.plan.plan ?? null,
@@ -102,7 +101,7 @@ async function loadHostProps(input: {
       current: orgPlanId(bill),
       plans,
       trial,
-      founding,
+      trialDays: offerDays ?? undefined,
       stripeReady: !!stripe,
       interval: bill?.billing_interval === "year" ? "year" : "month",
     },

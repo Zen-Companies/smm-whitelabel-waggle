@@ -2,7 +2,12 @@
 // (snapshot.ts) gathers the facts, this turns them into HighLevel's strings.
 
 import { PLANS, isPlanId } from "@/features/billing";
-import type { CrmConnectField, CrmEvent, CrmField } from "@/lib/crm";
+import {
+  referralRewardedFields,
+  type CrmConnectField,
+  type CrmEvent,
+  type CrmField,
+} from "@/lib/crm";
 
 export interface CrmSnapshot {
   event: CrmEvent;
@@ -12,7 +17,6 @@ export interface CrmSnapshot {
   business: string;
   /** Waggle's plan id while the plan is live, else null. */
   planId: string | null;
-  founding: boolean;
   status: string | null;
   trialEndsAt: string | null;
   periodEnd: string | null;
@@ -25,7 +29,7 @@ export interface CrmSnapshot {
 }
 
 /**
- * HighLevel's plan words: solo, team ($99), business ($199). Careful: Waggle's ids are swapped
+ * HighLevel's plan words: solo, team ($99), business (custom price). Careful: Waggle's ids are swapped
  * for the two upper plans (id `business` is shown as Team, id `team` as Business), so the
  * name decides, never the id.
  */
@@ -68,9 +72,14 @@ export function crmFields(
     ...connectFields(s),
     waggle_event: s.event,
     waggle_event_at: s.eventAt.toISOString(),
-    waggle_plan: crmPlan(s.planId),
+    // referral_rewarded names the plan its month was applied to (queued with the event).
+    waggle_plan: crmPlan(
+      s.event === "referral_rewarded" && text(s.details.plan) ? text(s.details.plan) : s.planId,
+    ),
     waggle_from_plan: crmPlan(text(s.details.from_plan)),
-    waggle_founding: s.founding ? "true" : "false",
+    // The founding offer is retired (Pricing Bible, 24 Nov): always "false", kept because
+    // Walter's workflow expects every field on every event.
+    waggle_founding: "false",
     waggle_trial_ends: day(s.trialEndsAt),
     waggle_ends_on: endsOn(s),
     waggle_platform: text(s.details.platform),
@@ -82,5 +91,8 @@ export function crmFields(
     waggle_reply_limit: s.replyLimit === null ? "" : String(s.replyLimit),
     waggle_resets_on: day(s.resetsOn),
     waggle_business: s.business,
+    ...(s.event === "referral_rewarded"
+      ? referralRewardedFields(s.details)
+      : referralRewardedFields({})),
   };
 }

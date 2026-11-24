@@ -1968,6 +1968,7 @@ export type Database = {
           stripe_customer_id: string
           stripe_event_at: string | null
           stripe_subscription_id: string | null
+          trial_days: number | null
           trial_ends_at: string | null
           updated_at: string
         }
@@ -1985,6 +1986,7 @@ export type Database = {
           stripe_customer_id: string
           stripe_event_at?: string | null
           stripe_subscription_id?: string | null
+          trial_days?: number | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -2001,6 +2003,7 @@ export type Database = {
           stripe_customer_id?: string
           stripe_event_at?: string | null
           stripe_subscription_id?: string | null
+          trial_days?: number | null
           trial_ends_at?: string | null
           updated_at?: string
         }
@@ -2422,6 +2425,200 @@ export type Database = {
           },
         ]
       }
+      promotion_changes: {
+        Row: {
+          action: string
+          after: Json
+          before: Json
+          changed_by: string | null
+          created_at: string
+          id: string
+          promotion_id: string
+        }
+        ComputedFields: never
+        Insert: {
+          action: string
+          after: Json
+          before: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          promotion_id: string
+        }
+        Update: {
+          action?: string
+          after?: Json
+          before?: Json
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          promotion_id?: string
+        }
+        Relationships: []
+      }
+      promotions: {
+        Row: {
+          audience: string
+          bar_cta: string
+          bar_enabled: boolean
+          bar_label: string
+          bar_link: string
+          bar_phone_cta: string
+          bar_phone_text: string
+          bar_text: string
+          countdown: boolean
+          created_at: string
+          day_name_1: string
+          day_name_2: string
+          enabled: boolean
+          ends_at: string | null
+          headline: string
+          id: string
+          kind: string
+          last_bar_label: string
+          last_bar_phone_text: string
+          last_bar_text: string
+          last_day_name_1: string
+          last_day_name_2: string
+          last_day_starts_at: string | null
+          last_headline: string
+          last_subline: string
+          name: string
+          reward_months: number
+          starts_at: string | null
+          subline: string
+          trial_days: number
+          updated_at: string
+          updated_by: string | null
+        }
+        ComputedFields: never
+        Insert: {
+          audience?: string
+          bar_cta?: string
+          bar_enabled?: boolean
+          bar_label?: string
+          bar_link?: string
+          bar_phone_cta?: string
+          bar_phone_text?: string
+          bar_text?: string
+          countdown?: boolean
+          created_at?: string
+          day_name_1?: string
+          day_name_2?: string
+          enabled?: boolean
+          ends_at?: string | null
+          headline?: string
+          id: string
+          kind: string
+          last_bar_label?: string
+          last_bar_phone_text?: string
+          last_bar_text?: string
+          last_day_name_1?: string
+          last_day_name_2?: string
+          last_day_starts_at?: string | null
+          last_headline?: string
+          last_subline?: string
+          name: string
+          reward_months?: number
+          starts_at?: string | null
+          subline?: string
+          trial_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          audience?: string
+          bar_cta?: string
+          bar_enabled?: boolean
+          bar_label?: string
+          bar_link?: string
+          bar_phone_cta?: string
+          bar_phone_text?: string
+          bar_text?: string
+          countdown?: boolean
+          created_at?: string
+          day_name_1?: string
+          day_name_2?: string
+          enabled?: boolean
+          ends_at?: string | null
+          headline?: string
+          id?: string
+          kind?: string
+          last_bar_label?: string
+          last_bar_phone_text?: string
+          last_bar_text?: string
+          last_day_name_1?: string
+          last_day_name_2?: string
+          last_day_starts_at?: string | null
+          last_headline?: string
+          last_subline?: string
+          name?: string
+          reward_months?: number
+          starts_at?: string | null
+          subline?: string
+          trial_days?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      referral_codes: {
+        Row: {
+          code: string
+          created_at: string
+          organization_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          organization_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          organization_id?: string
+        }
+        Relationships: []
+      }
+      referrals: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          referred_org_id: string
+          referrer_org_id: string
+          reward_cents: number
+          reward_due_at: string | null
+          rewarded_at: string | null
+          status: string
+          stripe_ref: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          referred_org_id: string
+          referrer_org_id: string
+          reward_cents?: number
+          reward_due_at?: string | null
+          rewarded_at?: string | null
+          status?: string
+          stripe_ref?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          referred_org_id?: string
+          referrer_org_id?: string
+          reward_cents?: number
+          reward_due_at?: string | null
+          rewarded_at?: string | null
+          status?: string
+          stripe_ref?: string | null
+        }
+        Relationships: []
+      }
       reply_top_ups: {
         Row: {
           automatic: boolean
@@ -2757,6 +2954,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "tenants_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trial_reminders: {
+        Row: {
+          amount_cents: number
+          billing_interval: string
+          charge_at: string
+          created_at: string
+          organization_id: string
+          plan: string
+          reason: string | null
+          sent_at: string | null
+          status: string
+          stripe_subscription_id: string
+        }
+        Insert: {
+          amount_cents: number
+          billing_interval?: string
+          charge_at: string
+          created_at?: string
+          organization_id: string
+          plan: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          stripe_subscription_id: string
+        }
+        Update: {
+          amount_cents?: number
+          billing_interval?: string
+          charge_at?: string
+          created_at?: string
+          organization_id?: string
+          plan?: string
+          reason?: string | null
+          sent_at?: string | null
+          status?: string
+          stripe_subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trial_reminders_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"

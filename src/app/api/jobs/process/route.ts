@@ -17,7 +17,12 @@ import {
 import { syncAnalytics } from "@/features/analytics";
 import { finishCatchUps, runCatchUps } from "@/features/catch-up";
 import { crmClient, deliverCrmEvents, sweepInactive, sweepUsage } from "@/features/crm";
-import { chargeUsageAtCost, getStripe } from "@/features/billing";
+import {
+  chargeUsageAtCost,
+  getStripe,
+  grantReferralRewards,
+  sendTrialReminders,
+} from "@/features/billing";
 import { sendQuietLeadFollowUps } from "@/features/automations";
 import { pruneCalls } from "@/features/mcp";
 import { purgeDueBrands } from "@/features/offboarding";
@@ -166,6 +171,25 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
 
+    // Referrals (23 Nov): a month off the next bill for each friend whose first payment went through.
+    const referralRewards = await grantReferralRewards({
+      db,
+      stripe: getStripe(),
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+
+    // Pricing Bible (24 Nov): the reminder before the first charge, queued by Stripe's
+    // trial_will_end (3 days before), emailed to the Owner(s) once per subscription.
+    const trialReminders = await sendTrialReminders({
+      db,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 10_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
+
     // Follow-ups for leads that went quiet (18 Nov): the owner's message, through Zernio Sequences.
     const followUps = await sendQuietLeadFollowUps({
       db,
@@ -261,6 +285,9 @@ export async function POST(request: Request): Promise<Response> {
       followUpsFailed: followUps.failed,
       usageAtCostAdded: usageAtCost.added,
       usageAtCostMissed: usageAtCost.missed,
+      referralsCredited: referralRewards.credited,
+      referralsBanked: referralRewards.banked,
+      trialReminders,
       kbEmbedFailed: kb.failed,
       dmWindowsEscalated,
       nudges,

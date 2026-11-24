@@ -1,4 +1,4 @@
-// The plans, from the Waggle Pricing Bible (docs/Waggle Pricing Bible 1.md, updated 18 Nov 2026;
+// The plans, from the Waggle Pricing Bible (docs/Waggle Pricing Bible 1.md, final 24 Nov 2026;
 // only Jason changes a price or a plan). Pure: no Stripe, no database. These are the defaults:
 // staff can change what each plan includes on Staff → Plans (plan_settings), and the app reads
 // the merged result (applyPlanSettings). Prices live here and in Stripe.
@@ -82,8 +82,9 @@ export const PLANS: Record<PlanId, Plan> = {
   },
   team: {
     id: "team",
-    // Shown as Business (Jason, 17 Nov). 19 Nov: 10+ accounts, custom price, by call only (Book a
-    // call); staff set the organization up by hand. Anyone already on the $199 price keeps it.
+    // Shown as Business (Jason, 17 Nov). 24 Nov (final): a custom price set on a call, never a
+    // checkout (CUSTOM_PRICE_PLAN); staff set the organization up by hand. monthlyUsd is only the
+    // old Stripe price kept for anyone already on it: the app never shows it.
     name: "Business",
     monthlyUsd: 199,
     yearlyUsd: null,
@@ -111,12 +112,34 @@ export function isPaidPlanId(v: unknown): v is PaidPlanId {
 /** Business is sold after a call with Jason (19 Nov): the plan's button opens his booking page. */
 export const BUSINESS_CALL_URL = "https://ro.am/jason-kulha/";
 
+/** Business (id "team"): a custom price set on a call (Pricing Bible, 24 Nov). Never a checkout. */
+export const CUSTOM_PRICE_PLAN: PaidPlanId = "team";
+
+/** Pure: whether a plan is priced on a call (Business): no price shown, no checkout. */
+export function isCustomPrice(id: PlanId): boolean {
+  return id === CUSTOM_PRICE_PLAN;
+}
+
 /**
- * 20 Nov (Febron, Walter's flow): the trial is back. Free needs no card; the first paid plan
- * (Solo or Team) starts with 7 days free, with a card. Only an organization that never had a paid
- * subscription gets it (checkoutTrialDays).
+ * Pure: whether the app may start a checkout or switch for a plan: a paid plan staff left for
+ * sale on Staff → Plans, never Business (by call only, 24 Nov), never Free.
  */
-export const TRIAL = { days: 7, cardRequired: true } as const;
+export function checkoutAllowed(plan: Plan): boolean {
+  return plan.id !== "free" && plan.forSale && !isCustomPrice(plan.id);
+}
+
+/** Pure: Business as the plan card and pop-ups say it: "Custom price · 10+ accounts · about 1,500 replies". */
+export function customPriceLine(plan: Plan): string {
+  const n = (v: number) => v.toLocaleString("en-US");
+  return `Custom price · ${n(plan.accounts)}+ accounts · about ${n(plan.replies)} replies`;
+}
+
+/**
+ * Pricing Bible, 24 Nov (final): the first month is free on Solo and Team, everyday, with a card
+ * (billed after; it stays on the paid plan). Free needs no card. Only an organization that never
+ * had a paid subscription gets it (checkoutTrialDays). A promotion may give more, never less.
+ */
+export const TRIAL = { days: 30, cardRequired: true } as const;
 
 /**
  * Pure: the trial days a plan checkout adds, or null. Only the organization's first paid plan
@@ -152,25 +175,14 @@ export const EXTRAS = {
   autoTopUp: { maxPerMonth: 2 },
 } as const;
 
-/** The first 50 businesses get the $99 plan (shown as Team) at $79 a month for 6 months, then $99. */
-export const FOUNDING = { plan: "business" as PaidPlanId, monthlyUsd: 79, months: 6, spots: 50 };
-
 /** Pure: when a trial that started at `start` ends. */
 export function trialEndsAt(start: Date): Date {
   return new Date(start.getTime() + TRIAL.days * 24 * 60 * 60 * 1000);
 }
 
-/** Pure: what a plan costs a month, founding price first, yearly as its monthly share. */
-export function monthlyPrice(
-  plan: PlanId,
-  opts: { yearly?: boolean; founding?: { since: Date; now: Date } } = {},
-): number {
+/** Pure: what a plan costs a month, yearly as its monthly share. */
+export function monthlyPrice(plan: PlanId, opts: { yearly?: boolean } = {}): number {
   const p = PLANS[plan];
-  if (opts.founding && plan === FOUNDING.plan) {
-    const end = new Date(opts.founding.since);
-    end.setUTCMonth(end.getUTCMonth() + FOUNDING.months);
-    if (opts.founding.now < end) return FOUNDING.monthlyUsd;
-  }
   if (opts.yearly && p.yearlyUsd !== null) return Math.round((p.yearlyUsd / 12) * 100) / 100;
   return p.monthlyUsd;
 }
