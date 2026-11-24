@@ -278,7 +278,7 @@ export async function typeToWaggle(input: {
   try {
     const result = await llm.generateObject({
       tenantId: tenant.id,
-      purpose: "classify",
+      purpose: "setup",
       schema: typedOutputSchema,
       system: typedSystemPrompt(),
       prompt: typedUserPrompt({
