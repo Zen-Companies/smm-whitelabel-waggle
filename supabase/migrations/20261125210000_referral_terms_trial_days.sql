@@ -60,3 +60,10 @@ set trial_days = coalesce(
 )
 where b.trial_days is null
   and b.trial_ends_at is not null;
+
+-- 3. The Owner's time zone (QA, 25 Nov): a trial ending 18:35 UTC on December 24 is charged on
+--    December 25 in Manila, as Stripe says. Your plan shows dates in the viewer's own zone; the
+--    reminder email and HighLevel's waggle_trial_ends use this one, the zone of the browser that
+--    started the checkout. null: not known (older bills): UTC for the email, US Eastern for
+--    HighLevel, as before.
+alter table public.org_billing add column time_zone text check (char_length(time_zone) <= 64);

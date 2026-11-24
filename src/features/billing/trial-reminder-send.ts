@@ -4,6 +4,7 @@ import type Stripe from "stripe";
 import { unconfirmedUserIds } from "@/lib/email/confirmations";
 import type { Mailer } from "@/lib/email/mailer";
 import type { ServiceClient } from "@/lib/supabase/service";
+import { validTimeZone } from "@/lib/time/zone";
 import { storedTrialDays } from "./plans";
 import { billingFromSubscription } from "./subscription";
 import { reminderEmail, trialReminderRow } from "./trial-reminder";
@@ -92,7 +93,9 @@ async function handle(
   // Still the organization's running trial, not set to cancel, and not charged yet.
   const { data: bill, error: billErr } = await db
     .from("org_billing")
-    .select("stripe_subscription_id, status, cancel_at_period_end, trial_ends_at, trial_days")
+    .select(
+      "stripe_subscription_id, status, cancel_at_period_end, trial_ends_at, trial_days, time_zone",
+    )
     .eq("organization_id", r.organization_id)
     .maybeSingle();
   if (billErr) throw new Error(`trial reminder: reading the bill failed: ${billErr.message}`);
@@ -140,6 +143,7 @@ async function handle(
         chargeAt: r.charge_at,
         appUrl: deps.appUrl,
         trialDays: storedTrialDays(bill),
+        timeZone: validTimeZone(bill?.time_zone),
       });
       await deps.mailer.send({
         to: [owner.email],

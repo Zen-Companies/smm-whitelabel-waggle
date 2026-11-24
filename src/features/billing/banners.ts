@@ -62,3 +62,13 @@ export const STORAGE = {
   /** Session storage: the out-of-replies pop-up was shown this session for this month. */
   outShown: (orgId: string, resetsAt: string) => `waggle.out.shown.${orgId}.${resetsAt}`,
 } as const;
+
+/**
+ * Pure: where a checkout started on Your plan itself comes back to (its plan cards, HighLevel's
+ * /plan?start=): Your plan with the success pop-up of the chosen plan, which confirms the
+ * checkout with Stripe and stores it, so the plan shows without a reload (QA, 25 Nov). Stripe's
+ * `checkout=done&session_id=` is added after the trailing "&".
+ */
+export function planPageReturn(plan: "solo" | "team" | "business"): string {
+  return `/plan?upgrade=${plan === "team" ? "team" : "nudge"}&`;
+}

@@ -245,3 +245,21 @@ describe("helpers", () => {
     expect(trialEndLabel(NOW)).toBe("December 23");
   });
 });
+
+describe("the strip's account box (QA, 25 Nov)", () => {
+  it("says Not connected when nothing is connected, never Connected", () => {
+    for (const v of [
+      { v: "try", sub: "banner" },
+      { v: "try", sub: "welcome" },
+      { v: "accounts", platform: "tiktok" },
+    ] as PopupVersion[]) {
+      const box = content(v, { connected: [] }).strip[0];
+      expect(box).toMatchObject({ title: "+ add", text: "Not connected", tone: "open" });
+    }
+  });
+  it("names the account when one is connected", () => {
+    expect(
+      content({ v: "try", sub: "banner" }, { connected: ["instagram"] }).strip[0],
+    ).toMatchObject({ text: "Connected", tone: "done", platform: "instagram" });
+  });
+});

@@ -7,6 +7,8 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { parseCapInput } from "./ai-cap";
 import { parsePlanSettings, PLAN_IDS } from "./plans";
+import { getStripe, syncPlanProducts } from "./stripe-client";
+import { loadPlans } from "./usage";
 import { hasPermission } from "@/features/staff";
 
 export type CapFormState = { saved?: boolean; error?: string };
@@ -108,6 +110,13 @@ export async function updatePlanSettings(
     await db
       .from("plan_settings_changes")
       .insert({ plan: p.id, changed_by: user.id, before: before ?? {}, after });
+  }
+  // Stripe Checkout's line under each plan says what the plan includes now (QA, 25 Nov).
+  const stripe = getStripe();
+  if (stripe) {
+    await loadPlans(db)
+      .then((plans) => syncPlanProducts(stripe, plans))
+      .catch(() => console.error("billing: syncing plan products to Stripe failed"));
   }
   revalidatePath("/admin/plans");
   revalidatePath("/plan");

@@ -6,13 +6,18 @@ import { brandedEmail, brandedText, detailRows, paragraph } from "@/lib/email/fr
 import { isPaidPlanId, PLANS, trialIsMonth, type PaidPlanId } from "./plans";
 import type { BillingRow } from "./subscription";
 
-/** "December 24": the day Stripe charges (dates are stored in UTC, like the rest of Your plan). */
-export function chargeDay(at: Date | string): string {
-  return new Date(at).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+/**
+ * "December 24": the day Stripe charges, in the given time zone (the viewer's, or the Owner's
+ * for the email: 18:35 UTC on December 24 is December 25 in Manila, as Stripe says it there).
+ */
+export function chargeDay(at: Date | string, timeZone = "UTC"): string {
+  const fmt = (tz: string) =>
+    new Date(at).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: tz });
+  try {
+    return fmt(timeZone);
+  } catch {
+    return fmt("UTC");
+  }
 }
 
 /** "$49", or "$49.50" when there are cents. */
@@ -22,8 +27,8 @@ export function dollars(cents: number): string {
 }
 
 /** Pure: Your plan's header and the trial bar: "First charge: December 24 ($49)". */
-export function firstChargeLine(chargeAt: Date | string, cents: number): string {
-  return `First charge: ${chargeDay(chargeAt)} (${dollars(cents)})`;
+export function firstChargeLine(chargeAt: Date | string, cents: number, timeZone = "UTC"): string {
+  return `First charge: ${chargeDay(chargeAt, timeZone)} (${dollars(cents)})`;
 }
 
 /** The few fields of a Stripe subscription item this needs. */
@@ -89,6 +94,8 @@ export interface ReminderEmailInput {
   appUrl: string;
   /** The trial's length: "free month" at 28 days or more, else "free trial". */
   trialDays: number;
+  /** The Owner's time zone (org_billing.time_zone), so the date is the one Stripe charges on. */
+  timeZone?: string;
 }
 
 /** Pure: the email to each Owner: plan, amount, the charge date, and how to change or cancel. */
@@ -98,7 +105,7 @@ export function reminderEmail(input: ReminderEmailInput): {
   html: string;
 } {
   const planName = isPaidPlanId(input.plan) ? PLANS[input.plan].name : "your plan";
-  const when = chargeDay(input.chargeAt);
+  const when = chargeDay(input.chargeAt, input.timeZone);
   const amount = dollars(input.amountCents);
   const every = input.interval === "year" ? "year" : "month";
   const free = trialIsMonth(input.trialDays) ? "free month" : "free trial";

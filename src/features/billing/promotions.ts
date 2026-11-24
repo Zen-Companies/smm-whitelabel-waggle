@@ -436,8 +436,12 @@ export function inviteState(
 }
 
 /** Pure: "24 Dec", the success modal's date. */
-export function shortDate(d: Date): string {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+export function shortDate(d: Date, timeZone = "UTC"): string {
+  try {
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone });
+  } catch {
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  }
 }
 
 /** Pure: the success modal's promo lines, from the checkout's own record (Stripe metadata). */

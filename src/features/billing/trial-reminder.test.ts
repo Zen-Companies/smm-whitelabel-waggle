@@ -125,3 +125,28 @@ describe("the reminder email", () => {
     expect(e.text).not.toContain("free month");
   });
 });
+
+describe("the charge date in the Owner's time zone (QA, 25 Nov)", () => {
+  // Stripe's trial ends 18:35 UTC on December 24: December 25 in Manila.
+  const END = "2026-12-24T18:35:00.000Z";
+  it("says the day Stripe charges where the viewer is", () => {
+    expect(chargeDay(END)).toBe("December 24");
+    expect(chargeDay(END, "Asia/Manila")).toBe("December 25");
+    expect(firstChargeLine(END, 4900, "Asia/Manila")).toBe("First charge: December 25 ($49)");
+    expect(chargeDay(END, "Not/AZone")).toBe("December 24");
+  });
+  it("the email uses the Owner's zone", () => {
+    const e = reminderEmail({
+      firstName: null,
+      orgName: "X",
+      plan: "solo",
+      interval: "month",
+      amountCents: 4900,
+      chargeAt: END,
+      appUrl: "https://app.example.com",
+      trialDays: 30,
+      timeZone: "Asia/Manila",
+    });
+    expect(e.subject).toBe("Your free month ends soon: $49 on December 25");
+  });
+});

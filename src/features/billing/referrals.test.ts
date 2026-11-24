@@ -300,7 +300,12 @@ describe("the reward is the referral's own (review of release #78)", () => {
   it("credits what the referrer actually pays: every item, a custom price included", async () => {
     const d = db({ due: [row()], bill: { ...liveBill, plan: "business" } });
     // A Business custom price ($250) and two extra accounts ($10 each).
-    const s = stripe({ items: [[25000, 1], [1000, 2]] });
+    const s = stripe({
+      items: [
+        [25000, 1],
+        [1000, 2],
+      ],
+    });
     await grantReferralRewards({ db: d.client, stripe: s.client, now: new Date(AFTER) });
     expect(s.createBalanceTransaction.mock.calls[0]?.[1]).toMatchObject({ amount: -27000 });
     const settled = d.calls.find((c) => c.patch?.status === "rewarded");

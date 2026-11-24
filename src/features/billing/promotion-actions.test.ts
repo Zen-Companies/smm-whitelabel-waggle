@@ -14,7 +14,9 @@ vi.mock("@/lib/supabase/service", () => ({ getServiceClient: () => ({ from }) })
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 const captureException = vi.fn();
-vi.mock("@sentry/nextjs", () => ({ captureException: (...a: unknown[]) => captureException(...a) }));
+vi.mock("@sentry/nextjs", () => ({
+  captureException: (...a: unknown[]) => captureException(...a),
+}));
 
 const { createPromotion, HISTORY_FAILED, setPromotionEnabled, updatePromotion } =
   await import("./promotion-actions");
@@ -77,7 +79,12 @@ describe("the history entry", () => {
     expect(HISTORY_FAILED).toMatch(/^Saved, but the history entry failed/);
     expect(captureException).toHaveBeenCalledTimes(1);
     expect(captureException.mock.calls[0]?.[1]).toEqual({
-      extra: { promotionId: "black-friday-2026", action: "enabled", changedBy: "u1", code: "42501" },
+      extra: {
+        promotionId: "black-friday-2026",
+        action: "enabled",
+        changedBy: "u1",
+        code: "42501",
+      },
     });
   });
 

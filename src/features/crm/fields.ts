@@ -20,6 +20,8 @@ export interface CrmSnapshot {
   planId: string | null;
   status: string | null;
   trialEndsAt: string | null;
+  /** The Owner's time zone (org_billing.time_zone); null: US Eastern. */
+  timeZone?: string | null;
   periodEnd: string | null;
   cancelAtPeriodEnd: boolean;
   accountsConnected: number;
@@ -88,7 +90,7 @@ export function crmFields(
     // Walter's workflow expects every field on every event.
     waggle_founding: "false",
     // "December 24" for an email, and the exact time for HighLevel's own reminder (25 Nov).
-    waggle_trial_ends: readableDay(s.trialEndsAt),
+    waggle_trial_ends: readableDay(s.trialEndsAt, s.timeZone ?? undefined),
     waggle_trial_ends_at: iso(s.trialEndsAt),
     waggle_ends_on: endsOn(s),
     waggle_platform: text(s.details.platform),

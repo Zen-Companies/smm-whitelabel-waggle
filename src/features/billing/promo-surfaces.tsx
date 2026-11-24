@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import Link from "next/link";
 import { cache } from "react";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -44,6 +45,7 @@ export async function PromoBar({ orgId, isOwner }: { orgId: string; isOwner: boo
 }
 
 async function loadBar(orgId: string, isOwner: boolean) {
+  await connection();
   const now = new Date();
   const list = await loadPromotions();
   // Only read the bill when some bar's audience depends on it.
@@ -77,6 +79,7 @@ async function loadBar(orgId: string, isOwner: boolean) {
 
 /** 2 · Your plan: Walter's pass (Owners of never-paid organizations). */
 async function loadPass(orgId: string) {
+  await connection();
   if (!(await neverPaid(orgId))) return null;
   const [ref, list] = await Promise.all([referrerOf(getServiceClient(), orgId), loadPromotions()]);
   return passFor(
@@ -145,6 +148,9 @@ export async function PromoPass({ orgId }: { orgId: string }) {
 
 /** One lookup per request, shared by the card and the left panel. */
 const inviteFor = cache(async (code: string) => {
+  // Request time first (Next 16 cache components): the promotions' short cache and "now" read the
+  // clock, which may not run while the sign-up page is prerendered (QA, 25 Nov).
+  await connection();
   const [who, list] = await Promise.all([
     referrerForCode(getServiceClient(), code),
     loadPromotions(),

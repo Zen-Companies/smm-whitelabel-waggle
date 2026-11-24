@@ -2,7 +2,7 @@
 // by these lookup keys, so no price id lives in the environment: `pnpm stripe:catalog` creates
 // them once per Stripe account (sandbox or live) and prints the ids.
 
-import { EXTRAS, PAID_PLAN_IDS, PLANS, type PaidPlanId } from "./plans";
+import { EXTRAS, PAID_PLAN_IDS, PLANS, type PaidPlanId, type Plan, type PlanId } from "./plans";
 
 export type Interval = "month" | "year";
 
@@ -30,11 +30,19 @@ export interface CatalogProduct {
 
 const cents = (usd: number) => Math.round(usd * 100);
 
-/** Every product and price Waggle needs in Stripe. */
-export function catalog(): CatalogProduct[] {
+/**
+ * Pure: a plan's product description, the line Stripe Checkout shows under the plan. From the
+ * plans as staff set them (Staff → Plans), so it says what the app says.
+ */
+export function planProductDescription(p: Pick<Plan, "accounts" | "replies">): string {
+  return `${p.accounts} connected accounts, about ${p.replies.toLocaleString("en-US")} AI replies a month.`;
+}
+
+/** Every product and price Waggle needs in Stripe (the plans: Staff → Plans, else the code's). */
+export function catalog(list: Record<PlanId, Plan> = PLANS): CatalogProduct[] {
   // Free is no subscription, so it has no product.
   const plans = PAID_PLAN_IDS.map((id) => {
-    const p = PLANS[id];
+    const p = list[id];
     const prices: CatalogPrice[] = [
       { lookupKey: PRICE_KEYS.plan(id, "month"), amount: cents(p.monthlyUsd), interval: "month" },
     ];
@@ -48,7 +56,7 @@ export function catalog(): CatalogProduct[] {
     return {
       key: `waggle_${id}`,
       name: `Waggle ${p.name}`,
-      description: `${p.accounts} connected accounts, about ${p.replies.toLocaleString("en-US")} AI replies a month.`,
+      description: planProductDescription(p),
       prices,
     };
   });

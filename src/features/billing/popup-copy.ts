@@ -322,6 +322,10 @@ export function popupContent(input: PopupInput): PopupContent {
   const scanOn = scan ? label(scan.platform) : null;
   const pain = facts.pain;
   const keepFree = { label: `Keep ${free.name}`, kind: "close" as const };
+  // The first box says the real state (QA, 25 Nov): never "Connected" with nothing connected.
+  const accountBox: StripBox = first
+    ? { title: first, text: "Connected", tone: "done", platform: firstId }
+    : { title: "+ add", text: "Not connected", tone: "open" };
   const base = {
     plan: planId,
     ticks:
@@ -345,7 +349,7 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
+          accountBox,
           { title: adding ?? "+", text: "Adding now", tone: "now", platform: version.platform },
           ...(open > 0
             ? [{ title: `+ ${n(open)} more`, text: "open", tone: "open" as const }]
@@ -573,7 +577,7 @@ export function popupContent(input: PopupInput): PopupContent {
         return {
           ...base,
           strip: [
-            { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
+            accountBox,
             {
               title: "Worker Bee",
               text: trial ? `${trialDays} days free` : `on ${solo.name}`,
@@ -625,7 +629,7 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip: [
-          { title: first ?? "Your account", text: "Connected", tone: "done", platform: firstId },
+          accountBox,
           ...(sent > 0
             ? [{ title: plural(sent, "reply", "replies"), text: "sent", tone: "done" as const }]
             : []),

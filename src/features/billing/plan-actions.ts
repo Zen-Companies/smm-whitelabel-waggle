@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type Stripe from "stripe";
 import { z } from "zod";
 import { getCurrentUser } from "@/lib/supabase/server";
+import { viewerTimeZone } from "@/lib/time/viewer-zone";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
 import { auditOrg, loadBilling, type BillingRecord } from "./billing-store";
 import { PRICE_KEYS, type Interval } from "./catalog";
@@ -22,6 +23,7 @@ import { loadPlans } from "./usage";
 import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
+import { planPageReturn } from "./banners";
 import { bankedDaysOf, firstCheckoutTrial } from "./promo";
 import { loadPromotions } from "./promotions-store";
 import { loadReferralForCheckout } from "./referrals";
@@ -146,7 +148,11 @@ export async function choosePlan(
   if (!stripe) return { error: NO_STRIPE };
   const { db, orgId, user } = who;
   const bill = await loadBilling(db, orgId);
-  const returnTo = popupReturn(formData.get("back"), formData.get("reason"));
+  // From the pop-up: back to its page. From Your plan itself (its plan cards, HighLevel's
+  // /plan?start=): back to Your plan with the success pop-up for that plan, which confirms the
+  // checkout with Stripe and stores it, so the page shows the plan without a reload (QA, 25 Nov).
+  const returnTo =
+    popupReturn(formData.get("back"), formData.get("reason")) ?? planPageReturn(choice.plan);
 
   let url: string | null = null;
   try {
@@ -186,6 +192,12 @@ export async function choosePlan(
     }
 
     const customer = await ensureCustomer(stripe, db, orgId, user.email, bill);
+    // The Owner's time zone (QA, 25 Nov): the reminder email and HighLevel say the charge date
+    // as Stripe charges it there. Only when the browser has reported one.
+    const zone = await viewerTimeZone();
+    if (zone !== "UTC") {
+      await db.from("org_billing").update({ time_zone: zone }).eq("organization_id", orgId);
+    }
     // The first paid plan starts with its first month free, with a card (24 Nov).
     const baseTrial = checkoutTrialDays(bill);
     const firstTime = baseTrial !== null;
