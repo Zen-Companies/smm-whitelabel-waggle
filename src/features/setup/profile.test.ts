@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   basicProfile,
   effectiveProfile,
+  profileName,
   profileUserPrompt,
   storedProfile,
   wantedCounts,
@@ -127,5 +128,31 @@ describe("profileUserPrompt", () => {
     expect(profileUserPrompt({ kindLabel: null, bio: null, captions: [], messages: [] })).toContain(
       "Page category: (none)",
     );
+  });
+
+  it("passes the page name inside the data block, capped (24 Nov)", () => {
+    const prompt = profileUserPrompt({
+      kindLabel: null,
+      pageName: `WakoWakoCorner ${"n".repeat(200)}`,
+      bio: null,
+      captions: [],
+      messages: [],
+    });
+    const inside = prompt.slice(prompt.indexOf("<message>"), prompt.indexOf("</message>"));
+    expect(inside).toContain("Page name: WakoWakoCorner");
+    expect(prompt).not.toContain("n".repeat(100));
+  });
+});
+
+describe("profileName (24 Nov)", () => {
+  it("is the AI's suggested name, validated; older profiles without one parse", () => {
+    const old = storedProfile({ kind: null, wanted: [], facts: [], askFirst: [], urgent: [] });
+    expect(old).not.toBeNull();
+    expect(profileName(old)).toBeNull();
+    expect(profileName({ ...basicProfile(null), businessName: " Wako  Wako Corner " })).toBe(
+      "Wako Wako Corner",
+    );
+    expect(profileName({ ...basicProfile(null), businessName: "x".repeat(81) })).toBeNull();
+    expect(profileName(null)).toBeNull();
   });
 });
