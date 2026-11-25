@@ -1,8 +1,10 @@
 import "server-only";
+import * as Sentry from "@sentry/nextjs";
 import type { User } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 import { claimReferral, REF_COOKIE } from "@/features/billing";
 import { ensurePersonalOrg } from "@/features/orgs";
+import { START_PLAN_ID, type StartPlan } from "@/lib/checkout-link";
 import { getServiceClient } from "@/lib/supabase/service";
 
 /**
@@ -29,4 +31,26 @@ export async function setupTenantForUser(user: User): Promise<{ organizationId: 
     // Read-only cookies (a page render) or no request: the referral waits for the next sign-in.
   }
   return { organizationId };
+}
+
+/**
+ * Sign-up carried a plan picked on the site (25 Nov): one organization history row (rule 11),
+ * with the plan's id (Team is `business`) and how they signed up. Never blocks the sign-up.
+ */
+export async function recordSignupPlan(input: {
+  organizationId: string;
+  userId: string;
+  start: StartPlan;
+  via: "email" | "google";
+}): Promise<void> {
+  const { error } = await getServiceClient()
+    .from("organization_audit")
+    .insert({
+      organization_id: input.organizationId,
+      action: "signup_plan_picked",
+      actor: input.userId,
+      details: { plan: START_PLAN_ID[input.start], via: input.via },
+    });
+  if (error)
+    Sentry.captureException(new Error(`signup_plan_picked audit failed: ${error.message}`));
 }

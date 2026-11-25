@@ -69,6 +69,8 @@ describe("Your plan's own checkout return (QA, 25 Nov)", () => {
   it("comes back with the success pop-up of the chosen plan, which opens on Your plan", () => {
     expect(planPageReturn("solo")).toBe("/plan?upgrade=nudge&");
     expect(planPageReturn("team")).toBe("/plan?upgrade=team&");
+    // Team is Waggle's id `business`: its success names Team, not Solo.
+    expect(planPageReturn("business")).toBe("/plan?upgrade=team&");
     const back = new URLSearchParams(planPageReturn("solo").split("?")[1] + "checkout=done");
     expect(
       popupFor({
