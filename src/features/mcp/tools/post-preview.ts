@@ -82,11 +82,13 @@ export interface ToolPostOption {
   title?: string;
   pinterest_board_id?: string;
   caption?: string;
+  ai_label?: boolean;
 }
 
 const POST_TYPES = new Set(["instagram", "facebook"]);
 const FIRST_COMMENT = new Set(["instagram", "facebook", "youtube", "threads", "linkedin"]);
 const TITLES = new Set(["youtube", "facebook"]);
+const AI_LABEL = new Set(["instagram", "youtube"]);
 
 /** Pure: choices that don't fit the chosen platforms, said so the assistant can fix them. */
 export function optionProblems(options: ToolPostOption[], platforms: string[]): string[] {
@@ -107,6 +109,8 @@ export function optionProblems(options: ToolPostOption[], platforms: string[]): 
       out.push(`options: title is for YouTube and Facebook, not ${p}.`);
     if (o.pinterest_board_id && p !== "pinterest")
       out.push("options: pinterest_board_id is for Pinterest only.");
+    if (o.ai_label && !AI_LABEL.has(p))
+      out.push(`options: ai_label is for Instagram and YouTube, not ${p}.`);
   }
   return out;
 }
@@ -125,6 +129,7 @@ export function toPostOptions(
       ...(o.first_comment ? { firstComment: o.first_comment } : {}),
       ...(o.title ? { title: o.title } : {}),
       ...(o.pinterest_board_id ? { boardId: o.pinterest_board_id } : {}),
+      ...(o.ai_label ? { aiLabel: true } : {}),
     };
     if (Object.keys(v).length) out[p] = v;
   }

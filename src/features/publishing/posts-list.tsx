@@ -1,16 +1,19 @@
-import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Loader } from "lucide-react";
+import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Film, Loader } from "lucide-react";
 import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { needsNewTime, postStatusWord } from "./calendar";
 import { CancelPostButton, RetryPostForm, TakeDownButton } from "./post-actions";
 import { platformLabel } from "@/lib/social/platforms";
+import { mediaKindOf, type PostPlatformResult } from "@/lib/social/types";
+import { failedAccounts, type TargetAccount } from "./post-results";
+import { dateTimeIn } from "./post-time";
 
 // Posts (PRD F3): one post with its status and actions, and the List view. Read through RLS.
 
 export interface PostRow {
   id: string;
   content: string;
-  media: { url?: string }[];
+  media: { url?: string; type?: string | null }[];
   status: string;
   scheduled_for: string | null;
   queued: boolean;
@@ -21,25 +24,12 @@ export interface PostRow {
   target_account_ids: string[];
   /** Zernio's id once the post was sent (T74a: reach from analytics). */
   zernio_post_id?: string | null;
-  platform_results: {
-    platform: string;
-    status: string;
-    url: string | null;
-    error: string | null;
-  }[];
+  platform_results: PostPlatformResult[];
 }
 
-const fmt = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
 /** Status is inline text + icon, never a colored chip (design.md §3). */
-function Status({ post }: { post: PostRow }) {
+function Status({ post, timeZone }: { post: PostRow; timeZone: string }) {
+  const fmt = (iso: string) => dateTimeIn(iso, timeZone);
   const s = post.status;
   if (s === "published")
     return (
@@ -101,21 +91,59 @@ function problem(post: PostRow): string | null {
 export function Post({
   post,
   accounts,
+  targets = [],
+  timeZone,
   as: Tag = "li",
 }: {
   post: PostRow;
   accounts: Map<string, string>;
+  /** The brand's accounts, to name the ones a post failed on. */
+  targets?: TargetAccount[];
+  /** The zone times are shown in (the calendar renders on the server). */
+  timeZone: string;
   as?: "li" | "div";
 }) {
-  const issue = problem(post);
-  const image = post.media[0]?.url;
+  const failed =
+    post.status === "partial" || post.status === "failed"
+      ? failedAccounts(
+          post.platform_results ?? [],
+          targets.filter((t) => post.target_account_ids.includes(t.id)),
+        )
+      : [];
+  // Each failed account is named with its reason; the row's summary only when there's none.
+  const issue = failed.length && !post.failure_reason ? null : problem(post);
+  const first = post.media[0];
+  const isVideo =
+    !!first?.url &&
+    mediaKindOf({
+      url: first.url,
+      type: first.type === "video" ? "video" : null,
+    }) === "video";
   const live = post.platform_results.find((r) => r.url)?.url;
   return (
     <Tag className="flex gap-4 py-4">
-      {image && (
-        // eslint-disable-next-line @next/next/no-img-element -- remote post media, any host
-        <img src={image} alt="" className="size-16 shrink-0 rounded-lg border object-cover" />
-      )}
+      {first?.url &&
+        (isVideo ? (
+          // A video's first frame, never an <img> (it shows as broken).
+          <span className="bg-subtle relative size-16 shrink-0 overflow-hidden rounded-lg border">
+            <video
+              src={first.url}
+              preload="metadata"
+              muted
+              playsInline
+              aria-hidden
+              className="size-full object-cover"
+            />
+            <Film
+              className="text-ink-2 absolute right-1 bottom-1 size-4"
+              strokeWidth={1.75}
+              aria-label="Video"
+            />
+          </span>
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element -- remote post media, any host
+          <img src={first.url} alt="" className="size-16 shrink-0 rounded-lg border object-cover" />
+        ))}
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <p className="line-clamp-3 whitespace-pre-wrap">{post.content}</p>
         <div className="meta flex flex-wrap gap-x-3">
@@ -128,8 +156,17 @@ export function Post({
             </a>
           )}
         </div>
-        <Status post={post} />
+        <Status post={post} timeZone={timeZone} />
         {issue && <p className="danger-box">{issue}</p>}
+        {failed.length > 0 && (
+          <ul className="danger-box flex flex-col gap-1.5" aria-label="Not posted on">
+            {failed.map((f) => (
+              <li key={f.key}>
+                <b className="font-semibold">{f.name}</b>: {f.reason}
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex flex-wrap gap-2">
           {(post.status === "scheduled" || post.status === "queued") && (
             <CancelPostButton postId={post.id} />
@@ -154,6 +191,8 @@ export function Post({
             <RetryPostForm
               postId={post.id}
               label={post.failure_reason === "zernio_paused" ? "Post now" : "Try again"}
+              // Already live on some accounts: only "Try again" (a new time would post it twice).
+              canPickTime={post.status !== "partial"}
             />
           )}
         </div>
@@ -181,7 +220,7 @@ export async function loadPosts(tenantId: string) {
       .limit(100),
     supabase
       .from("social_accounts")
-      .select("id, platform, username, status")
+      .select("id, platform, username, status, zernio_account_id")
       .eq("tenant_id", tenantId),
   ]);
   return {
@@ -228,7 +267,9 @@ export function PostsTable({
   platforms,
   reach,
   openHref,
+  timeZone,
 }: {
+  timeZone: string;
   posts: PostRow[];
   /** Account id → platform label. */
   platforms: Map<string, string>;
@@ -274,7 +315,7 @@ export function PostsTable({
             return (
               <tr key={p.id} className="border-line border-b last:border-b-0">
                 <td className="text-ink-2 px-4 py-3 whitespace-nowrap">
-                  {at ? fmt(at) : p.queued ? "Next free time" : "Not set"}
+                  {at ? dateTimeIn(at, timeZone) : p.queued ? "Next free time" : "Not set"}
                 </td>
                 <td className="max-w-[280px] truncate px-4 py-3">
                   {p.content.split("\n")[0] || "Photo"}
@@ -309,7 +350,15 @@ export function PostsTable({
 }
 
 /** The List view: needs attention, upcoming, published. */
-export function PostsList({ posts, names }: { posts: PostRow[]; names: Map<string, string> }) {
+export function PostsList({
+  posts,
+  names,
+  timeZone,
+}: {
+  posts: PostRow[];
+  names: Map<string, string>;
+  timeZone: string;
+}) {
   const attention = posts.filter(needsNewTime);
   const upcoming = posts
     .filter((p) => ["queued", "scheduled", "publishing"].includes(p.status))
@@ -328,7 +377,7 @@ export function PostsList({ posts, names }: { posts: PostRow[]; names: Map<strin
       ) : (
         <ul className="divide-y">
           {list.map((p) => (
-            <Post key={p.id} post={p} accounts={names} />
+            <Post key={p.id} post={p} accounts={names} timeZone={timeZone} />
           ))}
         </ul>
       )}

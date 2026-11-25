@@ -118,6 +118,8 @@ export const postEventSchema = z.object({
     platforms: z.array(
       z.object({
         platform: z.string(),
+        // The account this target posted through (a post can span several of one platform).
+        accountId: z.string().optional().catch(undefined),
         status: z.string(),
         publishedUrl: z.string().optional(),
         error: z.string().optional(),

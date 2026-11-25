@@ -74,6 +74,19 @@ export function parsePostOptions(value: unknown): PostOptions {
 const FIRST_COMMENT = new Set(["instagram", "facebook", "youtube", "threads", "linkedin"]);
 
 /**
+ * A platform's own text, only when it's a real change: empty or the same as the caption means
+ * the platform follows the caption (so later caption edits reach it).
+ */
+export function ownText(o: PlatformPostOptions | undefined, sharedText: string): string | null {
+  return o?.text && o.text.trim() && o.text !== sharedText ? o.text : null;
+}
+
+/** The text that really goes to this platform: its own text, else the caption. */
+export function textFor(platform: string, options: PostOptions, sharedText: string): string {
+  return ownText(options[platform], sharedText) ?? sharedText;
+}
+
+/**
  * The extra fields for one target in Zernio's createPost: `customContent` and
  * `platformSpecificData`, only with what the platform accepts for this kind of post.
  */
@@ -84,7 +97,8 @@ export function targetExtras(
 ): { customContent?: string; platformSpecificData?: Record<string, unknown> } {
   if (!o) return {};
   const out: { customContent?: string; platformSpecificData?: Record<string, unknown> } = {};
-  if (o.text && o.text.trim() && o.text !== sharedText) out.customContent = o.text;
+  const own = ownText(o, sharedText);
+  if (own) out.customContent = own;
 
   const d: Record<string, unknown> = {};
   const story = o.as === "story";

@@ -173,6 +173,7 @@ export function fakeZernio() {
     ping: notImplemented,
     uploadMedia: notImplemented,
     deletePost: notImplemented,
+    retryPost: notImplemented,
     listCommentedPosts: notImplemented,
     listPostComments: notImplemented,
     listCommentedPostsPage: notImplemented,

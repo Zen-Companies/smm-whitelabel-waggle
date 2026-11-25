@@ -651,9 +651,11 @@ async function mapPost(
       failure_reason: failureReason,
       platform_results: e.post.platforms.map((p) => ({
         platform: p.platform,
+        accountId: p.accountId ?? null,
         status: p.status,
         url: p.publishedUrl ?? null,
         error: customerText(p.error ?? null),
+        errorCategory: p.errorCategory ?? null,
       })),
       ...(e.post.publishedAt ? { published_at: e.post.publishedAt } : {}),
     })

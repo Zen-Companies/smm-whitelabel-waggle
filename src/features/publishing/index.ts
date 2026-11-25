@@ -12,5 +12,5 @@ export type { PublishResult } from "./publish";
 export { QueueView } from "./queue-view";
 export { PostsHeader } from "./posts-header";
 export { listBoardsFor } from "./pinterest";
-export { parsePostOptions } from "./post-options";
+export { parsePostOptions, targetExtras } from "./post-options";
 export type { PostOptions } from "./post-options";
