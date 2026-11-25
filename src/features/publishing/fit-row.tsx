@@ -51,7 +51,8 @@ export function FitRow({
   options: PostOptions;
   mediaFor: (platform: string) => PlatformMedia | null;
   shared: MediaShape;
-  crops: Partial<Record<string, MadeCrop>>;
+  /** Each platform's crop in use (a new one, or one the post already had). */
+  crops: Partial<Record<string, { label: string }>>;
   allCrop: MadeCrop | null;
   onCrop: (platform: string) => void;
   onRemoveCrop: (platform: string) => void;
