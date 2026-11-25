@@ -3,16 +3,21 @@
 // webhook stores, and the email the jobs route sends.
 
 import { brandedEmail, brandedText, detailRows, paragraph } from "@/lib/email/frame";
-import { isPaidPlanId, PLANS, type PaidPlanId } from "./plans";
+import { isPaidPlanId, PLANS, trialIsMonth, type PaidPlanId } from "./plans";
 import type { BillingRow } from "./subscription";
 
-/** "December 24": the day Stripe charges (dates are stored in UTC, like the rest of Your plan). */
-export function chargeDay(at: Date | string): string {
-  return new Date(at).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+/**
+ * "December 24": the day Stripe charges, in the given time zone (the viewer's, or the Owner's
+ * for the email: 18:35 UTC on December 24 is December 25 in Manila, as Stripe says it there).
+ */
+export function chargeDay(at: Date | string, timeZone = "UTC"): string {
+  const fmt = (tz: string) =>
+    new Date(at).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: tz });
+  try {
+    return fmt(timeZone);
+  } catch {
+    return fmt("UTC");
+  }
 }
 
 /** "$49", or "$49.50" when there are cents. */
@@ -22,8 +27,8 @@ export function dollars(cents: number): string {
 }
 
 /** Pure: Your plan's header and the trial bar: "First charge: December 24 ($49)". */
-export function firstChargeLine(chargeAt: Date | string, cents: number): string {
-  return `First charge: ${chargeDay(chargeAt)} (${dollars(cents)})`;
+export function firstChargeLine(chargeAt: Date | string, cents: number, timeZone = "UTC"): string {
+  return `First charge: ${chargeDay(chargeAt, timeZone)} (${dollars(cents)})`;
 }
 
 /** The few fields of a Stripe subscription item this needs. */
@@ -87,6 +92,10 @@ export interface ReminderEmailInput {
   amountCents: number;
   chargeAt: string;
   appUrl: string;
+  /** The trial's length: "free month" at 28 days or more, else "free trial". */
+  trialDays: number;
+  /** The Owner's time zone (org_billing.time_zone), so the date is the one Stripe charges on. */
+  timeZone?: string;
 }
 
 /** Pure: the email to each Owner: plan, amount, the charge date, and how to change or cancel. */
@@ -96,12 +105,13 @@ export function reminderEmail(input: ReminderEmailInput): {
   html: string;
 } {
   const planName = isPaidPlanId(input.plan) ? PLANS[input.plan].name : "your plan";
-  const when = chargeDay(input.chargeAt);
+  const when = chargeDay(input.chargeAt, input.timeZone);
   const amount = dollars(input.amountCents);
   const every = input.interval === "year" ? "year" : "month";
-  const subject = `Your free month ends soon: ${amount} on ${when}`;
+  const free = trialIsMonth(input.trialDays) ? "free month" : "free trial";
+  const subject = `Your ${free} ends soon: ${amount} on ${when}`;
   const hello = input.firstName ? `Hi ${input.firstName}.` : "Hi.";
-  const lead = `${hello} Your free month of Waggle ${planName} ends soon. On ${when} your card is charged ${amount}, then every ${every}.`;
+  const lead = `${hello} Your ${free} of Waggle ${planName} ends soon. On ${when} your card is charged ${amount}, then every ${every}.`;
   const keep = "Nothing to do to keep it: Waggle keeps answering as it does now.";
   const change = `To change your plan or cancel, open Your plan before ${when}. Cancel before then and you pay nothing.`;
   const base = input.appUrl.replace(/\/$/, "");

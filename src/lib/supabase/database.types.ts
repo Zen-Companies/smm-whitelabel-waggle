@@ -1968,6 +1968,7 @@ export type Database = {
           stripe_customer_id: string
           stripe_event_at: string | null
           stripe_subscription_id: string | null
+          time_zone: string | null
           trial_days: number | null
           trial_ends_at: string | null
           updated_at: string
@@ -1986,6 +1987,7 @@ export type Database = {
           stripe_customer_id: string
           stripe_event_at?: string | null
           stripe_subscription_id?: string | null
+          time_zone?: string | null
           trial_days?: number | null
           trial_ends_at?: string | null
           updated_at?: string
@@ -2003,6 +2005,7 @@ export type Database = {
           stripe_customer_id?: string
           stripe_event_at?: string | null
           stripe_subscription_id?: string | null
+          time_zone?: string | null
           trial_days?: number | null
           trial_ends_at?: string | null
           updated_at?: string
@@ -2589,9 +2592,11 @@ export type Database = {
           referrer_org_id: string
           reward_cents: number
           reward_due_at: string | null
+          reward_months: number | null
           rewarded_at: string | null
           status: string
           stripe_ref: string | null
+          trial_days: number | null
         }
         Insert: {
           code: string
@@ -2601,9 +2606,11 @@ export type Database = {
           referrer_org_id: string
           reward_cents?: number
           reward_due_at?: string | null
+          reward_months?: number | null
           rewarded_at?: string | null
           status?: string
           stripe_ref?: string | null
+          trial_days?: number | null
         }
         Update: {
           code?: string
@@ -2613,9 +2620,11 @@ export type Database = {
           referrer_org_id?: string
           reward_cents?: number
           reward_due_at?: string | null
+          reward_months?: number | null
           rewarded_at?: string | null
           status?: string
           stripe_ref?: string | null
+          trial_days?: number | null
         }
         Relationships: []
       }

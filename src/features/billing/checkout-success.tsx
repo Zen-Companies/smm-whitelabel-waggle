@@ -102,7 +102,11 @@ export function CheckoutSuccess({
   carryOn: CarryOn;
   onDone: () => void;
 }) {
-  const until = confirmed.freeUntil ? shortDate(new Date(confirmed.freeUntil)) : null;
+  // Shown only after Stripe confirmed (client state), so the browser's own zone is safe here:
+  // the day Stripe charges where the Owner is (QA, 25 Nov).
+  const until = confirmed.freeUntil
+    ? shortDate(new Date(confirmed.freeUntil), Intl.DateTimeFormat().resolvedOptions().timeZone)
+    : null;
   const inboxClass = carryOn
     ? "text-ink hover:text-ink-2 inline-flex min-h-10 items-center justify-center text-[13px] font-semibold"
     : buttonVariants({ variant: "primary" });

@@ -48,7 +48,8 @@ async function Body({ searchParams }: { searchParams: SearchParams }) {
       />
       {/* Give a month, get a month (23 Nov): the link right under the plan, one tap to share. */}
       {isOwner && <ReferralCard orgId={org.id} />}
-      {notice === "done" && (
+      {/* Back with the success pop-up (?upgrade=), its own tag fires instead. */}
+      {notice === "done" && !params.upgrade && (
         <Suspense fallback={null}>
           <TrialConversionTag
             sessionId={typeof params.session_id === "string" ? params.session_id : undefined}

@@ -373,6 +373,12 @@ export function passFor(
     referrerName: string | null;
     /** When the friend signed up: the referral program that ran then still gives the month. */
     referredAt?: Date | null;
+    /**
+     * The friend's free days stored on the referral row at sign-up (0: none). Wins over the
+     * program's switch, so turning it off never takes back a month already given. null: a row
+     * from before they were stored.
+     */
+    referralTrialDays?: number | null;
   },
   list: readonly Promotion[] = PROMOTIONS,
 ): PassView | null {
@@ -390,7 +396,11 @@ export function passFor(
     };
   }
   if (!input.referred) return null;
-  const referral = runningReferral(input.referredAt ?? now, list);
+  const stored = input.referralTrialDays ?? null;
+  if (stored !== null && stored <= 0) return null;
+  const referral =
+    runningReferral(input.referredAt ?? now, list) ??
+    (stored !== null ? (list.find((p) => p.kind === "referral") ?? null) : null);
   if (!referral) return null;
   return {
     promotionId: referral.id,
@@ -398,7 +408,7 @@ export function passFor(
     dayName: referral.pass.dayName,
     headline: referral.pass.headline,
     small: fill(referral.pass.small, { name: input.referrerName ?? "A friend" }),
-    trialDays: referral.trialDays,
+    trialDays: stored ?? referral.trialDays,
   };
 }
 
@@ -426,8 +436,12 @@ export function inviteState(
 }
 
 /** Pure: "24 Dec", the success modal's date. */
-export function shortDate(d: Date): string {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+export function shortDate(d: Date, timeZone = "UTC"): string {
+  try {
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone });
+  } catch {
+    return d.toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+  }
 }
 
 /** Pure: the success modal's promo lines, from the checkout's own record (Stripe metadata). */

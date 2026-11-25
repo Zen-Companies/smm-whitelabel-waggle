@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { UsageAtCostCard } from "./usage-at-cost-card";
 import { CombMeter, PlanBees, RestingBee, TrialCells } from "@/components/app/bee-plan";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
+import { viewerTimeZone } from "@/lib/time/viewer-zone";
 import { loadBilling, loadTopUps, type BillingRecord } from "./billing-store";
 import {
   buyTopUpNow,
@@ -24,7 +25,9 @@ import {
   planBullets,
   PLAN_IDS,
   PLANS,
+  storedTrialDays,
   TRIAL,
+  trialIsMonth,
   type PaidPlanId,
   type Plan,
   type PlanId,
@@ -41,8 +44,13 @@ import { loadPlans, loadReplyLimit } from "./usage";
 // the bee"). One page for the plan, what's used and every extra, self-serve. Owners see it all;
 // others see what's counted, not the card.
 
+/** A month's reset (midnight UTC on the 1st): said in UTC so it never reads as the 30th. */
 const day = (d: Date | string) =>
   new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+
+/** A trial's or a period's end, in the viewer's time zone: the day Stripe charges there. */
+const dayIn = (d: Date | string, timeZone: string) =>
+  new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone });
 
 export interface YourPlanOrg {
   id: string;
@@ -151,12 +159,14 @@ export async function YourPlanSection({
 }) {
   const db = getServiceClient();
   const now = new Date();
-  const [bill, counts, owners, plans] = await Promise.all([
+  const [bill, counts, owners, plans, zone] = await Promise.all([
     loadBilling(db, org.id),
     loadCounts(db, org.id),
     ownerNames(db, org.id),
     loadPlans(db),
+    viewerTimeZone(),
   ]);
+  const localDay = (d: Date | string) => dayIn(d, zone);
   const { accounts } = counts;
   const live = !!bill && planIsLive(bill.status) && isPaidPlanId(bill.plan);
   const planId: PaidPlanId | null = live && isPaidPlanId(bill!.plan) ? bill!.plan : null;
@@ -219,7 +229,7 @@ export async function YourPlanSection({
                 <h3 className="font-display text-[30px] leading-tight font-semibold">Free</h3>
                 <span className="text-ink-2 text-sm">
                   {ended
-                    ? `Your paid plan ended on ${day(bill!.current_period_end!)}. You’re on Free now: everything you set up is still here.`
+                    ? `Your paid plan ended on ${localDay(bill!.current_period_end!)}. You’re on Free now: everything you set up is still here.`
                     : "No card, no time limit. Waggle drafts, you approve."}
                 </span>
               </div>
@@ -323,10 +333,12 @@ export async function YourPlanSection({
   const firstCharge =
     price.chargeUsd +
     bill.extra_accounts * EXTRAS.accountUsd * (bill.billing_interval === "year" ? 12 : 1);
+  // A trial from before its length was stored is the old 7-day one, never the free month.
+  const trialLength = storedTrialDays(bill);
   // Pricing Bible (24 Nov): the billing date shown in the app, "First charge: December 24 ($49)".
   const chargeLine =
     bill.status === "trialing" && bill.trial_ends_at && !bill.cancel_at_period_end
-      ? firstChargeLine(bill.trial_ends_at, Math.round(firstCharge * 100))
+      ? firstChargeLine(bill.trial_ends_at, Math.round(firstCharge * 100), zone)
       : null;
   const perCell = Math.round(limit.allowance / 10);
 
@@ -379,20 +391,19 @@ export async function YourPlanSection({
       {bill.status === "trialing" && bill.trial_ends_at && (
         <section className="border-honey-border bg-honey-tint flex flex-wrap items-center gap-4 rounded-xl border px-4 py-3">
           {/* One hexagon a day fits a short trial; the free month says it in words only. */}
-          {(bill.trial_days ?? TRIAL.days) <= TRIAL_CELLS_MAX && (
+          {trialLength <= TRIAL_CELLS_MAX && (
             <TrialCells
-              day={trialDay(new Date(bill.trial_ends_at), now, bill.trial_days ?? TRIAL.days)}
-              of={bill.trial_days ?? TRIAL.days}
+              day={trialDay(new Date(bill.trial_ends_at), now, trialLength)}
+              of={trialLength}
             />
           )}
           <span className="min-w-[240px] flex-1 text-sm">
             <b>
-              Free month: day{" "}
-              {trialDay(new Date(bill.trial_ends_at), now, bill.trial_days ?? TRIAL.days)} of{" "}
-              {bill.trial_days ?? TRIAL.days}.
+              {trialIsMonth(trialLength) ? "Free month" : "Free trial"}: day{" "}
+              {trialDay(new Date(bill.trial_ends_at), now, trialLength)} of {trialLength}.
             </b>{" "}
             {bill.cancel_at_period_end ? (
-              `It ends on ${day(bill.trial_ends_at)} and you won't be charged.`
+              `It ends on ${localDay(bill.trial_ends_at)} and you won't be charged.`
             ) : (
               <>
                 <b>{chargeLine}.</b> We email you 3 days before. Cancel any time before then and you
@@ -409,8 +420,8 @@ export async function YourPlanSection({
       {bill.cancel_at_period_end && bill.status !== "trialing" && bill.current_period_end && (
         <section className="border-line bg-subtle flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
           <span className="text-sm">
-            <b>Your plan ends on {day(bill.current_period_end)}.</b> Until then everything keeps
-            working.
+            <b>Your plan ends on {localDay(bill.current_period_end)}.</b> Until then everything
+            keeps working.
           </span>
           {org.isOwner && (
             <PlanButton action={openBillingPortal} fields={fields} label="Keep my plan" />

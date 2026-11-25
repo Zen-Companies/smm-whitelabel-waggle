@@ -223,12 +223,16 @@ export function BillingPopups({
     void confirmCheckout({ orgId: org.orgId, sessionId })
       .catch(() => null)
       .then((result) => {
-        if (live) setConfirmed({ id: sessionId, result });
+        if (!live) return;
+        setConfirmed({ id: sessionId, result });
+        // Confirmed and stored: the page behind the pop-up reads the new plan now, not after a
+        // reload (QA, 25 Nov).
+        if (result) router.refresh();
       });
     return () => {
       live = false;
     };
-  }, [checkout, sessionId, confirmed?.id, org.orgId]);
+  }, [checkout, sessionId, confirmed?.id, org.orgId, router]);
 
   const back = (() => {
     const next = new URLSearchParams(params.toString());

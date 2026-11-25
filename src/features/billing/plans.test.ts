@@ -18,6 +18,8 @@ import {
   PLANS,
   PROMOTED_PLAN,
   replyAllowance,
+  storedTrialDays,
+  trialIsMonth,
   TRIAL,
   trialEndsAt,
 } from "./plans";
@@ -329,5 +331,18 @@ describe("plan card lines (Pricing Bible, 18 Nov)", () => {
       "3 businesses, just you",
       "4 accounts, then $10 each",
     ]);
+  });
+});
+
+describe("a stored trial's length (review of release #78)", () => {
+  it("is the stored length, else the old 7-day trial: never read as the free month", () => {
+    expect(storedTrialDays({ trial_days: 37 })).toBe(37);
+    expect(storedTrialDays({ trial_days: null })).toBe(7);
+    expect(storedTrialDays(null)).toBe(7);
+  });
+  it("is called the free month only at 28 days or more", () => {
+    expect(trialIsMonth(30)).toBe(true);
+    expect(trialIsMonth(28)).toBe(true);
+    expect(trialIsMonth(7)).toBe(false);
   });
 });

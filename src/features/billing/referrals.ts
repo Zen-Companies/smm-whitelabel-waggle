@@ -14,13 +14,14 @@ import {
 import type { Database } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { auditOrg } from "./billing-store";
-import { checkoutTrialDays, isPaidPlanId, monthlyPrice } from "./plans";
-import { firstCheckoutTrial } from "./promo";
+import { checkoutTrialDays, isPaidPlanId } from "./plans";
+import { bankedDaysOf, firstCheckoutTrial } from "./promo";
 import { runningReferral, type Promotion } from "./promotions";
 import { loadPromotions } from "./promotions-store";
 import { codeFromBytes, isNewOrg, parseRefCode, referralLink } from "./referral-code";
 import { appUrl } from "./stripe-client";
 import { isPayingBill } from "./subscription";
+import { subscriptionChargeCents } from "./trial-reminder";
 
 // "Give a month, get a month" (Jason, 23 November 2026). See promo.ts for the free month itself.
 
@@ -112,10 +113,19 @@ export async function claimReferral(
       return "skipped";
     }
     if (!(await orgIsPaying(db, owner.organization_id))) return "skipped";
+    // The program's terms now are the referral's for good (review of release #78): switching it
+    // off or changing it later never takes back a month already earned. 0: none running.
+    const terms = runningReferral(now, await loadPromotions());
     const { data, error } = await db
       .from("referrals")
       .upsert(
-        { referrer_org_id: owner.organization_id, referred_org_id: orgId, code },
+        {
+          referrer_org_id: owner.organization_id,
+          referred_org_id: orgId,
+          code,
+          reward_months: terms?.rewardMonths ?? 0,
+          trial_days: terms?.trialDays ?? 0,
+        },
         { onConflict: "referred_org_id", ignoreDuplicates: true },
       )
       .select("id");
@@ -131,28 +141,45 @@ export async function claimReferral(
   }
 }
 
+export interface ReferralForCheckout {
+  referred: boolean;
+  referredAt: Date | null;
+  /** The friend's free days stored at sign-up (0: none); null on a row from before. */
+  referralTrialDays: number | null;
+  bankedIds: string[];
+  /** Each banked row's own terms, for bankedDaysOf. */
+  banked: { reward_months: number | null; trial_days: number | null }[];
+}
+
 /**
- * What an organization's first plan checkout needs: was it referred (and when: the referral
- * program that ran then still gives the month), and banked months.
+ * What an organization's first plan checkout needs: was it referred (and on what terms: the
+ * ones stored when it signed up), and banked months (each on its own terms).
  */
 export async function loadReferralForCheckout(
   db: ServiceClient,
   orgId: string,
-): Promise<{ referred: boolean; referredAt: Date | null; bankedIds: string[] }> {
+): Promise<ReferralForCheckout> {
   const [{ data: mine }, { data: banked }] = await Promise.all([
-    db.from("referrals").select("id, created_at").eq("referred_org_id", orgId).maybeSingle(),
     db
       .from("referrals")
-      .select("id")
+      .select("id, created_at, trial_days")
+      .eq("referred_org_id", orgId)
+      .maybeSingle(),
+    db
+      .from("referrals")
+      .select("id, reward_months, trial_days")
       .eq("referrer_org_id", orgId)
       .eq("status", "banked")
       .order("created_at")
       .limit(24),
   ]);
+  const rows = banked ?? [];
   return {
     referred: !!mine,
     referredAt: mine ? new Date(mine.created_at) : null,
-    bankedIds: (banked ?? []).map((r) => r.id),
+    referralTrialDays: mine?.trial_days ?? null,
+    bankedIds: rows.map((r) => r.id),
+    banked: rows.map((r) => ({ reward_months: r.reward_months, trial_days: r.trial_days })),
   };
 }
 
@@ -209,13 +236,15 @@ export async function markBankedUsed(
 /** A claim older than this crashed half-way: it's retried, after looking in Stripe for its credit. */
 export const CREDITING_STALE_MS = 10 * 60_000;
 
-const ROW = "id, referrer_org_id, referred_org_id, created_at";
+const ROW = "id, referrer_org_id, referred_org_id, created_at, reward_months";
 
 interface RewardRow {
   id: string;
   referrer_org_id: string;
   referred_org_id: string;
   created_at: string;
+  /** Stored at sign-up (null: a row from before: the program that ran then decides). */
+  reward_months: number | null;
 }
 
 /** Where a row was when the jobs route took it. */
@@ -228,8 +257,8 @@ type ReferralPatch = Database["public"]["Tables"]["referrals"]["Update"];
  * months of its plan off its next bill (a Stripe customer balance credit, so nothing to click).
  * One still on Free has it banked: it becomes trial days on its first checkout. Banked months of a
  * referrer that has a plan again (one it had before, so its checkout had no trial to put them in)
- * are credited the same way. The months per friend are the referral program's that ran when the
- * friend signed up (Staff → Promotions).
+ * are credited the same way. The months per friend are stored on the referral when the friend
+ * signs up (the program then, Staff → Promotions); switching it off later changes nothing owed.
  *
  * Never twice: a row is claimed ('crediting') before Stripe is called, Stripe is asked for a
  * credit already made for the referral before making one, and every write is checked.
@@ -266,10 +295,11 @@ export async function grantReferralRewards(deps: {
     } catch (e) {
       result.failed++;
       Sentry.captureException(e, { extra: { referralId: row.id } });
-      // Hand it back (a credit already made is found in Stripe next time, never made again).
+      // Hand it back where it was claimed from: a banked month stays banked, the rest are due
+      // again (a credit already made is found in Stripe next time, never made again).
       await db
         .from("referrals")
-        .update({ status: "reward_due", rewarded_at: null })
+        .update({ status: handBackStatus(from), rewarded_at: null })
         .eq("id", row.id)
         .eq("status", "crediting")
         .then(
@@ -279,6 +309,23 @@ export async function grantReferralRewards(deps: {
     }
   }
   return result;
+}
+
+/** Pure: where a row goes back to when crediting it failed: where it was claimed from. */
+export function handBackStatus(from: ClaimFrom): "banked" | "reward_due" {
+  return from === "banked" ? "banked" : "reward_due";
+}
+
+/**
+ * Pure: a month of the referrer's own subscription, in cents: every item's price (the plan, extra
+ * accounts, a Business custom price) as Stripe charges it; a yearly one is a twelfth.
+ */
+export function monthOfSubscriptionCents(
+  sub: Parameters<typeof subscriptionChargeCents>[0],
+  interval: string | null,
+): number {
+  const cents = subscriptionChargeCents(sub);
+  return interval === "year" ? Math.round(cents / 12) : cents;
 }
 
 /** What to credit: months due, claims that crashed half-way, banked months of live referrers. */
@@ -374,8 +421,12 @@ async function creditOne(
   if (claimError) throw new Error(`referrals: claiming the reward failed: ${claimError.message}`);
   if (!claimed?.length) return "skipped";
 
-  // The program that ran when the friend signed up decides the reward.
-  const months = runningReferral(new Date(row.created_at), ctx.promotions)?.rewardMonths ?? 0;
+  // The terms stored when the friend signed up decide the reward, whatever the program's switch
+  // says now. A row from before they were stored: the program that ran then.
+  const months =
+    row.reward_months ??
+    runningReferral(new Date(row.created_at), ctx.promotions)?.rewardMonths ??
+    0;
   if (months <= 0) {
     await settle(db, row.id, { status: "no_reward", rewarded_at: null });
     await auditOrg(db, row.referrer_org_id, "referral.no_reward", "system", {
@@ -399,26 +450,29 @@ async function creditOne(
     return "banked";
   }
 
+  if (!bill.stripe_subscription_id) {
+    throw new Error("referrals: a paying bill without its subscription");
+  }
+  const sub = await stripe.subscriptions.retrieve(bill.stripe_subscription_id);
   // A banked month a first checkout's trial already used (its webhook may not have landed yet,
   // or the row was handed back after a failure): never also credited.
-  if (bill.stripe_subscription_id) {
-    const sub = await stripe.subscriptions.retrieve(bill.stripe_subscription_id);
-    if ((sub.metadata?.banked_referrals ?? "").split(",").includes(row.id)) {
-      await settle(db, row.id, {
-        status: "rewarded",
-        rewarded_at: at,
-        stripe_ref: sub.id,
-        reward_cents: 0,
-      });
-      await auditOrg(db, row.referrer_org_id, "referral.banked_used", "system", {
-        referralId: row.id,
-      });
-      return "used";
-    }
+  if ((sub.metadata?.banked_referrals ?? "").split(",").includes(row.id)) {
+    await settle(db, row.id, {
+      status: "rewarded",
+      rewarded_at: at,
+      stripe_ref: sub.id,
+      reward_cents: 0,
+    });
+    await auditOrg(db, row.referrer_org_id, "referral.banked_used", "system", {
+      referralId: row.id,
+    });
+    return "used";
   }
 
-  const usd = monthlyPrice(bill.plan, { yearly: bill.billing_interval === "year" });
-  const cents = Math.round(usd * 100 * months);
+  // What the referrer actually pays for a month (its subscription's items, a Business custom
+  // price included), not the list price.
+  const cents = monthOfSubscriptionCents(sub, bill.billing_interval) * months;
+  if (cents <= 0) throw new Error("referrals: the subscription has no price to credit");
   const txn =
     (await findReferralCredit(stripe, bill.stripe_customer_id, row.id)) ??
     (await stripe.customers.createBalanceTransaction(
@@ -501,7 +555,9 @@ export async function offerTrialDays(
     now,
     referred: ref.referred,
     referredAt: ref.referredAt,
+    referralTrialDays: ref.referralTrialDays,
     bankedMonths: ref.bankedIds.length,
+    bankedDays: bankedDaysOf(ref.banked, now, promotions),
     baseDays: base,
     promotions,
   }).days;
@@ -656,16 +712,23 @@ export async function referrerForCode(
 export async function referrerOf(
   db: ServiceClient,
   orgId: string,
-): Promise<{ referred: boolean; referredAt: Date | null; name: string | null }> {
+): Promise<{
+  referred: boolean;
+  referredAt: Date | null;
+  /** The friend's free days stored at sign-up (0: none); null on a row from before. */
+  trialDays: number | null;
+  name: string | null;
+}> {
   const { data } = await db
     .from("referrals")
-    .select("referrer_org_id, created_at")
+    .select("referrer_org_id, created_at, trial_days")
     .eq("referred_org_id", orgId)
     .maybeSingle();
-  if (!data) return { referred: false, referredAt: null, name: null };
+  if (!data) return { referred: false, referredAt: null, trialDays: null, name: null };
   return {
     referred: true,
     referredAt: new Date(data.created_at),
+    trialDays: data.trial_days,
     name: await businessNameOf(db, data.referrer_org_id),
   };
 }

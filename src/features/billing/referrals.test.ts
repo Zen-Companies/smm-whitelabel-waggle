@@ -28,6 +28,7 @@ vi.mock("./promotions-store", async () => {
 const {
   claimReferral,
   ensureReferralCode,
+  handBackStatus,
   grantReferralRewards,
   markBankedUsed,
   markReferralRewardDue,
@@ -108,11 +109,12 @@ const filter = (c: Call, col: string, op = "eq") =>
 
 const DURING = "2026-11-25T12:00:00Z";
 const AFTER = "2026-12-05T12:00:00Z";
-const row = (over: Partial<Record<string, string>> = {}) => ({
+const row = (over: Partial<Record<string, string | number | null>> = {}) => ({
   id: "11111111-1111-1111-1111-111111111111",
   referrer_org_id: "org-referrer",
   referred_org_id: "org-friend",
   created_at: DURING,
+  reward_months: 1 as number | null,
   ...over,
 });
 const liveBill = {
@@ -166,12 +168,31 @@ async function* list<T>(items: T[]) {
   for (const i of items) yield i;
 }
 
+/** The referrer's subscription items: [unit_amount cents, quantity]. Solo $49 by default. */
+type Items = [number, number][];
+
 function stripe(
-  opts: { existing?: { id: string; amount: number; metadata: object }[]; subMeta?: object } = {},
+  opts: {
+    existing?: { id: string; amount: number; metadata: object }[];
+    subMeta?: object;
+    items?: Items;
+  } = {},
 ) {
-  const createBalanceTransaction = vi.fn(async () => ({ id: "cbtxn_new", amount: -1900 }));
+  const createBalanceTransaction = vi.fn(async (_c: string, p: { amount: number }) => ({
+    id: "cbtxn_new",
+    amount: p.amount,
+  }));
   const listBalanceTransactions = vi.fn(() => list(opts.existing ?? []));
-  const retrieve = vi.fn(async () => ({ id: "sub_1", metadata: opts.subMeta ?? {} }));
+  const retrieve = vi.fn(async () => ({
+    id: "sub_1",
+    metadata: opts.subMeta ?? {},
+    items: {
+      data: (opts.items ?? [[4900, 1]]).map(([unit_amount, quantity]) => ({
+        quantity,
+        price: { unit_amount },
+      })),
+    },
+  }));
   const client = {
     customers: { createBalanceTransaction, listBalanceTransactions },
     subscriptions: { retrieve },
@@ -250,11 +271,67 @@ describe("crediting the referrer's month", () => {
   });
 
   it("owes nothing when no referral program ran when the friend joined", async () => {
-    const d = db({ due: [row({ created_at: AFTER })], bill: liveBill });
+    const d = db({ due: [row({ created_at: AFTER, reward_months: null })], bill: liveBill });
     const s = stripe();
     await grantReferralRewards({ db: d.client, stripe: s.client, now: new Date(AFTER) });
     expect(d.status()).toBe("no_reward");
     expect(s.createBalanceTransaction).not.toHaveBeenCalled();
+  });
+
+  it("owes nothing when the terms stored at sign-up give 0 months", async () => {
+    const d = db({ due: [row({ reward_months: 0 })], bill: liveBill });
+    const s = stripe();
+    await grantReferralRewards({ db: d.client, stripe: s.client, now: new Date(AFTER) });
+    expect(d.status()).toBe("no_reward");
+    expect(s.createBalanceTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe("the reward is the referral's own (review of release #78)", () => {
+  it("switching the program off later doesn't take back an earned month", async () => {
+    // Joined after the code list's end date: only the stored months count.
+    const d = db({ due: [row({ created_at: AFTER, reward_months: 2 })], bill: liveBill });
+    const s = stripe();
+    const r = await grantReferralRewards({ db: d.client, stripe: s.client, now: new Date(AFTER) });
+    expect(r.credited).toBe(1);
+    expect(s.createBalanceTransaction.mock.calls[0]?.[1]).toMatchObject({ amount: -9800 });
+  });
+
+  it("credits what the referrer actually pays: every item, a custom price included", async () => {
+    const d = db({ due: [row()], bill: { ...liveBill, plan: "business" } });
+    // A Business custom price ($250) and two extra accounts ($10 each).
+    const s = stripe({
+      items: [
+        [25000, 1],
+        [1000, 2],
+      ],
+    });
+    await grantReferralRewards({ db: d.client, stripe: s.client, now: new Date(AFTER) });
+    expect(s.createBalanceTransaction.mock.calls[0]?.[1]).toMatchObject({ amount: -27000 });
+    const settled = d.calls.find((c) => c.patch?.status === "rewarded");
+    expect(settled?.patch).toMatchObject({ reward_cents: 27000 });
+  });
+
+  it("a yearly subscription's month is a twelfth of it", async () => {
+    const d = db({ due: [row()], bill: { ...liveBill, billing_interval: "year" } });
+    const s = stripe({ items: [[46800, 1]] });
+    await grantReferralRewards({ db: d.client, stripe: s.client, now: new Date(AFTER) });
+    expect(s.createBalanceTransaction.mock.calls[0]?.[1]).toMatchObject({ amount: -3900 });
+  });
+
+  it("a banked month whose credit fails stays banked", async () => {
+    const d = db({ banked: [row()], bill: liveBill, status: "banked", failSettle: true });
+    const s = stripe();
+    const r = await grantReferralRewards({ db: d.client, stripe: s.client, now: new Date(AFTER) });
+    expect(r.failed).toBe(1);
+    expect(updates(d.calls)).toEqual(["crediting", "rewarded", "banked"]);
+    expect(d.status()).toBe("banked");
+  });
+
+  it("hands a row back where it was claimed from", () => {
+    expect(handBackStatus("banked")).toBe("banked");
+    expect(handBackStatus("reward_due")).toBe("reward_due");
+    expect(handBackStatus("crediting")).toBe("reward_due");
   });
 });
 
@@ -358,6 +435,11 @@ describe("only paying Owners can refer", () => {
     const d = gateDb({ bill: liveBill });
     expect(await claimReferral(d.client, "org-friend", "abcd2345", NOW)).toBe("claimed");
     expect(wrote(d.calls, "referrals")).toBe(true);
+    // The program's terms at sign-up are stored with it (review of release #78).
+    expect(d.calls.find((c) => c.table === "referrals" && c.op === "upsert")?.row).toMatchObject({
+      reward_months: 1,
+      trial_days: 30,
+    });
     expect((await referrerForCode(d.client, "abcd2345")).known).toBe(true);
   });
 

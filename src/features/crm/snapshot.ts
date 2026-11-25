@@ -60,6 +60,7 @@ export async function loadSnapshot(
     planId: live ? bill!.plan : ENDING.has(row.event) && bill?.plan ? bill.plan : "free",
     status: bill?.status ?? null,
     trialEndsAt: bill?.trial_ends_at ?? null,
+    timeZone: bill?.time_zone ?? null,
     periodEnd: bill?.current_period_end ?? null,
     cancelAtPeriodEnd: !!bill?.cancel_at_period_end,
     accountsConnected: count ?? 0,

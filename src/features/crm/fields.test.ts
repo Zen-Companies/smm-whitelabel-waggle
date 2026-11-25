@@ -130,3 +130,15 @@ describe("trial end (Walter's own reminder, 25 Nov)", () => {
     expect(f.waggle_trial_ends_at).toBe("");
   });
 });
+
+describe("trial end in the Owner's time zone (QA, 25 Nov)", () => {
+  it("uses the zone stored at checkout, US Eastern when unknown", () => {
+    const end = "2026-12-24T18:35:00Z";
+    expect(
+      crmFields({ ...base, trialEndsAt: end, timeZone: "Asia/Manila" }).waggle_trial_ends,
+    ).toBe("December 25");
+    expect(crmFields({ ...base, trialEndsAt: end, timeZone: null }).waggle_trial_ends).toBe(
+      "December 24",
+    );
+  });
+});

@@ -142,6 +142,22 @@ export function customPriceLine(plan: Plan): string {
 export const TRIAL = { days: 30, cardRequired: true } as const;
 
 /**
+ * The trial before the free month (7 days). A stored trial whose length is unknown (a bill from
+ * before org_billing.trial_days, 23 Nov) is read as this one, never as the free month.
+ */
+export const LEGACY_TRIAL_DAYS = 7;
+
+/** Pure: how long a stored trial is (its stored length, else the old 7-day trial). */
+export function storedTrialDays(bill: { trial_days: number | null } | null | undefined): number {
+  return bill?.trial_days && bill.trial_days > 0 ? bill.trial_days : LEGACY_TRIAL_DAYS;
+}
+
+/** Pure: a trial of 28 days or more is "the free month"; a shorter one is "the free trial". */
+export function trialIsMonth(days: number): boolean {
+  return days >= 28;
+}
+
+/**
  * Pure: the trial days a plan checkout adds, or null. Only the organization's first paid plan
  * gets them: never when it already had a subscription or a trial.
  */

@@ -35,20 +35,53 @@ export function bankedRewardDays(now: Date, list: readonly Promotion[] = PROMOTI
   return Math.max(0, p.rewardMonths) * p.trialDays;
 }
 
+/** A referral's terms as stored on its row when the friend signed up (null: from before). */
+export interface StoredReferralTerms {
+  reward_months: number | null;
+  trial_days: number | null;
+}
+
+/**
+ * Pure: the trial days banked rewards are worth: each row's own terms (its reward months times
+ * the program's month, as they were when the friend signed up), else what bankedRewardDays says.
+ */
+export function bankedDaysOf(
+  rows: readonly StoredReferralTerms[],
+  now: Date,
+  list: readonly Promotion[] = PROMOTIONS,
+): number {
+  return rows.reduce(
+    (sum, r) =>
+      sum +
+      (r.reward_months !== null && r.trial_days !== null
+        ? Math.max(0, r.reward_months) * Math.max(0, r.trial_days)
+        : bankedRewardDays(now, list)),
+    0,
+  );
+}
+
 /**
  * Pure: the trial days a first plan checkout gets, and why. The free month (a seasonal promotion
  * or a friend's link, never both) replaces the usual first month (`baseDays`) with the
  * promotion's trial days, never shortening it; each banked referral reward adds its days.
  * Capped at Stripe's 730 days.
- * A friend keeps the month when the referral program ran when they signed up (`referredAt`),
- * even if it has ended since.
+ * A friend keeps the month on the terms stored when they signed up (`referralTrialDays`), even
+ * if the program has ended or was switched off since.
  */
 export function firstCheckoutTrial(input: {
   now: Date;
   referred: boolean;
   /** When the friend signed up through the link (the referral row's created_at). */
   referredAt?: Date | null;
+  /**
+   * The friend's free days stored on the referral row at sign-up (0: no program ran then). Wins
+   * over the promotions list, so switching the program off later never takes the month away.
+   * null or left out: a row from before they were stored (the program that ran at referredAt).
+   */
+  referralTrialDays?: number | null;
   bankedMonths: number;
+  /** The banked rewards' days from their rows (bankedDaysOf); else bankedMonths × the program's. */
+  bankedDays?: number;
   baseDays?: number;
   promotions?: readonly Promotion[];
 }): { days: number; reasons: FreeMonthReason[] } {
@@ -61,12 +94,18 @@ export function firstCheckoutTrial(input: {
     reasons.push("black_friday");
     start = Math.max(base, season.trialDays);
   } else if (input.referred) {
-    const referral = runningReferral(input.referredAt ?? input.now, list);
-    if (referral) {
+    const days =
+      input.referralTrialDays ??
+      runningReferral(input.referredAt ?? input.now, list)?.trialDays ??
+      0;
+    if (days > 0) {
       reasons.push("referral");
-      start = Math.max(base, referral.trialDays);
+      start = Math.max(base, days);
     }
   }
-  const banked = Math.max(0, Math.floor(input.bankedMonths)) * bankedRewardDays(input.now, list);
+  const banked =
+    input.bankedDays !== undefined
+      ? Math.max(0, input.bankedDays)
+      : Math.max(0, Math.floor(input.bankedMonths)) * bankedRewardDays(input.now, list);
   return { days: Math.min(MAX_TRIAL_DAYS, start + banked), reasons };
 }

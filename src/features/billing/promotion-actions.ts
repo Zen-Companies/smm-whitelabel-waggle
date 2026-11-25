@@ -1,5 +1,6 @@
 "use server";
 
+import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -9,6 +10,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import {
   changedFields,
+  HISTORY_FAILED,
   newPromotionFields,
   parsePromotionForm,
   PROMOTION_ID,
@@ -34,13 +36,17 @@ function refresh(id: string) {
   revalidatePath("/", "layout");
 }
 
+/**
+ * Keeps one change in promotion_changes. false when that fails: reported to Sentry (ids only)
+ * and the action says so in place, since the change itself is already saved.
+ */
 async function record(
   id: string,
   by: string,
   action: "created" | "updated" | "enabled" | "disabled",
   before: Record<string, unknown>,
   after: Record<string, unknown>,
-) {
+): Promise<boolean> {
   const { error } = await getServiceClient()
     .from("promotion_changes")
     .insert({
@@ -50,7 +56,11 @@ async function record(
       before: before as Json,
       after: after as Json,
     });
-  if (error) console.error("billing: recording a promotion change failed", { id, action });
+  if (!error) return true;
+  Sentry.captureException(new Error("billing: recording a promotion change failed"), {
+    extra: { promotionId: id, action, changedBy: by, code: error.code ?? null },
+  });
+  return false;
 }
 
 const createSchema = z.object({
@@ -85,8 +95,9 @@ export async function createPromotion(
     .from("promotions")
     .insert({ ...fields, updated_by: user.id, updated_at: new Date().toISOString() });
   if (error) return { error: "Couldn't create it. Please try again." };
-  await record(id, user.id, "created", {}, fields);
+  const kept = await record(id, user.id, "created", {}, fields);
   refresh(id);
+  if (!kept) return { error: HISTORY_FAILED };
   redirect(`${PATH}/${id}`);
 }
 
@@ -116,9 +127,9 @@ export async function updatePromotion(
     .update({ ...parsed.value, updated_by: user.id, updated_at: new Date().toISOString() })
     .eq("id", id.data);
   if (error) return { error: "Couldn't save. Please try again." };
-  await record(id.data, user.id, "updated", before, changed);
+  const kept = await record(id.data, user.id, "updated", before, changed);
   refresh(id.data);
-  return { saved: true };
+  return kept ? { saved: true } : { error: HISTORY_FAILED };
 }
 
 /** The on/off switch on the list and the edit page. */
@@ -144,7 +155,7 @@ export async function setPromotionEnabled(
     .update({ enabled, updated_by: user.id, updated_at: new Date().toISOString() })
     .eq("id", id.data);
   if (error) return { error: "Couldn't switch it. Please try again." };
-  await record(
+  const kept = await record(
     id.data,
     user.id,
     enabled ? "enabled" : "disabled",
@@ -152,5 +163,5 @@ export async function setPromotionEnabled(
     { enabled },
   );
   refresh(id.data);
-  return { saved: true };
+  return kept ? { saved: true } : { error: HISTORY_FAILED };
 }

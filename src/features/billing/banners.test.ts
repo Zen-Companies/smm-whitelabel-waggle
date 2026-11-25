@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { billingBanner, nudgeDue, popupFor, promoBarHref, rememberClosed } from "./banners";
+import {
+  billingBanner,
+  nudgeDue,
+  planPageReturn,
+  popupFor,
+  promoBarHref,
+  rememberClosed,
+} from "./banners";
 
 const DAY = 86_400_000;
 
@@ -55,6 +62,24 @@ describe("which pop-up opens", () => {
       kind: "upgrade",
       reason: "nudge",
     });
+  });
+});
+
+describe("Your plan's own checkout return (QA, 25 Nov)", () => {
+  it("comes back with the success pop-up of the chosen plan, which opens on Your plan", () => {
+    expect(planPageReturn("solo")).toBe("/plan?upgrade=nudge&");
+    expect(planPageReturn("team")).toBe("/plan?upgrade=team&");
+    const back = new URLSearchParams(planPageReturn("solo").split("?")[1] + "checkout=done");
+    expect(
+      popupFor({
+        path: "/plan",
+        upgrade: back.get("upgrade"),
+        welcome: null,
+        welcomeSeen: true,
+        outDue: false,
+        onPlanToo: true,
+      }),
+    ).toEqual({ kind: "upgrade", reason: "nudge" });
   });
 });
 
