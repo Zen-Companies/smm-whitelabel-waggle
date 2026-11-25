@@ -21,7 +21,7 @@ import {
   toMediaItems,
   type PostPlatformResult,
   type WhatsAppTemplate,
-  type AccountHealth,
+  type AccountsHealthReport,
   type BusinessProfile,
   type AccountPicture,
   type CreatePostInput,
@@ -477,9 +477,11 @@ const usageSchema = z.object({
     .optional(),
 });
 const healthSchema = z.object({
+  summary: z.object({ total: z.number().int().nonnegative().optional() }).nullish(),
   accounts: z.array(
     z.object({
       accountId: z.string().min(1),
+      profileId: z.string().nullish(),
       platform: z.string(),
       username: z.string().nullish(),
       status: z.enum(["healthy", "warning", "error"]),
@@ -967,7 +969,9 @@ export class ZernioSocialProvider implements SocialProvider {
           path: { accountId: t.accountId },
           // A video post has its own privacy options on TikTok.
           query: {
-            mediaType: postMediaOf(input).some((m) => mediaKindOf(m) === "video") ? "video" : "photo",
+            mediaType: postMediaOf(input).some((m) => mediaKindOf(m) === "video")
+              ? "video"
+              : "photo",
           },
         });
         const privacyLevel = pickTikTokPrivacy(
@@ -4486,23 +4490,48 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
-  async getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]> {
+  async getAccountsHealth(input: { profileId: string }): Promise<AccountsHealthReport> {
     return call("getAccountsHealth", async (withFetch) => {
       const { data } = await this.zernio.accounts.getAllAccountsHealth(
         withFetch({
           query: { profileId: input.profileId },
         }),
       );
-      return parse(healthSchema, data, "getAccountsHealth").accounts.map((a) => ({
-        accountId: a.accountId,
-        platform: a.platform,
-        username: a.username ?? null,
-        status: a.status,
-        needsReconnect: a.needsReconnect ?? false,
-        canPost: a.canPost ?? false,
-        issues: a.issues ?? [],
-      }));
+      const parsed = parse(healthSchema, data, "getAccountsHealth");
+      // The endpoint has no paging (docs: /accounts/get-all-accounts-health). Complete only when
+      // the summary's total matches and nothing from another profile came back.
+      const total = parsed.summary?.total;
+      const complete =
+        typeof total === "number" &&
+        total === parsed.accounts.length &&
+        parsed.accounts.every((a) => a.profileId == null || a.profileId === input.profileId);
+      return {
+        complete,
+        accounts: parsed.accounts.map((a) => ({
+          accountId: a.accountId,
+          platform: a.platform,
+          username: a.username ?? null,
+          status: a.status,
+          needsReconnect: a.needsReconnect ?? false,
+          canPost: a.canPost ?? false,
+          issues: a.issues ?? [],
+        })),
+      };
     });
+  }
+
+  async accountExists(input: { accountId: string; signal?: AbortSignal }): Promise<boolean> {
+    try {
+      await call("accountExists", async (withFetch) => {
+        await this.zernio.accounts.getAccountHealth(
+          withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+        );
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof SocialProviderError && error.details.status === 404) return false;
+      throw error;
+    }
   }
 
   async listAccountPictures(input: { profileId: string }): Promise<AccountPicture[]> {

@@ -11,6 +11,7 @@ import { ConnectNoteBox } from "./connect-note-box";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { accountLines } from "./account-lines";
 import { connectAccount } from "./actions";
+import { DisconnectAccount } from "./disconnect-account";
 import { BlueskySetup } from "./bluesky-setup";
 import { TelegramSetup } from "./telegram-setup";
 import { WhatsAppSetup } from "./whatsapp-setup";
@@ -19,6 +20,12 @@ import { connectBanner } from "./connect-banner";
 import { safeReturnPath } from "./connect-return";
 import { ConnectTiles } from "./connect-tiles";
 import { MoreConnections } from "./more-connections";
+
+/** " @name", or " name@x.com" for an address; empty when there's no name. */
+function handleOf(username: string | null): string {
+  if (!username) return "";
+  return username.includes("@") ? ` ${username}` : ` @${username}`;
+}
 
 /** Connected accounts (Settings). Status is inline text + icon, never a colored chip. */
 export async function AccountsCard({
@@ -30,10 +37,13 @@ export async function AccountsCard({
   const params = await searchParams;
   const banner = connectBanner(params);
   const supabase = await createServerSupabase();
+  // 25 Nov: an account the owner disconnected (released) isn't listed; its platform's Connect
+  // tile comes back instead.
   const { data: accounts } = await supabase
     .from("social_accounts")
     .select("id, platform, username, status, pinterest_board_name")
     .eq("tenant_id", tenant.id)
+    .is("released_at", null)
     .order("created_at");
   const down = (accounts ?? []).find((a) => a.status !== "active");
   const mayConnect = can(tenant.role, "accounts.manage");
@@ -120,11 +130,7 @@ export async function AccountsCard({
                   <span className="flex min-w-0 flex-col">
                     <span className="font-medium">
                       {name(account.platform)}
-                      {account.username
-                        ? account.username.includes("@")
-                          ? ` ${account.username}`
-                          : ` @${account.username}`
-                        : ""}
+                      {handleOf(account.username)}
                     </span>
                     {(() => {
                       // T66: what Waggle does here, and a gray line only when it differs.
@@ -159,13 +165,21 @@ export async function AccountsCard({
                     )}
                   </span>
                 </span>
-                {account.status !== "active" && mayConnect && (
-                  <form action={connectAccount}>
-                    <input type="hidden" name="platform" value={account.platform} />
-                    <Button type="submit" variant="primary">
-                      Reconnect
-                    </Button>
-                  </form>
+                {mayConnect && (
+                  <span className="flex flex-wrap items-center gap-2">
+                    {account.status !== "active" && (
+                      <form action={connectAccount}>
+                        <input type="hidden" name="platform" value={account.platform} />
+                        <Button type="submit" variant="primary">
+                          Reconnect
+                        </Button>
+                      </form>
+                    )}
+                    <DisconnectAccount
+                      id={account.id}
+                      label={`${name(account.platform)}${handleOf(account.username)}`}
+                    />
+                  </span>
                 )}
               </li>
             ))}

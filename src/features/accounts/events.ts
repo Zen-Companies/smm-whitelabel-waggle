@@ -36,6 +36,13 @@ export async function handleAccountConnected(
   // Another tenant's account id: never touch it (the caller records the event as an error).
   if (outcome === "foreign") return { accountId: row.account_id, outcome, resumedItems: 0 };
 
+  // 25 Nov: an account the owner disconnected (removed from Zernio) is back in Zernio.
+  await db
+    .from("social_accounts")
+    .update({ released_at: null })
+    .eq("id", row.account_id)
+    .not("released_at", "is", null);
+
   // Fix 1 (24 Nov): the brand's open connect attempt for this platform is now connected.
   await traceQuietly(() =>
     markConnectConnected(db, {
@@ -118,17 +125,34 @@ export async function handleAccountDisconnected(
     zernioAccountId: string;
     disconnectionType?: string;
     reason?: string;
+    /** Who did it: "system" (webhook, health check) or the owner's user id. */
+    actor?: string;
+    /**
+     * 25 Nov: false when the owner disconnected it themselves in Settings. No "your account
+     * disconnected" email, and the account counts as removed (released_at), so no reconnect
+     * banner either.
+     */
+    byOwner?: boolean;
   },
 ): Promise<{ accountId: string | null; pausedItems: number }> {
   const { data: account, error } = await db
     .from("social_accounts")
-    .update({ status: "disconnected" })
+    .update(
+      input.byOwner
+        ? { status: "disconnected", released_at: new Date().toISOString() }
+        : { status: "disconnected" },
+    )
     .eq("tenant_id", input.tenantId)
     .eq("zernio_account_id", input.zernioAccountId)
     .select("id")
     .maybeSingle();
   if (error) throw new Error(`disconnecting account failed: ${error.message}`);
   if (!account) return { accountId: null, pausedItems: 0 };
+
+  // The disconnect email is queued by a trigger in the same update (alerts migration). The owner
+  // who just did it isn't told: the alert is closed before the alerts job claims it (attempts 0),
+  // and its bell entry is marked read.
+  if (input.byOwner) await silenceDisconnectAlert(db, input.tenantId, account.id);
 
   const paused = await pauseAccountItems(db, {
     tenantId: input.tenantId,
@@ -138,7 +162,7 @@ export async function handleAccountDisconnected(
   await writeAudit(db, {
     tenantId: input.tenantId,
     action: "account_disconnected",
-    actor: "system",
+    actor: input.actor ?? "system",
     details: {
       accountId: account.id,
       zernioAccountId: input.zernioAccountId,
@@ -149,4 +173,28 @@ export async function handleAccountDisconnected(
   });
   // The owner email with a reconnect link is T13 (PRD F2).
   return { accountId: account.id, pausedItems: paused.length };
+}
+
+async function silenceDisconnectAlert(
+  db: ServiceClient,
+  tenantId: string,
+  socialAccountId: string,
+): Promise<void> {
+  const { data: alerts, error } = await db
+    .from("alerts")
+    .update({ status: "logged", last_error: "owner_disconnected" })
+    .eq("tenant_id", tenantId)
+    .eq("social_account_id", socialAccountId)
+    .eq("kind", "disconnect")
+    .eq("status", "pending")
+    .eq("attempts", 0)
+    .select("id");
+  if (error) throw new Error(`silencing the disconnect alert failed: ${error.message}`);
+  const keys = (alerts ?? []).map((a) => `alert:${a.id}`);
+  if (!keys.length) return;
+  await db
+    .from("notifications")
+    .update({ needs_action: false, read_at: new Date().toISOString() })
+    .eq("tenant_id", tenantId)
+    .in("dedupe_key", keys);
 }

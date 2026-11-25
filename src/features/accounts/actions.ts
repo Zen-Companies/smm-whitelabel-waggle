@@ -1,11 +1,12 @@
 "use server";
 
 import * as Sentry from "@sentry/nextjs";
+import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { orgOnFree, roomForAnotherAccount } from "@/features/billing";
-import { ensureZernioProfile, getTenantFor } from "@/features/tenants";
+import { ensureZernioProfile, getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
 import { getSocialProvider } from "@/lib/social";
@@ -21,6 +22,7 @@ import {
 } from "./connect-return";
 import { recordConnectStart, traceQuietly } from "./connect-trace-store";
 import { isFirstAccount } from "./first-account";
+import { disconnectSocialAccount } from "./disconnect";
 import { freeFullHref } from "./free-full";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -227,4 +229,32 @@ export async function checkTelegram(code: string): Promise<TelegramCheck | { err
     Sentry.captureException(error, { extra: { tenantId: tenant.id, platform: "telegram" } });
     return { status: "pending" };
   }
+}
+
+export type DisconnectState = { error?: string; done?: true };
+
+const disconnectSchema = z.object({ id: z.string().uuid() });
+
+/** Settings → Accounts (25 Nov): the owner disconnects one of the brand's social accounts. */
+export async function disconnectAccountAction(
+  _prev: DisconnectState,
+  formData: FormData,
+): Promise<DisconnectState> {
+  const tenant = await getTenantFor("accounts.manage");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const parsed = disconnectSchema.safeParse({ id: formData.get("id") });
+  if (!parsed.success) return { error: "Something went wrong. Reload the page." };
+  const result = await disconnectSocialAccount(
+    { db: getServiceClient(), social: getSocialProvider },
+    { tenantId: tenant.id, accountId: parsed.data.id, userId: tenant.userId },
+  );
+  if (!result.ok) {
+    if (result.error === "not_found") return { error: "Something went wrong. Reload the page." };
+    Sentry.captureException(result.cause, {
+      extra: { tenantId: tenant.id, accountId: parsed.data.id, step: "disconnectAccount" },
+    });
+    return { error: "Couldn't disconnect it right now. Try again." };
+  }
+  revalidatePath("/", "layout");
+  return { done: true };
 }
