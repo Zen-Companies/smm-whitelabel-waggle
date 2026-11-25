@@ -2,7 +2,7 @@
 
 import { Camera, Check, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useRef, useState } from "react";
+import { startTransition, useActionState, useRef, useState } from "react";
 import { cn } from "cn";
 import { EmptyCell } from "@/components/app/empty-spot";
 import { StateLabel } from "@/components/app/state-mark";
@@ -14,6 +14,7 @@ import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MA
 import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./post-rules";
 import { BoardPicker } from "./board-picker";
 import { PostOptionsFields } from "./post-options-fields";
+import { ownText, textFor, type PostOptions } from "./post-options";
 import { VideoField, type VideoState } from "./video-field";
 import { OneDrivePicker } from "./onedrive-picker";
 import { PostPreview } from "./post-preview";
@@ -117,6 +118,8 @@ function ComposeFields({
   const [time, setTime] = useState(initialTime ?? "09:00");
   const [text, setText] = useState("");
   const length = text.length;
+  // Per-platform choices (T75), here so each platform's own text is checked against its limit.
+  const [options, setOptions] = useState<PostOptions>({});
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoSize, setPhotoSize] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -175,14 +178,19 @@ function ComposeFields({
   ];
   const checks = pickedPlatforms.map((p) =>
     checkPlatform(p, {
-      textLength: length,
+      // The text that really goes there: its own when the owner wrote one, else the caption.
+      textLength: textFor(p, options, text).length,
       images: photo && !hasVideo ? 1 : 0,
       videos: hasVideo ? 1 : 0,
       videoSeconds: hasVideo ? video.seconds : null,
     }),
   );
   const serverProblems = state.problems ?? [];
-  const limit = textLimitFor(pickedPlatforms, POST_TEXT_MAX);
+  // Zernio's notes: before saving they sit in "Before it goes out"; once saved, by the outcome.
+  const serverWarnings = state.savedAt ? [] : (state.warnings ?? []);
+  // The caption's counter: the shortest limit among platforms that use the caption.
+  const followers = pickedPlatforms.filter((p) => ownText(options[p], text) === null);
+  const limit = textLimitFor(followers, POST_TEXT_MAX);
   const imageMb =
     Math.round(imageMaxBytesFor(pickedPlatforms, POST_IMAGE_MAX_BYTES) / 100_000) / 10;
   // Day and time are the owner's local time; send them as an absolute ISO time.
@@ -195,7 +203,8 @@ function ComposeFields({
       </p>
     ) : null;
 
-  const issues = checks.filter((c) => c.level !== "ok").length + serverProblems.length;
+  const issues =
+    checks.filter((c) => c.level !== "ok").length + serverProblems.length + serverWarnings.length;
   const beforeSummary = issues
     ? issues === 1
       ? "1 thing to check"
@@ -204,7 +213,17 @@ function ComposeFields({
       ? "Pinterest board"
       : "All good";
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <form
+      action={action}
+      // Submitted by hand so React doesn't reset the fields: a refused post keeps everything the
+      // owner typed and attached (a saved one remounts the form through savedAt instead).
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => action(data));
+      }}
+      className="flex flex-col gap-4"
+    >
       <div className="flex flex-col gap-2">
         <label htmlFor="post-content" className="text-sm font-medium">
           What do you want to share?
@@ -215,15 +234,14 @@ function ComposeFields({
           rows={4}
           maxLength={POST_TEXT_MAX}
           required
+          value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="New on the menu: ube cheese pandesal, every morning from 7."
           className="field min-h-28 py-3"
         />
         <p className={length > limit ? "text-danger text-sm" : "meta"}>
           {length} / {limit.toLocaleString("en-US")}
-          {limit < POST_TEXT_MAX && pickedPlatforms.length > 1
-            ? " (the shortest of your picks)"
-            : ""}
+          {limit < POST_TEXT_MAX && followers.length > 1 ? " (the shortest of your picks)" : ""}
         </p>
         {fieldError("content")}
       </div>
@@ -488,6 +506,8 @@ function ComposeFields({
           sharedText={text}
           hasMedia={!!photo || hasVideo}
           hasVideo={hasVideo}
+          options={options}
+          onOptionsChange={setOptions}
         />
       </Fold>
 
@@ -503,6 +523,7 @@ function ComposeFields({
 
       {(checks.some((c) => c.level !== "ok") ||
         serverProblems.length > 0 ||
+        serverWarnings.length > 0 ||
         pinterest.length > 0) && (
         <Fold
           title="Before it goes out"
@@ -550,6 +571,15 @@ function ComposeFields({
                   <PlatformMark platform={p.platform} size={22} />
                   <span className="text-danger">
                     <b className="font-semibold">{platformLabel(p.platform)}</b>: {p.message}
+                  </span>
+                </li>
+              ))}
+              {serverWarnings.map((w, i) => (
+                <li key={`warn-${w.platform}-${i}`} className="flex items-start gap-2.5">
+                  <PlatformMark platform={w.platform} size={22} />
+                  <span className="text-ink-2">
+                    <b className="text-ink font-semibold">{platformLabel(w.platform)}</b>:{" "}
+                    {w.message}
                   </span>
                 </li>
               ))}
@@ -696,6 +726,15 @@ function ComposeFields({
             {OUTCOME[state.outcome]}
           </p>
         )}
+        {state.savedAt && state.warnings?.length ? (
+          <ul className="text-ink-2 flex w-full flex-col gap-1 text-sm">
+            {state.warnings.map((w, i) => (
+              <li key={`saved-warn-${w.platform}-${i}`}>
+                <b className="text-ink font-semibold">{platformLabel(w.platform)}</b>: {w.message}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {state.error && !state.field && (
           <p role="alert" className="text-danger text-sm">
             {state.error}

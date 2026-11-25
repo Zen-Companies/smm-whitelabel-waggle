@@ -16,6 +16,7 @@ import type {
   ProviderPostStatus,
   MediaCheck,
   PostValidation,
+  PostPlatformResult,
   ProviderUsage,
   SocialPlatform,
   SocialProvider,
@@ -54,7 +55,12 @@ import type {
   CommentAutomationLogEntry,
 } from "./types";
 import { platformLabel, platformOf } from "./platforms";
-import { DM_ACCESS_MISSING, EMPTY_ACCOUNT_CATEGORY, SocialProviderError } from "./types";
+import {
+  DM_ACCESS_MISSING,
+  EMPTY_ACCOUNT_CATEGORY,
+  postMediaOf,
+  SocialProviderError,
+} from "./types";
 import type { WhatsAppTemplate } from "./whatsapp-templates";
 import {
   MOCK_BEST_TIMES,
@@ -161,15 +167,16 @@ export class MockSocialProvider implements SocialProvider {
   async validatePost(
     input: Omit<CreatePostInput, "publishAt" | "idempotencyKey">,
   ): Promise<PostValidation> {
-    const media = input.mediaUrls?.length ?? 0;
+    const media = postMediaOf(input).length;
     const errors: PostValidation["errors"] = [];
     for (const t of input.targets) {
       const rules = platformOf(t.platform)?.post;
       const name = platformLabel(t.platform);
+      const text = input.extras?.[t.platform]?.customContent ?? input.content;
       if (!rules) errors.push({ platform: t.platform, message: `${name} does not support posts.` });
       else if (rules.mediaRequired && media === 0)
         errors.push({ platform: t.platform, message: `${name} requires media.` });
-      else if (input.content.length > rules.textMax)
+      else if (text.length > rules.textMax)
         errors.push({ platform: t.platform, message: `${name} text is too long.` });
     }
     return { valid: errors.length === 0, errors, warnings: [] };
@@ -1661,6 +1668,29 @@ export class MockSocialProvider implements SocialProvider {
       CALL_CLICKS: Math.round(days / 2),
       BUSINESS_DIRECTION_REQUESTS: days,
       WEBSITE_CLICKS: Math.round(days * 0.7),
+    };
+  }
+
+  /** Retries record their post ids; the post goes back to publishing (mock-settle finishes it). */
+  readonly retried: string[] = [];
+
+  async retryPost(input: {
+    postId: string;
+    idempotencyKey: string;
+  }): Promise<{ status: ProviderPostStatus; results: PostPlatformResult[] }> {
+    this.retried.push(input.postId);
+    const post = this.posts.get(input.postId);
+    if (post) post.status = "publishing";
+    return {
+      status: "publishing",
+      results: (post?.targets ?? []).map((t) => ({
+        platform: t.platform,
+        accountId: t.accountId,
+        status: "pending",
+        url: null,
+        error: null,
+        errorCategory: null,
+      })),
     };
   }
 

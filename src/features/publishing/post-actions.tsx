@@ -25,7 +25,16 @@ export function CancelPostButton({ postId }: { postId: string }) {
 }
 
 /** Retry now, or pick a new time (posts that failed during a pause must be rescheduled). */
-export function RetryPostForm({ postId, label }: { postId: string; label: string }) {
+export function RetryPostForm({
+  postId,
+  label,
+  canPickTime = true,
+}: {
+  postId: string;
+  label: string;
+  /** False once the post is live on some accounts: only the failed ones are tried, now. */
+  canPickTime?: boolean;
+}) {
   const [state, action, pending] = useActionState<PostActionState, FormData>(retryPost, {});
   const [later, setLater] = useState(false);
   const [local, setLocal] = useState("");
@@ -55,7 +64,7 @@ export function RetryPostForm({ postId, label }: { postId: string; label: string
       <Button type="submit" variant="secondary" disabled={pending}>
         {pending ? "Saving…" : later ? "Reschedule" : label}
       </Button>
-      {!later && (
+      {!later && canPickTime && (
         <Button type="button" variant="quiet" onClick={() => setLater(true)}>
           Pick a time
         </Button>

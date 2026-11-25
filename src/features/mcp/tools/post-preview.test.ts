@@ -106,4 +106,15 @@ describe("options", () => {
     });
     expect(toPostOptions([{ platform: "facebook" }])).toEqual({});
   });
+  it("pass the AI label through (Instagram and YouTube only)", () => {
+    expect(
+      toPostOptions([
+        { platform: "instagram", ai_label: true },
+        { platform: "youtube", ai_label: true },
+      ]),
+    ).toEqual({ instagram: { aiLabel: true }, youtube: { aiLabel: true } });
+    expect(optionProblems([{ platform: "facebook", ai_label: true }], ["facebook"])[0]).toContain(
+      "ai_label is for Instagram and YouTube",
+    );
+  });
 });

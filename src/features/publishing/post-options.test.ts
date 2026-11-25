@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePostOptions, postOptionsRow, targetExtras } from "./post-options";
+import { ownText, parsePostOptions, postOptionsRow, targetExtras, textFor } from "./post-options";
 
 describe("parsePostOptions", () => {
   it("keeps known options per platform and drops junk", () => {
@@ -165,5 +165,25 @@ describe("postOptionsRow", () => {
       pinterest: { boardId: "b1" },
     });
     expect(postOptionsRow({}, undefined, undefined)).toEqual({});
+  });
+});
+
+describe("a platform's own text (Posts round 1, 25 Nov)", () => {
+  it("follows the caption until the owner really changes it", () => {
+    expect(ownText(undefined, "Caption")).toBeNull();
+    expect(ownText({ text: "Caption" }, "Caption")).toBeNull();
+    expect(ownText({ text: "  " }, "Caption")).toBeNull();
+    expect(ownText({ text: "Short" }, "Caption")).toBe("Short");
+  });
+
+  it("is what goes to that platform, and only a real change is sent", () => {
+    const options = { bluesky: { text: "Short" }, threads: { text: "New caption" } };
+    expect(textFor("bluesky", options, "New caption")).toBe("Short");
+    expect(textFor("threads", options, "New caption")).toBe("New caption");
+    expect(textFor("instagram", options, "New caption")).toBe("New caption");
+    expect(targetExtras("threads", options.threads, "New caption")).toEqual({});
+    expect(targetExtras("bluesky", options.bluesky, "New caption")).toEqual({
+      customContent: "Short",
+    });
   });
 });

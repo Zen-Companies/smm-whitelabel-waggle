@@ -4,6 +4,7 @@ import {
   listBoardsFor,
   parsePostOptions,
   POST_TEXT_MAX,
+  targetExtras,
   type PostOptions,
 } from "@/features/publishing";
 import { writeAudit } from "@/lib/audit";
@@ -58,7 +59,7 @@ const mediaItem = z.object({
 async function brandAccounts(ctx: ToolContext, tenantId: string) {
   const { data, error } = await ctx.db
     .from("social_accounts")
-    .select("id, platform, username, status")
+    .select("id, platform, username, status, zernio_account_id")
     .eq("tenant_id", tenantId);
   if (error) throw new Error(`mcp preview_post accounts failed: ${error.message}`);
   return data ?? [];
@@ -136,6 +137,12 @@ export const previewPost = defineTool({
             .max(POST_TEXT_MAX)
             .optional()
             .describe("A different caption for this platform only."),
+          ai_label: z
+            .boolean()
+            .optional()
+            .describe(
+              "Instagram and YouTube: label it as made with AI (or changed to look real). Only when the owner says so.",
+            ),
         }),
       )
       .max(10)
@@ -284,11 +291,20 @@ export const previewPost = defineTool({
     try {
       const v = await social.validatePost({
         content: input.content,
-        mediaUrls: allMedia.map((m) => m.url),
+        media: allMedia.map((m, i) => ({
+          url: m.url,
+          type: checks[i]?.type ?? null,
+          altText: m.alt_text ?? null,
+        })),
+        // Zernio's account ids (as the composer sends), not Waggle's.
         targets: accounts.map((a) => ({
           platform: a.platform as "instagram",
-          accountId: a.id,
+          accountId: a.zernio_account_id,
         })),
+        // Each platform's own caption and choices, as they'll be sent.
+        extras: Object.fromEntries(
+          platforms.map((p) => [p, targetExtras(p, postOptions[p], input.content)]),
+        ),
         signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
       });
       if (v.errors.length) {
@@ -436,7 +452,15 @@ export const createPostTool = defineTool({
       );
     }
 
-    const media = (claimed.media as { url: string }[]).map((m) => ({ url: m.url, seconds: null }));
+    // Each file's kind (from Zernio's media check) and the owner's alt text go out with it.
+    const media = (
+      claimed.media as { url: string; type?: string | null; alt_text?: string | null }[]
+    ).map((m) => ({
+      url: m.url,
+      seconds: null,
+      type: m.type === "image" || m.type === "video" ? (m.type as "image" | "video") : null,
+      altText: m.alt_text ?? null,
+    }));
     const r = await createPost(
       { db: ctx.db, social: ctx.social },
       {

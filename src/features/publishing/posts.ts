@@ -1,13 +1,13 @@
 import * as Sentry from "@sentry/nextjs";
 import { writeAudit } from "@/lib/audit";
-import { isSocialPlatform, isVideoUrl } from "@/lib/social/types";
+import { isSocialPlatform, mediaKindOf, type MediaKind } from "@/lib/social/types";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { checkPlatform, type RuleCheck } from "./post-rules";
 import { publishPost } from "./publish";
-import { postOptionsRow, type PostOptions } from "./post-options";
+import { postOptionsRow, targetExtras, textFor, type PostOptions } from "./post-options";
 import { statusAfterTakeDown, takeDownSplit } from "./take-down";
 
 // Post creation and cancelling without a form: the Server Actions (compose card) and the MCP
@@ -27,6 +27,8 @@ export type CreatePostResult =
       postId: string;
       outcome: "published" | "scheduled" | "waiting" | "failed";
       error?: string;
+      /** Zernio's notes on the post (it still went ahead), per platform. */
+      warnings: { platform: string; message: string }[];
     }
   | {
       ok: false;
@@ -42,6 +44,7 @@ export type CreatePostResult =
       error: "not_accepted";
       /** Per platform, why the post can't go there as it is (our rules, then Zernio's check). */
       problems: { platform: string; message: string }[];
+      warnings: { platform: string; message: string }[];
     };
 
 /** How long Zernio's check may take before the post is saved without it. */
@@ -60,8 +63,11 @@ export async function createPost(
     content: string;
     accountIds: string[];
     scheduledFor: Date | null;
-    /** Photos and videos already uploaded to Zernio (`seconds`: a video's length, when known). */
-    media?: { url: string; seconds?: number | null }[];
+    /**
+     * Photos and videos already uploaded to Zernio (`seconds`: a video's length, when known;
+     * `type`: what the file is, sent to Zernio so it never guesses; `altText`: for photos).
+     */
+    media?: { url: string; seconds?: number | null; type?: MediaKind | null; altText?: string | null }[];
     /** The owner confirmed TikTok's consent for this post. */
     tiktokConsent?: boolean;
     /** YouTube's title; without it Zernio uses the caption's first line. */
@@ -94,12 +100,21 @@ export async function createPost(
   }
   if (owned.some((a) => a.status !== "active")) return { ok: false, error: "account_disconnected" };
 
-  const media = (input.media ?? []).map((m) => ({ url: m.url, seconds: m.seconds ?? null }));
-  const videos = media.filter((m) => isVideoUrl(m.url));
+  const media = (input.media ?? []).map((m) => {
+    const type = mediaKindOf({ url: m.url, type: m.type ?? null });
+    return {
+      url: m.url,
+      seconds: m.seconds ?? null,
+      ...(type ? { type } : {}),
+      ...(m.altText?.trim() ? { altText: m.altText.trim() } : {}),
+    };
+  });
+  const videos = media.filter((m) => m.type === "video");
   const blocked = owned
     .map((a) =>
       checkPlatform(a.platform, {
-        textLength: input.content.length,
+        // Each platform's own text when the owner wrote one, else the caption.
+        textLength: textFor(a.platform, input.options ?? {}, input.content).length,
         images: media.length - videos.length,
         videos: videos.length,
         videoSeconds: videos[0]?.seconds ?? null,
@@ -111,6 +126,7 @@ export async function createPost(
       ok: false,
       error: "not_accepted",
       problems: blocked.map((c) => ({ platform: c.platform, message: c.message })),
+      warnings: [],
     };
   }
   if (owned.some((a) => a.platform === "tiktok") && !input.tiktokConsent) {
@@ -119,12 +135,23 @@ export async function createPost(
   const pinterestBoardId =
     owned.find((a) => a.platform === "pinterest" && a.pinterest_board_id)?.pinterest_board_id ??
     undefined;
-  // Zernio's dry run: the platforms' real rules, which may have changed since our table. If the
-  // check itself fails (timeout, pause), the post is saved anyway and publishing reports it.
+  // What goes in the row, and exactly what publishing will send per platform.
+  const optionsRow = postOptionsRow(
+    // Only the platforms this post goes to.
+    Object.fromEntries(
+      owned.map((a) => [a.platform, input.options?.[a.platform]]).filter(([, o]) => o),
+    ),
+    input.youtubeTitle,
+    pinterestBoardId,
+  );
+  // Zernio's dry run: the platforms' real rules, which may have changed since our table, with
+  // each platform's own text and choices (Story, Reel, title, board). If the check itself fails
+  // (timeout, pause), the post is saved anyway and publishing reports it.
+  let warnings: { platform: string; message: string }[] = [];
   try {
     const check = await deps.social().validatePost({
       content: input.content,
-      mediaUrls: media.map((m) => m.url),
+      media,
       youtubeTitle: input.youtubeTitle,
       pinterestBoardId,
       targets: owned.flatMap((a) =>
@@ -132,10 +159,14 @@ export async function createPost(
           ? [{ platform: a.platform, accountId: a.zernio_account_id }]
           : [],
       ),
+      extras: Object.fromEntries(
+        owned.map((a) => [a.platform, targetExtras(a.platform, optionsRow[a.platform], input.content)]),
+      ),
       signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
     });
+    warnings = check.warnings.filter((w) => w.message);
     if (!check.valid && check.errors.length) {
-      return { ok: false, error: "not_accepted", problems: check.errors };
+      return { ok: false, error: "not_accepted", problems: check.errors, warnings };
     }
   } catch (error) {
     if (!isPlatformPaused(error)) {
@@ -153,14 +184,7 @@ export async function createPost(
       queued: !!input.queued,
       status: "queued",
       tiktok_consent_at: input.tiktokConsent ? now.toISOString() : null,
-      platform_options: postOptionsRow(
-        // Only the platforms this post goes to.
-        Object.fromEntries(
-          owned.map((a) => [a.platform, input.options?.[a.platform]]).filter(([, o]) => o),
-        ),
-        input.youtubeTitle,
-        pinterestBoardId,
-      ),
+      platform_options: optionsRow,
     })
     .select("id")
     .single();
@@ -182,13 +206,16 @@ export async function createPost(
 
   const result = await publishPost({ db, social: deps.social }, post.id);
   if (result.outcome === "failed") {
-    return { ok: true, postId: post.id, outcome: "failed", error: result.error };
+    return { ok: true, postId: post.id, outcome: "failed", error: result.error, warnings };
   }
-  if (result.outcome === "retry_later") return { ok: true, postId: post.id, outcome: "waiting" };
+  if (result.outcome === "retry_later") {
+    return { ok: true, postId: post.id, outcome: "waiting", warnings };
+  }
   return {
     ok: true,
     postId: post.id,
     outcome: input.scheduledFor || input.queued ? "scheduled" : "published",
+    warnings,
   };
 }
 

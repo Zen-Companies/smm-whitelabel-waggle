@@ -1249,7 +1249,7 @@ describe("ZernioSocialProvider", () => {
     expect(req.headers.get("Idempotency-Key")).toBe("post-key");
     expect(req.body).toEqual({
       content: "Fresh pastries today",
-      mediaItems: [{ url: "https://media.test/a.jpg" }],
+      mediaItems: [{ type: "image", url: "https://media.test/a.jpg" }],
       platforms: [{ platform: "instagram", accountId: "acc_1" }],
       scheduledFor: "2026-11-01T09:00:00.000Z",
     });
@@ -1956,5 +1956,143 @@ describe("pickTikTokPrivacy", () => {
     expect(pickTikTokPrivacy(["SELF_ONLY", "PUBLIC_TO_EVERYONE"])).toBe("PUBLIC_TO_EVERYONE");
     expect(pickTikTokPrivacy([undefined, "FOLLOWER_OF_CREATOR"])).toBe("FOLLOWER_OF_CREATOR");
     expect(pickTikTokPrivacy([])).toBeNull();
+  });
+});
+
+describe("Posts round 1 (25 Nov): media types, the full pre-check, retry", () => {
+  it("createPost sends each file's type: a video without an extension is still a video", async () => {
+    respond = () => json({ post: { _id: "post_v", status: "publishing" } }, 201);
+    await provider.createPost({
+      content: "Behind the counter",
+      media: [
+        { url: "https://media.zernio.com/temp/abc123", type: "video" },
+        { url: "https://media.zernio.com/temp/2_clip.mov" },
+        { url: "https://media.zernio.com/temp/3_party.gif", type: "image", altText: " Balloons " },
+      ],
+      targets: [{ platform: "instagram", accountId: "acc_1" }],
+      publishAt: null,
+      idempotencyKey: "k-video",
+    });
+    expect((captured[0].body as { mediaItems: unknown[] }).mediaItems).toEqual([
+      { type: "video", url: "https://media.zernio.com/temp/abc123" },
+      { type: "video", url: "https://media.zernio.com/temp/2_clip.mov" },
+      // The extension wins (Zernio refuses a type that contradicts it); alt text goes along.
+      { type: "gif", url: "https://media.zernio.com/temp/3_party.gif", altText: "Balloons" },
+    ]);
+  });
+
+  it("validatePost sends the media types and each platform's own text and choices; keeps warnings", async () => {
+    respond = () =>
+      json({ valid: true, warnings: [{ platform: "instagram", warning: "Stories skip captions" }] });
+    const v = await provider.validatePost({
+      content: "Shared caption",
+      media: [{ url: "https://media.zernio.com/temp/v1", type: "video" }],
+      targets: [
+        { platform: "instagram", accountId: "acc_ig" },
+        { platform: "bluesky", accountId: "acc_bs" },
+      ],
+      extras: {
+        instagram: { platformSpecificData: { contentType: "story" } },
+        bluesky: { customContent: "Short one" },
+      },
+    });
+    const [req] = captured;
+    expect(req.url.pathname).toBe("/api/v1/tools/validate/post");
+    expect(req.body).toEqual({
+      content: "Shared caption",
+      mediaItems: [{ type: "video", url: "https://media.zernio.com/temp/v1" }],
+      platforms: [
+        {
+          platform: "instagram",
+          accountId: "acc_ig",
+          platformSpecificData: { contentType: "story" },
+        },
+        { platform: "bluesky", accountId: "acc_bs", customContent: "Short one" },
+      ],
+    });
+    expect(v).toEqual({
+      valid: true,
+      errors: [],
+      warnings: [{ platform: "instagram", message: "Stories skip captions" }],
+    });
+  });
+
+  it("retryPost calls Zernio's retry with a key and reads a 207 per platform", async () => {
+    respond = () =>
+      json(
+        {
+          error: "1 of 2 platforms failed",
+          post: {
+            _id: "post_r",
+            status: "partial",
+            platforms: [
+              {
+                platform: "facebook",
+                accountId: { _id: "acc_fb" },
+                status: "published",
+                platformPostUrl: "https://facebook.com/p/1",
+              },
+              { platform: "instagram", accountId: "acc_ig", status: "failed" },
+            ],
+          },
+          platformResults: [
+            {
+              platform: "facebook",
+              accountId: "acc_fb",
+              retried: false,
+              status: "published",
+              error: null,
+              errorCategory: null,
+              errorSource: null,
+              platformErrorCode: null,
+            },
+            {
+              platform: "instagram",
+              accountId: "acc_ig",
+              retried: true,
+              status: "failed",
+              error: "Unsupported format",
+              errorCategory: "user_content",
+              errorSource: "user",
+              platformErrorCode: null,
+            },
+          ],
+        },
+        207,
+      );
+    const r = await provider.retryPost({ postId: "post_r", idempotencyKey: "retry-key" });
+    const [req] = captured;
+    expect(req.method).toBe("POST");
+    expect(req.url.pathname).toBe("/api/v1/posts/post_r/retry");
+    expect(req.headers.get("Idempotency-Key")).toBe("retry-key");
+    expect(r).toEqual({
+      status: "partial",
+      results: [
+        {
+          platform: "facebook",
+          accountId: "acc_fb",
+          status: "published",
+          url: "https://facebook.com/p/1",
+          error: null,
+          errorCategory: null,
+        },
+        {
+          platform: "instagram",
+          accountId: "acc_ig",
+          status: "failed",
+          url: null,
+          error: "Unsupported format",
+          errorCategory: "user_content",
+        },
+      ],
+    });
+  });
+
+  it("retryPost: a 500 is ambiguous (reconcile, never retried blind)", async () => {
+    respond = () => json({ error: "boom" }, 500);
+    await expect(
+      provider.retryPost({ postId: "post_r", idempotencyKey: "k" }),
+    ).rejects.toMatchObject({ details: { status: 500, ambiguous: true } });
+    expect(captured).toHaveLength(1);
   });
 });

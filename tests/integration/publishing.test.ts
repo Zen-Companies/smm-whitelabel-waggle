@@ -137,7 +137,7 @@ describe("publishing (T14)", () => {
     expect(social.calls).toEqual([
       expect.objectContaining({
         targets: [{ platform: "instagram", accountId: zernioAccountId }],
-        mediaUrls: ["https://cdn.example.com/croissant.jpg"],
+        media: [{ url: "https://cdn.example.com/croissant.jpg", type: null }],
         publishAt: null,
         idempotencyKey: post.idempotency_key,
       }),
@@ -319,6 +319,7 @@ describe("publishing (T14)", () => {
       ok: false,
       error: "not_accepted",
       problems: [{ platform: "instagram", message: "Instagram needs a photo or video." }],
+      warnings: [],
     });
     expect(social.posts.size).toBe(before);
   });
@@ -351,15 +352,16 @@ describe("publishing (T14)", () => {
       .eq("id", (r as { postId: string }).postId)
       .single();
     expect(row).toEqual({
-      media: [{ url: video, seconds: 80 }],
+      media: [{ url: video, seconds: 80, type: "video" }],
       platform_options: { youtube: { title: "Ube cheesecake is back" } },
     });
     const last = social.calls.at(-1) as {
-      mediaUrls?: string[];
+      media?: { url: string; type?: string | null }[];
       youtubeTitle?: string;
       extras?: Record<string, { platformSpecificData?: Record<string, unknown> }>;
     };
-    expect(last.mediaUrls).toEqual([video]);
+    // Sent with its type, so Zernio never reads a video as a photo (25 Nov).
+    expect(last.media).toEqual([{ url: video, type: "video" }]);
     // The publish step sends it as YouTube's platform options (T75); the check before saving
     // still passes the title on its own.
     expect(last.extras?.youtube?.platformSpecificData?.title ?? last.youtubeTitle).toBe(
@@ -395,6 +397,7 @@ describe("publishing (T14)", () => {
           message: "Bluesky takes videos up to 60 seconds; this one is 1:20.",
         },
       ],
+      warnings: [],
     });
   });
 
