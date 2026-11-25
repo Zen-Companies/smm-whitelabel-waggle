@@ -11,11 +11,11 @@ import {
   type ActiveBar,
   type BarLine,
 } from "./promotions";
-import { upgradeHref } from "./upgrade";
+import { promoBarHref } from "./banners";
 
 // The moving bar above the navbar (board "Promotions in the app", 1 · Top bar, approved 24 Nov).
 // Walter's website strip: black, honey label, cream text drifting slowly left. Tapping it opens
-// the plan pop-up in place. × hides it for the rest of the viewer's day (a cookie the server
+// the plan pop-up in place (an Owner on Free), or Your plan when the pop-up doesn't apply. × hides it for the rest of the viewer's day (a cookie the server
 // reads, so it never flashes back in). Reduced motion: still, one line cut with ….
 
 function Sep() {
@@ -48,14 +48,22 @@ function plain(label: string, lines: BarLine[]): string {
   return [label, ...lines.map((l) => `${l.text}${l.honey ?? ""}`)].join(" · ");
 }
 
-export function PromoBarView({ bar, timeZone }: { bar: ActiveBar; timeZone: string }) {
+export function PromoBarView({
+  bar,
+  timeZone,
+  popup,
+}: {
+  bar: ActiveBar;
+  timeZone: string;
+  /** The upgrade pop-up opens for this viewer (an Owner on Free); otherwise Your plan. */
+  popup: boolean;
+}) {
   const [hidden, setHidden] = useState(false);
   const path = usePathname();
   const params = useSearchParams();
   if (hidden) return null;
   const q = params.toString();
-  const href =
-    bar.link === "plan-popup" ? upgradeHref("nudge", q ? `${path}?${q}` : path) : bar.link;
+  const href = promoBarHref({ link: bar.link, here: q ? `${path}?${q}` : path, popup });
   const { label, lines, phoneLines, cta, phoneCta } = bar.copy;
   const hide = () => {
     try {

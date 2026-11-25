@@ -7,7 +7,14 @@ import { useEffect, useState } from "react";
 import { PlanBees, RestingBee } from "@/components/app/bee-plan";
 import { Button } from "@/components/ui/button";
 import type { CheckoutSuccess } from "./popup-actions";
-import { NUDGE_EVERY_DAYS, nudgeDue, popupFor, STORAGE, type Popup } from "./banners";
+import {
+  NUDGE_EVERY_DAYS,
+  nudgeDue,
+  popupFor,
+  rememberClosed,
+  STORAGE,
+  type Popup,
+} from "./banners";
 import { recordPlanNotice } from "./notice-actions";
 import { UpgradeDialog, WelcomeDialog, type OfferOrg } from "./offer-dialogs";
 import { dailyAmount, TRIAL } from "./plans";
@@ -133,7 +140,11 @@ export function BillingPopups({
     onPlanToo: org.current === "free" || paidReturn,
   });
   const urlKey = `${path}?${params.toString()}`;
-  const popup = local ?? (closed === urlKey ? null : fromUrl);
+  // Forget a closed pop-up once the address moves on (closing drops its parameters), so the next
+  // link to it (the promotion bar, an upgrade link) opens it again.
+  const kept = rememberClosed(closed, urlKey);
+  if (kept !== closed) setClosed(kept);
+  const popup = local ?? (kept === null ? fromUrl : null);
 
   // The out pop-up counts as shown once it opens.
   useEffect(() => {

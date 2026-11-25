@@ -1,6 +1,6 @@
 import type { PlanId } from "./plans";
 import type { ReplyLimitLevel } from "./reply-limit";
-import { isOfferReason, type OfferReason } from "./upgrade";
+import { isOfferReason, upgradeHref, type OfferReason } from "./upgrade";
 
 // Which plan banner shows on top of every dashboard page, and which pop-up opens (Walter's flow,
 // 20 Nov; decision 9). Pure: the browser-storage reads happen in the component.
@@ -53,6 +53,33 @@ export function popupFor(input: {
   if (input.welcome === "1" && !input.welcomeSeen) return { kind: "welcome" };
   if (input.outDue) return { kind: "out" };
   return null;
+}
+
+/**
+ * Pure: the closed pop-up's address to remember on `urlKey` (the page with its query). A pop-up
+ * opened from the address stays closed only while the address is still the one it was closed on;
+ * closing drops its parameters, and once the address moves on it's forgotten, so a later link to
+ * the same `?upgrade=` opens it again (fix 25 Nov: the Black Friday bar's "Choose a plan" did
+ * nothing once the pop-up had been closed on that page).
+ */
+export function rememberClosed(closedAt: string | null, urlKey: string): string | null {
+  return closedAt === urlKey ? closedAt : null;
+}
+
+/**
+ * Pure: where a promotion bar's link goes (fix 25 Nov). "plan-popup": the upgrade pop-up over
+ * this page when it can open here (an Owner on Free: the first-month-free Try Solo version),
+ * otherwise Your plan. Any other link is a path, as staff set it.
+ */
+export function promoBarHref(input: {
+  link: string;
+  /** This page with its query ("/today?tab=new"). */
+  here: string;
+  /** The pop-up opens for this viewer: an Owner whose organization is on Free. */
+  popup: boolean;
+}): string {
+  if (input.link !== "plan-popup") return input.link;
+  return input.popup ? upgradeHref("nudge", input.here) : "/plan";
 }
 
 /** Browser storage keys (conveniences only: a cleared browser just shows them again). */

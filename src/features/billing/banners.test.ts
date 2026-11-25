@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { billingBanner, nudgeDue, planPageReturn, popupFor } from "./banners";
+import {
+  billingBanner,
+  nudgeDue,
+  planPageReturn,
+  popupFor,
+  promoBarHref,
+  rememberClosed,
+} from "./banners";
 
 const DAY = 86_400_000;
 
@@ -73,5 +80,59 @@ describe("Your plan's own checkout return (QA, 25 Nov)", () => {
         onPlanToo: true,
       }),
     ).toEqual({ kind: "upgrade", reason: "nudge" });
+  });
+});
+
+describe("the promotion bar's Choose a plan (fix 25 Nov)", () => {
+  /** What BillingPopups shows on an address, given the pop-up closed earlier (null: none). */
+  const shown = (closed: string | null, path: string, query: string) => {
+    const urlKey = `${path}?${query}`;
+    const kept = rememberClosed(closed, urlKey);
+    const p = new URLSearchParams(query);
+    const fromUrl = popupFor({
+      path,
+      upgrade: p.get("upgrade"),
+      welcome: p.get("welcome"),
+      welcomeSeen: true,
+      outDue: false,
+      onPlanToo: true,
+    });
+    return { kept, popup: kept === null ? fromUrl : null };
+  };
+  const tap = (here: string) => promoBarHref({ link: "plan-popup", here, popup: true });
+
+  it("a Free Owner's tap opens the Try Solo pop-up over the page", () => {
+    expect(tap("/today")).toBe("/today?upgrade=nudge");
+    const [path, query] = tap("/today").split("?");
+    expect(shown(null, path, query).popup).toEqual({ kind: "upgrade", reason: "nudge" });
+  });
+
+  it("opens again after the pop-up was closed on that page (it did nothing before)", () => {
+    // Closed on /today?upgrade=nudge, which drops the parameter: the address moves to /today.
+    const after = shown("/today?upgrade=nudge", "/today", "");
+    expect(after.kept).toBeNull();
+    // Tapping the bar again lands on the same address it was closed on: it opens.
+    expect(shown(after.kept, "/today", "upgrade=nudge").popup).toEqual({
+      kind: "upgrade",
+      reason: "nudge",
+    });
+  });
+
+  it("stays closed while the address is still the one it was closed on", () => {
+    expect(shown("/today?upgrade=nudge", "/today", "upgrade=nudge").popup).toBeNull();
+  });
+
+  it("keeps the page's own query", () => {
+    expect(tap("/setup?step=3")).toBe("/setup?step=3&upgrade=nudge");
+  });
+
+  it("goes to Your plan when the pop-up can't open (not Free, not an Owner)", () => {
+    expect(promoBarHref({ link: "plan-popup", here: "/today", popup: false })).toBe("/plan");
+  });
+
+  it("any other link is the path staff set", () => {
+    expect(promoBarHref({ link: "/plan#referral-title", here: "/today", popup: true })).toBe(
+      "/plan#referral-title",
+    );
   });
 });

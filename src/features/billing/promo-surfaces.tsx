@@ -24,6 +24,7 @@ import {
 import { loadPromotions } from "./promotions-store";
 import { referrerForCode, referrerOf } from "./referrals";
 import { upgradeHref } from "./upgrade";
+import { orgPlanId } from "./usage";
 
 // The promotion surfaces (board "Promotions in the app", approved 24 Nov), all read from the
 // promotions list (promotions.ts). Never block a page: a failure just shows nothing.
@@ -41,7 +42,9 @@ export async function PromoBar({ orgId, isOwner }: { orgId: string; isOwner: boo
     });
     return null;
   });
-  return shown ? <PromoBarView bar={shown.bar} timeZone={shown.zone} /> : null;
+  return shown ? (
+    <PromoBarView bar={shown.bar} timeZone={shown.zone} popup={shown.popup} />
+  ) : null;
 }
 
 async function loadBar(orgId: string, isOwner: boolean) {
@@ -74,7 +77,10 @@ async function loadBar(orgId: string, isOwner: boolean) {
   const jar = await cookies();
   const zone = validTimeZone(jar.get(TZ_COOKIE)?.value ?? null);
   if (barHiddenToday(jar.get(BAR_COOKIE)?.value, bar.promotionId, now, zone)) return null;
-  return { bar, zone };
+  // The upgrade pop-up only opens for an Owner on Free (BillingPopups); anyone else goes to Your
+  // plan, so the bar's link always does something (fix 25 Nov).
+  const popup = isOwner && orgPlanId(bill) === "free";
+  return { bar, zone, popup };
 }
 
 /** 2 · Your plan: Walter's pass (Owners of never-paid organizations). */

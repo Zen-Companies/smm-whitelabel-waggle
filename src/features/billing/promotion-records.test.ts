@@ -28,8 +28,12 @@ describe("rows and the app's promotions", () => {
     }
   });
   it("keeps a honey tail in the bar text", () => {
+    const f = promotionToFields(PROMOTIONS[1]);
+    expect(f.bar_text.split("\n")[0]).toBe("Send a friend your link: *their first month is free*");
+  });
+  it("the Black Friday bar (never-paid Owners) never offers referrals: paying Owners only", () => {
     const f = promotionToFields(PROMOTIONS[0]);
-    expect(f.bar_text.split("\n")[2]).toBe("Give a month, get a month: *refer a friend*");
+    expect(f.bar_text).not.toMatch(/refer|give a month/i);
   });
   it("never shows a countdown or a last-day face, even when the row still has them (24 Nov)", () => {
     const f = {
