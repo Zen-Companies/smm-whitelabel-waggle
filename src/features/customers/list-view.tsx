@@ -22,6 +22,7 @@ import {
   type Stage,
 } from "./derive";
 import { FilterForm } from "./filter-form";
+import { connectStatusLabel } from "./connect-story";
 import { type CustomerRow, LIST_WINDOW, loadCustomerList } from "./load";
 
 const PLAN_LABEL = { free: "Free", trial: "Trial", paid: "Paid" } as const;
@@ -253,6 +254,12 @@ function Tiles({
 }
 
 function Row({ row, now }: { row: CustomerRow; now: Date }) {
+  const status = connectStatusLabel({
+    stage: row.stage,
+    stageLabel: STAGE_LABEL[row.stage],
+    lastTry: row.lastTry,
+    now,
+  });
   const td = "px-2.5 py-3 align-top";
   const href = `/admin/customers/${row.id}`;
   const browser = browserLabel(row.browser);
@@ -278,9 +285,7 @@ function Row({ row, now }: { row: CustomerRow; now: Date }) {
         {row.sourceLabel && <span className="meta block">{row.sourceLabel}</span>}
       </td>
       <td className={td}>
-        <Chip tone={STAGE_TONE[row.stage]}>
-          {row.stage === "active" ? "Active" : `Stuck at ${STAGE_LABEL[row.stage]}`}
-        </Chip>
+        <Chip tone={status.inProgress ? "honey" : STAGE_TONE[row.stage]}>{status.label}</Chip>
         <span className="text-ink-2 mt-1 block">{row.where}</span>
       </td>
       <td className={td}>

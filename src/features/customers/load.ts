@@ -77,6 +77,8 @@ export interface CustomerRow {
   where: string;
   lastActivityAt: string | null;
   browser: string | null;
+  /** The newest connect try, for "In progress · N min" (staff connect trace, 26 Nov). */
+  lastTry: { outcome: string | null; startedAt: string } | null;
   plan: PlanKind;
   planLabel: string;
   flags: Flag[];
@@ -278,6 +280,7 @@ function rowFor(
     }),
     lastActivityAt,
     browser: lastTry?.userAgentClass ?? null,
+    lastTry: lastTry ? { outcome: lastTry.outcome, startedAt: lastTry.startedAt } : null,
     plan: plan.kind,
     planLabel: plan.label,
     flags: flagsFor({

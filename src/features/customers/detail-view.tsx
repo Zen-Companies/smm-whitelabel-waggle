@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Suspense } from "react";
 import { ChevronLeft } from "lucide-react";
 import { z } from "zod";
 import { Chip } from "@/components/app/chip";
 import { requirePermission } from "@/features/staff";
 import { writeAudit } from "@/lib/audit";
 import { ghlConfig } from "@/lib/ghl/client";
+import type { ProviderLog } from "@/lib/social";
 import { getServiceClient } from "@/lib/supabase/service";
+import { type ConnectLogs, LOGS_MAX_TRIES, loadConnectLogs } from "./connect-logs";
+import { buildStory, connectStatusLabel, type StepState, tryInProgress } from "./connect-story";
 import {
   ago,
   browserLabel,
@@ -25,7 +29,7 @@ import {
   type TimelineKind,
 } from "./derive";
 import { type AttemptRow, type CustomerDetail, loadCustomerDetail } from "./load";
-import { CopyEmail, LoggedLink, ResendConfirm } from "./staff-actions";
+import { CopyEmail, CopyId, LoggedLink, RefreshLogs, ResendConfirm } from "./staff-actions";
 
 const paramsSchema = z.object({ tenantId: z.uuid() });
 
@@ -35,6 +39,12 @@ const dateTime = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "UTC",
+  });
+const hm = (iso: string) =>
+  new Date(iso).toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     timeZone: "UTC",
@@ -83,6 +93,12 @@ export async function CustomerDetailView({
   if (!d) notFound();
   const gates = customerGates(access.permissions, d.tenant.offboardedAt !== null);
   const lastBrowser = browserLabel(d.row.browser);
+  const status = connectStatusLabel({
+    stage: d.row.stage,
+    stageLabel: STAGE_LABEL[d.row.stage],
+    lastTry: d.row.lastTry,
+    now,
+  });
 
   return (
     <div className="flex flex-col gap-5">
@@ -98,8 +114,8 @@ export async function CustomerDetailView({
           {d.tenant.offboardedAt ? (
             <Chip>Offboarded {dateTime(d.tenant.offboardedAt)}</Chip>
           ) : (
-            <Chip tone={d.row.stage === "active" ? "green" : "red"}>
-              {d.row.stage === "active" ? "Active" : `Stuck at ${STAGE_LABEL[d.row.stage]}`}
+            <Chip tone={d.row.stage === "active" ? "green" : status.inProgress ? "honey" : "red"}>
+              {status.label}
             </Chip>
           )}
           {d.row.flags
@@ -119,7 +135,18 @@ export async function CustomerDetailView({
 
       <Facts d={d} now={now} />
       <Funnel d={d} />
-      <Attempts attempts={d.attempts} profileId={d.tenant.zernioProfileId} />
+      <Suspense
+        fallback={
+          <Attempts
+            attempts={d.attempts}
+            profileId={d.tenant.zernioProfileId}
+            now={now}
+            logs="loading"
+          />
+        }
+      >
+        <AttemptsLive attempts={d.attempts} profileId={d.tenant.zernioProfileId} now={now} />
+      </Suspense>
       <Timeline d={d} type={type} showAll={showAll} />
       <div className="grid gap-4 md:grid-cols-2">
         <Setup d={d} />
@@ -274,28 +301,61 @@ function Funnel({ d }: { d: CustomerDetail }) {
   );
 }
 
+/** Connect tries with Zernio's side, read live (Suspense: the page doesn't wait for Zernio). */
+async function AttemptsLive({
+  attempts,
+  profileId,
+  now,
+}: {
+  attempts: AttemptRow[];
+  profileId: string | null;
+  now: Date;
+}) {
+  const logs = await loadConnectLogs({ profileId, attempts, now });
+  return <Attempts attempts={attempts} profileId={profileId} now={now} logs={logs} />;
+}
+
 function Attempts({
   attempts,
   profileId,
+  now,
+  logs,
 }: {
   attempts: AttemptRow[];
   /** The brand's Zernio profile, for tries that never came back (they don't store one). */
   profileId: string | null;
+  now: Date;
+  /** Zernio's log; "loading" while it's read. */
+  logs: ConnectLogs | "loading";
 }) {
   const connected = attempts.filter((a) => a.outcome === "connected").length;
   const classes = [...new Set(attempts.map((a) => a.userAgentClass))];
   const allInApp = attempts.length > 0 && classes.length === 1 && classes[0]?.startsWith("in_app_");
+  const sub = attempts.length
+    ? `${attempts.length} ${attempts.length === 1 ? "try" : "tries"} · ${connected} connected${
+        allInApp ? ` · all inside ${browserLabel(classes[0] ?? null)}` : ""
+      }`
+    : undefined;
   return (
-    <Card
-      title="Connect attempts"
-      sub={
-        attempts.length
-          ? `${attempts.length} ${attempts.length === 1 ? "try" : "tries"} · ${connected} connected${
-              allInApp ? ` · all inside ${browserLabel(classes[0] ?? null)}` : ""
-            }`
-          : undefined
-      }
-    >
+    <Card title="Connect attempts" sub={sub}>
+      {attempts.length > 0 && (
+        <p className="meta -mt-2 flex flex-wrap items-center gap-1.5 text-[13px]">
+          {logs === "loading" ? (
+            "Checking Zernio's logs…"
+          ) : !profileId ? (
+            "No Zernio profile yet, so Zernio's side can't be read."
+          ) : logs.reached ? (
+            <>
+              Zernio checked {hm(logs.checkedAt)} UTC · <RefreshLogs />
+            </>
+          ) : (
+            <>
+              Couldn&apos;t reach Zernio&apos;s logs, showing Waggle&apos;s side only ·{" "}
+              <RefreshLogs />
+            </>
+          )}
+        </p>
+      )}
       {attempts.length === 0 ? (
         <p className="text-ink-2">No connect tries yet. They haven&apos;t tried to connect.</p>
       ) : (
@@ -309,11 +369,21 @@ function Attempts({
             <span>User can fix?</span>
             <span>Stage</span>
           </div>
-          {attempts.map((a) => (
-            <AttemptLine key={a.id} a={a} profileId={profileId} />
+          {attempts.map((a, i) => (
+            <AttemptLine
+              key={a.id}
+              a={a}
+              profileId={profileId}
+              now={now}
+              open={i === 0}
+              nextStartedAt={nextSamePlatform(attempts, a)}
+              logs={logs === "loading" ? "loading" : (logs.byAttempt.get(a.id) ?? null)}
+              checked={logs !== "loading" && logs.byAttempt.has(a.id)}
+            />
           ))}
           <p className="meta mt-2">
-            One row per try, newest first. Abandoned: no return within 2 hours.
+            One row per try, newest first. Abandoned: no return within 2 hours. Zernio&apos;s side
+            is read for the newest {LOGS_MAX_TRIES} tries (it keeps 90 days); nothing is stored.
           </p>
         </div>
       )}
@@ -321,14 +391,128 @@ function Attempts({
   );
 }
 
-function AttemptLine({ a, profileId }: { a: AttemptRow; profileId: string | null }) {
-  const outcome = isOutcome(a.outcome) ? OUTCOME_LABEL[a.outcome] : "Open";
+/** The next try on the same platform, so its sign-in answer isn't borrowed by this one. */
+function nextSamePlatform(attempts: AttemptRow[], a: AttemptRow): string | null {
+  return (
+    attempts
+      .filter((o) => o.platform === a.platform && o.startedAt > a.startedAt)
+      .map((o) => o.startedAt)
+      .sort()[0] ?? null
+  );
+}
+
+const DOT: Record<StepState, { mark: string; cls: string; label: string }> = {
+  done: { mark: "●", cls: "text-success", label: "done" },
+  failed: { mark: "✕", cls: "text-danger", label: "failed" },
+  waiting: { mark: "◌", cls: "text-honey-text", label: "waiting" },
+  todo: { mark: "○", cls: "text-ink-2", label: "not yet" },
+  unknown: { mark: "?", cls: "text-ink-2", label: "unknown" },
+};
+
+function Story({
+  a,
+  logs,
+  nextStartedAt,
+  now,
+  checked,
+}: {
+  a: AttemptRow;
+  logs: ProviderLog[] | null | "loading";
+  nextStartedAt: string | null;
+  now: Date;
+  checked: boolean;
+}) {
+  const story = buildStory({
+    attempt: a,
+    logs: logs === "loading" ? null : logs,
+    nextStartedAt,
+    now,
+  });
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-[13px] font-semibold">What happened</h3>
+      {logs === "loading" ? (
+        <p className="meta">Checking Zernio&apos;s logs…</p>
+      ) : logs === null ? (
+        <p className="meta">
+          {checked
+            ? "Couldn't reach Zernio's logs for this try. Waggle's side only."
+            : "Zernio's side not checked for this try (older than the newest tries)."}
+        </p>
+      ) : null}
+      <ol className="flex flex-col gap-1.5">
+        {story.steps.map((s) => {
+          const dot = DOT[s.state];
+          return (
+            <li key={s.key} className="grid grid-cols-[64px_16px_1fr] items-baseline gap-2">
+              <span className="text-ink-2 font-mono text-xs">{s.at ? time(s.at) : "–"}</span>
+              <span className={dot.cls} aria-label={dot.label}>
+                {dot.mark}
+              </span>
+              <span className="min-w-0 break-words">
+                <b className="font-semibold">{s.title}</b>
+                <span className="text-ink-2"> · {s.by}</span>
+                {s.detail && <span> · {s.detail}</span>}
+                {s.requestId && (
+                  <span className="text-ink-2">
+                    {" "}
+                    · request{" "}
+                    <span className="font-mono text-xs select-all">
+                      {s.requestId.slice(0, 8)}…
+                    </span>{" "}
+                    <CopyId value={s.requestId} />
+                  </span>
+                )}
+                {s.quote && (
+                  <span className="mt-0.5 block">
+                    Zernio: <q className="font-mono text-xs">{s.quote}</q>{" "}
+                    <span className="meta">(Zernio&apos;s own message, word for word)</span>
+                  </span>
+                )}
+                {s.hint && <span className="mt-0.5 block font-medium">{s.hint}</span>}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {story.likely && (
+        <div className="border-honey/40 bg-honey-tint mt-1 flex flex-col gap-1 rounded-xl border p-3">
+          <p>
+            <b className="font-semibold">Most likely:</b> {story.likely.headline}
+            {story.likely.reason ? ` ${story.likely.reason}` : ""}
+          </p>
+          <p className="meta text-xs">{story.likely.basis}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AttemptLine({
+  a,
+  profileId,
+  now,
+  open,
+  nextStartedAt,
+  logs,
+  checked,
+}: {
+  a: AttemptRow;
+  profileId: string | null;
+  now: Date;
+  open: boolean;
+  nextStartedAt: string | null;
+  logs: ProviderLog[] | null | "loading";
+  checked: boolean;
+}) {
+  const inProgress = tryInProgress(a, now);
+  const outcome = isOutcome(a.outcome) ? OUTCOME_LABEL[a.outcome] : (inProgress ?? "Open");
   const tone =
     a.outcome === "connected"
       ? "green"
-      : a.outcome === null
-        ? "grey"
-        : a.outcome === "abandoned"
+      : inProgress
+        ? "honey"
+        : a.outcome === null || a.outcome === "abandoned"
           ? "grey"
           : "red";
   const secs = a.returnedAt
@@ -342,7 +526,7 @@ function AttemptLine({ a, profileId }: { a: AttemptRow; profileId: string | null
       </div>
     );
   return (
-    <details className="border-subtle group border-b">
+    <details className="border-subtle group border-b" open={open}>
       <summary className="grid cursor-pointer list-none grid-cols-2 gap-2 px-2 py-2.5 text-[13px] md:grid-cols-[90px_100px_140px_150px_1fr_90px_120px]">
         <span>{dateTime(a.startedAt).split(", ").pop()}</span>
         <span>{platformName(a.platform)}</span>
@@ -364,7 +548,8 @@ function AttemptLine({ a, profileId }: { a: AttemptRow; profileId: string | null
           </span>
         </span>
       </summary>
-      <div className="bg-subtle mx-2 mb-3 flex flex-col gap-1.5 rounded-xl p-3 text-[13px]">
+      <div className="bg-subtle mx-2 mb-3 flex flex-col gap-3 rounded-xl p-3 text-[13px]">
+        <Story a={a} logs={logs} nextStartedAt={nextStartedAt} now={now} checked={checked} />
         <p>
           Started {time(a.startedAt)} UTC
           {a.returnedAt ? ` · came back ${time(a.returnedAt)} (${secs} s)` : " · never came back"}

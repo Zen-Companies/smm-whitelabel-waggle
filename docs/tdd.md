@@ -904,6 +904,13 @@ Spec "Walter's flow" (build B), boards "Walter's flow in Waggle" and "Setup step
 - The list looks through the newest 1000 sign-ups (in the date range) and filters in memory.
 - Every look writes `staff.customer.viewed` to the business's audit_log; copy email, open Stripe / GoHighLevel and
   resend write `staff.customer.*`. Timeline shows action names and counts only, never audit details or message text.
+- Connect trace (board "Connect tries: what happened", approved 26 Nov): each try on the detail page has a "What
+  happened" timeline joining `connect_attempts` with Zernio's activity log (`SocialProvider.listLogs`, `GET /v1/logs`,
+  read only). Read live in a Suspense boundary when staff open the page (and on Refresh), for the newest 8 tries:
+  `api_request` and `connections` entries for the brand's profile from 1 min before the tap to 3 h after (or now),
+  4 s timeout; on failure the page shows Waggle's steps only. Nothing is stored. Building the steps, the "Most likely"
+  deduction (time, browser class, platform; labelled "Deduced by Waggle") and the "In progress · N min" status (a try
+  with no outcome under 2 h, list and detail) are pure in `connect-story.ts`.
 
 ## From the site's plan card to that plan (board option A, approved 25 Nov)
 
