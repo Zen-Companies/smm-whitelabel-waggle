@@ -1,4 +1,4 @@
-import { isStartCheckoutPath } from "@/lib/checkout-link";
+import { isSignupStartPath, isStartCheckoutPath } from "@/lib/checkout-link";
 
 /**
  * Where sign-in continues: back to an AI assistant's consent page (MCP, docs/mcp/PLAN.md §4.2)
@@ -14,5 +14,8 @@ export function signInNext(next: FormDataEntryValue | null): string {
     return next;
   // HighLevel's upgrade button (25 Nov): /plan?start=solo or start=team starts Checkout.
   if (isStartCheckoutPath(next)) return next;
+  // The site's plan card (25 Nov): Google sign-up from /signup?plan=solo lands on setup's first
+  // page, which starts Checkout for that plan.
+  if (isSignupStartPath(next)) return next;
   return "/settings";
 }

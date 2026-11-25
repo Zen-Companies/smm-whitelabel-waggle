@@ -890,3 +890,12 @@ Spec "Walter's flow" (build B), boards "Walter's flow in Waggle" and "Setup step
 - The list looks through the newest 1000 sign-ups (in the date range) and filters in memory.
 - Every look writes `staff.customer.viewed` to the business's audit_log; copy email, open Stripe / GoHighLevel and
   resend write `staff.customer.*`. Timeline shows action names and counts only, never audit details or message text.
+
+## From the site's plan card to that plan (board option A, approved 25 Nov)
+
+- gowaggle.ai's Solo and Team "Start free →" link to `/signup?plan=solo|team` (plus `ref`/utm, unchanged). `plan` is read with `parseStartParam` (`src/lib/checkout-link.ts`); anything else, Business, or a plan staff took off sale is today's sign-up page.
+- With a plan, the left side of sign-up shows the plan (`SignupPlanPanel`, numbers from `loadPlans`, i.e. Staff → Plans) instead of the moving wall; phones get `SignupPlanStrip` above the form. The button reads "Create account and start my free month". Someone already signed in is sent to `/plan?start=<plan>`.
+- Order: account → Checkout → setup. Email sign-up (and Google, via `next=/welcome?start=<plan>`, whitelisted in `signInNext`) still makes the personal organization first (`setupTenantForUser`), records `signup_plan_picked` in `organization_audit` (no brand exists yet for `audit_log`), then lands on `/welcome?start=<plan>`. There `SignupCheckout` opens Checkout (the same `AutoCheckout` + `choosePlan` as HighLevel's link) only for the Owner of a personal organization on Free that never had a subscription or trial (`signupCheckoutPlan`); a login that already has a business is sent to `/plan?start=`.
+- Success returns to `/welcome?upgrade=nudge|team&checkout=done&session_id=` (the setup layout's BillingHost shows the success pop-up); backing out returns to plain `/welcome` (`cancel=quiet` → `quietCancelPath`), on Free with no pop-up.
+- Fixed with it: Your plan's own return named Solo after a Team checkout (`planPageReturn("business")` now opens the Team success, via `successReason`).
+- CRM: `waggle_signup_plan` is not sent; `signed_up` is queued inside `ensurePersonalOrg`, which doesn't know the plan, and the field would need a new GoHighLevel custom field.

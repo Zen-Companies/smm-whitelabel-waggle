@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { signIn, signUp, type AuthFormState } from "./actions";
 import { GoogleButton, InAppGoogleGate, OrDivider } from "@/features/auth";
+import { signupStartPath, type StartPlan } from "@/lib/checkout-link";
 import { PASSWORD_MIN } from "./password";
 import { PasswordInput } from "./password-input";
 
@@ -29,10 +30,16 @@ export function AuthForm({
   mode,
   next,
   error,
+  plan,
 }: {
   mode: "signup" | "login";
   next?: string;
   error?: string;
+  /**
+   * Sign-up with a plan picked on the site (25 Nov): once the account exists, setup's first page
+   * opens Checkout for it (Google too, through its `next`).
+   */
+  plan?: StartPlan;
 }) {
   // A failed submit resets the form (React 19), so the name and email come back as its defaults.
   // Passwords never travel back; a mismatch is caught here before submitting, so nothing clears.
@@ -56,6 +63,8 @@ export function AuthForm({
   // comes back with the next submit's answer.
   const [edited, setEdited] = useState(false);
   const isSignup = mode === "signup";
+  const withPlan = isSignup ? plan : undefined;
+  const googleNext = withPlan ? signupStartPath(withPlan) : next;
   const formError = mismatch ? MISMATCH : edited ? undefined : state.error;
 
   return (
@@ -81,7 +90,7 @@ export function AuthForm({
         <InAppGoogleGate>
           <GoogleButton
             label={isSignup ? "Sign up with Google" : "Continue with Google"}
-            next={next}
+            next={googleNext}
           />
           <OrDivider />
         </InAppGoogleGate>
@@ -104,6 +113,7 @@ export function AuthForm({
         className="flex flex-col gap-4"
       >
         {next && <input type="hidden" name="next" value={next} />}
+        {withPlan && <input type="hidden" name="plan" value={withPlan} />}
         {isSignup && (
           <div className="flex flex-col gap-1.5">
             <label htmlFor="fullName" className="text-sm font-medium">
@@ -189,8 +199,19 @@ export function AuthForm({
           </p>
         )}
         <Button type="submit" variant="primary" disabled={pending} className="w-full">
-          {pending ? "Please wait…" : isSignup ? "Create login" : "Sign in"}
+          {pending
+            ? "Please wait…"
+            : withPlan
+              ? "Create account and start my free month"
+              : isSignup
+                ? "Create login"
+                : "Sign in"}
         </Button>
+        {withPlan && (
+          <p className="text-ink-3 -mt-2 text-center text-[13px]">
+            Next: add a card. Nothing is charged today.
+          </p>
+        )}
         {isSignup && (
           <ol className="bg-subtle text-ink-2 flex flex-col gap-2 rounded-2xl px-4 py-3.5 text-[13px]">
             {[

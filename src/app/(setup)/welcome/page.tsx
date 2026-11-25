@@ -12,10 +12,11 @@ import {
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
 import { headers } from "next/headers";
 import { connectBanner } from "@/features/accounts";
-import { freeAccountsFull, TrialConversionTag } from "@/features/billing";
+import { freeAccountsFull, SignupCheckout, TrialConversionTag } from "@/features/billing";
 import { loadPlatformStatuses } from "@/features/platforms";
 import { connectProblem, deviceOf, isInAppBrowser, WelcomeConnect } from "@/features/setup";
 import { AddBrandForm, getCurrentTenant, getOpenOrg } from "@/features/tenants";
+import { parseStartParam, startCheckoutPath } from "@/lib/checkout-link";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 
@@ -122,6 +123,11 @@ async function Content({
     .eq("organization_id", org.id);
   const hasBrand = (count ?? 0) > 0;
   const db = getServiceClient();
+  // Sign-up from the site's plan card (25 Nov) lands here with ?start=solo (or team). Someone who
+  // already has a business (an existing login through Google's sign-up) goes to Your plan's
+  // checkout link instead, which knows who may start a plan.
+  const start = parseStartParam(params.start);
+  if (hasBrand && start) redirect(startCheckoutPath(start));
 
   // Setup step 1 (Walter's flow, 20 Nov): Connect. A business that already has an account goes
   // on to setup (or Today once setup is finished); one that can't connect goes to Today.
@@ -170,6 +176,17 @@ async function Content({
           />
         )}
         {betaBanner}
+        {/* A new Owner: Stripe Checkout first, then back here into setup (25 Nov). */}
+        {start && !hasBrand && (
+          <Suspense fallback={null}>
+            <SignupCheckout
+              orgId={org.id}
+              personal={org.personal}
+              isOwner={org.role === "owner"}
+              start={start}
+            />
+          </Suspense>
+        )}
         <WelcomeConnect
           firstName={name}
           free={free}

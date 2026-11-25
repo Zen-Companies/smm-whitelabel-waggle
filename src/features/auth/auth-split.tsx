@@ -9,17 +9,20 @@ import { AuthWall } from "./auth-wall";
 export function AuthSplit({
   kind,
   aside,
+  wall,
   children,
 }: {
   kind: "signin" | "signup";
   /** Over the top of the wall (sign-up from a friend's link, 24 Nov). */
   aside?: ReactNode;
+  /** In place of the moving wall (sign-up with a plan picked on the site, 25 Nov). */
+  wall?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <div className="grid flex-1 lg:h-dvh lg:grid-cols-[minmax(0,1fr)_minmax(400px,520px)] lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden">
       <div className="relative hidden h-dvh overflow-hidden lg:block">
-        <AuthWall kind={kind} />
+        {wall ?? <AuthWall kind={kind} />}
         {aside && (
           <div className="absolute inset-x-8 top-6 z-10 mx-auto max-w-[520px] empty:hidden">
             {aside}

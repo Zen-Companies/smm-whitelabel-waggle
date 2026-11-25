@@ -14,10 +14,19 @@ export function AutoCheckout({
   orgId,
   planId,
   planName,
+  back,
+  reason,
+  quietCancel = false,
 }: {
   orgId: string;
   planId: string;
   planName: string;
+  /** The page Checkout comes back to (with `reason`, the success pop-up opens there). */
+  back?: string;
+  /** The pop-up's reason for the success state ("nudge" for Solo, "team" for Team). */
+  reason?: string;
+  /** Backing out of Checkout returns to `back` with no pop-up (sign-up from the site, 25 Nov). */
+  quietCancel?: boolean;
 }) {
   const [state, run, pending] = useActionState<PlanActionState, FormData>(choosePlan, {});
   const form = useRef<HTMLFormElement>(null);
@@ -38,6 +47,13 @@ export function AutoCheckout({
         <input type="hidden" name="orgId" value={orgId} />
         <input type="hidden" name="plan" value={planId} />
         <input type="hidden" name="interval" value="month" />
+        {back && reason && (
+          <>
+            <input type="hidden" name="back" value={back} />
+            <input type="hidden" name="reason" value={reason} />
+          </>
+        )}
+        {quietCancel && <input type="hidden" name="cancel" value="quiet" />}
         {state.error ? (
           <>
             <p className="text-ink-2 m-0">{state.error}</p>
