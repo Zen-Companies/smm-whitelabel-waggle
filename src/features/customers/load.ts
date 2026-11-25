@@ -95,6 +95,7 @@ interface Shared {
     setup_chat: unknown;
     offboarded_at: string | null;
     is_test: boolean;
+    zernio_profile_id: string | null;
   }[];
 }
 
@@ -292,7 +293,7 @@ function rowFor(
 }
 
 const TENANT_COLUMNS =
-  "id, name, created_at, organization_id, setup_screen, setup_done_at, setup_passed_at, setup_chat, offboarded_at, is_test";
+  "id, name, created_at, organization_id, setup_screen, setup_done_at, setup_passed_at, setup_chat, offboarded_at, is_test, zernio_profile_id";
 
 export interface CustomerList {
   rows: CustomerRow[];
@@ -382,6 +383,8 @@ export interface CustomerDetail {
     setupDoneAt: string | null;
     setupPassedAt: string | null;
     setupChatAnswered: number;
+    /** The brand's Zernio profile (what to search for in Zernio), set at sign-up. */
+    zernioProfileId: string | null;
   };
   owner: {
     id: string | null;
@@ -654,6 +657,7 @@ export async function loadCustomerDetail(
       setupDoneAt: t.setup_done_at,
       setupPassedAt: t.setup_passed_at,
       setupChatAnswered: chatAnswered(t.setup_chat),
+      zernioProfileId: t.zernio_profile_id,
     },
     owner: {
       id: ownerId,
