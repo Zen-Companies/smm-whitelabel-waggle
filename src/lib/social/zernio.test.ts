@@ -458,6 +458,32 @@ describe("ZernioSocialProvider", () => {
     ]);
   });
 
+  it("createPost and validatePost send a platform's own crop as customMedia (Posts Round 2)", async () => {
+    respond = () => json({ post: { _id: "post_c", status: "published" }, valid: true }, 201);
+    const crop = [{ type: "image" as const, url: "https://media.zernio.com/temp/ig-crop.jpg" }];
+    const input = {
+      content: "Shared",
+      media: [{ url: "https://media.zernio.com/temp/wide.jpg", type: "image" as const }],
+      targets: [
+        { platform: "instagram" as const, accountId: "acc_ig" },
+        { platform: "facebook" as const, accountId: "acc_fb" },
+      ],
+      extras: { instagram: { customMedia: crop } },
+    };
+    await provider.createPost({ ...input, publishAt: null, idempotencyKey: "k-c" });
+    await provider.validatePost(input);
+    for (const req of captured) {
+      const body = req.body as { mediaItems: unknown; platforms: unknown };
+      expect(body.mediaItems).toEqual([
+        { type: "image", url: "https://media.zernio.com/temp/wide.jpg" },
+      ]);
+      expect(body.platforms).toEqual([
+        { platform: "instagram", accountId: "acc_ig", customMedia: crop },
+        { platform: "facebook", accountId: "acc_fb" },
+      ]);
+    }
+  });
+
   it("createWhatsAppBroadcast targets subscribed people with the tag, then fills from them (T78b)", async () => {
     respond = (req) =>
       req.url.pathname === "/api/v1/broadcasts"
@@ -1983,7 +2009,10 @@ describe("Posts round 1 (25 Nov): media types, the full pre-check, retry", () =>
 
   it("validatePost sends the media types and each platform's own text and choices; keeps warnings", async () => {
     respond = () =>
-      json({ valid: true, warnings: [{ platform: "instagram", warning: "Stories skip captions" }] });
+      json({
+        valid: true,
+        warnings: [{ platform: "instagram", warning: "Stories skip captions" }],
+      });
     const v = await provider.validatePost({
       content: "Shared caption",
       media: [{ url: "https://media.zernio.com/temp/v1", type: "video" }],

@@ -15,9 +15,20 @@ import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./p
 import { BoardPicker } from "./board-picker";
 import { PostOptionsFields } from "./post-options-fields";
 import { ownText, textFor, type PostOptions } from "./post-options";
-import { VideoField, type VideoState } from "./video-field";
+import { readVideoMeta, VideoField, type VideoState } from "./video-field";
 import { OneDrivePicker } from "./onedrive-picker";
-import { PostPreview } from "./post-preview";
+import { PostPreview, type PlatformMedia } from "./post-preview";
+import { CropSheet, type MadeCrop } from "./crop-sheet";
+import { FitRow } from "./fit-row";
+import {
+  cropChoicesFor,
+  fitFor,
+  ONE_SHAPE_CHOICES,
+  shapeFor,
+  shapeLabel,
+  type Fit,
+  type MediaShape,
+} from "./media-fit";
 
 export interface ComposeAccount {
   id: string;
@@ -46,6 +57,12 @@ function slotLabel(iso: string): string {
   const at = new Date(iso);
   return `${at.toLocaleDateString(undefined, { weekday: "short" })} ${at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
+
+/**
+ * What one post may carry to the server (next.config `serverActions.bodySizeLimit` is 6 MB),
+ * with room for the text and options.
+ */
+const POST_BODY_MAX_BYTES = 5.5 * 1024 * 1024;
 
 const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -130,6 +147,14 @@ function ComposeFields({
   // T84c: a photo picked from OneDrive, already copied into media storage.
   const [drivePhoto, setDrivePhoto] = useState<{ url: string; size: number } | null>(null);
   const [video, setVideo] = useState<VideoState>({ step: "none" });
+  // Posts Round 2 ("How it fits"): the photo's size and type, each platform's own crop, one crop
+  // for all, and which crop is open.
+  const [photoDims, setPhotoDims] = useState<{ width: number; height: number } | null>(null);
+  const [photoMime, setPhotoMime] = useState<string | null>(null);
+  const [crops, setCrops] = useState<Partial<Record<string, MadeCrop>>>({});
+  const [allCrop, setAllCrop] = useState<MadeCrop | null>(null);
+  const [cropping, setCropping] = useState<{ target: string; ratio?: number } | null>(null);
+  const photoRun = useRef(0);
   // T64: boards chosen here (saved on the account), and whose picker is open.
   const [boards, setBoards] = useState<Record<string, { id: string; name: string }>>({});
   const [boardFor, setBoardFor] = useState<string | null>(null);
@@ -137,6 +162,24 @@ function ComposeFields({
   const pinterest = accounts.filter((a) => a.platform === "pinterest" && picked.includes(a.id));
   const hasVideo = video.step === "ready" || video.step === "uploading";
   const hasMedia = !!photo || hasVideo;
+  /** A new photo starts with no crops; its size is read by the browser for "How it fits". */
+  const startPhoto = (url: string | null, mime: string | null) => {
+    for (const c of [...Object.values(crops), allCrop]) if (c) URL.revokeObjectURL(c.url);
+    setCrops({});
+    setAllCrop(null);
+    setCropping(null);
+    setPhotoMime(mime);
+    setPhotoDims(null);
+    const id = ++photoRun.current;
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => {
+      if (id === photoRun.current && img.naturalWidth && img.naturalHeight) {
+        setPhotoDims({ width: img.naturalWidth, height: img.naturalHeight });
+      }
+    };
+    img.src = url;
+  };
   /** A photo from the device (or null to clear it), from the picker, Replace, Remove or a drop. */
   const choosePhoto = (file: File | null) => {
     setDropError(null);
@@ -147,10 +190,12 @@ function ComposeFields({
     setPhoto(file?.name ?? null);
     setPhotoSize(file?.size ?? null);
     setDrivePhoto(null);
+    const url = file ? URL.createObjectURL(file) : null;
     setPhotoUrl((old) => {
       if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
-      return file ? URL.createObjectURL(file) : null;
+      return url;
     });
+    startPhoto(url, file?.type ?? null);
   };
   /** A file dropped on the zone: photos go in the form's file field, videos start uploading. */
   const dropFile = (file: File | null) => {
@@ -185,6 +230,60 @@ function ComposeFields({
       videoSeconds: hasVideo ? video.seconds : null,
     }),
   );
+  // "How it fits": each picked platform's file (its own crop, the crop for all, or the original).
+  const sharedShape: MediaShape | null =
+    hasVideo && video.width && video.height
+      ? { kind: "video", width: video.width, height: video.height, seconds: video.seconds }
+      : photo && !hasVideo
+        ? allCrop
+          ? { kind: "image", width: allCrop.width, height: allCrop.height }
+          : photoDims
+            ? { kind: "image", ...photoDims }
+            : null
+        : null;
+  const cropSizes = Object.fromEntries(
+    Object.entries(crops).flatMap(([p, c]) =>
+      c ? [[p, { width: c.width, height: c.height }]] : [],
+    ),
+  );
+  const fits: Partial<Record<string, Fit | null>> = Object.fromEntries(
+    pickedPlatforms.map((p) => {
+      const shape = shapeFor(p, sharedShape, cropSizes);
+      return [p, shape ? fitFor(p, shape, options[p]?.as) : null];
+    }),
+  );
+  const refused = pickedPlatforms.filter((p) => fits[p]?.level === "refused");
+  const mediaFor = (p: string): PlatformMedia | null => {
+    if (hasVideo) return { src: null, shape: sharedShape };
+    if (!photo) return null;
+    const own = crops[p];
+    if (own) {
+      return { src: own.url, shape: { kind: "image", width: own.width, height: own.height } };
+    }
+    return { src: allCrop?.url ?? photoUrl, shape: sharedShape };
+  };
+  // What the post carries to the server: the photo (or the crop for all) and the crops in use.
+  const usedCrops = pickedPlatforms.flatMap((p) => {
+    const c = crops[p];
+    return c ? [[p, c] as const] : [];
+  });
+  const bodyBytes =
+    (allCrop ? allCrop.file.size : drivePhoto ? 0 : (photoSize ?? 0)) +
+    usedCrops.reduce((sum, [, c]) => sum + c.file.size, 0);
+  const tooBig = usedCrops.length > 0 && bodyBytes > POST_BODY_MAX_BYTES;
+  const cropTarget = cropping?.target ?? null;
+  const cropChoices =
+    cropTarget === "all"
+      ? ONE_SHAPE_CHOICES
+      : cropTarget
+        ? cropChoicesFor(cropTarget, options[cropTarget]?.as)
+        : [];
+  const editing = cropTarget === "all" ? allCrop : cropTarget ? crops[cropTarget] : null;
+  const cropStart =
+    editing && (cropping?.ratio === undefined || cropping.ratio === editing.ratio)
+      ? { ratio: editing.ratio, zoom: editing.zoom, cx: editing.cx, cy: editing.cy }
+      : { ratio: cropping?.ratio ?? cropChoices[0]?.ratio ?? 1 };
+
   const serverProblems = state.problems ?? [];
   // Zernio's notes: before saving they sit in "Before it goes out"; once saved, by the outcome.
   const serverWarnings = state.savedAt ? [] : (state.warnings ?? []);
@@ -220,6 +319,26 @@ function ComposeFields({
       onSubmit={(e) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
+        // Posts Round 2: the crop for all replaces the photo; each platform's own crop goes as
+        // its own file; the sizes let the server check how it fits too.
+        if (allCrop) {
+          data.set("image", allCrop.file);
+          data.delete("imageUrl");
+          data.delete("imageSize");
+        }
+        for (const [p, c] of usedCrops) data.set(`crop_${p}`, c.file);
+        if (sharedShape) {
+          data.set(
+            "mediaShape",
+            JSON.stringify({
+              width: sharedShape.width,
+              height: sharedShape.height,
+              crops: Object.fromEntries(
+                usedCrops.map(([p, c]) => [p, { width: c.width, height: c.height }]),
+              ),
+            }),
+          );
+        }
         startTransition(() => action(data));
       }}
       className="flex flex-col gap-4"
@@ -302,7 +421,9 @@ function ComposeFields({
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <b className="truncate text-sm font-semibold">{photo}</b>
                 <span className="text-ink-3 text-xs">
-                  Photo{photoSize ? ` · ${sizeLabel(photoSize)}` : ""} ·{" "}
+                  Photo
+                  {photoDims ? ` · ${shapeLabel(photoDims.width, photoDims.height)}` : ""}
+                  {photoSize ? ` · ${sizeLabel(photoSize)}` : ""} ·{" "}
                   {drivePhoto ? "from OneDrive" : "from this device"}
                 </span>
               </span>
@@ -353,14 +474,23 @@ function ComposeFields({
                     setPhotoSize(pick.size);
                     setDrivePhoto({ url: pick.url, size: pick.size });
                     setPhotoUrl(pick.url);
+                    startPhoto(pick.url, null);
                   } else {
                     setVideo({
                       step: "ready",
                       name: pick.name,
                       size: pick.size,
                       seconds: null,
+                      width: null,
+                      height: null,
                       url: pick.url,
                     });
+                    // Its length and shape, read from the copied file for "How it fits".
+                    void readVideoMeta(pick.url).then((meta) =>
+                      setVideo((v) =>
+                        v.step === "ready" && v.url === pick.url ? { ...v, ...meta } : v,
+                      ),
+                    );
                   }
                 }}
               />
@@ -391,6 +521,84 @@ function ComposeFields({
         )}
         {fieldError("image")}
       </div>
+
+      {sharedShape && (
+        <FitRow
+          platforms={pickedPlatforms}
+          accountCount={picked.length}
+          fits={fits}
+          options={options}
+          mediaFor={mediaFor}
+          shared={sharedShape}
+          crops={crops}
+          allCrop={allCrop}
+          onCrop={(p) => setCropping({ target: p })}
+          onRemoveCrop={(p) =>
+            setCrops((c) => {
+              const old = c[p];
+              if (old) URL.revokeObjectURL(old.url);
+              return Object.fromEntries(Object.entries(c).filter(([k]) => k !== p));
+            })
+          }
+          onStory={(p) => setOptions((o) => ({ ...o, [p]: { ...o[p], as: "story" } }))}
+          onLeaveOut={(p) =>
+            setPicked((ids) =>
+              ids.filter((id) => accounts.find((a) => a.id === id)?.platform !== p),
+            )
+          }
+          onAllShape={(choice) => {
+            if (choice) {
+              setCropping({ target: "all", ratio: choice.ratio });
+              return;
+            }
+            if (allCrop) URL.revokeObjectURL(allCrop.url);
+            setAllCrop(null);
+          }}
+        />
+      )}
+      {tooBig && (
+        <p role="alert" className="text-danger text-sm">
+          The photo and its crops are too big to send together. Remove a crop, or use a smaller
+          photo.
+        </p>
+      )}
+      {cropping && photoUrl && photoDims && (
+        <CropSheet
+          key={`${cropping.target}-${cropping.ratio ?? ""}`}
+          title={
+            cropping.target === "all"
+              ? "One shape for all"
+              : `Crop for ${platformLabel(cropping.target)}`
+          }
+          note={
+            cropping.target === "all"
+              ? "The crop is made here and posted to every account in place of the original. Original puts it back."
+              : `The crop is made here and posted only to ${platformLabel(cropping.target)}. The original still goes to the others.`
+          }
+          src={photoUrl}
+          width={photoDims.width}
+          height={photoDims.height}
+          mime={photoMime}
+          choices={cropChoices}
+          start={cropStart}
+          onCancel={() => setCropping(null)}
+          onUse={(made) => {
+            const target = cropping.target;
+            setCropping(null);
+            if (target === "all") {
+              for (const c of [...Object.values(crops), allCrop]) if (c) URL.revokeObjectURL(c.url);
+              setCrops({});
+              setAllCrop(made);
+              return;
+            }
+            setCrops((c) => {
+              const old = c[target];
+              if (old) URL.revokeObjectURL(old.url);
+              return { ...c, [target]: made };
+            });
+          }}
+        />
+      )}
 
       <Fold
         title="Post to"
@@ -516,8 +724,8 @@ function ComposeFields({
           platforms={pickedPlatforms}
           brandName={brandName}
           text={text}
-          photoUrl={hasVideo ? null : photoUrl}
-          hasVideo={hasVideo}
+          options={options}
+          mediaFor={mediaFor}
         />
       </Fold>
 
@@ -710,7 +918,9 @@ function ComposeFields({
             pending ||
             video.step === "uploading" ||
             picked.length === 0 ||
-            checks.some((c) => c.level === "blocked")
+            checks.some((c) => c.level === "blocked") ||
+            refused.length > 0 ||
+            tooBig
           }
         >
           {pending

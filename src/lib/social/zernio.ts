@@ -967,7 +967,9 @@ export class ZernioSocialProvider implements SocialProvider {
           path: { accountId: t.accountId },
           // A video post has its own privacy options on TikTok.
           query: {
-            mediaType: postMediaOf(input).some((m) => mediaKindOf(m) === "video") ? "video" : "photo",
+            mediaType: postMediaOf(input).some((m) => mediaKindOf(m) === "video")
+              ? "video"
+              : "photo",
           },
         });
         const privacyLevel = pickTikTokPrivacy(
@@ -979,6 +981,7 @@ export class ZernioSocialProvider implements SocialProvider {
           platform: t.platform,
           accountId: t.accountId,
           ...(extra.customContent ? { customContent: extra.customContent } : {}),
+          ...(extra.customMedia?.length ? { customMedia: extra.customMedia } : {}),
           platformSpecificData: {
             ...extra.platformSpecificData,
             ...(privacyLevel ? { privacyLevel } : {}),

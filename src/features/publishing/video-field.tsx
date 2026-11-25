@@ -7,10 +7,13 @@ import { POST_VIDEO_TYPES } from "./limits";
 import { clockLength } from "./post-rules";
 import { videoProblem } from "./video";
 
+/** What the browser could read about a video: its length and size in pixels (null when it can't). */
+export type VideoMeta = { seconds: number | null; width: number | null; height: number | null };
+
 export type VideoState =
   | { step: "none" }
-  | { step: "uploading"; name: string; size: number; seconds: number | null; progress: number }
-  | { step: "ready"; name: string; size: number; seconds: number | null; url: string }
+  | ({ step: "uploading"; name: string; size: number; progress: number } & VideoMeta)
+  | ({ step: "ready"; name: string; size: number; url: string } & VideoMeta)
   | { step: "error"; message: string };
 
 const mb = (bytes: number) =>
@@ -18,20 +21,33 @@ const mb = (bytes: number) =>
     ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
     : `${Math.max(1, Math.round(bytes / 1024 ** 2))} MB`;
 
-/** The video's length, read by the browser (null if it can't tell). */
-function readSeconds(file: File): Promise<number | null> {
+/**
+ * A video's length and shape, read by the browser from its metadata (Posts Round 2: "How it
+ * fits" checks both). `src` is a file's object URL or a public link.
+ */
+export function readVideoMeta(src: string): Promise<VideoMeta> {
   return new Promise((resolve) => {
     const el = document.createElement("video");
-    const url = URL.createObjectURL(file);
-    const done = (value: number | null) => {
-      URL.revokeObjectURL(url);
-      resolve(value);
-    };
     el.preload = "metadata";
-    el.onloadedmetadata = () => done(Number.isFinite(el.duration) ? el.duration : null);
-    el.onerror = () => done(null);
-    el.src = url;
+    el.muted = true;
+    el.onloadedmetadata = () =>
+      resolve({
+        seconds: Number.isFinite(el.duration) ? el.duration : null,
+        width: el.videoWidth || null,
+        height: el.videoHeight || null,
+      });
+    el.onerror = () => resolve({ seconds: null, width: null, height: null });
+    el.src = src;
   });
+}
+
+async function readFileMeta(file: File): Promise<VideoMeta> {
+  const url = URL.createObjectURL(file);
+  try {
+    return await readVideoMeta(url);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /** PUT to the presigned link with progress (fetch can't report upload progress). */
@@ -73,8 +89,8 @@ export function VideoField({
     const id = ++run.current;
     const problem = videoProblem(file);
     if (problem) return onChange({ step: "error", message: problem });
-    const seconds = await readSeconds(file);
-    const base = { name: file.name, size: file.size, seconds };
+    const meta = await readFileMeta(file);
+    const base = { name: file.name, size: file.size, ...meta };
     onChange({ step: "uploading", ...base, progress: 0 });
     const link = await prepareVideoUpload({ type: file.type, size: file.size });
     if (id !== run.current) return;
