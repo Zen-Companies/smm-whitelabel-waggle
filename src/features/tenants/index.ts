@@ -5,7 +5,7 @@ export { BusinessSettings } from "./business-settings";
 export { getCurrentTenant, getTenantFor, NOT_ALLOWED } from "./current-tenant";
 export type { CurrentTenant } from "./current-tenant";
 export { zernioProfileName } from "./profile-name";
-export { setupTenantForUser } from "./server";
+export { recordSignupPlan, setupTenantForUser } from "./server";
 export {
   ensureOwnerTenant,
   ensureZernioProfile,

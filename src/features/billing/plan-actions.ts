@@ -24,6 +24,7 @@ import { upgradeLine } from "./upgrade";
 import { chargeTopUp, type TopUpCharge } from "./auto-top-up";
 import { appUrl, getStripe, priceId } from "./stripe-client";
 import { planPageReturn } from "./banners";
+import { quietCancelPath } from "./checkout-return";
 import { bankedDaysOf, firstCheckoutTrial } from "./promo";
 import { loadPromotions } from "./promotions-store";
 import { loadReferralForCheckout } from "./referrals";
@@ -153,6 +154,10 @@ export async function choosePlan(
   // checkout with Stripe and stores it, so the page shows the plan without a reload (QA, 25 Nov).
   const returnTo =
     popupReturn(formData.get("back"), formData.get("reason")) ?? planPageReturn(choice.plan);
+  // After sign-up with a plan from the site (25 Nov): backing out of Checkout lands in setup on
+  // Free, with no pop-up and no error.
+  const quietCancel =
+    formData.get("cancel") === "quiet" ? quietCancelPath(formData.get("back")) : null;
 
   let url: string | null = null;
   try {
@@ -264,7 +269,8 @@ export async function choosePlan(
             : `${PLAN_PATH}?checkout=done`,
       ),
       cancel_url: appUrl(
-        returnTo ? `${returnTo}checkout=cancelled` : `${PLAN_PATH}?checkout=cancelled`,
+        quietCancel ??
+          (returnTo ? `${returnTo}checkout=cancelled` : `${PLAN_PATH}?checkout=cancelled`),
       ),
     });
     await auditOrg(db, orgId, "billing.checkout_started", user.id, {

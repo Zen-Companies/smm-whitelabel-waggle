@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { PlatformMark } from "@/components/app/platform-mark";
-import { platformLabel } from "@/lib/social/platforms";
-import type { PlatformPostOptions, PostOptions } from "./post-options";
+import { platformLabel, platformOf } from "@/lib/social/platforms";
+import { ownText, type PlatformPostOptions, type PostOptions } from "./post-options";
 
 const SHOWS_AS = new Set(["instagram", "facebook"]);
 const FIRST_COMMENT = ["instagram", "facebook", "youtube", "threads", "linkedin"];
@@ -18,13 +18,17 @@ export function PostOptionsFields({
   sharedText,
   hasMedia,
   hasVideo,
+  options,
+  onOptionsChange: setOptions,
 }: {
   platforms: string[];
   sharedText: string;
   hasMedia: boolean;
   hasVideo: boolean;
+  /** Held by the composer, which checks each platform's own text against its limit. */
+  options: PostOptions;
+  onOptionsChange: (update: (o: PostOptions) => PostOptions) => void;
 }) {
-  const [options, setOptions] = useState<PostOptions>({});
   const [textFor, setTextFor] = useState<string | null>(null);
   const set = (platform: string, patch: Partial<PlatformPostOptions>) =>
     setOptions((o) => ({ ...o, [platform]: { ...o[platform], ...patch } }));
@@ -51,16 +55,14 @@ export function PostOptionsFields({
                 key={p}
                 type="button"
                 aria-pressed={textFor === p}
-                onClick={() => {
-                  setTextFor(textFor === p ? null : p);
-                  if (opt(p).text === undefined) set(p, { text: sharedText });
-                }}
+                // Opening it copies nothing: until the owner edits it, it follows the caption.
+                onClick={() => setTextFor(textFor === p ? null : p)}
                 className="border-line-strong data-[on=true]:border-ink data-[on=true]:bg-subtle inline-flex min-h-9 items-center gap-1.5 rounded-full border px-3 text-sm"
                 data-on={textFor === p}
               >
                 <PlatformMark platform={p} size={18} />
                 {platformLabel(p)}
-                {opt(p).text !== undefined && opt(p).text !== sharedText ? " · edited" : ""}
+                {ownText(opt(p), sharedText) !== null ? " · edited" : ""}
               </button>
             ))}
           </div>
@@ -76,6 +78,7 @@ export function PostOptionsFields({
                 onChange={(e) => set(textFor, { text: e.target.value })}
                 className="field min-h-20 py-3"
               />
+              <TextCount platform={textFor} length={(opt(textFor).text ?? sharedText).length} />
               <button
                 type="button"
                 onClick={() => set(textFor, { text: undefined })}
@@ -247,6 +250,17 @@ export function PostOptionsFields({
         </div>
       )}
     </div>
+  );
+}
+
+/** "120 / 300" against this platform's own limit. */
+function TextCount({ platform, length }: { platform: string; length: number }) {
+  const max = platformOf(platform)?.post?.textMax;
+  if (!max) return null;
+  return (
+    <p className={length > max ? "text-danger text-sm" : "meta"}>
+      {length} / {max.toLocaleString("en-US")} on {platformLabel(platform)}
+    </p>
   );
 }
 

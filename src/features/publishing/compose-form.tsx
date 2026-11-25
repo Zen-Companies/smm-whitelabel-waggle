@@ -2,7 +2,7 @@
 
 import { Camera, Check, ChevronDown } from "lucide-react";
 import Link from "next/link";
-import { useActionState, useRef, useState } from "react";
+import { startTransition, useActionState, useRef, useState } from "react";
 import { cn } from "cn";
 import { EmptyCell } from "@/components/app/empty-spot";
 import { StateLabel } from "@/components/app/state-mark";
@@ -14,9 +14,21 @@ import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MA
 import { checkPlatform, imageMaxBytesFor, needsConsent, textLimitFor } from "./post-rules";
 import { BoardPicker } from "./board-picker";
 import { PostOptionsFields } from "./post-options-fields";
-import { VideoField, type VideoState } from "./video-field";
+import { ownText, textFor, type PostOptions } from "./post-options";
+import { readVideoMeta, VideoField, type VideoState } from "./video-field";
 import { OneDrivePicker } from "./onedrive-picker";
-import { PostPreview } from "./post-preview";
+import { PostPreview, type PlatformMedia } from "./post-preview";
+import { CropSheet, type MadeCrop } from "./crop-sheet";
+import { FitRow } from "./fit-row";
+import {
+  cropChoicesFor,
+  fitFor,
+  ONE_SHAPE_CHOICES,
+  shapeFor,
+  shapeLabel,
+  type Fit,
+  type MediaShape,
+} from "./media-fit";
 
 export interface ComposeAccount {
   id: string;
@@ -45,6 +57,12 @@ function slotLabel(iso: string): string {
   const at = new Date(iso);
   return `${at.toLocaleDateString(undefined, { weekday: "short" })} ${at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
 }
+
+/**
+ * What one post may carry to the server (next.config `serverActions.bodySizeLimit` is 6 MB),
+ * with room for the text and options.
+ */
+const POST_BODY_MAX_BYTES = 5.5 * 1024 * 1024;
 
 const localDay = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -117,6 +135,8 @@ function ComposeFields({
   const [time, setTime] = useState(initialTime ?? "09:00");
   const [text, setText] = useState("");
   const length = text.length;
+  // Per-platform choices (T75), here so each platform's own text is checked against its limit.
+  const [options, setOptions] = useState<PostOptions>({});
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoSize, setPhotoSize] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -127,6 +147,14 @@ function ComposeFields({
   // T84c: a photo picked from OneDrive, already copied into media storage.
   const [drivePhoto, setDrivePhoto] = useState<{ url: string; size: number } | null>(null);
   const [video, setVideo] = useState<VideoState>({ step: "none" });
+  // Posts Round 2 ("How it fits"): the photo's size and type, each platform's own crop, one crop
+  // for all, and which crop is open.
+  const [photoDims, setPhotoDims] = useState<{ width: number; height: number } | null>(null);
+  const [photoMime, setPhotoMime] = useState<string | null>(null);
+  const [crops, setCrops] = useState<Partial<Record<string, MadeCrop>>>({});
+  const [allCrop, setAllCrop] = useState<MadeCrop | null>(null);
+  const [cropping, setCropping] = useState<{ target: string; ratio?: number } | null>(null);
+  const photoRun = useRef(0);
   // T64: boards chosen here (saved on the account), and whose picker is open.
   const [boards, setBoards] = useState<Record<string, { id: string; name: string }>>({});
   const [boardFor, setBoardFor] = useState<string | null>(null);
@@ -134,6 +162,24 @@ function ComposeFields({
   const pinterest = accounts.filter((a) => a.platform === "pinterest" && picked.includes(a.id));
   const hasVideo = video.step === "ready" || video.step === "uploading";
   const hasMedia = !!photo || hasVideo;
+  /** A new photo starts with no crops; its size is read by the browser for "How it fits". */
+  const startPhoto = (url: string | null, mime: string | null) => {
+    for (const c of [...Object.values(crops), allCrop]) if (c) URL.revokeObjectURL(c.url);
+    setCrops({});
+    setAllCrop(null);
+    setCropping(null);
+    setPhotoMime(mime);
+    setPhotoDims(null);
+    const id = ++photoRun.current;
+    if (!url) return;
+    const img = new Image();
+    img.onload = () => {
+      if (id === photoRun.current && img.naturalWidth && img.naturalHeight) {
+        setPhotoDims({ width: img.naturalWidth, height: img.naturalHeight });
+      }
+    };
+    img.src = url;
+  };
   /** A photo from the device (or null to clear it), from the picker, Replace, Remove or a drop. */
   const choosePhoto = (file: File | null) => {
     setDropError(null);
@@ -144,10 +190,12 @@ function ComposeFields({
     setPhoto(file?.name ?? null);
     setPhotoSize(file?.size ?? null);
     setDrivePhoto(null);
+    const url = file ? URL.createObjectURL(file) : null;
     setPhotoUrl((old) => {
       if (old?.startsWith("blob:")) URL.revokeObjectURL(old);
-      return file ? URL.createObjectURL(file) : null;
+      return url;
     });
+    startPhoto(url, file?.type ?? null);
   };
   /** A file dropped on the zone: photos go in the form's file field, videos start uploading. */
   const dropFile = (file: File | null) => {
@@ -175,14 +223,73 @@ function ComposeFields({
   ];
   const checks = pickedPlatforms.map((p) =>
     checkPlatform(p, {
-      textLength: length,
+      // The text that really goes there: its own when the owner wrote one, else the caption.
+      textLength: textFor(p, options, text).length,
       images: photo && !hasVideo ? 1 : 0,
       videos: hasVideo ? 1 : 0,
       videoSeconds: hasVideo ? video.seconds : null,
     }),
   );
+  // "How it fits": each picked platform's file (its own crop, the crop for all, or the original).
+  const sharedShape: MediaShape | null =
+    hasVideo && video.width && video.height
+      ? { kind: "video", width: video.width, height: video.height, seconds: video.seconds }
+      : photo && !hasVideo
+        ? allCrop
+          ? { kind: "image", width: allCrop.width, height: allCrop.height }
+          : photoDims
+            ? { kind: "image", ...photoDims }
+            : null
+        : null;
+  const cropSizes = Object.fromEntries(
+    Object.entries(crops).flatMap(([p, c]) =>
+      c ? [[p, { width: c.width, height: c.height }]] : [],
+    ),
+  );
+  const fits: Partial<Record<string, Fit | null>> = Object.fromEntries(
+    pickedPlatforms.map((p) => {
+      const shape = shapeFor(p, sharedShape, cropSizes);
+      return [p, shape ? fitFor(p, shape, options[p]?.as) : null];
+    }),
+  );
+  const refused = pickedPlatforms.filter((p) => fits[p]?.level === "refused");
+  const mediaFor = (p: string): PlatformMedia | null => {
+    if (hasVideo) return { src: null, shape: sharedShape };
+    if (!photo) return null;
+    const own = crops[p];
+    if (own) {
+      return { src: own.url, shape: { kind: "image", width: own.width, height: own.height } };
+    }
+    return { src: allCrop?.url ?? photoUrl, shape: sharedShape };
+  };
+  // What the post carries to the server: the photo (or the crop for all) and the crops in use.
+  const usedCrops = pickedPlatforms.flatMap((p) => {
+    const c = crops[p];
+    return c ? [[p, c] as const] : [];
+  });
+  const bodyBytes =
+    (allCrop ? allCrop.file.size : drivePhoto ? 0 : (photoSize ?? 0)) +
+    usedCrops.reduce((sum, [, c]) => sum + c.file.size, 0);
+  const tooBig = usedCrops.length > 0 && bodyBytes > POST_BODY_MAX_BYTES;
+  const cropTarget = cropping?.target ?? null;
+  const cropChoices =
+    cropTarget === "all"
+      ? ONE_SHAPE_CHOICES
+      : cropTarget
+        ? cropChoicesFor(cropTarget, options[cropTarget]?.as)
+        : [];
+  const editing = cropTarget === "all" ? allCrop : cropTarget ? crops[cropTarget] : null;
+  const cropStart =
+    editing && (cropping?.ratio === undefined || cropping.ratio === editing.ratio)
+      ? { ratio: editing.ratio, zoom: editing.zoom, cx: editing.cx, cy: editing.cy }
+      : { ratio: cropping?.ratio ?? cropChoices[0]?.ratio ?? 1 };
+
   const serverProblems = state.problems ?? [];
-  const limit = textLimitFor(pickedPlatforms, POST_TEXT_MAX);
+  // Zernio's notes: before saving they sit in "Before it goes out"; once saved, by the outcome.
+  const serverWarnings = state.savedAt ? [] : (state.warnings ?? []);
+  // The caption's counter: the shortest limit among platforms that use the caption.
+  const followers = pickedPlatforms.filter((p) => ownText(options[p], text) === null);
+  const limit = textLimitFor(followers, POST_TEXT_MAX);
   const imageMb =
     Math.round(imageMaxBytesFor(pickedPlatforms, POST_IMAGE_MAX_BYTES) / 100_000) / 10;
   // Day and time are the owner's local time; send them as an absolute ISO time.
@@ -195,7 +302,8 @@ function ComposeFields({
       </p>
     ) : null;
 
-  const issues = checks.filter((c) => c.level !== "ok").length + serverProblems.length;
+  const issues =
+    checks.filter((c) => c.level !== "ok").length + serverProblems.length + serverWarnings.length;
   const beforeSummary = issues
     ? issues === 1
       ? "1 thing to check"
@@ -204,7 +312,37 @@ function ComposeFields({
       ? "Pinterest board"
       : "All good";
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <form
+      action={action}
+      // Submitted by hand so React doesn't reset the fields: a refused post keeps everything the
+      // owner typed and attached (a saved one remounts the form through savedAt instead).
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        // Posts Round 2: the crop for all replaces the photo; each platform's own crop goes as
+        // its own file; the sizes let the server check how it fits too.
+        if (allCrop) {
+          data.set("image", allCrop.file);
+          data.delete("imageUrl");
+          data.delete("imageSize");
+        }
+        for (const [p, c] of usedCrops) data.set(`crop_${p}`, c.file);
+        if (sharedShape) {
+          data.set(
+            "mediaShape",
+            JSON.stringify({
+              width: sharedShape.width,
+              height: sharedShape.height,
+              crops: Object.fromEntries(
+                usedCrops.map(([p, c]) => [p, { width: c.width, height: c.height }]),
+              ),
+            }),
+          );
+        }
+        startTransition(() => action(data));
+      }}
+      className="flex flex-col gap-4"
+    >
       <div className="flex flex-col gap-2">
         <label htmlFor="post-content" className="text-sm font-medium">
           What do you want to share?
@@ -215,15 +353,14 @@ function ComposeFields({
           rows={4}
           maxLength={POST_TEXT_MAX}
           required
+          value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="New on the menu: ube cheese pandesal, every morning from 7."
           className="field min-h-28 py-3"
         />
         <p className={length > limit ? "text-danger text-sm" : "meta"}>
           {length} / {limit.toLocaleString("en-US")}
-          {limit < POST_TEXT_MAX && pickedPlatforms.length > 1
-            ? " (the shortest of your picks)"
-            : ""}
+          {limit < POST_TEXT_MAX && followers.length > 1 ? " (the shortest of your picks)" : ""}
         </p>
         {fieldError("content")}
       </div>
@@ -284,7 +421,9 @@ function ComposeFields({
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <b className="truncate text-sm font-semibold">{photo}</b>
                 <span className="text-ink-3 text-xs">
-                  Photo{photoSize ? ` · ${sizeLabel(photoSize)}` : ""} ·{" "}
+                  Photo
+                  {photoDims ? ` · ${shapeLabel(photoDims.width, photoDims.height)}` : ""}
+                  {photoSize ? ` · ${sizeLabel(photoSize)}` : ""} ·{" "}
                   {drivePhoto ? "from OneDrive" : "from this device"}
                 </span>
               </span>
@@ -335,14 +474,23 @@ function ComposeFields({
                     setPhotoSize(pick.size);
                     setDrivePhoto({ url: pick.url, size: pick.size });
                     setPhotoUrl(pick.url);
+                    startPhoto(pick.url, null);
                   } else {
                     setVideo({
                       step: "ready",
                       name: pick.name,
                       size: pick.size,
                       seconds: null,
+                      width: null,
+                      height: null,
                       url: pick.url,
                     });
+                    // Its length and shape, read from the copied file for "How it fits".
+                    void readVideoMeta(pick.url).then((meta) =>
+                      setVideo((v) =>
+                        v.step === "ready" && v.url === pick.url ? { ...v, ...meta } : v,
+                      ),
+                    );
                   }
                 }}
               />
@@ -373,6 +521,84 @@ function ComposeFields({
         )}
         {fieldError("image")}
       </div>
+
+      {sharedShape && (
+        <FitRow
+          platforms={pickedPlatforms}
+          accountCount={picked.length}
+          fits={fits}
+          options={options}
+          mediaFor={mediaFor}
+          shared={sharedShape}
+          crops={crops}
+          allCrop={allCrop}
+          onCrop={(p) => setCropping({ target: p })}
+          onRemoveCrop={(p) =>
+            setCrops((c) => {
+              const old = c[p];
+              if (old) URL.revokeObjectURL(old.url);
+              return Object.fromEntries(Object.entries(c).filter(([k]) => k !== p));
+            })
+          }
+          onStory={(p) => setOptions((o) => ({ ...o, [p]: { ...o[p], as: "story" } }))}
+          onLeaveOut={(p) =>
+            setPicked((ids) =>
+              ids.filter((id) => accounts.find((a) => a.id === id)?.platform !== p),
+            )
+          }
+          onAllShape={(choice) => {
+            if (choice) {
+              setCropping({ target: "all", ratio: choice.ratio });
+              return;
+            }
+            if (allCrop) URL.revokeObjectURL(allCrop.url);
+            setAllCrop(null);
+          }}
+        />
+      )}
+      {tooBig && (
+        <p role="alert" className="text-danger text-sm">
+          The photo and its crops are too big to send together. Remove a crop, or use a smaller
+          photo.
+        </p>
+      )}
+      {cropping && photoUrl && photoDims && (
+        <CropSheet
+          key={`${cropping.target}-${cropping.ratio ?? ""}`}
+          title={
+            cropping.target === "all"
+              ? "One shape for all"
+              : `Crop for ${platformLabel(cropping.target)}`
+          }
+          note={
+            cropping.target === "all"
+              ? "The crop is made here and posted to every account in place of the original. Original puts it back."
+              : `The crop is made here and posted only to ${platformLabel(cropping.target)}. The original still goes to the others.`
+          }
+          src={photoUrl}
+          width={photoDims.width}
+          height={photoDims.height}
+          mime={photoMime}
+          choices={cropChoices}
+          start={cropStart}
+          onCancel={() => setCropping(null)}
+          onUse={(made) => {
+            const target = cropping.target;
+            setCropping(null);
+            if (target === "all") {
+              for (const c of [...Object.values(crops), allCrop]) if (c) URL.revokeObjectURL(c.url);
+              setCrops({});
+              setAllCrop(made);
+              return;
+            }
+            setCrops((c) => {
+              const old = c[target];
+              if (old) URL.revokeObjectURL(old.url);
+              return { ...c, [target]: made };
+            });
+          }}
+        />
+      )}
 
       <Fold
         title="Post to"
@@ -488,6 +714,8 @@ function ComposeFields({
           sharedText={text}
           hasMedia={!!photo || hasVideo}
           hasVideo={hasVideo}
+          options={options}
+          onOptionsChange={setOptions}
         />
       </Fold>
 
@@ -496,13 +724,14 @@ function ComposeFields({
           platforms={pickedPlatforms}
           brandName={brandName}
           text={text}
-          photoUrl={hasVideo ? null : photoUrl}
-          hasVideo={hasVideo}
+          options={options}
+          mediaFor={mediaFor}
         />
       </Fold>
 
       {(checks.some((c) => c.level !== "ok") ||
         serverProblems.length > 0 ||
+        serverWarnings.length > 0 ||
         pinterest.length > 0) && (
         <Fold
           title="Before it goes out"
@@ -550,6 +779,15 @@ function ComposeFields({
                   <PlatformMark platform={p.platform} size={22} />
                   <span className="text-danger">
                     <b className="font-semibold">{platformLabel(p.platform)}</b>: {p.message}
+                  </span>
+                </li>
+              ))}
+              {serverWarnings.map((w, i) => (
+                <li key={`warn-${w.platform}-${i}`} className="flex items-start gap-2.5">
+                  <PlatformMark platform={w.platform} size={22} />
+                  <span className="text-ink-2">
+                    <b className="text-ink font-semibold">{platformLabel(w.platform)}</b>:{" "}
+                    {w.message}
                   </span>
                 </li>
               ))}
@@ -680,7 +918,9 @@ function ComposeFields({
             pending ||
             video.step === "uploading" ||
             picked.length === 0 ||
-            checks.some((c) => c.level === "blocked")
+            checks.some((c) => c.level === "blocked") ||
+            refused.length > 0 ||
+            tooBig
           }
         >
           {pending
@@ -696,6 +936,15 @@ function ComposeFields({
             {OUTCOME[state.outcome]}
           </p>
         )}
+        {state.savedAt && state.warnings?.length ? (
+          <ul className="text-ink-2 flex w-full flex-col gap-1 text-sm">
+            {state.warnings.map((w, i) => (
+              <li key={`saved-warn-${w.platform}-${i}`}>
+                <b className="text-ink font-semibold">{platformLabel(w.platform)}</b>: {w.message}
+              </li>
+            ))}
+          </ul>
+        ) : null}
         {state.error && !state.field && (
           <p role="alert" className="text-danger text-sm">
             {state.error}

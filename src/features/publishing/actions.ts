@@ -1,11 +1,9 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
-import { writeAudit } from "@/lib/audit";
 import { getSocialProvider, resolveSocialProviderMode } from "@/lib/social";
 import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { isPlatformPaused } from "@/lib/social/zernio";
@@ -13,12 +11,12 @@ import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { POST_IMAGE_MAX_BYTES, POST_IMAGE_TYPES, POST_TEXT_MAX, YOUTUBE_TITLE_MAX } from "./limits";
 import { imageMaxBytesFor } from "./post-rules";
-import { publishPost } from "./publish";
+import { retryPost as retryFailedPost } from "./retry";
 import { chooseBoardFor, listBoardsFor, type PinterestBoard } from "./pinterest";
 import { cancelScheduledPost, createPost, takeDownPost } from "./posts";
 import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./video";
 import { driveKind, isUploadedImageUrl, ONEDRIVE_VIDEO_MAX_BYTES, postableItems } from "./onedrive";
-import { parsePostOptions, type PostOptions } from "./post-options";
+import { parsePostOptions, withoutMedia, type PostOptions } from "./post-options";
 import { platformLabel } from "@/lib/social/platforms";
 
 export interface ComposeState {
@@ -30,7 +28,22 @@ export interface ComposeState {
   outcome?: "published" | "scheduled" | "waiting" | "failed";
   /** Platforms that won't take the post as it is, with why (shown in "Before it goes out"). */
   problems?: { platform: string; message: string }[];
+  /** Platforms' notes on the post: it can still go out (shown in "Before it goes out"). */
+  warnings?: { platform: string; message: string }[];
 }
+
+/** Platforms a photo can be cropped for (one file each, sent only there). */
+const CROP_PLATFORMS = [
+  "instagram",
+  "facebook",
+  "linkedin",
+  "pinterest",
+  "tiktok",
+  "googlebusiness",
+  "threads",
+  "twitter",
+  "bluesky",
+] as const;
 
 const composeSchema = z.object({
   content: z.string().trim().min(1, "Write something to post.").max(POST_TEXT_MAX),
@@ -49,6 +62,28 @@ const composeSchema = z.object({
   // T84c: a photo already copied into media storage from OneDrive, and its size.
   imageUrl: z.string().optional(),
   imageSize: z.coerce.number().int().nonnegative().optional().catch(undefined),
+  // Posts Round 2: the photo's or video's size in pixels, and each platform's own crop (its file
+  // comes as `crop_<platform>`), all read in the browser.
+  mediaShape: z
+    .string()
+    .optional()
+    .transform((v) => {
+      try {
+        return v ? mediaShapeSchema.parse(JSON.parse(v)) : undefined;
+      } catch {
+        return undefined;
+      }
+    }),
+});
+
+const pixels = z.number().int().positive().max(100_000);
+const mediaShapeSchema = z.object({
+  width: pixels,
+  height: pixels,
+  crops: z
+    .partialRecord(z.enum(CROP_PLATFORMS), z.object({ width: pixels, height: pixels }))
+    .optional()
+    .default({}),
 });
 
 export async function composePost(_prev: ComposeState, formData: FormData): Promise<ComposeState> {
@@ -62,6 +97,7 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     videoSeconds: formData.get("videoSeconds") || undefined,
     imageUrl: formData.get("imageUrl") || undefined,
     imageSize: formData.get("imageSize") || undefined,
+    mediaShape: formData.get("mediaShape") || undefined,
   });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -88,14 +124,27 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
   if (!tenant) return { error: NOT_ALLOWED };
   const db = getServiceClient();
   // Optional image: uploaded through Zernio's presign flow before the post is created.
-  const media: { url: string; seconds?: number | null }[] = [];
+  const media: {
+    url: string;
+    seconds?: number | null;
+    type: "image" | "video";
+    width?: number;
+    height?: number;
+  }[] = [];
+  const shape = parsed.data.mediaShape;
+  const dims = shape ? { width: shape.width, height: shape.height } : {};
   const image = formData.get("image");
   if (parsed.data.video) {
     const mock = resolveSocialProviderMode(process.env) === "mock";
     if (!isUploadedVideoUrl(parsed.data.video, { mock, appUrl: process.env.APP_URL })) {
       return { error: "Upload the video again.", field: "image" };
     }
-    media.push({ url: parsed.data.video, seconds: parsed.data.videoSeconds ?? null });
+    media.push({
+      url: parsed.data.video,
+      seconds: parsed.data.videoSeconds ?? null,
+      type: "video",
+      ...dims,
+    });
   } else if (parsed.data.imageUrl && !(image instanceof File && image.size > 0)) {
     const mock = resolveSocialProviderMode(process.env) === "mock";
     if (!isUploadedImageUrl(parsed.data.imageUrl, { mock, appUrl: process.env.APP_URL })) {
@@ -116,7 +165,7 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
         field: "image",
       };
     }
-    media.push({ url: parsed.data.imageUrl });
+    media.push({ url: parsed.data.imageUrl, type: "image", ...dims });
   } else if (image instanceof File && image.size > 0) {
     if (!(POST_IMAGE_TYPES as readonly string[]).includes(image.type)) {
       return { error: "Use a JPG, PNG or WebP image.", field: "image" };
@@ -137,25 +186,34 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
         field: "image",
       };
     }
-    try {
-      const { publicUrl } = await getSocialProvider().uploadMedia({
-        filename: image.name || "image",
-        contentType: image.type,
-        bytes: new Uint8Array(await image.arrayBuffer()),
-        signal: AbortSignal.timeout(30_000),
-      });
-      media.push({ url: publicUrl });
-    } catch (error) {
-      if (isPlatformPaused(error)) {
-        await recordPlatformPause(db);
-        return {
-          error: "Posting is paused on our side right now. Try again later.",
-          field: "image",
-        };
-      }
-      Sentry.captureException(error, { extra: { tenantId: tenant.id } });
-      return { error: "The image couldn't be uploaded. Try again.", field: "image" };
+    const uploaded = await uploadPhoto(image, tenant.id);
+    if ("error" in uploaded) return uploaded;
+    media.push({ url: uploaded.url, type: "image", ...dims });
+  }
+
+  // Posts Round 2: each platform's own crop, uploaded like the photo and sent only there
+  // (Zernio `customMedia`). Only with a photo; the browser's options never carry files.
+  const options = withoutMedia(readOptions(formData.get("platformOptions")));
+  const crops = media[0]?.type === "image" ? Object.entries(shape?.crops ?? {}) : [];
+  for (const [platform, size] of crops) {
+    const file = formData.get(`crop_${platform}`);
+    if (!size || !(file instanceof File) || file.size === 0) continue;
+    if (!["image/jpeg", "image/png"].includes(file.type)) {
+      return { error: "Crop the photo again.", field: "image" };
     }
+    const maxBytes = imageMaxBytesFor([platform], POST_IMAGE_MAX_BYTES);
+    if (file.size > maxBytes) {
+      return {
+        error: `The crop for ${platformLabel(platform)} is over ${Math.round(maxBytes / 100_000) / 10} MB. Crop a smaller part, or remove the crop.`,
+        field: "image",
+      };
+    }
+    const uploaded = await uploadPhoto(file, tenant.id);
+    if ("error" in uploaded) return uploaded;
+    options[platform] = {
+      ...options[platform],
+      media: [{ url: uploaded.url, type: "image", width: size.width, height: size.height }],
+    };
   }
 
   const result = await createPost(
@@ -169,7 +227,7 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
       media,
       tiktokConsent: formData.get("tiktokConsent") === "yes",
       youtubeTitle: parsed.data.youtubeTitle || undefined,
-      options: readOptions(formData.get("platformOptions")),
+      options,
       queued: when === "queue",
     },
   );
@@ -177,6 +235,7 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     if (result.error === "not_accepted") {
       return {
         problems: result.problems,
+        warnings: result.warnings,
         error: "Some platforms won't take this post as it is.",
         field: "accounts",
       };
@@ -199,10 +258,34 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     return { error: "Couldn't save the post. Try again." };
   }
   revalidatePath("/posts");
+  const warnings = result.warnings.length ? { warnings: result.warnings } : {};
   if (result.outcome === "failed") {
-    return { error: result.error, savedAt: Date.now(), outcome: "failed" };
+    return { error: result.error, savedAt: Date.now(), outcome: "failed", ...warnings };
   }
-  return { savedAt: Date.now(), outcome: result.outcome };
+  return { savedAt: Date.now(), outcome: result.outcome, ...warnings };
+}
+
+/** Uploads a photo (or a crop of it) to media storage for a post. */
+async function uploadPhoto(
+  file: File,
+  tenantId: string,
+): Promise<{ url: string } | { error: string; field: "image" }> {
+  try {
+    const { publicUrl } = await getSocialProvider().uploadMedia({
+      filename: file.name || "image",
+      contentType: file.type,
+      bytes: new Uint8Array(await file.arrayBuffer()),
+      signal: AbortSignal.timeout(30_000),
+    });
+    return { url: publicUrl };
+  } catch (error) {
+    if (isPlatformPaused(error)) {
+      await recordPlatformPause(getServiceClient());
+      return { error: "Posting is paused on our side right now. Try again later.", field: "image" };
+    }
+    Sentry.captureException(error, { extra: { tenantId } });
+    return { error: "The image couldn't be uploaded. Try again.", field: "image" };
+  }
 }
 
 export interface PostActionState {
@@ -242,8 +325,8 @@ const retrySchema = z.object({
 });
 
 /**
- * Retry a failed post, or reschedule one that failed during a Zernio pause or was cancelled
- * because its account was removed. A new idempotency key: the old one would replay the failure.
+ * Try a failed or partly posted post again, or move one that never went out to a new time
+ * (posts.ts / retry.ts decide how; only the accounts that didn't get it are tried again).
  */
 export async function retryPost(
   _prev: PostActionState,
@@ -260,34 +343,12 @@ export async function retryPost(
   }
   const tenant = await getTenantFor("posts.write");
   if (!tenant) return { error: NOT_ALLOWED };
-  const db = getServiceClient();
-  const { data: updated } = await db
-    .from("posts")
-    .update({
-      status: "queued",
-      idempotency_key: randomUUID(),
-      zernio_post_id: null,
-      scheduled_for: at?.toISOString() ?? null,
-      failure_reason: null,
-      last_error: null,
-      attempts: 0,
-      next_attempt_at: null,
-      platform_results: [],
-    })
-    .eq("id", parsed.data.postId)
-    .eq("tenant_id", tenant.id)
-    .in("status", ["failed", "partial", "cancelled"])
-    .select("id");
-  if (!updated?.length) return { error: "This post can't be retried." };
-  await writeAudit(db, {
-    tenantId: tenant.id,
-    action: "post_retried",
-    actor: tenant.userId,
-    details: { postId: parsed.data.postId, rescheduled: !!at },
-  });
-  const result = await publishPost({ db, social: getSocialProvider }, parsed.data.postId);
+  const result = await retryFailedPost(
+    { db: getServiceClient(), social: getSocialProvider },
+    { tenantId: tenant.id, userId: tenant.userId, postId: parsed.data.postId, scheduledFor: at },
+  );
   revalidatePath("/posts");
-  return result.outcome === "failed" ? { error: result.error } : {};
+  return result.ok ? {} : { error: result.error };
 }
 
 const videoMetaSchema = z.object({

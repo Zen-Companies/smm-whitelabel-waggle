@@ -16,9 +16,12 @@ import {
   EMPTY_ACCOUNT_CATEGORY,
   type AccountCategory,
   type TelegramConnectStatus,
-  isVideoUrl,
+  mediaKindOf,
+  postMediaOf,
+  toMediaItems,
+  type PostPlatformResult,
   type WhatsAppTemplate,
-  type AccountHealth,
+  type AccountsHealthReport,
   type BusinessProfile,
   type AccountPicture,
   type CreatePostInput,
@@ -474,9 +477,11 @@ const usageSchema = z.object({
     .optional(),
 });
 const healthSchema = z.object({
+  summary: z.object({ total: z.number().int().nonnegative().optional() }).nullish(),
   accounts: z.array(
     z.object({
       accountId: z.string().min(1),
+      profileId: z.string().nullish(),
       platform: z.string(),
       username: z.string().nullish(),
       status: z.enum(["healthy", "warning", "error"]),
@@ -923,7 +928,7 @@ export class ZernioSocialProvider implements SocialProvider {
         withFetch({
           body: {
             content: input.content,
-            mediaItems: input.mediaUrls?.map((url) => ({ url })),
+            mediaItems: mediaItemsFor(input),
             platforms: await this.postTargets(input),
             // The queue picks (and holds) the time itself; never pass its next slot as a time.
             ...(input.queueProfileId
@@ -963,7 +968,11 @@ export class ZernioSocialProvider implements SocialProvider {
         const { data } = await this.zernio.accounts.getTikTokCreatorInfo({
           path: { accountId: t.accountId },
           // A video post has its own privacy options on TikTok.
-          query: { mediaType: (input.mediaUrls ?? []).some(isVideoUrl) ? "video" : "photo" },
+          query: {
+            mediaType: postMediaOf(input).some((m) => mediaKindOf(m) === "video")
+              ? "video"
+              : "photo",
+          },
         });
         const privacyLevel = pickTikTokPrivacy(
           (parse(creatorInfoSchema, data, "getTikTokCreatorInfo").privacyLevels ?? []).map(
@@ -974,6 +983,7 @@ export class ZernioSocialProvider implements SocialProvider {
           platform: t.platform,
           accountId: t.accountId,
           ...(extra.customContent ? { customContent: extra.customContent } : {}),
+          ...(extra.customMedia?.length ? { customMedia: extra.customMedia } : {}),
           platformSpecificData: {
             ...extra.platformSpecificData,
             ...(privacyLevel ? { privacyLevel } : {}),
@@ -994,10 +1004,13 @@ export class ZernioSocialProvider implements SocialProvider {
           signal: input.signal,
           body: {
             content: input.content,
-            mediaItems: input.mediaUrls?.map((url) => ({ url })),
+            mediaItems: mediaItemsFor(input),
+            // Each target's own text and choices (Story, Reel, title, board), as createPost sends
+            // them, so the check sees the post that will really go out.
             platforms: input.targets.map((t) => ({
               platform: t.platform as "instagram",
               accountId: t.accountId,
+              ...(input.extras?.[t.platform] ?? legacyExtras(t.platform, input)),
             })),
           },
         }),
@@ -3597,6 +3610,23 @@ export class ZernioSocialProvider implements SocialProvider {
     return { publicUrl };
   }
 
+  async retryPost(input: {
+    postId: string;
+    idempotencyKey: string;
+    signal?: AbortSignal;
+  }): Promise<{ status: ProviderPostStatus; results: PostPlatformResult[] }> {
+    return call("retryPost", async (withFetch) => {
+      const { data } = await this.zernio.posts.retryPost(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      return retryOutcome(parse(retrySchema, data, "retryPost"));
+    });
+  }
+
   async deletePost(input: { postId: string; signal?: AbortSignal }): Promise<void> {
     await call("deletePost", async (withFetch) => {
       await this.zernio.posts.deletePost(
@@ -4461,23 +4491,48 @@ export class ZernioSocialProvider implements SocialProvider {
     });
   }
 
-  async getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]> {
+  async getAccountsHealth(input: { profileId: string }): Promise<AccountsHealthReport> {
     return call("getAccountsHealth", async (withFetch) => {
       const { data } = await this.zernio.accounts.getAllAccountsHealth(
         withFetch({
           query: { profileId: input.profileId },
         }),
       );
-      return parse(healthSchema, data, "getAccountsHealth").accounts.map((a) => ({
-        accountId: a.accountId,
-        platform: a.platform,
-        username: a.username ?? null,
-        status: a.status,
-        needsReconnect: a.needsReconnect ?? false,
-        canPost: a.canPost ?? false,
-        issues: a.issues ?? [],
-      }));
+      const parsed = parse(healthSchema, data, "getAccountsHealth");
+      // The endpoint has no paging (docs: /accounts/get-all-accounts-health). Complete only when
+      // the summary's total matches and nothing from another profile came back.
+      const total = parsed.summary?.total;
+      const complete =
+        typeof total === "number" &&
+        total === parsed.accounts.length &&
+        parsed.accounts.every((a) => a.profileId == null || a.profileId === input.profileId);
+      return {
+        complete,
+        accounts: parsed.accounts.map((a) => ({
+          accountId: a.accountId,
+          platform: a.platform,
+          username: a.username ?? null,
+          status: a.status,
+          needsReconnect: a.needsReconnect ?? false,
+          canPost: a.canPost ?? false,
+          issues: a.issues ?? [],
+        })),
+      };
     });
+  }
+
+  async accountExists(input: { accountId: string; signal?: AbortSignal }): Promise<boolean> {
+    try {
+      await call("accountExists", async (withFetch) => {
+        await this.zernio.accounts.getAccountHealth(
+          withFetch({ signal: input.signal, path: { accountId: input.accountId } }),
+        );
+      });
+      return true;
+    } catch (error) {
+      if (error instanceof SocialProviderError && error.details.status === 404) return false;
+      throw error;
+    }
   }
 
   async listAccountPictures(input: { profileId: string }): Promise<AccountPicture[]> {
@@ -4508,7 +4563,111 @@ export function createZernioProvider(options: {
 }
 
 /** The YouTube title and Pinterest board passed the T63/T64 way (no `extras` for the platform). */
-function legacyExtras(platform: string, input: CreatePostInput): TargetExtras {
+/** `mediaItems` for createPost and validate: each file with its type (and alt text). */
+function mediaItemsFor(input: Pick<CreatePostInput, "media" | "mediaUrls">) {
+  const media = postMediaOf(input);
+  return media.length ? toMediaItems(media) : undefined;
+}
+
+const POST_STATUSES = [
+  "draft",
+  "pending_approval",
+  "scheduled",
+  "publishing",
+  "published",
+  "partial",
+  "failed",
+  "cancelled",
+] as const;
+
+/**
+ * `POST /v1/posts/{postId}/retry` (docs.zernio.com/posts/retry-post): 200 or 207 with the post
+ * and one `platformResults` entry per platform. Read loosely: only what Waggle shows.
+ */
+const retrySchema = z.object({
+  post: z
+    .object({
+      status: z.enum(POST_STATUSES).optional().catch(undefined),
+      platforms: z
+        .array(
+          z.object({
+            platform: z.string().optional(),
+            accountId: z
+              .union([z.string(), z.object({ _id: z.string() }).transform((a) => a._id)])
+              .optional()
+              .catch(undefined),
+            status: z.string().optional(),
+            platformPostUrl: z.string().nullish(),
+            errorMessage: z.string().nullish(),
+            errorCategory: z.string().nullish(),
+          }),
+        )
+        .optional()
+        .catch(undefined),
+    })
+    .optional(),
+  platformResults: z
+    .array(
+      z.object({
+        platform: z.string(),
+        accountId: z.string().nullish(),
+        status: z.string(),
+        error: z.string().nullish(),
+        errorCategory: z.string().nullish(),
+      }),
+    )
+    .optional()
+    .catch(undefined),
+});
+
+/** The post's status and each platform's result after a retry (URLs from `post.platforms`). */
+export function retryOutcome(r: z.infer<typeof retrySchema>): {
+  status: ProviderPostStatus;
+  results: PostPlatformResult[];
+} {
+  const targets = r.post?.platforms ?? [];
+  const urlOf = (platform: string, accountId: string | null | undefined) =>
+    targets.find((t) => t.platform === platform && (!accountId || t.accountId === accountId))
+      ?.platformPostUrl ?? null;
+  const results: PostPlatformResult[] = r.platformResults?.length
+    ? r.platformResults.map((p) => ({
+        platform: p.platform,
+        accountId: p.accountId ?? null,
+        status: p.status,
+        url: urlOf(p.platform, p.accountId),
+        error: p.error ?? null,
+        errorCategory: p.errorCategory ?? null,
+      }))
+    : targets.flatMap((t) =>
+        t.platform
+          ? [
+              {
+                platform: t.platform,
+                accountId: t.accountId ?? null,
+                status: t.status ?? "pending",
+                url: t.platformPostUrl ?? null,
+                error: t.errorMessage ?? null,
+                errorCategory: t.errorCategory ?? null,
+              },
+            ]
+          : [],
+      );
+  const status: ProviderPostStatus =
+    r.post?.status ??
+    (results.every((p) => p.status === "published")
+      ? "published"
+      : results.some((p) => p.status === "published")
+        ? "partial"
+        : results.some((p) => p.status === "failed")
+          ? "failed"
+          : "publishing");
+  return { status, results };
+}
+
+function legacyExtras(
+  platform: string,
+  input: Pick<CreatePostInput, "pinterestBoardId" | "youtubeTitle">,
+): TargetExtras {
   if (platform === "pinterest" && input.pinterestBoardId) {
     return { platformSpecificData: { boardId: input.pinterestBoardId } };
   }

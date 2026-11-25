@@ -41,8 +41,13 @@ export interface MediaCheck {
 
 export interface CreatePostInput {
   content: string;
-  /** Public HTTPS URLs (Zernio media presign flow, T14). */
+  /** Public HTTPS URLs (Zernio media presign flow, T14). `media` wins when both are given. */
   mediaUrls?: string[];
+  /**
+   * The same files with what kind each is (and alt text), so Zernio never has to guess the type
+   * from the link: a video it reads as a photo fails on Instagram.
+   */
+  media?: PostMedia[];
   targets: { platform: SocialPlatform; accountId: string }[];
   /** null publishes now. */
   publishAt: Date | null;
@@ -80,12 +85,95 @@ export type PostingQueue = {
 /** One target's extra createPost fields (T75). */
 export type TargetExtras = {
   customContent?: string;
+  /** This platform's own files (Zernio `customMedia`), replacing `mediaItems` there only. */
+  customMedia?: { type?: MediaKind; url: string; altText?: string }[];
   platformSpecificData?: Record<string, unknown>;
 };
 
 /** A video (or other file) is a video when its URL ends like one; Zernio reads the same. */
 export const isVideoUrl = (url: string): boolean =>
   /\.(mp4|mov|webm|m4v|mpeg|avi)(\?|$)/i.test(url);
+
+/** Zernio's media item types (`mediaItems[].type`, docs /posts/create-post). */
+export type MediaKind = "image" | "video" | "gif" | "document";
+
+/** One file of a post: its public link, what it is when Waggle knows, and its alt text. */
+export interface PostMedia {
+  url: string;
+  type?: MediaKind | null;
+  altText?: string | null;
+}
+
+/**
+ * The kind a link's extension says, the way Zernio infers it (null when the link has no known
+ * extension, e.g. a copied file named without one).
+ */
+export function mediaKindFromUrl(url: string): MediaKind | null {
+  let path = url;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    path = url.split(/[?#]/)[0];
+  }
+  if (isVideoUrl(path)) return "video";
+  if (/\.gif$/i.test(path)) return "gif";
+  if (/\.pdf$/i.test(path)) return "document";
+  if (/\.(jpe?g|png|webp|heic|heif|avif|bmp|tiff?)$/i.test(path)) return "image";
+  return null;
+}
+
+/** The kind a MIME type says (an upload's content type, Zernio's media check), or null. */
+export function mediaKindFromMime(mime: string | null | undefined): MediaKind | null {
+  const m = (mime ?? "").toLowerCase().split(";")[0].trim();
+  if (m === "image/gif") return "gif";
+  if (m.startsWith("image/")) return "image";
+  if (m.startsWith("video/")) return "video";
+  if (m === "application/pdf") return "document";
+  return null;
+}
+
+/**
+ * The type to send for one file. The extension wins when it has one (Zernio refuses a `type`
+ * that contradicts it); otherwise what Waggle stored about the file. Null: let Zernio infer.
+ */
+export function mediaKindOf(m: PostMedia): MediaKind | null {
+  return mediaKindFromUrl(m.url) ?? m.type ?? null;
+}
+
+/** A post's files, from `media` or else the bare `mediaUrls`. */
+export function postMediaOf(input: Pick<CreatePostInput, "media" | "mediaUrls">): PostMedia[] {
+  return input.media ?? (input.mediaUrls ?? []).map((url) => ({ url }));
+}
+
+/**
+ * Zernio's `mediaItems` for a post: `{ type, url }` per file (and `altText` when given), the
+ * shape docs.zernio.com/posts/create-post describes.
+ */
+export function toMediaItems(
+  media: PostMedia[],
+): { type?: MediaKind; url: string; altText?: string }[] {
+  return media.map((m) => {
+    const type = mediaKindOf(m);
+    const alt = m.altText?.trim();
+    return {
+      ...(type ? { type } : {}),
+      url: m.url,
+      ...(alt ? { altText: alt } : {}),
+    };
+  });
+}
+
+/** One platform's outcome on a post (webhooks, retry), kept in `posts.platform_results`. */
+export interface PostPlatformResult {
+  platform: string;
+  /** Zernio's account id; missing on rows saved before 25 Nov. */
+  accountId?: string | null;
+  status: string;
+  url: string | null;
+  error: string | null;
+  /** Zernio's stable failure category (auth_expired, user_content, …). */
+  errorCategory?: string | null;
+}
 
 export type ProviderPostStatus =
   | "draft"
@@ -257,6 +345,16 @@ export interface AccountHealth {
   needsReconnect: boolean;
   canPost: boolean;
   issues: string[];
+}
+
+/**
+ * `GET /v1/accounts/health?profileId=` (25 Nov). `complete` is true only when the answer clearly
+ * covers the whole profile: the summary's total matches the accounts listed and every account
+ * listed belongs to the profile. Only then may a missing account be treated as gone.
+ */
+export interface AccountsHealthReport {
+  accounts: AccountHealth[];
+  complete: boolean;
 }
 
 export type TelegramConnectStatus =
@@ -1236,6 +1334,14 @@ export interface SocialProvider {
       bytes: Uint8Array;
     } & CallOptions,
   ): Promise<{ publicUrl: string }>;
+  /**
+   * Retries a failed or partial post (`POST /v1/posts/{postId}/retry`): only the platforms that
+   * didn't publish are tried again, so an account that already has the post never gets it twice.
+   * The answer is the post's status and each platform's result.
+   */
+  retryPost(
+    input: { postId: string; idempotencyKey: string } & CallOptions,
+  ): Promise<{ status: ProviderPostStatus; results: PostPlatformResult[] }>;
   /** Cancels a scheduled post (`DELETE /v1/posts/{postId}`). */
   deletePost(input: { postId: string } & CallOptions): Promise<void>;
   /**
@@ -1402,7 +1508,12 @@ export interface SocialProvider {
       limit?: number;
     } & CallOptions,
   ): Promise<ProviderCommentReply[]>;
-  getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
+  getAccountsHealth(input: { profileId: string }): Promise<AccountsHealthReport>;
+  /**
+   * 25 Nov: whether Zernio still has this account (`GET /v1/accounts/{accountId}/health`):
+   * false only on a 404; any other failure throws.
+   */
+  accountExists(input: { accountId: string } & CallOptions): Promise<boolean>;
   /**
    * T57: each connected account's profile picture (`GET /v1/accounts?profileId=`,
    * `SocialAccount.profilePicture`, null when the platform gives none).

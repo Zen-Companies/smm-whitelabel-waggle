@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { acceptInviteAndOpen, INVITE_PATH } from "@/features/orgs";
 import { signInNext } from "@/features/auth";
-import { setupTenantForUser } from "@/features/tenants";
+import { recordSignupPlan, setupTenantForUser } from "@/features/tenants";
+import { signupStartOf } from "@/lib/checkout-link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { siteUrl } from "../site-url";
 
@@ -25,7 +26,11 @@ export async function GET(request: NextRequest) {
   const supabase = await createServerSupabase();
   const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error || !data.user) return back("google");
-  await setupTenantForUser(data.user);
+  const { organizationId } = await setupTenantForUser(data.user);
+  // Google sign-up from the site's plan card (25 Nov): next is /welcome?start=solo, which opens
+  // Checkout for that plan; the pick is recorded once, here.
+  const start = signupStartOf(next);
+  if (start) await recordSignupPlan({ organizationId, userId: data.user.id, start, via: "google" });
 
   const invite = INVITE_PATH.exec(next);
   if (invite && (await acceptInviteAndOpen(invite[1], data.user.id))) {

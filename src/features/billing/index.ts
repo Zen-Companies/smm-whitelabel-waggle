@@ -86,3 +86,11 @@ export { ReferralCard } from "./referral-card";
 export { StartCheckout } from "./start-checkout-section";
 export { InviteCard, InvitePanel, PromoBar, PromoPass } from "./promo-surfaces";
 export { RefCatcher } from "./ref-catcher";
+export {
+  loadSignupPlan,
+  SignupCheckout,
+  SignupPlanPanel,
+  SignupPlanStrip,
+} from "./signup-plan-section";
+export type { SignupPlanLinks } from "./signup-plan-section";
+export type { SignupPlanCard } from "./signup-plan";

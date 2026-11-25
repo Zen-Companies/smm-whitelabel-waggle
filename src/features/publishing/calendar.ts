@@ -1,5 +1,7 @@
 // Month calendar for Posts (design v2). Pure: dates are local calendar days as "YYYY-MM-DD".
 
+import { dayKeyIn } from "./post-time";
+
 export interface Month {
   year: number;
   /** 1–12 */
@@ -60,13 +62,20 @@ export function monthWeeks(m: Month): string[][] {
   return weeks;
 }
 
-/** The day a post belongs on: when it went out, else when it's planned, else when it was made. */
-export function postDay(post: {
-  published_at: string | null;
-  scheduled_for: string | null;
-  created_at: string;
-}): string {
-  return dayKey(new Date(post.published_at ?? post.scheduled_for ?? post.created_at));
+/**
+ * The day a post belongs on: when it went out, else when it's planned, else when it was made.
+ * In `timeZone` when given (the calendar renders on a UTC server), else the runtime's own zone.
+ */
+export function postDay(
+  post: {
+    published_at: string | null;
+    scheduled_for: string | null;
+    created_at: string;
+  },
+  timeZone?: string,
+): string {
+  const at = new Date(post.published_at ?? post.scheduled_for ?? post.created_at);
+  return timeZone ? dayKeyIn(at, timeZone) : dayKey(at);
 }
 
 /** A post that didn't go out and needs the owner to pick a new time (or retry). */

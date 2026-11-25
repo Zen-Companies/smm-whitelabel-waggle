@@ -97,5 +97,13 @@ export const STORAGE = {
  * `checkout=done&session_id=` is added after the trailing "&".
  */
 export function planPageReturn(plan: "solo" | "team" | "business"): string {
-  return `/plan?upgrade=${plan === "team" ? "team" : "nudge"}&`;
+  return `/plan?upgrade=${successReason(plan)}&`;
+}
+
+/**
+ * Pure: the pop-up reason whose success state names the plan bought. Careful: Team is id
+ * `business` (the ids are swapped), so only Solo is "nudge".
+ */
+export function successReason(plan: "solo" | "team" | "business"): "nudge" | "team" {
+  return plan === "solo" ? "nudge" : "team";
 }

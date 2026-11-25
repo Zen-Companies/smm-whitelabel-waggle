@@ -70,7 +70,7 @@ const postRow = async (id: string) =>
       .single()
   ).data!;
 
-function deliver(fixture: string, zernioPostId: string) {
+function deliver(fixture: string, zernioPostId: string, opts: { noProfiles?: boolean } = {}) {
   const raw = readFileSync(`tests/fixtures/zernio/${fixture}.json`, "utf8")
     .replaceAll("__TENANT_ID__", tenantId)
     .replaceAll("__PROFILE_ID__", profileId)
@@ -78,6 +78,7 @@ function deliver(fixture: string, zernioPostId: string) {
     .replaceAll("__POST_ID__", zernioPostId);
   const payload = JSON.parse(raw);
   payload.id = `${payload.id}_${randomUUID().slice(0, 8)}`;
+  if (opts.noProfiles) delete payload.profiles;
   const body = JSON.stringify(payload);
   return POST(
     new Request("http://localhost/api/webhooks/zernio", {
@@ -137,7 +138,7 @@ describe("publishing (T14)", () => {
     expect(social.calls).toEqual([
       expect.objectContaining({
         targets: [{ platform: "instagram", accountId: zernioAccountId }],
-        mediaUrls: ["https://cdn.example.com/croissant.jpg"],
+        media: [{ url: "https://cdn.example.com/croissant.jpg", type: null }],
         publishAt: null,
         idempotencyKey: post.idempotency_key,
       }),
@@ -171,6 +172,24 @@ describe("publishing (T14)", () => {
         },
       ],
     });
+  });
+
+  it("a post event without profiles still settles the post, found by its Zernio id (25 Nov)", async () => {
+    social = new ScriptedPosts();
+    const post = await queuedPost({ scheduledInMs: 3_600_000 });
+    await publishPost(deps(), post.id);
+    const { zernio_post_id } = await postRow(post.id);
+
+    const res = await deliver("post-published", zernio_post_id!, { noProfiles: true });
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "published" });
+    expect(await postRow(post.id)).toMatchObject({ status: "published" });
+  });
+
+  it("a post event without profiles for a post Waggle never made stays unknown_tenant", async () => {
+    const res = await deliver("post-published", `zp_unknown_${randomUUID().slice(0, 8)}`, {
+      noProfiles: true,
+    });
+    expect(await res.json()).toEqual({ outcome: "rejected", reason: "unknown_tenant" });
   });
 
   it("a post that fails while Zernio is paused is marked for rescheduling", async () => {
@@ -319,6 +338,7 @@ describe("publishing (T14)", () => {
       ok: false,
       error: "not_accepted",
       problems: [{ platform: "instagram", message: "Instagram needs a photo or video." }],
+      warnings: [],
     });
     expect(social.posts.size).toBe(before);
   });
@@ -351,15 +371,16 @@ describe("publishing (T14)", () => {
       .eq("id", (r as { postId: string }).postId)
       .single();
     expect(row).toEqual({
-      media: [{ url: video, seconds: 80 }],
+      media: [{ url: video, seconds: 80, type: "video" }],
       platform_options: { youtube: { title: "Ube cheesecake is back" } },
     });
     const last = social.calls.at(-1) as {
-      mediaUrls?: string[];
+      media?: { url: string; type?: string | null }[];
       youtubeTitle?: string;
       extras?: Record<string, { platformSpecificData?: Record<string, unknown> }>;
     };
-    expect(last.mediaUrls).toEqual([video]);
+    // Sent with its type, so Zernio never reads a video as a photo (25 Nov).
+    expect(last.media).toEqual([{ url: video, type: "video" }]);
     // The publish step sends it as YouTube's platform options (T75); the check before saving
     // still passes the title on its own.
     expect(last.extras?.youtube?.platformSpecificData?.title ?? last.youtubeTitle).toBe(
@@ -395,7 +416,67 @@ describe("publishing (T14)", () => {
           message: "Bluesky takes videos up to 60 seconds; this one is 1:20.",
         },
       ],
+      warnings: [],
     });
+  });
+
+  it("How it fits: a shape Instagram refuses is held until cropped; the crop goes only there (Posts Round 2)", async () => {
+    social = new ScriptedPosts();
+    const { data: fb } = await db
+      .from("social_accounts")
+      .insert({
+        tenant_id: tenantId,
+        zernio_account_id: `acc_fb_${randomUUID().slice(0, 8)}`,
+        platform: "facebook",
+        username: "postingcafe.fb",
+      })
+      .select("id")
+      .single();
+    const tall = {
+      url: "https://media.zernio.com/temp/tall.jpg",
+      type: "image" as const,
+      width: 1000,
+      height: 3000,
+    };
+    const refused = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Our tallest cake yet",
+      accountIds: [accountId, fb!.id],
+      scheduledFor: null,
+      media: [tall],
+    });
+    expect(refused).toEqual({
+      ok: false,
+      error: "not_accepted",
+      problems: [
+        {
+          platform: "instagram",
+          message: "Instagram won't take this shape. Crop it for Instagram or post it as a Story.",
+        },
+      ],
+      warnings: [],
+    });
+    expect(social.calls).toHaveLength(0);
+
+    const crop = "https://media.zernio.com/temp/tall-ig.jpg";
+    const r = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Our tallest cake yet",
+      accountIds: [accountId, fb!.id],
+      scheduledFor: null,
+      media: [tall],
+      options: {
+        instagram: { media: [{ url: crop, type: "image", width: 1080, height: 1350 }] },
+      },
+    });
+    expect(r).toMatchObject({ ok: true });
+    const last = social.calls.at(-1)!;
+    expect(last.media).toEqual([{ url: tall.url, type: "image" }]);
+    expect(last.extras?.instagram?.customMedia).toEqual([{ type: "image", url: crop }]);
+    expect(last.extras?.facebook?.customMedia).toBeUndefined();
+    await db.from("social_accounts").delete().eq("id", fb!.id);
   });
 
   it("Pinterest: the chosen board is remembered and every pin goes there (T64)", async () => {

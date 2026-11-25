@@ -9,6 +9,8 @@ import {
 import {
   isSocialPlatform,
   SocialProviderError,
+  type MediaKind,
+  type PostMedia,
   type ProviderPostStatus,
   type SocialProvider,
 } from "@/lib/social/types";
@@ -38,14 +40,24 @@ const STATUS: Partial<Record<ProviderPostStatus, string>> = {
   cancelled: "cancelled",
 };
 
-/** Owner-facing reasons for a refused post (design.md §7: plain words). */
-export function postErrorMessage(error: SocialProviderError): string {
+/** "Instagram", "Instagram or Facebook", "Instagram, TikTok or YouTube". */
+export function platformList(platforms: string[]): string {
+  const names = [...new Set(platforms.map(platformLabel))];
+  if (names.length <= 1) return names[0] ?? "The platform";
+  return `${names.slice(0, -1).join(", ")} or ${names[names.length - 1]}`;
+}
+
+/**
+ * Owner-facing reasons for a refused post (design.md §7: plain words), naming the platforms
+ * the post was going to.
+ */
+export function postErrorMessage(error: SocialProviderError, platforms: string[] = []): string {
   const { status, code } = error.details;
   if (status === 409) {
     return "You posted the same text to this account in the last 24 hours. Change the text, then try again.";
   }
   if (status === 400 || status === 422) {
-    return "Instagram/Facebook didn't accept this post. Check the text and image, then try again.";
+    return `${platformList(platforms)} didn't accept this post. Check the text and the photo or video, then try again.`;
   }
   if (status === 401 || status === 403) {
     return "The account isn't allowed to post right now. Reconnect it in Settings, then try again.";
@@ -53,6 +65,31 @@ export function postErrorMessage(error: SocialProviderError): string {
   if (status === 404)
     return "One of the accounts can no longer be found. Reconnect it, then try again.";
   return `The post couldn't be published${code ? ` (${code})` : ""}. Try again.`;
+}
+
+/** One file as `posts.media` keeps it (older rows have only the url). */
+export type StoredMedia = {
+  url?: string;
+  seconds?: number | null;
+  type?: string | null;
+  altText?: string | null;
+};
+
+const KINDS = new Set<MediaKind>(["image", "video", "gif", "document"]);
+
+/** The row's files for Zernio, each with its kind (stored, or from the link) and alt text. */
+export function postMediaFromRow(media: StoredMedia[]): PostMedia[] {
+  return media.flatMap((m) =>
+    m.url
+      ? [
+          {
+            url: m.url,
+            type: KINDS.has(m.type as MediaKind) ? (m.type as MediaKind) : null,
+            ...(m.altText ? { altText: m.altText } : {}),
+          },
+        ]
+      : [],
+  );
 }
 
 export async function publishPost(
@@ -116,7 +153,7 @@ export async function publishPost(
   }
 
   const scheduledFor = post.scheduled_for ? new Date(post.scheduled_for) : null;
-  const media = (post.media as { url?: string }[] | null) ?? [];
+  const media = (post.media as StoredMedia[] | null) ?? [];
   // T75: "next free slot" posts go to the brand's queue; Zernio picks the time.
   let queueProfileId: string | undefined;
   if (post.queued && !post.scheduled_for) {
@@ -133,7 +170,7 @@ export async function publishPost(
   try {
     const result = await deps.social().createPost({
       content: post.content,
-      mediaUrls: media.flatMap((m) => (m.url ? [m.url] : [])),
+      media: postMediaFromRow(media),
       targets: accounts.flatMap((a) =>
         isSocialPlatform(a.platform)
           ? [{ platform: a.platform, accountId: a.zernio_account_id }]
@@ -200,7 +237,13 @@ export async function publishPost(
         .eq("id", post.id);
       return { outcome: "retry_later", reason: "unclear" };
     }
-    return fail(postErrorMessage(err), { status: status ?? null, code: code ?? null });
+    return fail(
+      postErrorMessage(
+        err,
+        accounts.map((a) => a.platform),
+      ),
+      { status: status ?? null, code: code ?? null },
+    );
   }
 }
 

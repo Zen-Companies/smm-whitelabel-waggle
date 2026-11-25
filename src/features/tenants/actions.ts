@@ -11,11 +11,12 @@ import { queueForOwners, queueQuietly } from "@/lib/crm";
 import { BUSINESS_PROFILE_MAX } from "@/lib/classifier/business-context";
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
+import { afterSignupPath } from "@/lib/checkout-link";
 import { ORG_COOKIE } from "@/features/orgs";
 import { BRAND_COOKIE } from "./brand-pick";
 import { PASSWORD_MIN } from "./password";
 import { getTenantFor, NOT_ALLOWED } from "./current-tenant";
-import { setupTenantForUser } from "./server";
+import { recordSignupPlan, setupTenantForUser } from "./server";
 import { emailConfirmState, RESEND_AFTER_MS, sendEmailConfirmation } from "./email-confirm";
 
 export interface AuthFormState {
@@ -24,15 +25,20 @@ export interface AuthFormState {
 }
 
 // T54: a login is just a person. The business comes in as a brand on /welcome.
-const signUpSchema = z.object({
-  fullName: z.string().trim().min(1, "Enter your name").max(100, "Keep it under 100 characters"),
-  email: z.email("Enter a valid email"),
-  password: z.string().min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`),
-  confirmPassword: z.string(),
-}).refine((v) => v.password === v.confirmPassword, {
-  message: "The passwords don't match",
-  path: ["confirmPassword"],
-});
+const signUpSchema = z
+  .object({
+    fullName: z.string().trim().min(1, "Enter your name").max(100, "Keep it under 100 characters"),
+    email: z.email("Enter a valid email"),
+    password: z.string().min(PASSWORD_MIN, `Use at least ${PASSWORD_MIN} characters`),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: "The passwords don't match",
+    path: ["confirmPassword"],
+  });
+
+/** The plan picked on the site's plan card (25 Nov); anything else is no plan. */
+const signupPlanSchema = z.enum(["solo", "team"]);
 
 const signInSchema = z.object({
   email: z.email("Enter a valid email"),
@@ -43,6 +49,8 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   const parsed = signUpSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const { fullName, email, password } = parsed.data;
+  const planParse = signupPlanSchema.safeParse(formData.get("plan"));
+  const start = planParse.success ? planParse.data : null;
 
   const supabase = await createServerSupabase();
   const { data, error } = await supabase.auth.signUp({
@@ -58,7 +66,12 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
   // With email confirmation on, an existing address comes back as a placeholder user with no
   // identities: nothing to set up. Otherwise the personal organization is made now, and again
   // (harmlessly) on login or confirmation if this request dies half-way.
-  if (data.user?.identities?.length) await setupTenantForUser(data.user);
+  if (data.user?.identities?.length) {
+    const { organizationId } = await setupTenantForUser(data.user);
+    if (start) {
+      await recordSignupPlan({ organizationId, userId: data.user.id, start, via: "email" });
+    }
+  }
 
   if (!data.session) return { message: "Check your email to confirm your account." };
   // Confirm later (hotfix 21 Nov): Supabase's confirm is off, so this login works now; Waggle
@@ -70,7 +83,8 @@ export async function signUp(_prev: AuthFormState, formData: FormData): Promise<
       name: fullName,
     }).catch((e: unknown) => Sentry.captureException(e));
   }
-  redirect("/welcome");
+  // With a plan from the site (25 Nov): setup's first page opens Checkout for it, then setup.
+  redirect(afterSignupPath(start));
 }
 
 export async function signIn(_prev: AuthFormState, formData: FormData): Promise<AuthFormState> {

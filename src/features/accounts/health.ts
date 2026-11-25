@@ -3,7 +3,12 @@ import { insertInboundItem } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { getPlatformPause, recordPlatformPause } from "@/lib/social/platform-pause";
 import { COMMENTS_LIVE } from "@/lib/social/platforms";
-import { isSocialPlatform, type SocialProvider } from "@/lib/social/types";
+import {
+  isSocialPlatform,
+  type AccountsHealthReport,
+  type SocialPlatform,
+  type SocialProvider,
+} from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { handleAccountConnected, handleAccountDisconnected } from "./events";
@@ -14,6 +19,46 @@ import { syncAccountPictures } from "./pictures";
 // connect, a recovery or a Zernio pause (inbox polling stops while Zernio is paused).
 
 export const HEALTH_CHECK_INTERVAL_MS = 60 * 60 * 1000;
+
+/** The audit reason for an account Zernio no longer has (deleted there, 25 Nov). */
+export const REMOVED_IN_ZERNIO = "removed in Zernio";
+
+export type HealthStep =
+  | { kind: "none" }
+  | { kind: "disconnect"; reason: string }
+  /** Missing from a complete answer: disconnect only if Zernio answers 404 for it. */
+  | { kind: "check_gone" }
+  | { kind: "recover"; platform: SocialPlatform; username: string };
+
+/**
+ * What one Waggle account needs after the profile's health answer. Pure. An account missing from
+ * the answer is only suspect when the answer is complete (docs/tdd.md §7.2); a partial answer
+ * never changes anything. An account the owner disconnected (released) is never revived.
+ */
+export function healthStep(
+  account: { zernio_account_id: string; status: string; released_at: string | null },
+  report: AccountsHealthReport,
+): HealthStep {
+  const h = report.accounts.find((x) => x.accountId === account.zernio_account_id);
+  if (!h) {
+    return report.complete && account.status === "active"
+      ? { kind: "check_gone" }
+      : { kind: "none" };
+  }
+  const broken = h.needsReconnect || h.status === "error";
+  if (broken && account.status === "active") {
+    return { kind: "disconnect", reason: h.issues.join(", ") || h.status };
+  }
+  if (
+    !broken &&
+    account.status !== "active" &&
+    !account.released_at &&
+    isSocialPlatform(h.platform)
+  ) {
+    return { kind: "recover", platform: h.platform, username: h.username ?? "" };
+  }
+  return { kind: "none" };
+}
 
 interface Deps {
   db: ServiceClient;
@@ -66,27 +111,41 @@ export async function checkAccountsHealth(
 
     const { data: accounts } = await db
       .from("social_accounts")
-      .select("id, zernio_account_id, status")
+      .select("id, zernio_account_id, status, released_at")
       .eq("tenant_id", tenant.id);
     for (const account of accounts ?? []) {
-      const h = health.find((x) => x.accountId === account.zernio_account_id);
-      if (!h) continue;
-      const broken = h.needsReconnect || h.status === "error";
-      if (broken && account.status === "active") {
+      const step = healthStep(account, health);
+      if (step.kind === "none") continue;
+      if (step.kind === "check_gone") {
+        // 25 Nov: missing from a complete answer. Confirmed one by one before anything changes:
+        // only Zernio's 404 for the account itself means it was removed there.
+        let exists: boolean;
+        try {
+          exists = await deps.social().accountExists({
+            accountId: account.zernio_account_id,
+            signal: AbortSignal.timeout(15_000),
+          });
+        } catch (err) {
+          Sentry.captureException(err, { extra: { tenantId: tenant.id, accountId: account.id } });
+          continue;
+        }
+        if (exists) continue;
+      }
+      if (step.kind === "disconnect" || step.kind === "check_gone") {
         // Same path as the account.disconnected webhook: items pause, owner gets one email.
         await handleAccountDisconnected(db, {
           tenantId: tenant.id,
           zernioAccountId: account.zernio_account_id,
           disconnectionType: "health_check",
-          reason: h.issues.join(", ") || h.status,
+          reason: step.kind === "disconnect" ? step.reason : REMOVED_IN_ZERNIO,
         });
         summary.disconnected += 1;
-      } else if (!broken && account.status !== "active" && isSocialPlatform(h.platform)) {
+      } else {
         await handleAccountConnected(db, {
           tenantId: tenant.id,
           zernioAccountId: account.zernio_account_id,
-          platform: h.platform,
-          username: h.username ?? "",
+          platform: step.platform,
+          username: step.username,
         });
         summary.recovered += 1;
       }

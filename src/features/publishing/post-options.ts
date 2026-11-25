@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { toMediaItems, type MediaKind } from "@/lib/social/types";
 
 /**
  * What the owner chose for one platform on a post (T75, design "Posts · options"), kept in
@@ -21,7 +22,12 @@ const optionsSchema = z.object({
   shareToFeed: z.boolean().optional().catch(undefined),
   collaborators: z
     .array(z.string())
-    .transform((a) => a.map((s) => s.trim().replace(/^@/, "")).filter(Boolean).slice(0, 3))
+    .transform((a) =>
+      a
+        .map((s) => s.trim().replace(/^@/, ""))
+        .filter(Boolean)
+        .slice(0, 3),
+    )
     .optional()
     .catch(undefined),
   trialReel: z.boolean().optional().catch(undefined),
@@ -36,6 +42,23 @@ const optionsSchema = z.object({
   fbDraft: z.boolean().optional().catch(undefined),
   /** Pinterest board (T64). */
   boardId: z.string().optional().catch(undefined),
+  /**
+   * Posts Round 2: this platform's own file (a crop made in the composer), sent as Zernio's
+   * `customMedia`, replacing the shared file there only. Set by the server after uploading,
+   * never taken from the browser's options (see `withoutMedia`).
+   */
+  media: z
+    .array(
+      z.object({
+        url: z.string().url(),
+        type: z.enum(["image", "video", "gif", "document"]).optional(),
+        width: z.number().int().positive().optional(),
+        height: z.number().int().positive().optional(),
+      }),
+    )
+    .max(1)
+    .optional()
+    .catch(undefined),
 });
 
 export type PlatformPostOptions = z.infer<typeof optionsSchema>;
@@ -74,6 +97,19 @@ export function parsePostOptions(value: unknown): PostOptions {
 const FIRST_COMMENT = new Set(["instagram", "facebook", "youtube", "threads", "linkedin"]);
 
 /**
+ * A platform's own text, only when it's a real change: empty or the same as the caption means
+ * the platform follows the caption (so later caption edits reach it).
+ */
+export function ownText(o: PlatformPostOptions | undefined, sharedText: string): string | null {
+  return o?.text && o.text.trim() && o.text !== sharedText ? o.text : null;
+}
+
+/** The text that really goes to this platform: its own text, else the caption. */
+export function textFor(platform: string, options: PostOptions, sharedText: string): string {
+  return ownText(options[platform], sharedText) ?? sharedText;
+}
+
+/**
  * The extra fields for one target in Zernio's createPost: `customContent` and
  * `platformSpecificData`, only with what the platform accepts for this kind of post.
  */
@@ -81,10 +117,20 @@ export function targetExtras(
   platform: string,
   o: PlatformPostOptions | undefined,
   sharedText: string,
-): { customContent?: string; platformSpecificData?: Record<string, unknown> } {
+): {
+  customContent?: string;
+  customMedia?: { type?: MediaKind; url: string }[];
+  platformSpecificData?: Record<string, unknown>;
+} {
   if (!o) return {};
-  const out: { customContent?: string; platformSpecificData?: Record<string, unknown> } = {};
-  if (o.text && o.text.trim() && o.text !== sharedText) out.customContent = o.text;
+  const out: ReturnType<typeof targetExtras> = {};
+  const own = ownText(o, sharedText);
+  if (own) out.customContent = own;
+  // Its own crop (Posts Round 2): docs.zernio.com/guides/media-uploads, "Set `customMedia` on one
+  // entry to replace it for that platform".
+  if (o.media?.length) {
+    out.customMedia = toMediaItems(o.media.map((m) => ({ url: m.url, type: m.type ?? null })));
+  }
 
   const d: Record<string, unknown> = {};
   const story = o.as === "story";
@@ -117,6 +163,16 @@ export function targetExtras(
 
   if (Object.keys(d).length) out.platformSpecificData = d;
   return out;
+}
+
+/** The browser's options without any `media`: only the server sets a platform's own file. */
+export function withoutMedia(options: PostOptions): PostOptions {
+  return Object.fromEntries(
+    Object.entries(options).map(([platform, o]) => [
+      platform,
+      o && Object.fromEntries(Object.entries(o).filter(([key]) => key !== "media")),
+    ]),
+  );
 }
 
 /**

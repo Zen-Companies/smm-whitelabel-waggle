@@ -33,3 +33,10 @@ it("sign-in goes back to HighLevel's checkout link (25 Nov), exactly", () => {
   expect(signInNext("/plan?start=business")).toBe("/settings");
   expect(signInNext("/plan?start=solo&x=//evil")).toBe("/settings");
 });
+
+it("Google sign-up from the site's plan card goes to setup's first page with the plan", () => {
+  expect(signInNext("/welcome?start=solo")).toBe("/welcome?start=solo");
+  expect(signInNext("/welcome?start=team")).toBe("/welcome?start=team");
+  expect(signInNext("/welcome?start=business")).toBe("/settings");
+  expect(signInNext("/welcome?start=solo&next=//evil.com")).toBe("/settings");
+});
