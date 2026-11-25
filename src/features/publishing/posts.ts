@@ -48,6 +48,66 @@ export type CreatePostResult =
       warnings: { platform: string; message: string }[];
     };
 
+/** One file as a rule check sees it. */
+export interface CheckedMedia {
+  type?: string | null;
+  seconds?: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+/**
+ * Why the post can't go to some of its platforms as it is, per platform: our rules (text length,
+ * photo or video needed, video length), then "How it fits" (Posts Round 2): a shape or length a
+ * platform refuses holds that platform until the owner crops for it, posts it as a Story or
+ * leaves it out. Shapes aren't checked when the size isn't known (an assistant's post); Zernio's
+ * check still runs. Shared by new posts and edits (Posts Round 3).
+ */
+export function ruleProblems(
+  platforms: readonly string[],
+  content: string,
+  media: readonly CheckedMedia[],
+  options: PostOptions,
+): { platform: string; message: string }[] {
+  const unique = [...new Set(platforms)];
+  const videos = media.filter((m) => m.type === "video");
+  const blocked = unique
+    .map((platform) =>
+      checkPlatform(platform, {
+        // Each platform's own text when the owner wrote one, else the caption.
+        textLength: textFor(platform, options, content).length,
+        images: media.length - videos.length,
+        videos: videos.length,
+        videoSeconds: videos[0]?.seconds ?? null,
+      }),
+    )
+    .filter((c): c is Extract<RuleCheck, { level: "blocked" }> => c.level === "blocked");
+  const first = media[0];
+  const shared: MediaShape | null =
+    first?.width && first.height
+      ? {
+          kind: first.type === "video" ? "video" : "image",
+          width: first.width,
+          height: first.height,
+          seconds: first.seconds,
+        }
+      : null;
+  const crops = Object.fromEntries(
+    Object.entries(options).flatMap(([platform, o]) => {
+      const m = o?.media?.[0];
+      return m?.width && m.height ? [[platform, { width: m.width, height: m.height }]] : [];
+    }),
+  );
+  const refused = shared
+    ? unique.flatMap((platform) => {
+        const shape = shapeFor(platform, shared, crops);
+        const fit = shape ? fitFor(platform, shape, options[platform]?.as) : null;
+        return fit?.level === "refused" ? [{ platform, message: refusedMessage(fit) }] : [];
+      })
+    : [];
+  return [...blocked.map((c) => ({ platform: c.platform, message: c.message })), ...refused];
+}
+
 /** How long Zernio's check may take before the post is saved without it. */
 const VALIDATE_TIMEOUT_MS = 15_000;
 
@@ -120,50 +180,14 @@ export async function createPost(
     };
   });
   const videos = media.filter((m) => m.type === "video");
-  const blocked = owned
-    .map((a) =>
-      checkPlatform(a.platform, {
-        // Each platform's own text when the owner wrote one, else the caption.
-        textLength: textFor(a.platform, input.options ?? {}, input.content).length,
-        images: media.length - videos.length,
-        videos: videos.length,
-        videoSeconds: videos[0]?.seconds ?? null,
-      }),
-    )
-    .filter((c): c is Extract<RuleCheck, { level: "blocked" }> => c.level === "blocked");
-  // Posts Round 2 ("How it fits"): a platform that refuses the file's shape or length can't be
-  // sent until the owner crops for it, posts it as a Story or leaves it out. Others aren't checked
-  // here when the size isn't known (an assistant's post); Zernio's check still runs.
-  const first = media[0];
-  const shared: MediaShape | null =
-    first && "width" in first && first.width && first.height
-      ? {
-          kind: first.type === "video" ? "video" : "image",
-          width: first.width,
-          height: first.height,
-          seconds: first.seconds,
-        }
-      : null;
-  const crops = Object.fromEntries(
-    Object.entries(input.options ?? {}).flatMap(([platform, o]) => {
-      const m = o?.media?.[0];
-      return m?.width && m.height ? [[platform, { width: m.width, height: m.height }]] : [];
-    }),
+  const problems = ruleProblems(
+    owned.map((a) => a.platform),
+    input.content,
+    media,
+    input.options ?? {},
   );
-  const refused = shared
-    ? [...new Set(owned.map((a) => a.platform))].flatMap((platform) => {
-        const shape = shapeFor(platform, shared, crops);
-        const fit = shape ? fitFor(platform, shape, input.options?.[platform]?.as) : null;
-        return fit?.level === "refused" ? [{ platform, message: refusedMessage(fit) }] : [];
-      })
-    : [];
-  if (blocked.length || refused.length) {
-    return {
-      ok: false,
-      error: "not_accepted",
-      problems: [...blocked.map((c) => ({ platform: c.platform, message: c.message })), ...refused],
-      warnings: [],
-    };
+  if (problems.length) {
+    return { ok: false, error: "not_accepted", problems, warnings: [] };
   }
   if (owned.some((a) => a.platform === "tiktok") && !input.tiktokConsent) {
     return { ok: false, error: "consent_required" };

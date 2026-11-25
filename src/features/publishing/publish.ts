@@ -73,6 +73,9 @@ export type StoredMedia = {
   seconds?: number | null;
   type?: string | null;
   altText?: string | null;
+  /** Posts Round 2: the file's size in pixels, when the browser read it. */
+  width?: number | null;
+  height?: number | null;
 };
 
 const KINDS = new Set<MediaKind>(["image", "video", "gif", "document"]);
@@ -163,7 +166,9 @@ export async function publishPost(
       .eq("id", post.tenant_id)
       .single();
     if (!tenant?.zernio_profile_id) {
-      return fail("Set your posting times in Posts → Queue, then try again.", { reason: "no_queue" });
+      return fail("Set your posting times in Posts → Queue, then try again.", {
+        reason: "no_queue",
+      });
     }
     queueProfileId = tenant.zernio_profile_id;
   }
@@ -186,7 +191,11 @@ export async function publishPost(
       extras: Object.fromEntries(
         accounts.map((a) => [
           a.platform,
-          targetExtras(a.platform, parsePostOptions(post.platform_options)[a.platform], post.content),
+          targetExtras(
+            a.platform,
+            parsePostOptions(post.platform_options)[a.platform],
+            post.content,
+          ),
         ]),
       ),
     });
@@ -275,4 +284,3 @@ export async function publishQueuedPosts(
   }
   return summary;
 }
-
