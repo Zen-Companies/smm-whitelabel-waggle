@@ -19,10 +19,18 @@ describe("planChipState", () => {
     expect(planChipText(s, true)).toBe("6 days left");
   });
 
-  it("a plan shows its name and replies, quietly (not on the phone)", () => {
+  it("a plan shows its name; the phone shows its replies compact (26 Nov)", () => {
     const s = planChipState(base)!;
     expect(s).toEqual({ kind: "plan", planName: "Team", used: 620, allowance: 750 });
-    expect(showOnPhone(s)).toBe(false);
+    expect(planChipText(s)).toBe("Team");
+    expect(showOnPhone(s)).toBe(true);
+    expect(planChipText(s, true)).toBe("620/750");
+    const big = { kind: "plan", planName: "Team", used: 1200, allowance: 1500 } as const;
+    expect(planChipText(big, true)).toBe("1,200/1,500");
+    // A plan without a reply limit stays off the phone, like the count on a computer.
+    const unlimited = { ...big, used: 0, allowance: 0 };
+    expect(showOnPhone(unlimited)).toBe(false);
+    expect(planChipText(unlimited, true)).toBe("Team");
   });
 
   it("a failed payment comes before replies; replies used up before the trial", () => {
@@ -46,6 +54,8 @@ describe("planChipState", () => {
     })!;
     expect(free).toEqual({ kind: "free", used: 12, allowance: 100 });
     expect(planChipText(free)).toBe("Free · Upgrade");
+    expect(planChipText(free, true)).toBe("12/100");
+    expect(showOnPhone(free)).toBe(true);
     const out = planChipState({
       ...base,
       planName: null,

@@ -142,6 +142,27 @@ export function customPriceLine(plan: Plan): string {
 export const TRIAL = { days: 30, cardRequired: true } as const;
 
 /**
+ * Pure: the trial's pay button (Walter's Playbook, 26 Nov): "Start my free month", or with more
+ * days from a promotion or a friend's link "Start my 60 free days".
+ */
+export function startTrialLabel(days: number = TRIAL.days): string {
+  return days === TRIAL.days
+    ? "Start my free month"
+    : `Start my ${days.toLocaleString("en-US")} free days`;
+}
+
+/** Pure: the trial in words, never a date (Jason): "your free month", "your 60 free days". */
+export function yourTrial(days: number = TRIAL.days): string {
+  return days === TRIAL.days ? "your free month" : `your ${days.toLocaleString("en-US")} free days`;
+}
+
+/** Pure: the success line once the trial started: "Your free month has started." */
+export function trialStartedLine(days: number = TRIAL.days): string {
+  const t = yourTrial(days);
+  return `${t[0]!.toUpperCase()}${t.slice(1)} ${days === TRIAL.days ? "has" : "have"} started.`;
+}
+
+/**
  * The trial before the free month (7 days). A stored trial whose length is unknown (a bill from
  * before org_billing.trial_days, 23 Nov) is read as this one, never as the free month.
  */

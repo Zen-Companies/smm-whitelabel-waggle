@@ -26,6 +26,7 @@ import {
   PLAN_IDS,
   PLANS,
   storedTrialDays,
+  startTrialLabel,
   TRIAL,
   trialIsMonth,
   type PaidPlanId,
@@ -717,13 +718,7 @@ function UpgradePanel({
             <PlanButton
               action={choosePlan}
               fields={{ orgId, plan: copy.plan, interval }}
-              label={
-                trial
-                  ? trialDays === TRIAL.days
-                    ? "Start your free month"
-                    : `Start ${trialDays} days free`
-                  : upgradeLabel(reason)
-              }
+              label={trial ? startTrialLabel(trialDays) : upgradeLabel(reason)}
               pendingLabel="Starting…"
               honey
               className="items-start"

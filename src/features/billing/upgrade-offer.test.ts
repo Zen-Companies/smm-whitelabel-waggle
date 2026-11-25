@@ -26,7 +26,7 @@ describe("upgradeOffer", () => {
     const o = upgradeOffer("free", "accounts", PLANS, trial);
     expect(o.next).toBe("solo");
     expect(o.via).toBe("trial");
-    expect(o.cta).toBe("Start your free month");
+    expect(o.cta).toBe("Start my free month");
     expect(o.title).toBe("Free includes 1 account.");
     expect(o.body).toBe("Upgrade to Solo to connect 3.");
     expect(o.extra).toBeNull();
@@ -37,7 +37,7 @@ describe("upgradeOffer", () => {
   });
   it("a longer trial (banked referral months) says its days", () => {
     const o = upgradeOffer("free", "nudge", PLANS, { trial: true, trialDays: 60 });
-    expect(o.cta).toBe("Start 60 days free");
+    expect(o.cta).toBe("Start my 60 free days");
     expect(o.title).toBe("Try Solo. 60 days free.");
   });
 

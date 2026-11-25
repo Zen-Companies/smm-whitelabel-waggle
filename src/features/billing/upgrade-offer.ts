@@ -5,6 +5,7 @@ import {
   isCustomPrice,
   PLAN_IDS,
   PLANS,
+  startTrialLabel,
   TRIAL,
   type PaidPlanId,
   type Plan,
@@ -112,9 +113,7 @@ export function upgradeOffer(
   const freeMonth = days === TRIAL.days;
   const cta =
     via === "trial"
-      ? freeMonth
-        ? "Start your free month"
-        : `Start ${days} days free`
+      ? startTrialLabel(days)
       : via === "checkout"
         ? `Upgrade to ${next!.name}`
         : via === "switch"

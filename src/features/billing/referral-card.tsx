@@ -2,6 +2,7 @@ import "server-only";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
 import { getServiceClient } from "@/lib/supabase/service";
+import { startTrialLabel } from "./plans";
 import { runningReferral } from "./promotions";
 import { loadPromotions } from "./promotions-store";
 import { referralLink } from "./referral-code";
@@ -60,7 +61,7 @@ export async function ReferralCard({ orgId, page = false }: { orgId: string; pag
           href="/plan?start=solo"
           className={buttonVariants({ variant: "primary", className: "w-fit" })}
         >
-          Start your free month
+          {startTrialLabel()}
         </Link>
         {stats.joined > 0 && <StatsLine stats={stats} />}
       </section>

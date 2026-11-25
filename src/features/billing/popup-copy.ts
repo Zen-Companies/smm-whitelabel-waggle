@@ -1,5 +1,13 @@
 import { platformLabel } from "@/lib/social/platforms";
-import { TRIAL, type PaidPlanId, type Plan, type PlanId } from "./plans";
+import {
+  startTrialLabel,
+  TRIAL,
+  trialStartedLine,
+  yourTrial,
+  type PaidPlanId,
+  type Plan,
+  type PlanId,
+} from "./plans";
 import type { ReplyPain } from "./reply-pain";
 import type { OfferReason } from "./upgrade";
 
@@ -151,16 +159,16 @@ export interface PopupContent {
   sub: string;
   honey: Seg[] | null;
   ticks: Tick[];
-  /** "Add a card, pay $0 today. Then $49 a month from November 30. …" */
+  /** "Add a card, pay $0 today. Then $49 a month after your free month. …" (never a date, Jason). */
   note: string;
   /** Under the note with a trial (Pricing Bible): "We email you 3 days before the first charge." */
   reminder: string | null;
-  /** The card button: "Start free with a card", or without a trial "Pay with a card". */
+  /** The card button: "Start my free month", or without a trial "Pay with a card". */
   cardLabel: string;
   keep: { label: string; kind: "close" | "inbox" };
   /** × in the corner, Esc and the backdrop close it (not when out of replies). */
   closable: boolean;
-  /** After Stripe's return: "You're on Solo. Free until November 30." */
+  /** After Stripe's return: "Your free month has started.", without a trial "You're on Solo." */
   success: string;
   /** The success moment (24 Nov): "Solo" and "$49 a month". */
   planName: string;
@@ -181,15 +189,6 @@ export interface PopupInput {
 const n = (v: number) => v.toLocaleString("en-US");
 const plural = (k: number, one: string, many: string) => `${n(k)} ${k === 1 ? one : many}`;
 const label = (id: string) => platformLabel(id);
-
-/** "November 30": the trial's end, the first charge. */
-export function trialEndLabel(now: Date, days: number = TRIAL.days): string {
-  return new Date(now.getTime() + days * 86_400_000).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
 
 /**
  * The Try Solo headline (Walter's playbook, 25 Nov): "Try Solo. Your first month is free." A
@@ -218,19 +217,18 @@ export function payWords(
   plan: Plan,
   free: Plan,
   trial: boolean,
-  now: Date,
   trialDays: number = TRIAL.days,
 ): { note: string; reminder: string | null; cardLabel: string; success: string; price: string } {
-  const end = trialEndLabel(now, trialDays);
   const price = `$${n(plan.monthlyUsd)} a month`;
   const perMonth = price;
   return trial
     ? {
         price: perMonth,
-        note: `Add a card, pay $0 today. Then ${price} from ${end}. Cancel before then and you pay nothing.`,
+        // No date in an offer (Jason, 26 Nov: "never say it ends on a date").
+        note: `Add a card, pay $0 today. Then ${price} after ${yourTrial(trialDays)}. Cancel before it ends and you pay nothing.`,
         reminder: TRIAL_REMINDER,
-        cardLabel: "Start free with a card",
-        success: `You’re on ${plan.name}. Free until ${end}.`,
+        cardLabel: startTrialLabel(trialDays),
+        success: trialStartedLine(trialDays),
       }
     : {
         price: perMonth,
@@ -331,13 +329,13 @@ export function andList(items: string[]): string {
 
 /** Pure: everything the pop-up says, for one version with what's known. */
 export function popupContent(input: PopupInput): PopupContent {
-  const { version, plans, trial, facts, now } = input;
+  const { version, plans, trial, facts } = input;
   const trialDays = input.trialDays ?? TRIAL.days;
   const free = plans.free;
   const solo = plans.solo;
   const planId = offeredBy(version);
   const plan = plans[planId];
-  const pay = payWords(plan, free, trial, now, trialDays);
+  const pay = payWords(plan, free, trial, trialDays);
   const used = facts.connected.length > 0 ? facts.connected.length : null;
   const firstId = facts.connected[0];
   const first = firstId ? label(firstId) : null;

@@ -5,7 +5,6 @@ import {
   NO_FACTS,
   popupContent,
   popupVersion,
-  trialEndLabel,
   type PopupFacts,
   type PopupVersion,
   type Seg,
@@ -79,10 +78,11 @@ describe("popupContent", () => {
       "About 300 replies a month · Free has 100",
     ]);
     expect(c.note).toBe(
-      "Add a card, pay $0 today. Then $49 a month from December 23. Cancel before then and you pay nothing.",
+      "Add a card, pay $0 today. Then $49 a month after your free month. Cancel before it ends and you pay nothing.",
     );
     expect(c.reminder).toBe("We email you 3 days before the first charge.");
-    expect(c.success).toBe("You’re on Solo. Free until December 23.");
+    expect(c.success).toBe("Your free month has started.");
+    expect(c.cardLabel).toBe("Start my free month");
     expect(c.keep.label).toBe("Keep Free");
   });
 
@@ -184,7 +184,7 @@ describe("popupContent", () => {
     expect(c.headline).toBe("Invite your team with Team");
     expect(c).not.toHaveProperty("priceFlag");
     expect(c.note).toBe(
-      "Add a card, pay $0 today. Then $99 a month from December 23. Cancel before then and you pay nothing.",
+      "Add a card, pay $0 today. Then $99 a month after your free month. Cancel before it ends and you pay nothing.",
     );
     expect(c.ticks[1]!.bold).toBe(`${PLANS.business.accounts} accounts`);
     expect(c.ticks[2]!.bold).toBe(`Worker Bee and ${PLANS.business.replies} replies a month`);
@@ -213,7 +213,7 @@ describe("popupContent", () => {
         now: NOW,
       });
     expect(team(true).note).toBe(
-      "Add a card, pay $0 today. Then $99 a month from December 23. Cancel before then and you pay nothing.",
+      "Add a card, pay $0 today. Then $99 a month after your free month. Cancel before it ends and you pay nothing.",
     );
     expect(team(false).note).toContain("Pay $99 today");
     expect(team(true).note).not.toMatch(/founding|\$79/i);
@@ -282,11 +282,33 @@ describe("popupContent", () => {
 });
 
 describe("helpers", () => {
-  it("andList and trialEndLabel", () => {
+  it("andList", () => {
     expect(andList(["A"])).toBe("A");
     expect(andList(["A", "B", "C"])).toBe("A, B and C");
-    // The first month free (24 Nov): 30 days from now.
-    expect(trialEndLabel(NOW)).toBe("December 23");
+  });
+});
+
+describe("the pay words (26 Nov): Start my free month, never a date", () => {
+  it("a longer trial says its days, and no pop-up line names a date", () => {
+    const c = popupContent({
+      version: { v: "accounts", platform: "tiktok" },
+      plans: PLANS,
+      trial: true,
+      trialDays: 60,
+      facts: NO_FACTS,
+      now: NOW,
+    });
+    expect(c.cardLabel).toBe("Start my 60 free days");
+    expect(c.note).toBe(
+      "Add a card, pay $0 today. Then $49 a month after your 60 free days. Cancel before it ends and you pay nothing.",
+    );
+    expect(c.success).toBe("Your 60 free days have started.");
+    const month = content({ v: "accounts", platform: "tiktok" });
+    for (const line of [c.note, c.success, month.note, month.success]) {
+      expect(line).not.toMatch(
+        /January|February|March|April|May|June|July|August|September|October|November|December/,
+      );
+    }
   });
 });
 

@@ -127,14 +127,18 @@ function Mark({ state }: { state: PlanChipState }) {
   return null;
 }
 
-/** The header chip. Owners only: they pay. On a phone only when there's something to do. */
+/**
+ * The header chip. Owners only: they pay. On a phone when there's something to do, or the
+ * month's replies compact ("82/100", 26 Nov) where the plan has a reply limit.
+ */
 export type PlanViewer = { orgId: string; isOwner: boolean };
 
 export async function PlanChip({ orgId, isOwner }: PlanViewer) {
   const { state, peek, soloReplies } = await loadChip(orgId);
   if (!state || !isOwner) return null;
+  // On a phone the pill stays 36px tall but taps over 44px (design.md: 44px targets).
   const pillClass = cn(
-    "min-h-9 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 hover:opacity-90",
+    "relative min-h-9 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:opacity-90 md:before:hidden",
     showOnPhone(state) ? "inline-flex" : "hidden md:inline-flex",
     TONE[state.kind],
   );
@@ -142,7 +146,7 @@ export async function PlanChip({ orgId, isOwner }: PlanViewer) {
   const inner = (
     <>
       <Mark state={state} />
-      <span className="md:hidden">{planChipText(state, true)}</span>
+      <span className="tabular-nums md:hidden">{planChipText(state, true)}</span>
       <span className="hidden md:inline">{planChipText(state)}</span>
       {state.kind === "plan" && (
         <span className="text-ink-3 hidden font-medium lg:inline">
