@@ -10,9 +10,12 @@ import { anonClient, serviceClient, uniqueEmail } from "./helpers";
 // emailed (alert queued); comments are backfilled after a connect. Zernio is the mock.
 class HealthSocial extends MockSocialProvider {
   health: AccountHealth[] = [];
+  complete = true;
+  failHealth = false;
   commented: { postId: string; comments: ProviderComment[] }[] = [];
   override async getAccountsHealth() {
-    return this.health;
+    if (this.failHealth) throw new Error("zernio down");
+    return { accounts: this.health, complete: this.complete };
   }
   override async listCommentedPosts() {
     return this.commented.map((p) => ({ postId: p.postId }));
@@ -140,6 +143,64 @@ describe("account health check (T16)", () => {
     const account = await accountStatus();
     expect(account.status).toBe("active");
     expect(account.backfill_from).not.toBeNull();
+  });
+});
+
+describe("an account deleted in Zernio (25 Nov)", () => {
+  const recheck = () => db.from("tenants").update({ health_checked_at: null }).eq("id", tenantId);
+
+  it("a failed health call changes nothing", async () => {
+    social = new HealthSocial();
+    social.failHealth = true;
+    social.goneAccounts.add(zernioAccountId);
+    await recheck();
+    expect(await checkAccountsHealth(deps(), { tenantId })).toMatchObject({
+      checked: 0,
+      disconnected: 0,
+    });
+    expect((await accountStatus()).status).toBe("active");
+  });
+
+  it("a partial answer changes nothing", async () => {
+    social = new HealthSocial();
+    social.complete = false;
+    social.goneAccounts.add(zernioAccountId);
+    await recheck();
+    expect(await checkAccountsHealth(deps(), { tenantId })).toMatchObject({ disconnected: 0 });
+    expect((await accountStatus()).status).toBe("active");
+  });
+
+  it("missing but Zernio still has it (no 404): unchanged", async () => {
+    social = new HealthSocial();
+    await recheck();
+    expect(await checkAccountsHealth(deps(), { tenantId })).toMatchObject({ disconnected: 0 });
+    expect((await accountStatus()).status).toBe("active");
+  });
+
+  it("missing from a complete answer and 404 on its own: disconnected, reason audited", async () => {
+    social = new HealthSocial();
+    social.goneAccounts.add(zernioAccountId);
+    await recheck();
+    expect(await checkAccountsHealth(deps(), { tenantId })).toMatchObject({ disconnected: 1 });
+    expect((await accountStatus()).status).toBe("disconnected");
+    const { data: audit } = await db
+      .from("audit_log")
+      .select("details")
+      .eq("tenant_id", tenantId)
+      .eq("action", "account_disconnected")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    expect(audit?.details).toMatchObject({
+      disconnectionType: "health_check",
+      reason: "removed in Zernio",
+    });
+    // Back for the tests below.
+    social = new HealthSocial();
+    social.health = [health()];
+    await recheck();
+    await checkAccountsHealth(deps(), { tenantId });
+    expect((await accountStatus()).status).toBe("active");
   });
 });
 

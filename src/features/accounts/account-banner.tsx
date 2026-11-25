@@ -23,6 +23,8 @@ export async function AccountBanner() {
       .select("id, platform, username")
       .eq("tenant_id", tenant.id)
       .neq("status", "active")
+      // 25 Nov: one the owner disconnected on purpose needs no reconnect bar.
+      .is("released_at", null)
       .order("created_at")
       .limit(1)
       .maybeSingle(),

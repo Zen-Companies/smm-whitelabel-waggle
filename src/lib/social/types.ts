@@ -347,6 +347,16 @@ export interface AccountHealth {
   issues: string[];
 }
 
+/**
+ * `GET /v1/accounts/health?profileId=` (25 Nov). `complete` is true only when the answer clearly
+ * covers the whole profile: the summary's total matches the accounts listed and every account
+ * listed belongs to the profile. Only then may a missing account be treated as gone.
+ */
+export interface AccountsHealthReport {
+  accounts: AccountHealth[];
+  complete: boolean;
+}
+
 export type TelegramConnectStatus =
   | { status: "pending" }
   | { status: "expired" }
@@ -1498,7 +1508,12 @@ export interface SocialProvider {
       limit?: number;
     } & CallOptions,
   ): Promise<ProviderCommentReply[]>;
-  getAccountsHealth(input: { profileId: string }): Promise<AccountHealth[]>;
+  getAccountsHealth(input: { profileId: string }): Promise<AccountsHealthReport>;
+  /**
+   * 25 Nov: whether Zernio still has this account (`GET /v1/accounts/{accountId}/health`):
+   * false only on a 404; any other failure throws.
+   */
+  accountExists(input: { accountId: string } & CallOptions): Promise<boolean>;
   /**
    * T57: each connected account's profile picture (`GET /v1/accounts?profileId=`,
    * `SocialAccount.profilePicture`, null when the platform gives none).

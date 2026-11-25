@@ -63,7 +63,9 @@ export async function reconcileConnectedAccounts(
     .maybeSingle();
   if (!tenant?.zernio_profile_id || tenant.offboarded_at) return false;
   if (!(await claimReconcile(db, tenantId, deps.now ?? new Date()))) return false;
-  const health = await deps.social().getAccountsHealth({ profileId: tenant.zernio_profile_id });
+  const { accounts: health } = await deps
+    .social()
+    .getAccountsHealth({ profileId: tenant.zernio_profile_id });
   const { data: rows } = await db
     .from("social_accounts")
     .select("zernio_account_id")

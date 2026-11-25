@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
   AccountCategory,
-  AccountHealth,
+  AccountsHealthReport,
   AccountPicture,
   CreatePostInput,
   ProviderComment,
@@ -1991,8 +1991,16 @@ export class MockSocialProvider implements SocialProvider {
     return [];
   }
 
-  async getAccountsHealth(): Promise<AccountHealth[]> {
-    return [];
+  /** Not complete: the mock never makes the health check treat an account as removed. */
+  async getAccountsHealth(): Promise<AccountsHealthReport> {
+    return { accounts: [], complete: false };
+  }
+
+  /** Ids the mock answers 404 for (tests). */
+  readonly goneAccounts = new Set<string>();
+
+  async accountExists(input: { accountId: string }): Promise<boolean> {
+    return !this.goneAccounts.has(input.accountId);
   }
 
   /** No pictures in mock mode: brands show initials. */

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { disconnectSocialAccount } from "@/features/accounts/disconnect";
 import { handleAccountConnected, handleAccountDisconnected } from "@/features/accounts/events";
+import { MockSocialProvider } from "@/lib/social/mock";
 import { anonClient, serviceClient, uniqueEmail } from "./helpers";
 
 // docs/tasks.md T4: accounts come from account.connected; a disconnect pauses open items.
@@ -227,5 +229,95 @@ describe("account events", () => {
     await expect(
       handleAccountDisconnected(db, { tenantId, zernioAccountId: "acc_unknown" }),
     ).resolves.toEqual({ accountId: null, pausedItems: 0 });
+  });
+});
+
+describe("the owner disconnects an account (Settings → Accounts, 25 Nov)", () => {
+  it("removes it in Zernio, pauses items, audits the owner, sends no email; Connect brings it back", async () => {
+    const zid = `acc_${randomUUID().slice(0, 8)}`;
+    const { accountId } = await handleAccountConnected(db, {
+      tenantId,
+      zernioAccountId: zid,
+      platform: "facebook",
+      username: "ownercafe",
+    });
+    const item = await addItem(accountId, "new");
+    const social = new MockSocialProvider();
+    const userId = userIds[0];
+
+    // Another brand can't disconnect it.
+    expect(
+      await disconnectSocialAccount(
+        { db, social: () => social },
+        { tenantId: otherTenantId, accountId, userId },
+      ),
+    ).toEqual({ ok: false, error: "not_found" });
+
+    expect(
+      await disconnectSocialAccount({ db, social: () => social }, { tenantId, accountId, userId }),
+    ).toEqual({ ok: true });
+    expect(social.disconnectedAccounts).toEqual([zid]);
+
+    const { data: row } = await db
+      .from("social_accounts")
+      .select("status, released_at")
+      .eq("id", accountId)
+      .single();
+    expect(row!.status).toBe("disconnected");
+    expect(row!.released_at).not.toBeNull();
+    expect((await statuses([item]))[item]).toBe("paused");
+
+    const { data: alerts } = await db
+      .from("alerts")
+      .select("status, last_error")
+      .eq("social_account_id", accountId)
+      .eq("kind", "disconnect");
+    expect(alerts).toEqual([{ status: "logged", last_error: "owner_disconnected" }]);
+    const { data: audit } = await db
+      .from("audit_log")
+      .select("actor, details")
+      .eq("tenant_id", tenantId)
+      .eq("action", "account_disconnected")
+      .eq("details->>accountId", accountId)
+      .single();
+    expect(audit).toMatchObject({
+      actor: userId,
+      details: { disconnectionType: "owner", reason: "owner" },
+    });
+
+    // Reconnecting the same account (a new Zernio id) brings the row back.
+    const back = await handleAccountConnected(db, {
+      tenantId,
+      zernioAccountId: `${zid}_2`,
+      platform: "facebook",
+      username: "ownercafe",
+    });
+    expect(back).toMatchObject({ accountId, outcome: "reconnected" });
+    const { data: again } = await db
+      .from("social_accounts")
+      .select("status, released_at")
+      .eq("id", accountId)
+      .single();
+    expect(again).toEqual({ status: "active", released_at: null });
+  });
+
+  it("Zernio failing leaves the account connected", async () => {
+    const zid = `acc_${randomUUID().slice(0, 8)}`;
+    const { accountId } = await handleAccountConnected(db, {
+      tenantId,
+      zernioAccountId: zid,
+      platform: "tiktok",
+      username: "ownercafe",
+    });
+    const social = new MockSocialProvider();
+    social.failRemoval.add(zid);
+    expect(
+      await disconnectSocialAccount(
+        { db, social: () => social },
+        { tenantId, accountId, userId: userIds[0] },
+      ),
+    ).toMatchObject({ ok: false, error: "provider_failed" });
+    const { data } = await db.from("social_accounts").select("status").eq("id", accountId).single();
+    expect(data!.status).toBe("active");
   });
 });

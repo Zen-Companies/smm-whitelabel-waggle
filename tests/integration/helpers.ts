@@ -169,6 +169,7 @@ export function fakeZernio() {
     listConversationMessages: notImplemented,
     listCommentReplies: notImplemented,
     getAccountsHealth: notImplemented,
+    accountExists: notImplemented,
     listAccountPictures: notImplemented,
     ping: notImplemented,
     uploadMedia: notImplemented,

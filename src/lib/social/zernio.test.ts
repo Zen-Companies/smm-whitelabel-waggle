@@ -1815,19 +1815,58 @@ describe("ZernioSocialProvider", () => {
         ],
       });
 
-    await expect(provider.getAccountsHealth({ profileId: "prof_1" })).resolves.toEqual([
-      {
-        accountId: "acc_1",
-        platform: "instagram",
-        username: "democafe",
-        status: "error",
-        needsReconnect: true,
-        canPost: false,
-        issues: ["token_expired"],
-      },
-    ]);
+    await expect(provider.getAccountsHealth({ profileId: "prof_1" })).resolves.toEqual({
+      complete: true,
+      accounts: [
+        {
+          accountId: "acc_1",
+          platform: "instagram",
+          username: "democafe",
+          status: "error",
+          needsReconnect: true,
+          canPost: false,
+          issues: ["token_expired"],
+        },
+      ],
+    });
     expect(captured[0].url.pathname).toBe("/api/v1/accounts/health");
     expect(captured[0].url.searchParams.get("profileId")).toBe("prof_1");
+  });
+
+  it("getAccountsHealth is complete only when the total matches and every account is the profile's", async () => {
+    const account = (id: string, profileId = "prof_1") => ({
+      accountId: id,
+      profileId,
+      platform: "instagram",
+      status: "healthy",
+    });
+    respond = () => json({ summary: { total: 0 }, accounts: [] });
+    expect((await provider.getAccountsHealth({ profileId: "prof_1" })).complete).toBe(true);
+
+    // More accounts than listed (a page or a cut-off answer).
+    respond = () => json({ summary: { total: 3 }, accounts: [account("a"), account("b")] });
+    expect((await provider.getAccountsHealth({ profileId: "prof_1" })).complete).toBe(false);
+
+    // No summary: can't tell whether everything came back.
+    respond = () => json({ accounts: [account("a")] });
+    expect((await provider.getAccountsHealth({ profileId: "prof_1" })).complete).toBe(false);
+
+    // The profile filter wasn't applied.
+    respond = () =>
+      json({ summary: { total: 2 }, accounts: [account("a"), account("b", "prof_2")] });
+    expect((await provider.getAccountsHealth({ profileId: "prof_1" })).complete).toBe(false);
+  });
+
+  it("accountExists: true on 200, false only on 404, throws otherwise", async () => {
+    respond = () => json({ accountId: "acc_1", status: "healthy" });
+    await expect(provider.accountExists({ accountId: "acc_1" })).resolves.toBe(true);
+    expect(captured.at(-1)!.url.pathname).toBe("/api/v1/accounts/acc_1/health");
+
+    respond = () => json({ error: "Account not found" }, 404);
+    await expect(provider.accountExists({ accountId: "acc_1" })).resolves.toBe(false);
+
+    respond = () => json({ error: "boom" }, 500);
+    await expect(provider.accountExists({ accountId: "acc_1" })).rejects.toThrow();
   });
 
   it("listAccountPictures reads profilePicture per account (null when missing)", async () => {
