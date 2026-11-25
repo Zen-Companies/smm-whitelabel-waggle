@@ -44,6 +44,11 @@ function Lines({ label, lines }: { label: string; lines: BarLine[] }) {
   );
 }
 
+/** Whether a link only changes this page's query (the pop-up), not the page. */
+function samePage(href: string, path: string): boolean {
+  return href.split(/[?#]/)[0] === path;
+}
+
 function plain(label: string, lines: BarLine[]): string {
   return [label, ...lines.map((l) => `${l.text}${l.honey ?? ""}`)].join(" · ");
 }
@@ -86,6 +91,14 @@ export function PromoBarView({
       <Link
         href={href}
         scroll={false}
+        onClick={(e) => {
+          // The pop-up opens from the address on this same page: change it in the browser only
+          // (Next keeps useSearchParams in sync), instead of a server round trip that re-renders
+          // the whole page first (~8 s on staging with nothing on screen, QA 25 Nov).
+          if (!samePage(href, path) || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+          e.preventDefault();
+          window.history.pushState(null, "", href);
+        }}
         aria-label={`${plain(label, lines)}. ${cta.replace(/\s*→$/, "")}`}
         className="flex min-w-0 flex-1 items-center gap-3"
       >
