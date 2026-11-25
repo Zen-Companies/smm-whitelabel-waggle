@@ -286,3 +286,12 @@ describe("status label", () => {
     ).toBe("Active");
   });
 });
+
+describe("fixHint from Zernio's real failure (23 Nov)", () => {
+  it("matches the error code even when the message doesn't say 'no pages'", () => {
+    expect(fixHint("Meta returned zero managed Pages", "facebook", "no_facebook_pages")).toMatch(
+      /Facebook Page/,
+    );
+    expect(fixHint("Meta returned zero managed Pages", "facebook")).toMatch(/Facebook Page/);
+  });
+});

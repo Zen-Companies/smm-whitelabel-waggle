@@ -146,10 +146,17 @@ export function findSignIn(
   );
 }
 
-/** Zernio's message when it names a fix the customer can make. */
-export function fixHint(message: string | null, platform: string): string | null {
+/** Zernio's message (or its error code) when it names a fix the customer can make. */
+export function fixHint(
+  message: string | null,
+  platform: string,
+  code: string | null = null,
+): string | null {
+  // Real log (23 Nov): code no_facebook_pages, message "Meta returned zero managed Pages".
+  if (code === "no_facebook_pages" || code === "no_pages_granted")
+    return "Can they fix it? Yes: they need a Facebook Page, ticked on Facebook's access step.";
   if (!message) return null;
-  if (/no (facebook )?pages?/i.test(message))
+  if (/no (facebook )?pages?|zero managed pages/i.test(message))
     return "Can they fix it? Yes: they need a Facebook Page.";
   if (/not (a )?(business|professional|creator)/i.test(message))
     return `Can they fix it? Yes: switch ${platformName(platform)} to a professional account.`;
@@ -295,7 +302,7 @@ export function buildStory(input: {
         state: "failed",
         detail: signIn.errorCode ? `failed · ${signIn.errorCode}` : "failed",
         quote: signIn.errorMessage,
-        hint: fixHint(signIn.errorMessage, a.platform),
+        hint: fixHint(signIn.errorMessage, a.platform, signIn.errorCode ?? null),
       });
     }
   }
