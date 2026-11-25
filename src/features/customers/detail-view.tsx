@@ -119,7 +119,7 @@ export async function CustomerDetailView({
 
       <Facts d={d} now={now} />
       <Funnel d={d} />
-      <Attempts attempts={d.attempts} />
+      <Attempts attempts={d.attempts} profileId={d.tenant.zernioProfileId} />
       <Timeline d={d} type={type} showAll={showAll} />
       <div className="grid gap-4 md:grid-cols-2">
         <Setup d={d} />
@@ -189,6 +189,16 @@ function Facts({ d, now }: { d: CustomerDetail; now: Date }) {
       </Pair>
       <Pair k="Brands">
         {d.org.brands.length} · {d.org.brands.map((b) => b.name).join(", ")}
+      </Pair>
+      <Pair k="Zernio profile">
+        {d.tenant.zernioProfileId ? (
+          <span className="font-mono text-[13px] select-all">{d.tenant.zernioProfileId}</span>
+        ) : (
+          "Not made yet"
+        )}
+        <span className="meta block">
+          Search this in Zernio for this brand&apos;s profile and its connects.
+        </span>
       </Pair>
       <Pair k="Plan">{d.billing.planLabel}</Pair>
       <Pair k="Signed up">
@@ -264,7 +274,14 @@ function Funnel({ d }: { d: CustomerDetail }) {
   );
 }
 
-function Attempts({ attempts }: { attempts: AttemptRow[] }) {
+function Attempts({
+  attempts,
+  profileId,
+}: {
+  attempts: AttemptRow[];
+  /** The brand's Zernio profile, for tries that never came back (they don't store one). */
+  profileId: string | null;
+}) {
   const connected = attempts.filter((a) => a.outcome === "connected").length;
   const classes = [...new Set(attempts.map((a) => a.userAgentClass))];
   const allInApp = attempts.length > 0 && classes.length === 1 && classes[0]?.startsWith("in_app_");
@@ -293,7 +310,7 @@ function Attempts({ attempts }: { attempts: AttemptRow[] }) {
             <span>Stage</span>
           </div>
           {attempts.map((a) => (
-            <AttemptLine key={a.id} a={a} />
+            <AttemptLine key={a.id} a={a} profileId={profileId} />
           ))}
           <p className="meta mt-2">
             One row per try, newest first. Abandoned: no return within 2 hours.
@@ -304,7 +321,7 @@ function Attempts({ attempts }: { attempts: AttemptRow[] }) {
   );
 }
 
-function AttemptLine({ a }: { a: AttemptRow }) {
+function AttemptLine({ a, profileId }: { a: AttemptRow; profileId: string | null }) {
   const outcome = isOutcome(a.outcome) ? OUTCOME_LABEL[a.outcome] : "Open";
   const tone =
     a.outcome === "connected"
@@ -366,7 +383,7 @@ function AttemptLine({ a }: { a: AttemptRow }) {
           {kv("user agent", a.userAgent)}
           {kv("attempt id", a.id)}
           {kv("Zernio request", a.zernioRequestId)}
-          {kv("Zernio profile", a.zernioProfileId)}
+          {kv("Zernio profile", a.zernioProfileId ?? profileId)}
           {kv("Zernio account", a.zernioAccountId)}
         </dl>
         <p className="meta">
