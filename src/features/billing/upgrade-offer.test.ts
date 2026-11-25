@@ -38,7 +38,7 @@ describe("upgradeOffer", () => {
   it("a longer trial (banked referral months) says its days", () => {
     const o = upgradeOffer("free", "nudge", PLANS, { trial: true, trialDays: 60 });
     expect(o.cta).toBe("Start 60 days free");
-    expect(o.title).toBe("Try Solo free for 60 days.");
+    expect(o.title).toBe("Try Solo. 60 days free.");
   });
 
   it("Free again after a paid plan: no second trial, paid at checkout", () => {

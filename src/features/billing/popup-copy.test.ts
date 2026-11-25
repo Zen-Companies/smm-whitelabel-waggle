@@ -75,12 +75,13 @@ describe("popupContent", () => {
     );
     expect(c.ticks.map((t) => `${t.bold} · ${t.rest}`)).toEqual([
       "3 accounts · you use 1 now",
-      "Worker Bee · answers every message for you, day or night, within Meta’s 24-hour window",
-      "300 replies a month · Free has 100",
+      "Worker Bee · answers regular questions for you, day or night, once you trust it",
+      "About 300 replies a month · Free has 100",
     ]);
     expect(c.note).toBe(
       "Add a card, pay $0 today. Then $49 a month from December 23. Cancel before then and you pay nothing.",
     );
+    expect(c.reminder).toBe("We email you 3 days before the first charge.");
     expect(c.success).toBe("You’re on Solo. Free until December 23.");
     expect(c.keep.label).toBe("Keep Free");
   });
@@ -113,7 +114,7 @@ describe("popupContent", () => {
       now: NOW,
     });
     expect(c.sub).toBe("Free covers 1 account. Solo covers 5.");
-    expect(c.ticks[2]!.bold).toBe("400 replies a month");
+    expect(c.ticks[2]!.bold).toBe("About 400 replies a month");
   });
 
   it("A, setup step 1: both platforms named, Keep one", () => {
@@ -163,7 +164,7 @@ describe("popupContent", () => {
       { v: "replies", level: "low" },
       { pain: { perDay: 2, waiting: 0 }, usage: { used: 82, allowance: 100, resetsOn: "Dec 1" } },
     );
-    expect(c.headline).toBe("Get 300 replies a month with Solo");
+    expect(c.headline).toBe("Get about 300 replies a month with Solo");
     expect(c.sub).toBe("You’ve used 82 of your 100 Free replies this month.");
     expect(text(c.honey)).toBe(
       "~2 messages a day from customers. At that pace you run out in about 9 days.",
@@ -234,6 +235,49 @@ describe("popupContent", () => {
     expect(c.headline).toBe("Let Worker Bee answer with Solo");
     expect(c.cardLabel).toBe("Pay with a card");
     expect(c.success).toBe("You’re on Solo.");
+    expect(c.reminder).toBeNull();
+  });
+
+  it("F banner with the trial (Walter's playbook, 25 Nov): first month free, Worker Bee", () => {
+    const c = content({ v: "try", sub: "banner" });
+    expect(c.headline).toBe("Try Solo. Your first month is free.");
+    expect(c.sub).toBe(
+      "Worker Bee answers regular questions for you, day or night, once you trust it.",
+    );
+    expect(c.strip[1]).toMatchObject({ title: "Worker Bee", text: "First month free" });
+    expect(c.reminder).toBe("We email you 3 days before the first charge.");
+    expect(c.ticks[2]!.bold).toBe("About 300 replies a month");
+    expect(c.ticks[1]!.bold).toBe("Worker Bee");
+  });
+
+  it("F banner with a longer promotion or a friend's link: the days, never 30", () => {
+    const c = popupContent({
+      version: { v: "try", sub: "banner" },
+      plans: PLANS,
+      trial: true,
+      trialDays: 60,
+      facts: NO_FACTS,
+      now: NOW,
+    });
+    expect(c.headline).toBe("Try Solo. 60 days free.");
+    expect(c.strip[1]).toMatchObject({ text: "60 days free" });
+    expect(c.headline).not.toMatch(/30/);
+  });
+
+  it("the Solo offer never says every message, 7 days or Free forever", () => {
+    const versions: PopupVersion[] = [
+      { v: "accounts", platform: "tiktok" },
+      { v: "worker_bee", topic: null },
+      { v: "replies", level: "out" },
+      { v: "replies", level: "low" },
+      { v: "idle", platform: "instagram" },
+      { v: "try", sub: "banner" },
+      { v: "try", sub: "welcome" },
+    ];
+    for (const v of versions) {
+      const all = JSON.stringify(content(v));
+      expect(all).not.toMatch(/every message|7 days|free forever/i);
+    }
   });
 });
 

@@ -392,6 +392,9 @@ export function UpgradePopup({
             />
             <AcceptedMarks />
             <p className="text-ink-3 m-0 text-center text-xs">{content.note}</p>
+            {content.reminder && (
+              <p className="text-ink-3 m-0 -mt-1 text-center text-xs">{content.reminder}</p>
+            )}
           </>
         )}
         {content.keep.kind === "inbox" ? (

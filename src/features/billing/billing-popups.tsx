@@ -19,7 +19,7 @@ import { recordPlanNotice } from "./notice-actions";
 import { UpgradeDialog, WelcomeDialog, type OfferOrg } from "./offer-dialogs";
 import { dailyAmount, TRIAL } from "./plans";
 import { confirmCheckout, popupFacts } from "./popup-actions";
-import { NO_FACTS, popupContent, popupVersion, type PopupFacts } from "./popup-copy";
+import { aboutReplies, NO_FACTS, popupContent, popupVersion, type PopupFacts } from "./popup-copy";
 import { waitingLine, type ReplyPain } from "./reply-pain";
 import type { OfferReason } from "./upgrade";
 import { upgradeOffer } from "./upgrade-offer";
@@ -392,9 +392,10 @@ function SoloNudge({
 }) {
   const solo = org.plans.solo;
   const perks: { icon: LucideIcon; label: string }[] = [
-    ...(solo.features.autoReply ? [{ icon: Zap, label: "Auto-reply" }] : []),
+    // Walter's playbook (25 Nov): Worker Bee by name, and "About 300 replies a month".
+    ...(solo.features.autoReply ? [{ icon: Zap, label: "Worker Bee" }] : []),
     { icon: AtSign, label: `${solo.accounts} accounts` },
-    { icon: MessagesSquare, label: `${solo.replies.toLocaleString("en-US")} AI replies a month` },
+    { icon: MessagesSquare, label: aboutReplies(solo) },
   ];
   return (
     <section

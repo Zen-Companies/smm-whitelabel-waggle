@@ -10,6 +10,8 @@ import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { isIntegrationKind, SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
+import { accountsFullHref } from "./account-room";
+import { DEFAULT_RETURN } from "./connect-return";
 import { handleAccountConnected } from "./events";
 import {
   CONNECTED_PLATFORMS,
@@ -93,6 +95,9 @@ export async function connectWhatsAppKeysAction(
   const parsed = parseWhatsAppKeys(formData);
   if (!parsed.ok) return { error: parsed.error, field: parsed.field };
   const db = getServiceClient();
+  // The plan's connected accounts, as the sign-in connects check them (Walter's playbook, 25 Nov).
+  const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, "whatsapp");
+  if (full) redirect(full);
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
     const account = await getSocialProvider().connectWhatsAppWithKeys({
@@ -272,6 +277,8 @@ export async function connectLineAction(
   const parsed = parseLineKeys(formData);
   if (!parsed.ok) return { error: parsed.error, field: parsed.field };
   const db = getServiceClient();
+  const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, "line");
+  if (full) redirect(full);
   let result: { accountId: string; name: string; webhookReady: boolean };
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);

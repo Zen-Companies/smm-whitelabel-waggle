@@ -24,6 +24,7 @@ import { recordConnectStart, traceQuietly } from "./connect-trace-store";
 import { isFirstAccount } from "./first-account";
 import { disconnectSocialAccount } from "./disconnect";
 import { freeFullHref } from "./free-full";
+import { accountsFullHref } from "./account-room";
 import { SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
 import { blueskyErrorText, blueskyInputSchema, connectBlueskyFor } from "./bluesky";
@@ -147,6 +148,9 @@ export async function connectBluesky(
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) return { error: "Only Owners and Admins can connect accounts." };
   const db = getServiceClient();
+  // The plan's connected accounts, as the sign-in connects check them (Walter's playbook, 25 Nov).
+  const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, "bluesky");
+  if (full) redirect(full);
 
   const firstAccount = await isFirstAccount(db, tenant.id);
   let result;
@@ -183,11 +187,15 @@ export async function connectBluesky(
  * the card goes once it connects: setup step 2 for the brand's first account (20 Nov).
  */
 export async function startTelegram(): Promise<
-  (TelegramCode & { after: string | null }) | { error: string }
+  (TelegramCode & { after: string | null }) | { error: string } | { upgrade: string }
 > {
   const tenant = await getTenantFor("accounts.manage");
   if (!tenant) return { error: "Only Owners and Admins can connect accounts." };
   const db = getServiceClient();
+  // The plan's connected accounts, before any code (Walter's playbook, 25 Nov): the card goes
+  // to the upgrade pop-up (Free) or the accounts-in-use line instead.
+  const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, "telegram");
+  if (full) return { upgrade: full };
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
     const [code, firstAccount] = await Promise.all([
