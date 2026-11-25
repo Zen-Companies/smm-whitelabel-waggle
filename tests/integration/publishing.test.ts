@@ -401,6 +401,65 @@ describe("publishing (T14)", () => {
     });
   });
 
+  it("How it fits: a shape Instagram refuses is held until cropped; the crop goes only there (Posts Round 2)", async () => {
+    social = new ScriptedPosts();
+    const { data: fb } = await db
+      .from("social_accounts")
+      .insert({
+        tenant_id: tenantId,
+        zernio_account_id: `acc_fb_${randomUUID().slice(0, 8)}`,
+        platform: "facebook",
+        username: "postingcafe.fb",
+      })
+      .select("id")
+      .single();
+    const tall = {
+      url: "https://media.zernio.com/temp/tall.jpg",
+      type: "image" as const,
+      width: 1000,
+      height: 3000,
+    };
+    const refused = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Our tallest cake yet",
+      accountIds: [accountId, fb!.id],
+      scheduledFor: null,
+      media: [tall],
+    });
+    expect(refused).toEqual({
+      ok: false,
+      error: "not_accepted",
+      problems: [
+        {
+          platform: "instagram",
+          message: "Instagram won't take this shape. Crop it for Instagram or post it as a Story.",
+        },
+      ],
+      warnings: [],
+    });
+    expect(social.calls).toHaveLength(0);
+
+    const crop = "https://media.zernio.com/temp/tall-ig.jpg";
+    const r = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Our tallest cake yet",
+      accountIds: [accountId, fb!.id],
+      scheduledFor: null,
+      media: [tall],
+      options: {
+        instagram: { media: [{ url: crop, type: "image", width: 1080, height: 1350 }] },
+      },
+    });
+    expect(r).toMatchObject({ ok: true });
+    const last = social.calls.at(-1)!;
+    expect(last.media).toEqual([{ url: tall.url, type: "image" }]);
+    expect(last.extras?.instagram?.customMedia).toEqual([{ type: "image", url: crop }]);
+    expect(last.extras?.facebook?.customMedia).toBeUndefined();
+    await db.from("social_accounts").delete().eq("id", fb!.id);
+  });
+
   it("Pinterest: the chosen board is remembered and every pin goes there (T64)", async () => {
     const { data: pin } = await db
       .from("social_accounts")

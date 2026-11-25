@@ -85,6 +85,8 @@ export type PostingQueue = {
 /** One target's extra createPost fields (T75). */
 export type TargetExtras = {
   customContent?: string;
+  /** This platform's own files (Zernio `customMedia`), replacing `mediaItems` there only. */
+  customMedia?: { type?: MediaKind; url: string; altText?: string }[];
   platformSpecificData?: Record<string, unknown>;
 };
 

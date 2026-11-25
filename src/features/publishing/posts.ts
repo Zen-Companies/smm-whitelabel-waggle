@@ -6,6 +6,7 @@ import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { checkPlatform, type RuleCheck } from "./post-rules";
+import { fitFor, refusedMessage, shapeFor, type MediaShape } from "./media-fit";
 import { publishPost } from "./publish";
 import { postOptionsRow, targetExtras, textFor, type PostOptions } from "./post-options";
 import { statusAfterTakeDown, takeDownSplit } from "./take-down";
@@ -67,7 +68,15 @@ export async function createPost(
      * Photos and videos already uploaded to Zernio (`seconds`: a video's length, when known;
      * `type`: what the file is, sent to Zernio so it never guesses; `altText`: for photos).
      */
-    media?: { url: string; seconds?: number | null; type?: MediaKind | null; altText?: string | null }[];
+    media?: {
+      url: string;
+      seconds?: number | null;
+      type?: MediaKind | null;
+      altText?: string | null;
+      /** Posts Round 2: the file's size in pixels, read by the browser (for "How it fits"). */
+      width?: number | null;
+      height?: number | null;
+    }[];
     /** The owner confirmed TikTok's consent for this post. */
     tiktokConsent?: boolean;
     /** YouTube's title; without it Zernio uses the caption's first line. */
@@ -107,6 +116,7 @@ export async function createPost(
       seconds: m.seconds ?? null,
       ...(type ? { type } : {}),
       ...(m.altText?.trim() ? { altText: m.altText.trim() } : {}),
+      ...(m.width && m.height ? { width: m.width, height: m.height } : {}),
     };
   });
   const videos = media.filter((m) => m.type === "video");
@@ -121,11 +131,37 @@ export async function createPost(
       }),
     )
     .filter((c): c is Extract<RuleCheck, { level: "blocked" }> => c.level === "blocked");
-  if (blocked.length) {
+  // Posts Round 2 ("How it fits"): a platform that refuses the file's shape or length can't be
+  // sent until the owner crops for it, posts it as a Story or leaves it out. Others aren't checked
+  // here when the size isn't known (an assistant's post); Zernio's check still runs.
+  const first = media[0];
+  const shared: MediaShape | null =
+    first && "width" in first && first.width && first.height
+      ? {
+          kind: first.type === "video" ? "video" : "image",
+          width: first.width,
+          height: first.height,
+          seconds: first.seconds,
+        }
+      : null;
+  const crops = Object.fromEntries(
+    Object.entries(input.options ?? {}).flatMap(([platform, o]) => {
+      const m = o?.media?.[0];
+      return m?.width && m.height ? [[platform, { width: m.width, height: m.height }]] : [];
+    }),
+  );
+  const refused = shared
+    ? [...new Set(owned.map((a) => a.platform))].flatMap((platform) => {
+        const shape = shapeFor(platform, shared, crops);
+        const fit = shape ? fitFor(platform, shape, input.options?.[platform]?.as) : null;
+        return fit?.level === "refused" ? [{ platform, message: refusedMessage(fit) }] : [];
+      })
+    : [];
+  if (blocked.length || refused.length) {
     return {
       ok: false,
       error: "not_accepted",
-      problems: blocked.map((c) => ({ platform: c.platform, message: c.message })),
+      problems: [...blocked.map((c) => ({ platform: c.platform, message: c.message })), ...refused],
       warnings: [],
     };
   }
@@ -160,7 +196,10 @@ export async function createPost(
           : [],
       ),
       extras: Object.fromEntries(
-        owned.map((a) => [a.platform, targetExtras(a.platform, optionsRow[a.platform], input.content)]),
+        owned.map((a) => [
+          a.platform,
+          targetExtras(a.platform, optionsRow[a.platform], input.content),
+        ]),
       ),
       signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
     });

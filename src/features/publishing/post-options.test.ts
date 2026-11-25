@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ownText, parsePostOptions, postOptionsRow, targetExtras, textFor } from "./post-options";
+import {
+  ownText,
+  parsePostOptions,
+  postOptionsRow,
+  targetExtras,
+  textFor,
+  withoutMedia,
+} from "./post-options";
 
 describe("parsePostOptions", () => {
   it("keeps known options per platform and drops junk", () => {
@@ -85,13 +92,21 @@ describe("targetExtras", () => {
 
   it("Instagram post: share to feed and trial only apply to Reels", () => {
     expect(
-      targetExtras("instagram", { as: "post", shareToFeed: true, trialReel: true, aiLabel: true }, ""),
+      targetExtras(
+        "instagram",
+        { as: "post", shareToFeed: true, trialReel: true, aiLabel: true },
+        "",
+      ),
     ).toEqual({ platformSpecificData: { isAiGenerated: true } });
   });
 
   it("Facebook Reel with a title; Story drops comment and countries", () => {
     expect(
-      targetExtras("facebook", { as: "reel", title: "Ube", firstComment: "hi", countries: ["PH"] }, ""),
+      targetExtras(
+        "facebook",
+        { as: "reel", title: "Ube", firstComment: "hi", countries: ["PH"] },
+        "",
+      ),
     ).toEqual({
       platformSpecificData: {
         contentType: "reel",
@@ -101,7 +116,11 @@ describe("targetExtras", () => {
       },
     });
     expect(
-      targetExtras("facebook", { as: "story", title: "x", firstComment: "hi", countries: ["PH"] }, ""),
+      targetExtras(
+        "facebook",
+        { as: "story", title: "x", firstComment: "hi", countries: ["PH"] },
+        "",
+      ),
     ).toEqual({ platformSpecificData: { contentType: "story" } });
   });
 
@@ -158,7 +177,11 @@ describe("targetExtras", () => {
 describe("postOptionsRow", () => {
   it("adds the YouTube title and the board to the composer's choices", () => {
     expect(
-      postOptionsRow({ youtube: { visibility: "unlisted" }, instagram: { as: "reel" } }, "Ube", "b1"),
+      postOptionsRow(
+        { youtube: { visibility: "unlisted" }, instagram: { as: "reel" } },
+        "Ube",
+        "b1",
+      ),
     ).toEqual({
       youtube: { visibility: "unlisted", title: "Ube" },
       instagram: { as: "reel" },
@@ -184,6 +207,35 @@ describe("a platform's own text (Posts round 1, 25 Nov)", () => {
     expect(targetExtras("threads", options.threads, "New caption")).toEqual({});
     expect(targetExtras("bluesky", options.bluesky, "New caption")).toEqual({
       customContent: "Short",
+    });
+  });
+});
+
+describe("a platform's own crop (Posts Round 2)", () => {
+  const crop = {
+    url: "https://media.example.com/ig-crop.jpg",
+    type: "image" as const,
+    width: 1080,
+    height: 1350,
+  };
+
+  it("goes to Zernio as that platform's customMedia, with its type", () => {
+    const o = parsePostOptions({ instagram: { media: [crop] } });
+    expect(targetExtras("instagram", o.instagram, "Hi")).toEqual({
+      customMedia: [{ type: "image", url: crop.url }],
+    });
+    expect(targetExtras("facebook", o.facebook, "Hi")).toEqual({});
+  });
+
+  it("is never taken from the browser's options", () => {
+    expect(withoutMedia({ instagram: { as: "story", media: [crop] } })).toEqual({
+      instagram: { as: "story" },
+    });
+  });
+
+  it("a link that isn't one is dropped", () => {
+    expect(parsePostOptions({ instagram: { media: [{ url: "nope" }] } })).toEqual({
+      instagram: {},
     });
   });
 });
