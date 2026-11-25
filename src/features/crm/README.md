@@ -38,7 +38,6 @@ HighLevel's workflows can send the right emails. The contract is Walter's "Waggl
 | business_info_saved                                                                                      | `features/tenants/actions.ts` (first save of a business profile)                        |
 | usage_80, usage_100                                                                                      | `features/billing` reply limit (once per month each)                                    |
 | account_limit                                                                                            | `features/accounts` connect actions (once a day)                                        |
-| founding_full                                                                                            | `sender.ts`, after a founding trial takes the last spot                                 |
 | inactive, app_active                                                                                     | `activity.ts` (sweep in the jobs route; a visit)                                        |
 
 ## Failed connects (Fix 1, 24 Nov)
@@ -70,11 +69,20 @@ Every attempt, with all of Zernio's error fields, is kept in `connect_attempts`.
   **only when the contact has none yet** (the gowaggle.ai waitlist may have set them first). See `src/lib/crm/utm.ts`.
 - The old inbound webhook (`src/lib/ghl.ts`) still sends beta_joined / feedback / page_rating until it's retired.
 
+## Give a month, get a month (Walter's GHL referral campaign, 24 Nov)
+
+| Event / field     | What HighLevel gets                                                                                                                                                                                                                                                                             | Queued from                                                                                                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| signed_up         | Also `ref_code` (the friend's link code) and `referred_by` (the referrer's business name) when they came through a friend's link, read at send time.                                                                                                                                            | `sender.ts` (`signupReferral`)                                                                                                                                                       |
+| referral_rewarded | Once per person per referral: `waggle_referral_role` (referrer / friend), `waggle_referral_with` (the other side's business name), `waggle_referral_ends` (their free month's end, "December 30", US Eastern), `waggle_plan`, then `waggle-app-event`. Referrer and friend at least 30 s apart. | `features/billing/referrals.ts`: the friend when their first trial starts (Stripe webhook); the referrer when the credit lands (jobs route) or banked months start their first trial |
+
+The pure rules (readable date, dedupe key, 30 s gap, friend's month applied) are in `src/lib/crm/referral.ts`.
+
 ## Rules (Walter's)
 
 - Plan words are `free` (no paid plan, 19 Nov), `solo`, `team` ($99), `business` (by call). Waggle's **ids are swapped** for the two
   upper plans, so `crmPlan()` uses the plan's name, never its id.
-- Every field on every event; `waggle_founding` is always `true` or `false`.
+- Every field on every event; `waggle_founding` is always `false` (founding offer retired, 24 Nov).
 - `trial_converted` always before a later `canceled` (the queue keeps order per person).
 - Only the owner's own account data. Never their customers' names, messages or contacts.
 
@@ -83,3 +91,12 @@ Every attempt, with all of Zernio's error fields, is kept in `connect_attempts`.
 `GHL_PRIVATE_TOKEN` (a Private Integration Token on the Waggle sub-account; scopes contacts.write,
 contacts.readonly) and `GHL_LOCATION_ID` (`k0lV8H3WuN9F6Yz0yl6I`). Without them nothing is sent and
 the queue waits, so local and staging are safe by default. Tests never call HighLevel.
+
+## Referral link, trial end and the checkout link (Walter, 25 Nov)
+
+| Field / link           | What HighLevel gets                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `waggle_referral_link` | The Owner's own link, `https://app.gowaggle.ai/signup?ref=<code>`, on every event about an Owner whose organization is paying (a paid plan with its card; the code is made if missing). Empty for an Owner on Free (no code is made), so emails can branch on it; never sent for teammates. Also `referral_link`, a fields-only event (no tag, no workflow), once per code per Owner when the code is made or first shown (`ensureReferralCode`). |
+| `waggle_trial_ends`    | The trial's end as "December 24" (US Eastern), on every event (was `2026-12-24` before 25 Nov).                                                                                                                                                                                                                                                                                                                                                   |
+| `waggle_trial_ends_at` | The trial's end, ISO (`2026-12-24T15:00:00.000Z`), on every event.                                                                                                                                                                                                                                                                                                                                                                                |
+| Checkout link          | `https://app.gowaggle.ai/plan?start=solo` (or `start=team`): an Owner on Free goes straight to Stripe Checkout (first month free, card). Signed out: sign in, then back to the link. Teammates see a note to ask the Owner. Never Business. `src/lib/checkout-link.ts`.                                                                                                                                                                           |

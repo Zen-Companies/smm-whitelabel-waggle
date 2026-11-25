@@ -1,5 +1,5 @@
 /**
- * Creates Waggle's products, prices, the founding coupon and the customer portal settings in
+ * Creates Waggle's products, prices and the customer portal settings in
  * the Stripe account of STRIPE_SECRET_KEY, and prints every id. Safe to run again: it finds what
  * exists by lookup key / metadata and only adds what's missing (a changed amount gets a new
  * price that takes over the lookup key; Stripe prices can't change).
@@ -8,8 +8,7 @@
  *   pnpm stripe:catalog --live     # a live key, on purpose
  */
 import Stripe from "stripe";
-import { catalog, FOUNDING_COUPON, foundingCentsOff, PRICE_KEYS } from "@/features/billing/catalog";
-import { FOUNDING } from "@/features/billing/plans";
+import { catalog, PRICE_KEYS } from "@/features/billing/catalog";
 
 try {
   process.loadEnvFile(".env.local");
@@ -79,26 +78,6 @@ async function main() {
       console.log(`+ price ${want.lookupKey} (${want.amount / 100} USD)`);
       out[`price ${want.lookupKey}`] = price.id;
     }
-  }
-
-  // The founding discount applies to the Business plan only.
-  const business = await findProduct("waggle_business");
-  try {
-    const c = await stripe.coupons.retrieve(FOUNDING_COUPON);
-    out[`coupon ${FOUNDING_COUPON}`] = c.id;
-  } catch {
-    const c = await stripe.coupons.create({
-      id: FOUNDING_COUPON,
-      name: "Founding member",
-      amount_off: foundingCentsOff(),
-      currency: "usd",
-      duration: "repeating",
-      duration_in_months: FOUNDING.months,
-      max_redemptions: FOUNDING.spots,
-      applies_to: { products: [business!.id] },
-    });
-    console.log(`+ coupon ${FOUNDING_COUPON}`);
-    out[`coupon ${FOUNDING_COUPON}`] = c.id;
   }
 
   // The customer portal: payment method, invoices, cancel at the end of the period.

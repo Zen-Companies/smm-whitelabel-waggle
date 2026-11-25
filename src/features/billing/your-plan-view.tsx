@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { UsageAtCostCard } from "./usage-at-cost-card";
 import { CombMeter, PlanBees, RestingBee, TrialCells } from "@/components/app/bee-plan";
 import { getServiceClient, type ServiceClient } from "@/lib/supabase/service";
+import { viewerTimeZone } from "@/lib/time/viewer-zone";
 import { loadBilling, loadTopUps, type BillingRecord } from "./billing-store";
 import {
   buyTopUpNow,
@@ -10,26 +11,23 @@ import {
   openBillingPortal,
   setAutoTopUp,
 } from "./plan-actions";
-import {
-  PlanButton,
-  PlanCards,
-  TopUpButton,
-  type FoundingOffer,
-  type PlanCardData,
-} from "./plan-forms";
-import { foundingSpotsLeft } from "./founding";
+import { PlanButton, PlanCards, TopUpButton, type PlanCardData } from "./plan-forms";
+import { offerTrialDays } from "./referrals";
 import { cardLabel } from "./auto-top-up";
 import {
   accountAllowance,
   EXTRAS,
-  FOUNDING,
   checkoutTrialDays,
+  customPriceLine,
+  isCustomPrice,
   isPaidPlanId,
   perDay,
   planBullets,
   PLAN_IDS,
   PLANS,
+  storedTrialDays,
   TRIAL,
+  trialIsMonth,
   type PaidPlanId,
   type Plan,
   type PlanId,
@@ -39,14 +37,20 @@ import { UPGRADE, upgradeCopy, upgradeLabel, upgradeLine, type UpgradeReason } f
 import { NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 import { getStripe } from "./stripe-client";
 import { planIsLive } from "./subscription";
+import { firstChargeLine } from "./trial-reminder";
 import { loadPlans, loadReplyLimit } from "./usage";
 
 // Settings → Organization → Your plan (T86; approved 17 Nov, canvas "Settings · Your plan, with
 // the bee"). One page for the plan, what's used and every extra, self-serve. Owners see it all;
 // others see what's counted, not the card.
 
+/** A month's reset (midnight UTC on the 1st): said in UTC so it never reads as the 30th. */
 const day = (d: Date | string) =>
   new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone: "UTC" });
+
+/** A trial's or a period's end, in the viewer's time zone: the day Stripe charges there. */
+const dayIn = (d: Date | string, timeZone: string) =>
+  new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", timeZone });
 
 export interface YourPlanOrg {
   id: string;
@@ -80,47 +84,34 @@ async function ownerNames(db: ServiceClient, orgId: string): Promise<string> {
   return names.join(" and ") || "the Owner";
 }
 
-/** Pure: which day of the trial it is (1..7), from when it ends. */
-export function trialDay(trialEndsAt: Date, now: Date): number {
-  const start = trialEndsAt.getTime() - TRIAL.days * 86_400_000;
-  return Math.min(TRIAL.days, Math.max(1, Math.ceil((now.getTime() - start) / 86_400_000)));
+/** One hexagon a day fits a short trial; a free month says it in words only. */
+const TRIAL_CELLS_MAX = 7;
+
+/** Pure: which day of the trial it is (1..length), from when it ends (30 days: the free month). */
+export function trialDay(trialEndsAt: Date, now: Date, length: number = TRIAL.days): number {
+  const start = trialEndsAt.getTime() - length * 86_400_000;
+  return Math.min(length, Math.max(1, Math.ceil((now.getTime() - start) / 86_400_000)));
 }
 
 /** Pure: what the plan costs, said the way the header says it. */
-export function priceLine(
-  bill: Pick<BillingRecord, "plan" | "billing_interval" | "founding" | "trial_ends_at">,
-  now: Date = new Date(),
-): {
+export function priceLine(bill: Pick<BillingRecord, "plan" | "billing_interval">): {
   line: string;
   chargeUsd: number;
-  /** The founding price applies right now. */
-  founding: boolean;
 } {
   const plan = isPaidPlanId(bill.plan) ? PLANS[bill.plan] : PLANS.business;
+  // Business: a custom price set on the call (24 Nov), never a number here.
+  if (isCustomPrice(plan.id)) {
+    return { line: "Custom price, set with you on a call · no contract.", chargeUsd: 0 };
+  }
   if (bill.billing_interval === "year" && plan.yearlyUsd !== null) {
     return {
       line: `$${plan.yearlyUsd} a year. Paid yearly · no contract.`,
       chargeUsd: plan.yearlyUsd,
-      founding: false,
     };
-  }
-  if (bill.founding && bill.plan === FOUNDING.plan) {
-    const start = bill.trial_ends_at
-      ? new Date(new Date(bill.trial_ends_at).getTime() - TRIAL.days * 86_400_000)
-      : new Date();
-    const until = new Date(start);
-    until.setUTCMonth(until.getUTCMonth() + FOUNDING.months);
-    if (now < until)
-      return {
-        line: `$${FOUNDING.monthlyUsd} a month until ${day(until)}, then $${plan.monthlyUsd}. Paid monthly · no contract.`,
-        chargeUsd: FOUNDING.monthlyUsd,
-        founding: true,
-      };
   }
   return {
     line: `$${plan.monthlyUsd} a month. Paid monthly · no contract.`,
     chargeUsd: plan.monthlyUsd,
-    founding: false,
   };
 }
 
@@ -168,12 +159,14 @@ export async function YourPlanSection({
 }) {
   const db = getServiceClient();
   const now = new Date();
-  const [bill, counts, owners, plans] = await Promise.all([
+  const [bill, counts, owners, plans, zone] = await Promise.all([
     loadBilling(db, org.id),
     loadCounts(db, org.id),
     ownerNames(db, org.id),
     loadPlans(db),
+    viewerTimeZone(),
   ]);
+  const localDay = (d: Date | string) => dayIn(d, zone);
   const { accounts } = counts;
   const live = !!bill && planIsLive(bill.status) && isPaidPlanId(bill.plan);
   const planId: PaidPlanId | null = live && isPaidPlanId(bill!.plan) ? bill!.plan : null;
@@ -186,20 +179,13 @@ export async function YourPlanSection({
     yearlyUsd: plans[id].yearlyUsd,
     forSale: plans[id].forSale,
     bullets: planBullets(plans[id]),
+    ...(isCustomPrice(id) ? { customLine: customPriceLine(plans[id]) } : {}),
   }));
-  // The first paid plan starts with 7 days free, with a card (trial back, 20 Nov).
+  // The first paid plan starts with its first month free, with a card (Pricing Bible, 24 Nov).
   const firstTime = checkoutTrialDays(bill) !== null;
-  // Founding offer, highlighted (approved 20 Nov): a banner and the Team card, while spots last.
-  const stripe = getStripe();
-  const founding: FoundingOffer | null =
-    firstTime && stripe && (await foundingSpotsLeft(stripe))
-      ? {
-          plan: FOUNDING.plan,
-          monthlyUsd: FOUNDING.monthlyUsd,
-          months: FOUNDING.months,
-          spots: FOUNDING.spots,
-        }
-      : null;
+  // Promotions and banked referral months can make it longer, said everywhere the trial is.
+  const offerDays = (await offerTrialDays(db, org.id, bill, now)) ?? TRIAL.days;
+  const freeWords = offerDays === TRIAL.days ? "first month free" : `${offerDays} days free`;
 
   const intro = (
     <div className="flex flex-col gap-1">
@@ -243,7 +229,7 @@ export async function YourPlanSection({
                 <h3 className="font-display text-[30px] leading-tight font-semibold">Free</h3>
                 <span className="text-ink-2 text-sm">
                   {ended
-                    ? `Your paid plan ended on ${day(bill!.current_period_end!)}. You’re on Free now: everything you set up is still here.`
+                    ? `Your paid plan ended on ${localDay(bill!.current_period_end!)}. You’re on Free now: everything you set up is still here.`
                     : "No card, no time limit. Waggle drafts, you approve."}
                 </span>
               </div>
@@ -254,7 +240,7 @@ export async function YourPlanSection({
                 fields={{ ...fields, plan: "solo", interval: "month" }}
                 label={
                   firstTime
-                    ? `Try ${plans.solo.name}: ${TRIAL.days} days free`
+                    ? `Try ${plans.solo.name}: ${freeWords}`
                     : `Upgrade to ${plans.solo.name}`
                 }
                 pendingLabel="Starting…"
@@ -264,8 +250,9 @@ export async function YourPlanSection({
           </div>
           {org.isOwner && getStripe() && firstTime && (
             <span className="meta">
-              {TRIAL.days} days free, then ${plans.solo.monthlyUsd} a month (
-              {perDay(plans.solo.monthlyUsd)}). Cancel before day {TRIAL.days} and you pay nothing.
+              {freeWords[0]!.toUpperCase() + freeWords.slice(1)}, then ${plans.solo.monthlyUsd} a
+              month ({perDay(plans.solo.monthlyUsd)}). We email you 3 days before the first charge;
+              cancel before then and you pay nothing.
             </span>
           )}
           <div className="text-ink-2 flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
@@ -311,9 +298,8 @@ export async function YourPlanSection({
               currentInterval={null}
               live={false}
               mayChange={org.isOwner}
-              foundingNote={null}
-              founding={founding}
               trial={firstTime}
+              trialDays={offerDays}
               freeLine={`${limit.used} of ${limit.allowance} AI replies used this month`}
               action={choosePlan}
             />
@@ -347,6 +333,13 @@ export async function YourPlanSection({
   const firstCharge =
     price.chargeUsd +
     bill.extra_accounts * EXTRAS.accountUsd * (bill.billing_interval === "year" ? 12 : 1);
+  // A trial from before its length was stored is the old 7-day one, never the free month.
+  const trialLength = storedTrialDays(bill);
+  // Pricing Bible (24 Nov): the billing date shown in the app, "First charge: December 24 ($49)".
+  const chargeLine =
+    bill.status === "trialing" && bill.trial_ends_at && !bill.cancel_at_period_end
+      ? firstChargeLine(bill.trial_ends_at, Math.round(firstCharge * 100), zone)
+      : null;
   const perCell = Math.round(limit.allowance / 10);
 
   return (
@@ -397,14 +390,26 @@ export async function YourPlanSection({
 
       {bill.status === "trialing" && bill.trial_ends_at && (
         <section className="border-honey-border bg-honey-tint flex flex-wrap items-center gap-4 rounded-xl border px-4 py-3">
-          <TrialCells day={trialDay(new Date(bill.trial_ends_at), now)} of={TRIAL.days} />
+          {/* One hexagon a day fits a short trial; the free month says it in words only. */}
+          {trialLength <= TRIAL_CELLS_MAX && (
+            <TrialCells
+              day={trialDay(new Date(bill.trial_ends_at), now, trialLength)}
+              of={trialLength}
+            />
+          )}
           <span className="min-w-[240px] flex-1 text-sm">
             <b>
-              Free trial: day {trialDay(new Date(bill.trial_ends_at), now)} of {TRIAL.days}.
+              {trialIsMonth(trialLength) ? "Free month" : "Free trial"}: day{" "}
+              {trialDay(new Date(bill.trial_ends_at), now, trialLength)} of {trialLength}.
             </b>{" "}
-            {bill.cancel_at_period_end
-              ? `It ends on ${day(bill.trial_ends_at)} and you won't be charged.`
-              : `Your card is charged $${firstCharge} on ${day(bill.trial_ends_at)}. Cancel any time before then and you pay nothing.`}
+            {bill.cancel_at_period_end ? (
+              `It ends on ${localDay(bill.trial_ends_at)} and you won't be charged.`
+            ) : (
+              <>
+                <b>{chargeLine}.</b> We email you 3 days before. Cancel any time before then and you
+                pay nothing.
+              </>
+            )}
           </span>
           {bill.cancel_at_period_end && org.isOwner && (
             <PlanButton action={openBillingPortal} fields={fields} label="Keep my plan" />
@@ -415,8 +420,8 @@ export async function YourPlanSection({
       {bill.cancel_at_period_end && bill.status !== "trialing" && bill.current_period_end && (
         <section className="border-line bg-subtle flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3">
           <span className="text-sm">
-            <b>Your plan ends on {day(bill.current_period_end)}.</b> Until then everything keeps
-            working.
+            <b>Your plan ends on {localDay(bill.current_period_end)}.</b> Until then everything
+            keeps working.
           </span>
           {org.isOwner && (
             <PlanButton action={openBillingPortal} fields={fields} label="Keep my plan" />
@@ -428,13 +433,9 @@ export async function YourPlanSection({
         <div className="flex flex-wrap items-center gap-5">
           <PlanBees plan={planId} />
           <div className="flex flex-col gap-1">
-            {price.founding && (
-              <span className="bg-honey text-ink w-fit rounded-full px-2.5 py-0.5 text-xs font-semibold">
-                Founding member
-              </span>
-            )}
             <h3 className="font-display text-[30px] leading-tight font-semibold">{plan.name}</h3>
             <span className="text-ink-2 text-sm">{price.line}</span>
+            {chargeLine && <b className="text-sm font-semibold">{chargeLine}</b>}
           </div>
         </div>
         <a href="#change-plan" className="action-link text-sm">
@@ -573,7 +574,7 @@ export async function YourPlanSection({
               />
             )}
           </Row>
-          {plan.yearlyUsd !== null && !price.founding && (
+          {plan.yearlyUsd !== null && !isCustomPrice(planId) && (
             <Row
               label={bill.billing_interval === "year" ? "Pay monthly" : "Pay yearly"}
               value={
@@ -640,11 +641,6 @@ export async function YourPlanSection({
           currentInterval={bill.billing_interval === "year" ? "year" : "month"}
           live
           mayChange={org.isOwner}
-          foundingNote={
-            price.founding
-              ? `Your founding price is for ${PLANS[FOUNDING.plan].name} monthly: moving to another plan or to yearly leaves it.`
-              : null
-          }
           action={choosePlan}
         />
         <span className="meta">
@@ -670,6 +666,7 @@ function UpgradePanel({
   live,
   interval = "month",
   trial = false,
+  trialDays = TRIAL.days,
 }: {
   reason: UpgradeReason;
   orgId: string;
@@ -678,8 +675,10 @@ function UpgradePanel({
   plans: Record<PlanId, Plan>;
   live: boolean;
   interval?: "month" | "year";
-  /** The first paid plan starts with 7 days free. */
+  /** The first paid plan starts with a free trial. */
   trial?: boolean;
+  /** How long: the first month (30 days), more with banked referral months. */
+  trialDays?: number;
 }) {
   // Numbers from the plans as staff set them (decision 10).
   const copy = upgradeCopy(reason, plans);
@@ -718,7 +717,13 @@ function UpgradePanel({
             <PlanButton
               action={choosePlan}
               fields={{ orgId, plan: copy.plan, interval }}
-              label={trial ? `Start ${TRIAL.days} days free` : upgradeLabel(reason)}
+              label={
+                trial
+                  ? trialDays === TRIAL.days
+                    ? "Start your free month"
+                    : `Start ${trialDays} days free`
+                  : upgradeLabel(reason)
+              }
               pendingLabel="Starting…"
               honey
               className="items-start"
@@ -736,7 +741,7 @@ function UpgradePanel({
       {!live && (
         <span className="meta">
           {trial
-            ? `A card starts your trial: ${TRIAL.days} days free, then $${target.monthlyUsd} a month. Cancel before day ${TRIAL.days} and you pay nothing.`
+            ? `A card starts it: ${trialDays === TRIAL.days ? "your first month free" : `${trialDays} days free`}, then $${target.monthlyUsd} a month. We email you 3 days before the first charge; cancel before then and you pay nothing.`
             : "Card at checkout. Cancel any time and you go back to Free."}
         </span>
       )}

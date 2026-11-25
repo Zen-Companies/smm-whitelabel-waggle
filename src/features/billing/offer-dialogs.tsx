@@ -40,10 +40,10 @@ export interface OfferOrg {
   canInvite: boolean;
   current: PlanId;
   plans: Record<PlanId, Plan>;
-  /** Its first paid plan starts with 7 days free. */
+  /** Its first paid plan starts with a free trial. */
   trial: boolean;
-  /** The founding offer applies to its first paid plan (spots left, checked with Stripe). */
-  founding: boolean;
+  /** How long: the first month (30 days), more with banked referral months. */
+  trialDays?: number;
   /** Stripe is set up on this server. */
   stripeReady: boolean;
   /** The interval a switch keeps. */
@@ -206,7 +206,11 @@ export function UpgradeDialog({
   resetsOn?: string;
   pain?: ReplyPain;
 }) {
-  const offer = upgradeOffer(org.current, reason, org.plans, { trial: org.trial, resetsOn });
+  const offer = upgradeOffer(org.current, reason, org.plans, {
+    trial: org.trial,
+    trialDays: org.trialDays,
+    resetsOn,
+  });
   const header = offer.next ?? org.current;
   return (
     <Sheet labelledBy="upgrade-title" onClose={onClose}>

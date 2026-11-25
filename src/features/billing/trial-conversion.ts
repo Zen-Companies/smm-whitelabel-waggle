@@ -1,6 +1,6 @@
 import "server-only";
 import type Stripe from "stripe";
-import { FOUNDING, isPaidPlanId, PLANS, type PaidPlanId } from "./plans";
+import { isPaidPlanId, PLANS, type PaidPlanId } from "./plans";
 import { getStripe } from "./stripe-client";
 import { parsePlanKey } from "./subscription";
 
@@ -10,7 +10,7 @@ export interface TrialConversion {
   /** A trial (old checkouts) or a paid plan straight away (moving up from Free, 19 Nov). */
   kind: "trial" | "paid";
   plan: PaidPlanId;
-  /** The monthly price the trial turns into, in US dollars (founding price when it applies). */
+  /** The monthly price the trial turns into, in US dollars. */
   valueUsd: number;
   /** The organization's first plan checkout (marked when it was made): only this tells the ads. */
   first: boolean;
@@ -43,11 +43,9 @@ export function trialFromSession(
   if (!trial && sub.status !== "active") return null;
   const key = sub.items.data.map((i) => parsePlanKey(i.price.lookup_key)).find((k) => k !== null);
   if (!key || !isPaidPlanId(key.plan)) return null;
-  const founding = sub.metadata?.founding === "1" && key.plan === FOUNDING.plan;
   const p = PLANS[key.plan];
-  const valueUsd = founding
-    ? FOUNDING.monthlyUsd
-    : key.interval === "year" && p.yearlyUsd !== null
+  const valueUsd =
+    key.interval === "year" && p.yearlyUsd !== null
       ? Math.round((p.yearlyUsd / 12) * 100) / 100
       : p.monthlyUsd;
   return {
@@ -77,7 +75,12 @@ export async function loadTrialConversion(
 export async function loadCheckoutReturn(
   sessionId: unknown,
   orgId: string,
-): Promise<{ conversion: TrialConversion; subscription: Stripe.Subscription } | null> {
+): Promise<{
+  conversion: TrialConversion;
+  subscription: Stripe.Subscription;
+  /** The session's own record of the free month (promo, banked_referrals), set at checkout. */
+  metadata: Record<string, string>;
+} | null> {
   if (!looksLikeSessionId(sessionId)) return null;
   const stripe = getStripe();
   if (!stripe) return null;
@@ -88,7 +91,7 @@ export async function loadCheckoutReturn(
     const conversion = trialFromSession(session, orgId);
     const sub = session.subscription;
     if (!conversion || !sub || typeof sub === "string") return null;
-    return { conversion, subscription: sub };
+    return { conversion, subscription: sub, metadata: session.metadata ?? {} };
   } catch (e) {
     console.error("billing: reading the checkout for the trial tag failed", {
       orgId,

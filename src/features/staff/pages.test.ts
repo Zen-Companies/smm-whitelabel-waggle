@@ -10,7 +10,12 @@ it("a role sees only the tabs it may open, in order", () => {
     "MCP tools",
     "MCP activity",
   ]);
-  expect(staffPagesFor(set(...PERMISSIONS))).toHaveLength(11);
+  expect(staffPagesFor(set(...PERMISSIONS))).toHaveLength(12);
+  expect(staffPagesFor(set("admin.caps.manage")).map((p) => p.label)).toEqual([
+    "Plans",
+    "Promotions",
+    "Platforms",
+  ]);
 });
 
 it("Customers is the first tab, for roles that may see customers", () => {

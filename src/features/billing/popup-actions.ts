@@ -6,6 +6,8 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { auditOrg } from "./billing-store";
 import { loadPopupFacts } from "./popup-facts";
+import { successLines } from "./promotions";
+import { referrerOf } from "./referrals";
 import type { PopupFacts } from "./popup-copy";
 import { billingFromSubscription } from "./subscription";
 import { loadCheckoutReturn } from "./trial-conversion";
@@ -81,10 +83,19 @@ const returnInput = z.object({
  * organization's plan, it's stored now (the webhook still has the last word) and the ads tag is
  * handed back. Anything else returns null and the pop-up says nothing changed.
  */
+/** What the success moment says (approved 24 Nov): the date and the promotion lines. */
+export interface CheckoutSuccess {
+  tag: ConversionTagProps | null;
+  /** The trial's end from Stripe (ISO), or null when it was paid straight away. */
+  freeUntil: string | null;
+  /** "Harbour Bean Café's month is on…", "+1 month from friends you brought…". */
+  lines: string[];
+}
+
 export async function confirmCheckout(raw: {
   orgId: string;
   sessionId: string;
-}): Promise<{ tag: ConversionTagProps | null } | null> {
+}): Promise<CheckoutSuccess | null> {
   const parsed = returnInput.safeParse(raw);
   if (!parsed.success) return null;
   const { orgId, sessionId } = parsed.data;
@@ -92,7 +103,7 @@ export async function confirmCheckout(raw: {
   if (!who) return null;
   const back = await loadCheckoutReturn(sessionId, orgId);
   if (!back) return null;
-  const { conversion, subscription } = back;
+  const { conversion, subscription, metadata } = back;
   const { db, user } = who;
   await db
     .from("org_billing")
@@ -103,11 +114,23 @@ export async function confirmCheckout(raw: {
     plan: conversion.plan,
     kind: conversion.kind,
   });
+  const freeUntil =
+    subscription.status === "trialing" && subscription.trial_end
+      ? new Date(subscription.trial_end * 1000).toISOString()
+      : null;
+  const promo = metadata.promo ?? null;
+  const banked = (metadata.banked_referrals ?? "").split(",").filter(Boolean).length;
+  const referrer = promo?.split(",").includes("referral")
+    ? await referrerOf(db, orgId).catch(() => ({ referred: true, name: null }))
+    : null;
+  const lines = successLines({ promo, bankedMonths: banked, referrerName: referrer?.name ?? null });
   // A plan change from the pop-up is stored too, but only a first checkout fires the ads tag.
-  if (!conversion.first) return { tag: null };
+  if (!conversion.first) return { tag: null, freeUntil, lines };
   const event = conversion.kind === "trial" ? "StartTrial" : "Subscribe";
   const keys = matchKeys(user.id, user.email);
   return {
+    freeUntil,
+    lines,
     tag: {
       event,
       eventId: conversionEventId(event, conversion.sessionId),

@@ -79,9 +79,9 @@ describe("popupContent", () => {
       "300 replies a month · Free has 100",
     ]);
     expect(c.note).toBe(
-      "Add a card, pay $0 today. Then $49 a month from November 30. Cancel before then and you pay nothing.",
+      "Add a card, pay $0 today. Then $49 a month from December 23. Cancel before then and you pay nothing.",
     );
-    expect(c.success).toBe("You’re on Solo. Free until November 30.");
+    expect(c.success).toBe("You’re on Solo. Free until December 23.");
     expect(c.keep.label).toBe("Keep Free");
   });
 
@@ -183,7 +183,7 @@ describe("popupContent", () => {
     expect(c.headline).toBe("Invite your team with Team");
     expect(c).not.toHaveProperty("priceFlag");
     expect(c.note).toBe(
-      "Add a card, pay $0 today. Then $99 a month from November 30. Cancel before then and you pay nothing.",
+      "Add a card, pay $0 today. Then $99 a month from December 23. Cancel before then and you pay nothing.",
     );
     expect(c.ticks[1]!.bold).toBe(`${PLANS.business.accounts} accounts`);
     expect(c.ticks[2]!.bold).toBe(`Worker Bee and ${PLANS.business.replies} replies a month`);
@@ -202,30 +202,20 @@ describe("popupContent", () => {
     expect(staffSet.ticks[1]!.bold).toBe("5 accounts");
   });
 
-  it("E: the founding price while the offer applies", () => {
+  it("E: Team at its own price, no founding offer (retired 24 Nov)", () => {
     const team = (trial: boolean) =>
       popupContent({
         version: { v: "team", sub: "leads" },
         plans: PLANS,
         trial,
-        founding: true,
         facts: NO_FACTS,
         now: NOW,
       });
     expect(team(true).note).toBe(
-      "Add a card, pay $0 today. Then $79 a month (founding price, locked for 6 months) from November 30. Cancel before then and you pay nothing.",
+      "Add a card, pay $0 today. Then $99 a month from December 23. Cancel before then and you pay nothing.",
     );
-    expect(team(false).note).toContain("Pay $79 today");
-    // Solo's pop-ups never take the founding price.
-    const solo = popupContent({
-      version: { v: "replies", level: "out" },
-      plans: PLANS,
-      trial: true,
-      founding: true,
-      facts: NO_FACTS,
-      now: NOW,
-    });
-    expect(solo.note).toContain("Then $49 a month from");
+    expect(team(false).note).toContain("Pay $99 today");
+    expect(team(true).note).not.toMatch(/founding|\$79/i);
   });
 
   it("F welcome: what was answered and what Meta locked", () => {
@@ -251,6 +241,25 @@ describe("helpers", () => {
   it("andList and trialEndLabel", () => {
     expect(andList(["A"])).toBe("A");
     expect(andList(["A", "B", "C"])).toBe("A, B and C");
-    expect(trialEndLabel(NOW)).toBe("November 30");
+    // The first month free (24 Nov): 30 days from now.
+    expect(trialEndLabel(NOW)).toBe("December 23");
+  });
+});
+
+describe("the strip's account box (QA, 25 Nov)", () => {
+  it("says Not connected when nothing is connected, never Connected", () => {
+    for (const v of [
+      { v: "try", sub: "banner" },
+      { v: "try", sub: "welcome" },
+      { v: "accounts", platform: "tiktok" },
+    ] as PopupVersion[]) {
+      const box = content(v, { connected: [] }).strip[0];
+      expect(box).toMatchObject({ title: "+ add", text: "Not connected", tone: "open" });
+    }
+  });
+  it("names the account when one is connected", () => {
+    expect(
+      content({ v: "try", sub: "banner" }, { connected: ["instagram"] }).strip[0],
+    ).toMatchObject({ text: "Connected", tone: "done", platform: "instagram" });
   });
 });

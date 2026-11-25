@@ -1,6 +1,8 @@
 import {
+  customPriceLine,
   dailyAmount,
   EXTRAS,
+  isCustomPrice,
   PLAN_IDS,
   PLANS,
   TRIAL,
@@ -11,8 +13,9 @@ import {
 import { upgradeCopy, type OfferReason } from "./upgrade";
 
 // What the upgrade pop-up offers, by the plan the organization is on (Walter's flow, 20 Nov; the
-// ladder of 19 Nov): Free → Solo (7 days free with a card on a first paid plan), Solo → Team
-// (switched in place, prorated), Team → Business (priced on a call: Book a call), Business →
+// ladder of 19 Nov): Free → Solo (first month free with a card on a first paid plan, 24 Nov),
+// Solo → Team (switched in place, prorated), Team → Business (a custom price set on a call: Talk
+// to us, never a checkout), Business →
 // nothing above it. A limit that needs a higher plan (team features need Team) skips ahead. Paid
 // plans also get the extra that fixes the limit (an account at $10 a month, or 200 replies for
 // $15); Free gets only the upgrade (19 Nov). Every number comes from the plans as staff set them.
@@ -22,8 +25,8 @@ export interface UpgradeOffer {
   /** The plan offered, or null at the top of the ladder. */
   next: PaidPlanId | null;
   /**
-   * How it's taken: a 7-day trial with a card (first paid plan), a checkout (Free again after a
-   * paid plan), a switch in place, or a call.
+   * How it's taken: the free month with a card (first paid plan), a checkout (Free again after a
+   * paid plan), a switch in place, or a call (Business).
    */
   via: "trial" | "checkout" | "switch" | "call" | null;
   title: string;
@@ -34,13 +37,15 @@ export interface UpgradeOffer {
   /** The add-on that fixes this limit without changing plan (paid plans only). */
   extra: "account" | "topUp" | null;
   footnote: string | null;
-  /** The price banner: "$1.61" a day, of "$49 a month after 7 days free". */
+  /** The price banner: "$1.61" a day, of "$49 a month after your free month". */
   day: { amount: string; of: string } | null;
 }
 
 export interface OfferContext {
   /** The organization never had a paid plan: its first one starts with the trial. */
   trial: boolean;
+  /** How long that trial is: the first month (30 days), more with banked referral months. */
+  trialDays?: number;
   /** Out of replies: the date replies come back, "December 1". */
   resetsOn?: string;
 }
@@ -74,6 +79,8 @@ export function outLine(resetsOn: string | undefined): string {
 }
 
 function planLine(p: Plan): string {
+  // Business (24 Nov): "Custom price · 10+ accounts · about 1,500 replies".
+  if (isCustomPrice(p.id)) return customPriceLine(p);
   const parts = [`${n(p.accounts)} accounts`, `${n(p.replies)} AI replies`];
   if (p.features.autoReply) parts.push("Auto-reply");
   if (p.features.leadsFlagged) parts.push("Leads and complaints flagged");
@@ -90,7 +97,8 @@ export function upgradeOffer(
   const cur = plans[current];
   const id = offeredPlan(current, reason);
   const next = id ? plans[id] : null;
-  const byCall = !!next && !next.forSale;
+  // Business is a custom price set on a call (24 Nov), whatever staff set; so is a plan off sale.
+  const byCall = !!next && (isCustomPrice(next.id) || !next.forSale);
   const via: UpgradeOffer["via"] = !next
     ? null
     : byCall
@@ -100,25 +108,29 @@ export function upgradeOffer(
         : ctx.trial
           ? "trial"
           : "checkout";
+  const days = ctx.trialDays ?? TRIAL.days;
+  const freeMonth = days === TRIAL.days;
   const cta =
     via === "trial"
-      ? `Start ${TRIAL.days} days free`
+      ? freeMonth
+        ? "Start your free month"
+        : `Start ${days} days free`
       : via === "checkout"
         ? `Upgrade to ${next!.name}`
         : via === "switch"
           ? `Switch to ${next!.name}`
           : via === "call"
-            ? "Book a call"
+            ? "Talk to us"
             : null;
   const footnote =
     via === "trial"
-      ? `A card starts your trial. Cancel before day ${TRIAL.days} and you pay nothing.`
+      ? "A card starts it. We email you 3 days before the first charge; cancel before then and you pay nothing."
       : via === "checkout"
         ? "Paid at checkout. Cancel any time and you go back to Free."
         : via === "switch"
           ? "You pay the difference for the rest of this period. Everything you’ve set up stays."
           : via === "call"
-            ? `We set ${next!.name} up with you on a short call, priced for what you run.`
+            ? `Custom price: we set ${next!.name} up with you on a short call, priced for what you run.`
             : null;
   const day =
     next && !byCall
@@ -126,7 +138,7 @@ export function upgradeOffer(
           amount: dailyAmount(next.monthlyUsd),
           of:
             via === "trial"
-              ? `$${next.monthlyUsd} a month after ${TRIAL.days} days free`
+              ? `$${next.monthlyUsd} a month after ${freeMonth ? "your free month" : `${days} days free`}`
               : `$${next.monthlyUsd} a month`,
         }
       : null;
@@ -165,7 +177,9 @@ export function upgradeOffer(
           extra: null,
           title:
             via === "trial"
-              ? `Try ${to.name} free for ${TRIAL.days} days.`
+              ? freeMonth
+                ? `Try ${to.name}: your first month is free.`
+                : `Try ${to.name} free for ${days} days.`
               : `Upgrade to ${to.name}.`,
           body: `${auto ? "Waggle answers the regular questions on its own" : "More room for Waggle"}: ${n(to.accounts)} accounts and ${n(to.replies)} AI replies a month.`,
         };
@@ -218,7 +232,7 @@ export function upgradeOffer(
         body: !next
           ? "You have everything Waggle does. Extra accounts and replies are on Your plan."
           : byCall
-            ? `For agencies and bigger teams: ${n(next.accounts)}+ accounts and ${n(next.replies)} AI replies, set up with you.`
+            ? `For agencies and bigger teams. ${customPriceLine(next)}, set up with you.`
             : planLine(next),
       };
     default: {

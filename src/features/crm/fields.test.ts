@@ -8,7 +8,6 @@ const base: CrmSnapshot = {
   details: {},
   business: "Harbour Bean Café",
   planId: "business",
-  founding: true,
   status: "trialing",
   trialEndsAt: "2026-11-25T10:00:00Z",
   periodEnd: "2026-11-25T10:00:00Z",
@@ -30,14 +29,15 @@ describe("crmPlan", () => {
 });
 
 describe("crmFields", () => {
-  it("sends every field, every time, founding as true/false", () => {
+  it("sends every field, every time, founding always false (retired 24 Nov)", () => {
     const f = crmFields(base);
     expect(Object.keys(f).sort()).toEqual([...CRM_FIELDS].sort());
     expect(f).toMatchObject({
       waggle_event: "trial_started",
       waggle_plan: "team",
-      waggle_founding: "true",
-      waggle_trial_ends: "2026-11-25",
+      waggle_founding: "false",
+      waggle_trial_ends: "November 25",
+      waggle_trial_ends_at: "2026-11-25T10:00:00.000Z",
       waggle_ends_on: "",
       waggle_accounts_connected: "2",
       waggle_replies_used: "12",
@@ -45,7 +45,6 @@ describe("crmFields", () => {
       waggle_resets_on: "2026-12-01",
       waggle_business: "Harbour Bean Café",
     });
-    expect(crmFields({ ...base, founding: false }).waggle_founding).toBe("false");
   });
 
   it("event details: the plan before, the platform, days inactive", () => {
@@ -61,6 +60,31 @@ describe("crmFields", () => {
       waggle_platform: "instagram",
       waggle_days_inactive: "3",
     });
+  });
+
+  it("referral_rewarded: role, the other business, a readable end and the plan", () => {
+    const f = crmFields({
+      ...base,
+      event: "referral_rewarded",
+      planId: "free",
+      details: {
+        referral_id: "r1",
+        role: "referrer",
+        with: "Harbour Bean Café",
+        ends: "2026-12-30T15:00:00Z",
+        plan: "solo",
+      },
+    });
+    expect(f).toMatchObject({
+      waggle_event: "referral_rewarded",
+      waggle_plan: "solo",
+      waggle_referral_role: "referrer",
+      waggle_referral_with: "Harbour Bean Café",
+      waggle_referral_ends: "December 30",
+    });
+    // Other events send the referral fields blank (HighLevel doesn't store blanks).
+    expect(crmFields(base).waggle_referral_role).toBe("");
+    expect(crmFields({ ...base, details: { plan: "team" } }).waggle_plan).toBe("team");
   });
 
   it("access ends at the trial's end when a trial is canceled", () => {
@@ -90,5 +114,31 @@ describe("crmFields", () => {
       waggle_connect_in_app: "yes",
     });
     for (const k of CRM_CONNECT_FIELDS) expect(crmFields(base)).not.toHaveProperty(k);
+  });
+});
+
+describe("trial end (Walter's own reminder, 25 Nov)", () => {
+  it("a readable day in US Eastern and the exact ISO time", () => {
+    const f = crmFields({ ...base, trialEndsAt: "2026-12-25T03:00:00Z" });
+    expect(f.waggle_trial_ends).toBe("December 24");
+    expect(f.waggle_trial_ends_at).toBe("2026-12-25T03:00:00.000Z");
+  });
+
+  it("blank without a trial", () => {
+    const f = crmFields({ ...base, trialEndsAt: null, status: "active" });
+    expect(f.waggle_trial_ends).toBe("");
+    expect(f.waggle_trial_ends_at).toBe("");
+  });
+});
+
+describe("trial end in the Owner's time zone (QA, 25 Nov)", () => {
+  it("uses the zone stored at checkout, US Eastern when unknown", () => {
+    const end = "2026-12-24T18:35:00Z";
+    expect(
+      crmFields({ ...base, trialEndsAt: end, timeZone: "Asia/Manila" }).waggle_trial_ends,
+    ).toBe("December 25");
+    expect(crmFields({ ...base, trialEndsAt: end, timeZone: null }).waggle_trial_ends).toBe(
+      "December 24",
+    );
   });
 });

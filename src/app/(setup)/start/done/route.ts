@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
 export function GET(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get("session_id") ?? "";
   const q = /^cs_[A-Za-z0-9_]+$/.test(sessionId)
-    ? `?checkout=done&session_id=${encodeURIComponent(sessionId)}`
+    ? `?upgrade=nudge&checkout=done&session_id=${encodeURIComponent(sessionId)}`
     : "";
   return NextResponse.redirect(new URL(`/plan${q}`, request.url));
 }

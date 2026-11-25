@@ -6,8 +6,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PlanBees, RestingBee } from "@/components/app/bee-plan";
 import { Button } from "@/components/ui/button";
-import type { ConversionTagProps } from "@/features/ad-tracking/client";
-import { NUDGE_EVERY_DAYS, nudgeDue, popupFor, STORAGE, type Popup } from "./banners";
+import type { CheckoutSuccess } from "./popup-actions";
+import {
+  NUDGE_EVERY_DAYS,
+  nudgeDue,
+  popupFor,
+  rememberClosed,
+  STORAGE,
+  type Popup,
+} from "./banners";
 import { recordPlanNotice } from "./notice-actions";
 import { UpgradeDialog, WelcomeDialog, type OfferOrg } from "./offer-dialogs";
 import { dailyAmount, TRIAL } from "./plans";
@@ -133,7 +140,11 @@ export function BillingPopups({
     onPlanToo: org.current === "free" || paidReturn,
   });
   const urlKey = `${path}?${params.toString()}`;
-  const popup = local ?? (closed === urlKey ? null : fromUrl);
+  // Forget a closed pop-up once the address moves on (closing drops its parameters), so the next
+  // link to it (the promotion bar, an upgrade link) opens it again.
+  const kept = rememberClosed(closed, urlKey);
+  if (kept !== closed) setClosed(kept);
+  const popup = local ?? (kept === null ? fromUrl : null);
 
   // The out pop-up counts as shown once it opens.
   useEffect(() => {
@@ -204,7 +215,7 @@ export function BillingPopups({
   // Stripe's return: asked once per session id.
   const [confirmed, setConfirmed] = useState<{
     id: string;
-    result: { tag: ConversionTagProps | null } | null;
+    result: CheckoutSuccess | null;
   } | null>(null);
   useEffect(() => {
     if (checkout !== "done" || !sessionId || confirmed?.id === sessionId) return;
@@ -212,12 +223,16 @@ export function BillingPopups({
     void confirmCheckout({ orgId: org.orgId, sessionId })
       .catch(() => null)
       .then((result) => {
-        if (live) setConfirmed({ id: sessionId, result });
+        if (!live) return;
+        setConfirmed({ id: sessionId, result });
+        // Confirmed and stored: the page behind the pop-up reads the new plan now, not after a
+        // reload (QA, 25 Nov).
+        if (result) router.refresh();
       });
     return () => {
       live = false;
     };
-  }, [checkout, sessionId, confirmed?.id, org.orgId]);
+  }, [checkout, sessionId, confirmed?.id, org.orgId, router]);
 
   const back = (() => {
     const next = new URLSearchParams(params.toString());
@@ -253,7 +268,7 @@ export function BillingPopups({
       version,
       plans: org.plans,
       trial: org.trial,
-      founding: org.founding,
+      trialDays: org.trialDays,
       facts: known,
       now: new Date(),
     });
@@ -315,7 +330,10 @@ export function BillingPopups({
       )}
       {!free && popup?.kind === "welcome" && (
         <WelcomeDialog
-          content={welcomeFor(org.current, org.plans, { trial: org.trial })}
+          content={welcomeFor(org.current, org.plans, {
+            trial: org.trial,
+            trialDays: org.trialDays,
+          })}
           org={org}
           onClose={close}
         />
@@ -328,6 +346,7 @@ export function BillingPopups({
 function OutBanner({ org, out, onOpen }: { org: OfferOrg; out: OutOfReplies; onOpen: () => void }) {
   const offer = upgradeOffer(org.current, "out", org.plans, {
     trial: org.trial,
+    trialDays: org.trialDays,
     resetsOn: out.resetsOn,
   });
   const label =
@@ -400,7 +419,9 @@ function SoloNudge({
             Let Waggle answer on its own
             {org.trial && (
               <span className="bg-honey text-ink rounded-full px-2 py-0.5 font-sans text-[11px] font-bold tracking-wide uppercase">
-                {TRIAL.days} days free
+                {(org.trialDays ?? TRIAL.days) === TRIAL.days
+                  ? "First month free"
+                  : `${org.trialDays} days free`}
               </span>
             )}
           </p>

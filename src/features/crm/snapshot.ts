@@ -58,9 +58,9 @@ export async function loadSnapshot(
     business: brands.data?.[0]?.name ?? "",
     // No paid plan is Free (19 Nov); an ending event still names the plan that ended.
     planId: live ? bill!.plan : ENDING.has(row.event) && bill?.plan ? bill.plan : "free",
-    founding: !!bill?.founding,
     status: bill?.status ?? null,
     trialEndsAt: bill?.trial_ends_at ?? null,
+    timeZone: bill?.time_zone ?? null,
     periodEnd: bill?.current_period_end ?? null,
     cancelAtPeriodEnd: !!bill?.cancel_at_period_end,
     accountsConnected: count ?? 0,

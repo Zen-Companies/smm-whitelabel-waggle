@@ -23,7 +23,10 @@ export const CRM_EVENTS = {
   usage_80: "AI replies reach 80% of the month's allowance",
   usage_100: "AI replies reach 100%",
   account_limit: "A connect is blocked: the plan's accounts are all in use",
-  founding_full: "The 50th founding spot is taken",
+  referral_rewarded:
+    "Give a month, get a month (24 Nov): this person's free month was applied in Stripe. The friend at their checkout (the 30-day trial starts), the referrer when the credit lands after the friend's first payment (or banked months start their first trial). Once per person per referral",
+  referral_link:
+    "The Owner's referral link (25 Nov): fields only (waggle_referral_link), no trigger tag, no workflow. Once per code per Owner, when the code is made or first shown",
   connect_failed:
     "A connect failed, came back with no account, or was abandoned (2 h, no return); once per brand + platform per 6 h",
 } as const;
@@ -34,6 +37,9 @@ export const isCrmEvent = (v: unknown): v is CrmEvent =>
 
 /** Events that only add a note to the contact: no fields, no trigger tag, no workflow. */
 export const CRM_NOTE_ONLY: ReadonlySet<CrmEvent> = new Set<CrmEvent>(["feedback", "page_rating"]);
+
+/** Events that only write contact fields (no trigger tag, no workflow, no note). */
+export const CRM_FIELDS_ONLY: ReadonlySet<CrmEvent> = new Set<CrmEvent>(["referral_link"]);
 
 /** Extra tags an event adds next to the trigger tag (18 Nov: Walter's workflow starts on the trigger). */
 export const CRM_EXTRA_TAGS: Partial<Record<CrmEvent, string>> = { signed_up: "waggle-signup" };
@@ -51,7 +57,9 @@ export const CRM_FIELDS = [
   "waggle_plan",
   "waggle_from_plan",
   "waggle_founding",
+  // The trial's end (25 Nov, Walter's own reminder): "December 24" (US Eastern) and the ISO time.
   "waggle_trial_ends",
+  "waggle_trial_ends_at",
   "waggle_ends_on",
   "waggle_platform",
   "waggle_accounts_connected",
@@ -60,8 +68,19 @@ export const CRM_FIELDS = [
   "waggle_reply_limit",
   "waggle_resets_on",
   "waggle_business",
+  // Walter's GHL referral campaign (24 Nov): filled on referral_rewarded, blank otherwise.
+  "waggle_referral_role",
+  "waggle_referral_with",
+  "waggle_referral_ends",
 ] as const;
 export type CrmField = (typeof CRM_FIELDS)[number];
+
+/**
+ * Sent on every event about an Owner (25 Nov): their own referral link,
+ * https://app.gowaggle.ai/signup?ref=<code>. Never for teammates.
+ */
+export const CRM_OWNER_FIELDS = ["waggle_referral_link"] as const;
+export type CrmOwnerField = (typeof CRM_OWNER_FIELDS)[number];
 
 /**
  * Sent with `connect_failed` only (Fix 1, 24 Nov), next to every field above. Walter creates them

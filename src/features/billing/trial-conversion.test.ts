@@ -40,9 +40,9 @@ describe("trialFromSession", () => {
     const first = session({ metadata: { kind: "plan", organization_id: "org-1", first: "1" } });
     expect(trialFromSession(first, "org-1")?.first).toBe(true);
   });
-  it("uses the founding price when the subscription is founding", () => {
+  it("ignores an old founding mark: the plan's own price (founding offer retired, 24 Nov)", () => {
     const s = session({ subscription: sub({ metadata: { founding: "1" } }) });
-    expect(trialFromSession(s, "org-1")?.valueUsd).toBe(79);
+    expect(trialFromSession(s, "org-1")?.valueUsd).toBe(99);
   });
   it("uses each plan's own price", () => {
     const solo = session({ subscription: sub({}, "waggle_solo_monthly") });
