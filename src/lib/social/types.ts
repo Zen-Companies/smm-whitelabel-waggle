@@ -74,6 +74,23 @@ export interface CreatePostInput {
   queueProfileId?: string;
 }
 
+/**
+ * Changes a post Zernio holds that hasn't gone out (`PUT /v1/posts/{postId}`, Posts Round 3):
+ * only the fields given are sent. `targets` (with `extras`) replaces the platforms list; send it
+ * whenever accounts, per-platform text or options, or the files change.
+ */
+export interface UpdatePostInput {
+  postId: string;
+  idempotencyKey: string;
+  content?: string;
+  media?: PostMedia[];
+  targets?: CreatePostInput["targets"];
+  extras?: CreatePostInput["extras"];
+  tiktokConsent?: boolean;
+  /** The new time (always ahead: a moved or edited post stays planned). */
+  publishAt?: Date;
+}
+
 /** A brand's posting times (`/v1/queue/slots`, T75): dayOfWeek 0 = Sunday, time "HH:mm". */
 export type PostingQueue = {
   timezone: string;
@@ -1342,6 +1359,21 @@ export interface SocialProvider {
   retryPost(
     input: { postId: string; idempotencyKey: string } & CallOptions,
   ): Promise<{ status: ProviderPostStatus; results: PostPlatformResult[] }>;
+  /**
+   * Changes a planned post (`PUT /v1/posts/{postId}`, docs.zernio.com/posts/update-post): text,
+   * files, accounts, per-platform choices or time. Zernio checks it like a new post (400).
+   */
+  updatePost(
+    input: UpdatePostInput & CallOptions,
+  ): Promise<{ status: ProviderPostStatus; scheduledFor: string | null }>;
+  /**
+   * Changes the text of a post that already went out, on one platform and account
+   * (`POST /v1/posts/{postId}/edit`, docs.zernio.com/posts/edit-post). Text only; not on
+   * Instagram, TikTok, Threads, Bluesky or Snapchat.
+   */
+  editPublishedPost(
+    input: { postId: string; platform: string; accountId?: string; content: string } & CallOptions,
+  ): Promise<{ url: string | null }>;
   /** Cancels a scheduled post (`DELETE /v1/posts/{postId}`). */
   deletePost(input: { postId: string } & CallOptions): Promise<void>;
   /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { platformLabel } from "@/lib/social/platforms";
 import { cn } from "cn";
@@ -164,6 +164,157 @@ export function PostPreview({
       <p className="meta">
         The shape {platformLabel(current)} shows
         {own !== text ? ", with its own text" : ""}. Each app trims long text with
+        &ldquo;more&rdquo;.
+      </p>
+    </section>
+  );
+}
+
+/**
+ * One platform's post as it really shows (Posts Round 3: the big composer's preview row): its
+ * frame, its own text, cut with "more" where the app cuts it.
+ */
+export function PreviewCard({
+  platform,
+  brandName,
+  text,
+  options,
+  media,
+}: {
+  platform: string;
+  brandName: string;
+  text: string;
+  options: PostOptions;
+  media: PlatformMedia | null;
+}) {
+  const own = textFor(platform, options, text);
+  const as = options[platform]?.as;
+  const frame = previewFrame(platform, as, media?.shape ?? null);
+  const { shown, more } = previewText(platform, own);
+  const kind = !frame.tall
+    ? null
+    : as === "story"
+      ? "Story"
+      : platform === "youtube"
+        ? "Short"
+        : platform === "tiktok"
+          ? null
+          : "Reel";
+  const picture = media ? <MediaFrame frame={frame} media={media} tallHeight={360} /> : null;
+  const words = shown ? (
+    <p className="px-3 py-2 text-[13px] whitespace-pre-wrap">
+      {textBelow(platform) && <b className="font-semibold">{brandName} </b>}
+      {shown}
+      {more && <span className="text-ink-3"> more</span>}
+    </p>
+  ) : (
+    <p className="text-ink-3 px-3 py-2 text-[13px]">Your text shows here.</p>
+  );
+  return (
+    <div className="border-line bg-surface overflow-hidden rounded-xl border">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="bg-ink text-honey inline-flex size-7 items-center justify-center rounded-full text-[11px] font-bold">
+          {initials(brandName)}
+        </span>
+        <span className="flex-1 truncate text-[13px] font-semibold">
+          {brandName}
+          {kind && <span className="text-ink-3 font-normal"> · {kind}</span>}
+        </span>
+        <PlatformMark platform={platform} size={18} />
+      </div>
+      {textBelow(platform) ? (
+        <>
+          {picture}
+          {words}
+        </>
+      ) : (
+        <>
+          {words}
+          {picture}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Every picked platform's preview side by side (Posts Round 3, board 6): up to 3 fit; more scroll
+ * sideways and the tabs jump to one. On a phone the row swipes, one app at a time.
+ */
+export function PreviewRow({
+  platforms,
+  brandName,
+  text,
+  options,
+  mediaFor,
+}: {
+  platforms: string[];
+  brandName: string;
+  text: string;
+  options: PostOptions;
+  mediaFor: (platform: string) => PlatformMedia | null;
+}) {
+  const row = useRef<HTMLDivElement>(null);
+  if (!platforms.length) {
+    return <p className="meta">Pick where it goes, and each app&apos;s preview shows here.</p>;
+  }
+  return (
+    <section aria-labelledby="preview-row-heading" className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 id="preview-row-heading" className="text-sm font-semibold">
+          Preview
+        </h3>
+        {platforms.length > 1 && (
+          <div className="segmented max-w-full overflow-x-auto" aria-label="Jump to">
+            {platforms.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() =>
+                  row.current
+                    ?.querySelector(`[data-preview="${p}"]`)
+                    ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" })
+                }
+              >
+                {platformLabel(p)}
+              </button>
+            ))}
+          </div>
+        )}
+        {platforms.length > 3 && (
+          <span className="meta">{platforms.length} platforms · scroll →</span>
+        )}
+      </div>
+      <div
+        ref={row}
+        className="flex snap-x snap-mandatory items-start gap-3 overflow-x-auto pb-2"
+        tabIndex={0}
+        aria-label="Previews"
+      >
+        {platforms.map((p) => (
+          <div
+            key={p}
+            data-preview={p}
+            className={cn(
+              "shrink-0 snap-start",
+              "max-lg:w-[85%] max-lg:snap-center",
+              platforms.length >= 3
+                ? "lg:w-[calc((100%-24px)/3)] lg:min-w-[220px]"
+                : "lg:min-w-0 lg:flex-1",
+            )}
+          >
+            <PreviewCard
+              platform={p}
+              brandName={brandName}
+              text={text}
+              options={options}
+              media={mediaFor(p)}
+            />
+          </div>
+        ))}
+      </div>
+      <p className="meta">
+        Each preview is the frame that app shows, with its own text. Each app trims long text with
         &ldquo;more&rdquo;.
       </p>
     </section>

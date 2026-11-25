@@ -7,6 +7,7 @@ import type {
   AccountsHealthReport,
   AccountPicture,
   CreatePostInput,
+  UpdatePostInput,
   ProviderComment,
   ProviderCommentReply,
   ProviderConversation,
@@ -1692,6 +1693,38 @@ export class MockSocialProvider implements SocialProvider {
         errorCategory: null,
       })),
     };
+  }
+
+  /** Updates of planned posts (Posts Round 3), in order. */
+  readonly updated: UpdatePostInput[] = [];
+
+  async updatePost(
+    input: UpdatePostInput,
+  ): Promise<{ status: ProviderPostStatus; scheduledFor: string | null }> {
+    this.updated.push(input);
+    const post = this.posts.get(input.postId);
+    if (post) {
+      if (input.content !== undefined) post.content = input.content;
+      if (input.media) post.media = input.media;
+      if (input.targets) post.targets = input.targets;
+      if (input.extras) post.extras = input.extras;
+      if (input.publishAt) post.publishAt = input.publishAt;
+    }
+    const at = input.publishAt ?? post?.publishAt ?? null;
+    return { status: "scheduled", scheduledFor: at ? at.toISOString() : null };
+  }
+
+  /** Text fixes on live posts (Posts Round 3), in order. */
+  readonly edited: { postId: string; platform: string; accountId?: string; content: string }[] = [];
+
+  async editPublishedPost(input: {
+    postId: string;
+    platform: string;
+    accountId?: string;
+    content: string;
+  }): Promise<{ url: string | null }> {
+    this.edited.push({ ...input });
+    return { url: null };
   }
 
   async deletePost(input: { postId: string }) {

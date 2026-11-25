@@ -163,7 +163,8 @@ export function VideoField({
               </>
             ) : (
               <span className="text-ink-3 text-xs">
-                Video{video.seconds ? ` · ${clockLength(video.seconds)}` : ""} · {mb(video.size)}
+                Video{video.seconds ? ` · ${clockLength(video.seconds)}` : ""}
+                {video.size ? ` · ${mb(video.size)}` : ""}
               </span>
             )}
           </span>

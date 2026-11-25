@@ -53,6 +53,8 @@ export function fakeZernio() {
     presignMedia: notImplemented,
     listPinterestBoards: notImplemented,
     getQueue: notImplemented,
+    updatePost: notImplemented,
+    editPublishedPost: notImplemented,
     enableSms: notImplemented,
     listSmsRegistrations: notImplemented,
     startSmsRegistration: notImplemented,

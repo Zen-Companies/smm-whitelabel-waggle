@@ -2,11 +2,25 @@ import { CalendarClock, CircleAlert, CircleCheck, CircleSlash, Film, Loader } fr
 import Link from "next/link";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { needsNewTime, postStatusWord } from "./calendar";
-import { CancelPostButton, RetryPostForm, TakeDownButton } from "./post-actions";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  CancelPostButton,
+  FixTextButton,
+  MovePostButton,
+  RetryPostForm,
+  TakeDownButton,
+  type PickerContext,
+} from "./post-actions";
 import { platformLabel } from "@/lib/social/platforms";
 import { mediaKindOf, type PostPlatformResult } from "@/lib/social/types";
+import { canMove } from "./move";
 import { failedAccounts, type TargetAccount } from "./post-results";
 import { dateTimeIn } from "./post-time";
+
+const DONE: Record<"edited" | "copied", string> = {
+  edited: "Changes saved. The post goes out with them.",
+  copied: "Copied. It's a new post on the calendar.",
+};
 
 // Posts (PRD F3): one post with its status and actions, and the List view. Read through RLS.
 
@@ -94,6 +108,10 @@ export function Post({
   targets = [],
   timeZone,
   as: Tag = "li",
+  picker,
+  editHref,
+  duplicateHref,
+  done = null,
 }: {
   post: PostRow;
   accounts: Map<string, string>;
@@ -102,7 +120,28 @@ export function Post({
   /** The zone times are shown in (the calendar renders on the server). */
   timeZone: string;
   as?: "li" | "div";
+  /** Round 3: the picker's best times and busy days (Move, Pick a time). */
+  picker?: PickerContext;
+  /** Round 3: Edit and Duplicate open the big window on these addresses. */
+  editHref?: string;
+  duplicateHref?: string;
+  /** Round 3: what just happened to this post, said in place. */
+  done?: "edited" | "copied" | null;
 }) {
+  const pick: PickerContext = picker ?? { timeZone, chips: null, busyDays: [] };
+  // The platforms it's live on (older rows kept no per-platform results: all its accounts).
+  const livePlatforms = post.platform_results.length
+    ? [
+        ...new Set(
+          post.platform_results.filter((r) => r.status === "published").map((r) => r.platform),
+        ),
+      ]
+    : [
+        ...new Set(
+          targets.filter((t) => post.target_account_ids.includes(t.id)).map((t) => t.platform),
+        ),
+      ];
+  const planned = canMove(post) && !!post.scheduled_for;
   const failed =
     post.status === "partial" || post.status === "failed"
       ? failedAccounts(
@@ -119,9 +158,17 @@ export function Post({
       url: first.url,
       type: first.type === "video" ? "video" : null,
     }) === "video";
-  const live = post.platform_results.find((r) => r.url)?.url;
+  const live = post.platform_results.find((r) => r.url);
   return (
-    <Tag className="flex gap-4 py-4">
+    <Tag className="flex flex-wrap gap-4 py-4">
+      {done && (
+        <p
+          role="status"
+          className="bg-success-soft text-success w-full rounded-xl px-3 py-2 text-sm"
+        >
+          {DONE[done]}
+        </p>
+      )}
       {first?.url &&
         (isVideo ? (
           // A video's first frame, never an <img> (it shows as broken).
@@ -150,9 +197,9 @@ export function Post({
           <span>
             {post.target_account_ids.map((id) => accounts.get(id) ?? "account").join(", ")}
           </span>
-          {live && (
-            <a href={live} target="_blank" rel="noreferrer" className="action-link with-arrow">
-              View post
+          {live?.url && (
+            <a href={live.url} target="_blank" rel="noreferrer" className="action-link with-arrow">
+              See it on {platformLabel(live.platform)}
             </a>
           )}
         </div>
@@ -167,7 +214,28 @@ export function Post({
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-start gap-2">
+          {planned && editHref && (
+            <Link href={editHref} scroll={false} className={buttonVariants({ variant: "primary" })}>
+              Edit
+            </Link>
+          )}
+          {planned && post.scheduled_for && (
+            <MovePostButton postId={post.id} scheduledFor={post.scheduled_for} picker={pick} />
+          )}
+          {post.status === "published" && (
+            <FixTextButton postId={post.id} content={post.content} platforms={livePlatforms} />
+          )}
+          {duplicateHref &&
+            ["scheduled", "queued", "published", "partial"].includes(post.status) && (
+              <Link
+                href={duplicateHref}
+                scroll={false}
+                className={buttonVariants({ variant: "secondary" })}
+              >
+                Duplicate
+              </Link>
+            )}
           {(post.status === "scheduled" || post.status === "queued") && (
             <CancelPostButton postId={post.id} />
           )}
@@ -193,6 +261,7 @@ export function Post({
               label={post.failure_reason === "zernio_paused" ? "Post now" : "Try again"}
               // Already live on some accounts: only "Try again" (a new time would post it twice).
               canPickTime={post.status !== "partial"}
+              picker={pick}
             />
           )}
         </div>
