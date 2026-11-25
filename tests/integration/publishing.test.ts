@@ -319,6 +319,7 @@ describe("publishing (T14)", () => {
       ok: false,
       error: "not_accepted",
       problems: [{ platform: "instagram", message: "Instagram needs a photo or video." }],
+      warnings: [],
     });
     expect(social.posts.size).toBe(before);
   });
@@ -396,6 +397,7 @@ describe("publishing (T14)", () => {
           message: "Bluesky takes videos up to 60 seconds; this one is 1:20.",
         },
       ],
+      warnings: [],
     });
   });
 
