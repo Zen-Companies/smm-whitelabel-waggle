@@ -740,13 +740,14 @@ describe("changing a post after it was made (Posts Round 3)", () => {
       content: "Fixed: croissants until 2 PM",
     });
     expect(r).toEqual({ ok: true, edited: ["facebook"], failed: [], notAllowed: ["instagram"] });
+    // The call also carries a timeout signal; only what was sent matters here.
     expect(social.edited).toEqual([
-      {
+      expect.objectContaining({
         postId: "zp_fix",
         platform: "facebook",
         accountId: fbZernio,
         content: "Fixed: croissants until 2 PM",
-      },
+      }),
     ]);
     // Instagram still shows the old text: the new one is kept as Facebook's own.
     const { data } = await db
