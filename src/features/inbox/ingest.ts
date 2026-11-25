@@ -7,7 +7,7 @@ import {
   readableEmailText,
   senderAddress,
 } from "./email-text";
-import type { z } from "zod";
+import { z } from "zod";
 import type { Json } from "@/lib/supabase/database.types";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { isInboxLive } from "@/lib/social/platforms";
@@ -191,9 +191,40 @@ async function mapEvent(
   const handler = handlers[event.event];
   if (!handler) return skipped("not_mapped");
 
-  const tenant = await resolveTenant(deps.db, event.profiles);
+  const tenant =
+    (await resolveTenant(deps.db, event.profiles)) ??
+    (POST_EVENTS.has(event.event) ? await resolvePostTenant(deps.db, payload) : null);
   if (!tenant) return rejected("unknown_tenant");
   return handler(tenant);
+}
+
+const POST_EVENTS = new Set(["post.published", "post.partial", "post.failed", "post.cancelled"]);
+
+/**
+ * A post event Zernio sent without `profiles` (seen on staging, 25 Nov: a post.published for a
+ * post Waggle created carried only the post). The post itself is ours when Waggle stored its
+ * Zernio id: the tenant is that post's, and its profile the tenant's own. The body is already
+ * signed; a Zernio id Waggle never stored stays unknown_tenant.
+ */
+async function resolvePostTenant(
+  db: ServiceClient,
+  payload: unknown,
+): Promise<{ tenantId: string; profileId: string } | null> {
+  const id = z.object({ post: z.object({ id: z.string().min(1) }) }).safeParse(payload);
+  if (!id.success) return null;
+  const { data: post } = await db
+    .from("posts")
+    .select("tenant_id")
+    .eq("zernio_post_id", id.data.post.id)
+    .maybeSingle();
+  if (!post) return null;
+  const { data: tenant } = await db
+    .from("tenants")
+    .select("id, zernio_profile_id")
+    .eq("id", post.tenant_id)
+    .maybeSingle();
+  if (!tenant?.zernio_profile_id) return null;
+  return { tenantId: tenant.id, profileId: tenant.zernio_profile_id };
 }
 
 /**

@@ -70,7 +70,7 @@ const postRow = async (id: string) =>
       .single()
   ).data!;
 
-function deliver(fixture: string, zernioPostId: string) {
+function deliver(fixture: string, zernioPostId: string, opts: { noProfiles?: boolean } = {}) {
   const raw = readFileSync(`tests/fixtures/zernio/${fixture}.json`, "utf8")
     .replaceAll("__TENANT_ID__", tenantId)
     .replaceAll("__PROFILE_ID__", profileId)
@@ -78,6 +78,7 @@ function deliver(fixture: string, zernioPostId: string) {
     .replaceAll("__POST_ID__", zernioPostId);
   const payload = JSON.parse(raw);
   payload.id = `${payload.id}_${randomUUID().slice(0, 8)}`;
+  if (opts.noProfiles) delete payload.profiles;
   const body = JSON.stringify(payload);
   return POST(
     new Request("http://localhost/api/webhooks/zernio", {
@@ -171,6 +172,24 @@ describe("publishing (T14)", () => {
         },
       ],
     });
+  });
+
+  it("a post event without profiles still settles the post, found by its Zernio id (25 Nov)", async () => {
+    social = new ScriptedPosts();
+    const post = await queuedPost({ scheduledInMs: 3_600_000 });
+    await publishPost(deps(), post.id);
+    const { zernio_post_id } = await postRow(post.id);
+
+    const res = await deliver("post-published", zernio_post_id!, { noProfiles: true });
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "published" });
+    expect(await postRow(post.id)).toMatchObject({ status: "published" });
+  });
+
+  it("a post event without profiles for a post Waggle never made stays unknown_tenant", async () => {
+    const res = await deliver("post-published", `zp_unknown_${randomUUID().slice(0, 8)}`, {
+      noProfiles: true,
+    });
+    expect(await res.json()).toEqual({ outcome: "rejected", reason: "unknown_tenant" });
   });
 
   it("a post that fails while Zernio is paused is marked for rescheduling", async () => {
