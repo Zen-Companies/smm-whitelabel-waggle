@@ -2156,6 +2156,68 @@ describe("Posts round 1 (25 Nov): media types, the full pre-check, retry", () =>
     });
   });
 
+  it("updatePost sends only what changed, with a key (Posts Round 3: move)", async () => {
+    respond = () =>
+      json({ post: { _id: "post_u", status: "scheduled", scheduledFor: "2026-11-26T01:00:00Z" } });
+    const r = await provider.updatePost({
+      postId: "post_u",
+      idempotencyKey: "move-key",
+      publishAt: new Date("2026-11-26T01:00:00.000Z"),
+    });
+    const [req] = captured;
+    expect(req.method).toBe("PUT");
+    expect(req.url.pathname).toBe("/api/v1/posts/post_u");
+    expect(req.headers.get("Idempotency-Key")).toBe("move-key");
+    expect(req.body).toEqual({ scheduledFor: "2026-11-26T01:00:00.000Z" });
+    expect(r).toEqual({ status: "scheduled", scheduledFor: "2026-11-26T01:00:00Z" });
+  });
+
+  it("updatePost with new text, files and accounts sends the platforms list (Posts Round 3: edit)", async () => {
+    respond = () => json({ post: { _id: "post_u", status: "scheduled" } });
+    await provider.updatePost({
+      postId: "post_u",
+      idempotencyKey: "edit-key",
+      content: "New text",
+      media: [{ url: "https://media.zernio.com/a.jpg", type: "image" }],
+      targets: [
+        { platform: "facebook", accountId: "acc_fb" },
+        { platform: "instagram", accountId: "acc_ig" },
+      ],
+      extras: { facebook: { customContent: "FB text" } },
+    });
+    expect(captured[0].body).toEqual({
+      content: "New text",
+      mediaItems: [{ type: "image", url: "https://media.zernio.com/a.jpg" }],
+      platforms: [
+        { platform: "facebook", accountId: "acc_fb", customContent: "FB text" },
+        { platform: "instagram", accountId: "acc_ig" },
+      ],
+    });
+  });
+
+  it("updatePost: a 500 is ambiguous (never retried blind)", async () => {
+    respond = () => json({ error: "boom" }, 500);
+    await expect(
+      provider.updatePost({ postId: "p", idempotencyKey: "k", publishAt: new Date() }),
+    ).rejects.toMatchObject({ details: { status: 500, ambiguous: true } });
+    expect(captured).toHaveLength(1);
+  });
+
+  it("editPublishedPost changes the text on one platform and account (Posts Round 3)", async () => {
+    respond = () => json({ success: true, id: "fb_1", url: "https://facebook.com/p/1" });
+    const r = await provider.editPublishedPost({
+      postId: "post_e",
+      platform: "facebook",
+      accountId: "acc_fb",
+      content: "Fixed text",
+    });
+    const [req] = captured;
+    expect(req.method).toBe("POST");
+    expect(req.url.pathname).toBe("/api/v1/posts/post_e/edit");
+    expect(req.body).toEqual({ platform: "facebook", content: "Fixed text", accountId: "acc_fb" });
+    expect(r).toEqual({ url: "https://facebook.com/p/1" });
+  });
+
   it("retryPost: a 500 is ambiguous (reconcile, never retried blind)", async () => {
     respond = () => json({ error: "boom" }, 500);
     await expect(
