@@ -48,6 +48,12 @@ const replyVia = z
 const decided = (error: string): never => {
   if (error === "not_found") throw new ToolError("not_found", "No such message for this brand.");
   if (error === "empty_reply") throw new ToolError("invalid_input", "The reply is empty.");
+  if (error === "internal_notes") {
+    throw new ToolError(
+      "invalid_input",
+      "This reply has Waggle's internal notes in it. Edit it before sending (pass edited_body).",
+    );
+  }
   if (error === "too_long") {
     throw new ToolError("invalid_input", `Keep the reply under ${REPLY_MAX} characters.`);
   }

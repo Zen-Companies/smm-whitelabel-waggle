@@ -1,6 +1,7 @@
 import { askFirstMatch } from "@/lib/ask-first";
 import type { Step, StatusEvent } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { hasLeakedFields } from "@/lib/draft-leak";
 import { uncheckedFactIds } from "@/lib/facts";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { dmRepliesSince } from "./dm-replies";
@@ -65,7 +66,7 @@ export async function loadPolicyInput(
       .maybeSingle(),
     db
       .from("drafts")
-      .select("id, needs_human, kb_entry_ids")
+      .select("id, body, needs_human, kb_entry_ids")
       .eq("item_id", itemId)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
@@ -99,7 +100,13 @@ export async function loadPolicyInput(
     input: {
       item: { kind: row.kind },
       classification: { category: row.category, confidence: Number(row.confidence) },
-      draft: draft ? { needsHuman: draft.needs_human, usesUncheckedFacts } : null,
+      draft: draft
+        ? {
+            needsHuman: draft.needs_human,
+            usesUncheckedFacts,
+            leaked: hasLeakedFields(draft.body),
+          }
+        : null,
       tenant: {
         subscriptionStatus: row.tenants.subscription_status,
         confidenceThreshold: Number(row.tenants.confidence_threshold),

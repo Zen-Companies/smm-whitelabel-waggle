@@ -499,3 +499,28 @@ describe("always ask me topics (setup, 20 Nov)", () => {
     });
   });
 });
+
+describe("Waggle's internal notes in the reply (hotfix 26 Nov)", () => {
+  const leaked = { needsHuman: false, leaked: true };
+
+  it("auto mode never sends it: back to the owner", () => {
+    expect(run({ draft: leaked, autonomyMode: "auto" })).toEqual({
+      decision: "approve",
+      reason: "internal_notes",
+    });
+  });
+
+  it("not even approved by the owner: they edit it first", () => {
+    expect(run({ draft: { ...leaked, approvedByOwner: true } })).toEqual({
+      decision: "approve",
+      reason: "internal_notes",
+    });
+  });
+
+  it("a clean reply goes as before", () => {
+    expect(run({ draft: { needsHuman: false, leaked: false, approvedByOwner: true } })).toEqual({
+      decision: "send",
+      reason: "owner_approved",
+    });
+  });
+});
