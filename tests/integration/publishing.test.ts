@@ -480,6 +480,95 @@ describe("publishing (T14)", () => {
     await db.from("social_accounts").delete().eq("id", fb!.id);
   });
 
+  it("a carousel: each platform gets the part it takes, as its own files (Posts Round 4)", async () => {
+    social = new ScriptedPosts();
+    const insert = async (platform: string, username: string) =>
+      (
+        await db
+          .from("social_accounts")
+          .insert({
+            tenant_id: tenantId,
+            zernio_account_id: `acc_${platform}_${randomUUID().slice(0, 8)}`,
+            platform,
+            username,
+          })
+          .select("id")
+          .single()
+      ).data!.id;
+    const fb = await insert("facebook", "postingcafe.fb");
+    const google = await insert("googlebusiness", "postingcafe.g");
+    const photo = (n: number) => ({
+      url: `https://media.zernio.com/temp/xmas-${n}.jpg`,
+      type: "image" as const,
+      width: 1080,
+      height: 1350,
+    });
+    const video = { url: "https://media.zernio.com/temp/xmas.mp4", type: "video" as const };
+    const r = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Christmas at the café: swipe for all of it",
+      accountIds: [accountId, fb, google],
+      scheduledFor: null,
+      media: [photo(1), photo(2), photo(3), video],
+      options: {
+        googlebusiness: {
+          google: {
+            kind: "offer",
+            title: "Fruitcake, 20% off",
+            startDay: "2026-12-01",
+            endDay: "2026-12-24",
+            coupon: "FRUIT20",
+            button: "ORDER",
+            buttonUrl: "https://postingcafe.example/order",
+          },
+        },
+      },
+    });
+    expect(r).toMatchObject({ ok: true });
+    const last = social.calls.at(-1)!;
+    // The post's files in order; Instagram takes them all (mixed is fine there).
+    expect(last.media?.map((m) => m.url)).toEqual([
+      photo(1).url,
+      photo(2).url,
+      photo(3).url,
+      video.url,
+    ]);
+    expect(last.extras?.instagram?.customMedia).toBeUndefined();
+    // Facebook can't mix photos and a video: the photos only.
+    expect(last.extras?.facebook?.customMedia?.map((m) => m.url)).toEqual([
+      photo(1).url,
+      photo(2).url,
+      photo(3).url,
+    ]);
+    // Google: the first photo only, as an offer with its button.
+    expect(last.extras?.googlebusiness?.customMedia).toEqual([
+      { type: "image", url: photo(1).url },
+    ]);
+    expect(last.extras?.googlebusiness?.platformSpecificData).toEqual({
+      topicType: "OFFER",
+      event: {
+        title: "Fruitcake, 20% off",
+        schedule: {
+          startDate: { year: 2026, month: 12, day: 1 },
+          endDate: { year: 2026, month: 12, day: 24 },
+        },
+      },
+      offer: { couponCode: "FRUIT20" },
+      callToAction: { type: "ORDER", url: "https://postingcafe.example/order" },
+    });
+    // The row keeps each platform's set with each file's place in the post.
+    const { data: row } = await db
+      .from("posts")
+      .select("platform_options")
+      .eq("id", (r as { postId: string }).postId)
+      .single();
+    const options = row!.platform_options as Record<string, { media?: { from?: number }[] }>;
+    expect(options.facebook.media?.map((m) => m.from)).toEqual([0, 1, 2]);
+    expect(options.googlebusiness.media?.map((m) => m.from)).toEqual([0]);
+    await db.from("social_accounts").delete().in("id", [fb, google]);
+  });
+
   it("Pinterest: the chosen board is remembered and every pin goes there (T64)", async () => {
     const { data: pin } = await db
       .from("social_accounts")

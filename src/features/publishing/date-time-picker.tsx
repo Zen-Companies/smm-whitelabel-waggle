@@ -48,6 +48,8 @@ export interface PickerProps {
   error?: string | null;
   /** A heading on top (the phone sheet says what the picker is for). */
   title?: string;
+  /** Posts Round 4: a day only (a Google offer's dates): no time, no best-time chips. */
+  dateOnly?: boolean;
 }
 
 /**
@@ -68,6 +70,7 @@ export function DateTimePicker({
   pending = false,
   error = null,
   title,
+  dateOnly = false,
 }: PickerProps) {
   const [day, setDay] = useState(start.day < today ? today : start.day);
   const [time, setTime] = useState(stepTime(start.time, 0));
@@ -78,7 +81,7 @@ export function DateTimePicker({
   const busy = new Set(busyDays);
   const { hour, minute, pm } = to12h(time);
   const [now] = useState(() => Date.now());
-  const tooSoon = fromWallClock(day, time, timeZone).getTime() < now + MIN_AHEAD_MS;
+  const tooSoon = !dateOnly && fromWallClock(day, time, timeZone).getTime() < now + MIN_AHEAD_MS;
 
   useEffect(() => {
     // Keyboard focus follows the arrow keys (not on first render: the picked day is focused).
@@ -199,7 +202,7 @@ export function DateTimePicker({
         ))}
       </div>
 
-      {chips ? (
+      {dateOnly ? null : chips ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-ink-2 text-sm">Your posts do best at:</span>
           {chips.map((c) => {
@@ -231,7 +234,7 @@ export function DateTimePicker({
         <p className="meta">Waggle learns your best times after a few posts.</p>
       )}
 
-      <fieldset className="flex flex-wrap items-center gap-2">
+      <fieldset className={cn("flex flex-wrap items-center gap-2", dateOnly && "hidden")}>
         <legend className="sr-only">Time</legend>
         <span className="text-sm font-medium" aria-hidden>
           Time
@@ -283,7 +286,7 @@ export function DateTimePicker({
         </div>
         <span className="meta">15-minute steps</span>
       </fieldset>
-      <p className="meta">{zoneLine(timeZone)}</p>
+      {!dateOnly && <p className="meta">{zoneLine(timeZone)}</p>}
       {(error || tooSoon) && (
         <p role="alert" className="text-danger text-sm">
           {error ?? "That time has already passed. Pick a later one."}
@@ -299,7 +302,7 @@ export function DateTimePicker({
           disabled={pending || tooSoon}
           onClick={() => onPick(day, time)}
         >
-          {pending ? "Saving…" : pickLabel(verb, day, time)}
+          {pending ? "Saving…" : dateOnly ? `${verb} ${dayName(day)}` : pickLabel(verb, day, time)}
         </Button>
       </div>
     </div>

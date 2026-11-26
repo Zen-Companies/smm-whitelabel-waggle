@@ -7,12 +7,18 @@ import { cn } from "cn";
 import type { MediaShape } from "./media-fit";
 import { textFor, type PostOptions } from "./post-options";
 import { initials, previewFrame, previewText, textBelow, type PreviewFrame } from "./preview";
+import { BUTTON_WORDS, googleDatesLabel, type GoogleOptions } from "./google-post";
 
 /** What a platform gets: its own crop when there is one, else the shared photo or video. */
 export interface PlatformMedia {
   /** A link the browser can show (blob: or our media link); null for a video. */
   src: string | null;
   shape: MediaShape | null;
+  /**
+   * Posts Round 4: every file that goes there when it's more than one (this one is the first),
+   * each already its crop for this platform.
+   */
+  set?: { src: string | null; shape: MediaShape | null }[];
 }
 
 /**
@@ -200,7 +206,14 @@ export function PreviewCard({
         : platform === "tiktok"
           ? null
           : "Reel";
-  const picture = media ? <MediaFrame frame={frame} media={media} tallHeight={360} /> : null;
+  const picture = media ? (
+    media.set && media.set.length > 1 ? (
+      <SetFrame platform={platform} frame={frame} set={media.set} />
+    ) : (
+      <MediaFrame frame={frame} media={media} tallHeight={360} />
+    )
+  ) : null;
+  const google = platform === "googlebusiness" ? options.googlebusiness?.google : undefined;
   const words = shown ? (
     <p className="px-3 py-2 text-[13px] whitespace-pre-wrap">
       {textBelow(platform) && <b className="font-semibold">{brandName} </b>}
@@ -210,6 +223,32 @@ export function PreviewCard({
   ) : (
     <p className="text-ink-3 px-3 py-2 text-[13px]">Your text shows here.</p>
   );
+  if (google) {
+    return (
+      <div className="border-line bg-surface overflow-hidden rounded-xl border">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <span className="bg-ink text-honey inline-flex size-7 items-center justify-center rounded-full text-[11px] font-bold">
+            {initials(brandName)}
+          </span>
+          <span className="flex flex-1 flex-col truncate">
+            <span className="truncate text-[13px] font-semibold">{brandName}</span>
+            <span className="text-ink-3 text-[11px]">Just now</span>
+          </span>
+          <PlatformMark platform={platform} size={18} />
+        </div>
+        {picture}
+        <GoogleExtras google={google} />
+        {words}
+        {google.button && (
+          <div className="px-3 pb-3">
+            <span className="border-line-strong text-ink inline-flex min-h-9 items-center rounded-full border px-4 text-[13px] font-semibold">
+              {BUTTON_WORDS[google.button].google}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="border-line bg-surface overflow-hidden rounded-xl border">
       <div className="flex items-center gap-2 px-3 py-2">
@@ -318,5 +357,109 @@ export function PreviewRow({
         &ldquo;more&rdquo;.
       </p>
     </section>
+  );
+}
+
+/**
+ * Several photos and videos in one post (Posts Round 4): Facebook lays them out as a grid (the
+ * first big, up to three more, "+N" on the last); the others swipe, with "1/5" and dots.
+ */
+function SetFrame({
+  platform,
+  frame,
+  set,
+}: {
+  platform: string;
+  frame: PreviewFrame;
+  set: { src: string | null; shape: MediaShape | null }[];
+}) {
+  const [at, setAt] = useState(0);
+  const strip = useRef<HTMLDivElement>(null);
+  if (platform === "facebook") {
+    const rest = set.slice(1, 4);
+    const more = set.length - 4;
+    return (
+      <div
+        className="grid grid-cols-3 gap-0.5"
+        aria-label={`${set.length} photos, shown as a grid`}
+      >
+        <div className="col-span-3">
+          <MediaFrame frame={{ ratio: 4 / 3, fit: "cover", tall: false }} media={set[0]} />
+        </div>
+        {rest.map((m, i) => (
+          <div key={i} className="relative">
+            <MediaFrame frame={{ ratio: 1, fit: "cover", tall: false }} media={m} />
+            {i === rest.length - 1 && more > 0 && (
+              <span className="bg-ink/55 absolute inset-0 flex items-center justify-center text-lg font-semibold text-white">
+                +{more}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  // Instagram shows every file of a carousel in the first one's shape.
+  const shared = frame.ratio === null ? { ...frame, ratio: 1 } : frame;
+  return (
+    <div className="relative">
+      <div
+        ref={strip}
+        className="flex snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto"
+        aria-label={`${set.length} files, swipe`}
+        tabIndex={0}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setAt(Math.round(el.scrollLeft / Math.max(1, el.clientWidth)));
+        }}
+      >
+        {set.map((m, i) => (
+          <div key={i} className="w-full shrink-0 snap-start">
+            <MediaFrame frame={shared} media={m} tallHeight={360} />
+          </div>
+        ))}
+      </div>
+      <span className="bg-ink/70 absolute top-2 right-2 rounded-full px-2 py-0.5 text-[11px] font-semibold text-white tabular-nums">
+        {at + 1}/{set.length}
+      </span>
+      <span className="flex justify-center gap-1 py-1.5" aria-hidden>
+        {set.map((_, i) => (
+          <span
+            key={i}
+            className={cn("size-1.5 rounded-full", i === at ? "bg-honey" : "bg-line-strong")}
+          />
+        ))}
+      </span>
+    </div>
+  );
+}
+
+/** Google's offer or event block: the heading and dates, the code, Redeem online. */
+function GoogleExtras({ google }: { google: GoogleOptions }) {
+  if (google.kind === "update") return null;
+  const dates = googleDatesLabel(google);
+  const title = google.title?.trim();
+  if (!title && !dates) return null;
+  return (
+    <div className="flex flex-col gap-1.5 px-3 pt-2">
+      {title && <b className="font-heading text-[15px] font-semibold">{title}</b>}
+      {dates && <span className="text-ink-3 text-xs">{dates}</span>}
+      {google.kind === "offer" && google.coupon?.trim() && (
+        <span className="border-line-strong flex flex-col items-center gap-0.5 rounded-lg border border-dashed py-2">
+          <span className="text-ink-3 text-[11px]">Show this code at the shop</span>
+          <b className="text-sm font-semibold tracking-wide">{google.coupon.trim()}</b>
+        </span>
+      )}
+      {google.kind === "offer" && (google.redeemUrl?.trim() || google.terms?.trim()) && (
+        <span className="text-honey-text text-xs">
+          {[
+            google.redeemUrl?.trim() ? "Redeem online" : null,
+            google.terms?.trim() ? "Terms and conditions" : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </span>
+      )}
+    </div>
   );
 }

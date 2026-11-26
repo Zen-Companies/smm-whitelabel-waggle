@@ -32,8 +32,10 @@ import { StateLabel } from "@/components/app/state-mark";
 import { PostsHeader } from "./posts-header";
 import { platformLabel, platformOf } from "@/lib/social/platforms";
 import { canMove } from "./move";
-import { accountNames, loadPosts, loadReach, Post, PostsTable, type PostRow } from "./posts-list";
-import { clockIn, dateTimeIn, dayKeyIn, zoneLine } from "./post-time";
+import { accountNames, loadMetrics, loadPosts, Post, PostsTable, type PostRow } from "./posts-list";
+import { BestPostCard } from "./best-post-card";
+import { bestPostThisWeek, postResults } from "./post-metrics";
+import { clockIn, dateTimeIn, dayKeyIn, fromWallClock, zoneLine } from "./post-time";
 import { startFrom, type StartRow } from "./start-from";
 import { WeekBoard } from "./week-board";
 
@@ -224,11 +226,38 @@ export async function PostsView({
   const days = weekDays(week);
   const weekPosts = days.flatMap((d) => byDay.get(d) ?? []);
   const platformOfAccount = new Map(accounts.map((a) => [a.id, platformLabel(a.platform)]));
-  const reach = view === "list" ? await loadReach(tenant.id, posts) : new Map<string, number>();
+  // Round 4: each sent post's numbers from the hourly copy (no platform calls on page open).
+  const metrics = await loadMetrics(tenant.id, posts);
+  const now = new Date();
+  const resultsOf = (p: PostRow) =>
+    p.zernio_post_id
+      ? postResults(
+          p.target_account_ids.flatMap((id) => accountPlatform.get(id) ?? []),
+          metrics.get(p.zernio_post_id) ?? [],
+        )
+      : null;
+  const best = bestPostThisWeek(
+    posts.flatMap((p) => {
+      const results = p.status === "published" && p.published_at ? resultsOf(p) : null;
+      return results && p.published_at
+        ? [{ postId: p.id, publishedAt: p.published_at, results }]
+        : [];
+    }),
+    fromWallClock(weekStart(today), "00:00", timeZone).toISOString(),
+    now,
+  );
+  const bestRow = best ? posts.find((p) => p.id === best.postId) : undefined;
 
   return (
     <>
       <PostsHeader />
+      {best && bestRow && (
+        <BestPostCard
+          best={best}
+          title={bestRow.content.split("\n")[0] || "Photo"}
+          href={u({ view, month, week, post: bestRow.id })}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         {view === "week" && (
           <div className="flex flex-wrap items-center gap-1">
@@ -368,7 +397,7 @@ export async function PostsView({
             <PostsTable
               posts={posts}
               platforms={platformOfAccount}
-              reach={reach}
+              results={resultsOf}
               openHref={(id) => u({ view, month, post: id })}
               timeZone={timeZone}
             />
@@ -554,6 +583,8 @@ export async function PostsView({
               editHref={u({ view, month, week, edit: selectedPost.id })}
               duplicateHref={u({ view, month, week, duplicate: selectedPost.id })}
               done={done}
+              results={resultsOf(selectedPost)}
+              now={now}
             />
           </SidePanel>
         ) : day || composing ? (

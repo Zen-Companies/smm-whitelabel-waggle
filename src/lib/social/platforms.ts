@@ -234,7 +234,9 @@ export const PLATFORMS: Record<PlatformId, Platform> = {
     post: rules({
       videoMaxSeconds: 140,
       textMax: 280,
-      maxImages: 4,
+      // docs.zernio.com/platforms/twitter/media (read 26 Nov): up to 20 images, or 1 GIF, or 1
+      // video per post (was 4).
+      maxImages: 20,
       note: "A post with a link costs more to send.",
     }),
     inbox: { comments: true, dms: true, reviews: false },
