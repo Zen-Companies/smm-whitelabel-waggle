@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { legacyPath, PATH_HEADER } from "@/lib/routes";
 import { loginForStart } from "@/lib/checkout-link";
+import { signedOutHome } from "@/lib/seo";
 import { UTM_COOKIE, UTM_COOKIE_MAX_AGE, utmFromParams } from "@/lib/crm/utm";
 
 // Refreshes the Supabase session cookie on page requests. Authorization happens close to the
@@ -21,7 +22,16 @@ export async function proxy(request: NextRequest) {
   let response = forward();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anonKey) return response;
+  // Signed-out visitors to the app's home go to gowaggle.ai on production with a real 308 (the
+  // page's own redirect streams, so search engines saw the old landing page; hotfix 26 Nov).
+  const publicHome =
+    request.nextUrl.pathname === "/" &&
+    signedOutHome(process.env.VERCEL_ENV).startsWith("https://");
+  if (!url || !anonKey) {
+    return publicHome
+      ? NextResponse.redirect(signedOutHome(process.env.VERCEL_ENV), 308)
+      : response;
+  }
 
   const supabase = createServerClient(url, anonKey, {
     cookies: {
@@ -34,6 +44,9 @@ export async function proxy(request: NextRequest) {
     },
   });
   const { data } = await supabase.auth.getUser();
+  if (!data.user && publicHome) {
+    return NextResponse.redirect(signedOutHome(process.env.VERCEL_ENV), 308);
+  }
   // HighLevel's checkout link (25 Nov) signed out: sign in, then back to the same link.
   if (!data.user) {
     const login = loginForStart(request.nextUrl.pathname, request.nextUrl.searchParams);

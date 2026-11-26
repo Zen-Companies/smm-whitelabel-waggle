@@ -17,10 +17,9 @@ const nextConfig: NextConfig = {
   env: {
     NEXT_PUBLIC_SENTRY_DSN: process.env.SENTRY_DSN ?? "",
   },
-  // Staging (hive-….gowaggle.ai) and previews are never listed by search engines; only the
-  // production build (VERCEL_ENV=production) may be.
+  // The app is never listed by search engines, production included: gowaggle.ai is the public
+  // site (hotfix 26 Nov). Belt and braces with robots.txt and the root layout's robots metadata.
   async headers() {
-    if (process.env.VERCEL_ENV === "production") return [];
     return [{ source: "/:path*", headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }] }];
   },
   turbopack: {
