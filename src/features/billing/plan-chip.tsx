@@ -5,7 +5,7 @@ import { StateMark } from "@/components/app/state-mark";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
 import { loadBilling } from "./billing-store";
-import { accountAllowance, BUSINESS_CALL_URL, EXTRAS, isPlanId } from "./plans";
+import { accountAllowance, BUSINESS_CALL_URL, EXTRAS, isPlanId, UNCOUNTED_FILTER } from "./plans";
 import { planPeek, type PlanPeek } from "./plan-peek";
 import { planChipState, planChipText, showOnPhone, type PlanChipState } from "./plan-chip-state";
 import { planIsLive } from "./subscription";
@@ -62,6 +62,7 @@ const loadChip = cache(
             .select("id", { count: "exact", head: true })
             .in("tenant_id", ids)
             .eq("status", "active")
+            .not("platform", "in", UNCOUNTED_FILTER)
             .then((r) => r.count ?? 0),
           db
             .from("autonomy_settings")

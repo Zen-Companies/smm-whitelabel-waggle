@@ -32,6 +32,7 @@ import {
   type PaidPlanId,
   type Plan,
   type PlanId,
+  UNCOUNTED_FILTER,
 } from "./plans";
 import { UpgradeLink } from "./upgrade-link";
 import { UPGRADE, upgradeCopy, upgradeLabel, upgradeLine, type UpgradeReason } from "./upgrade";
@@ -75,7 +76,8 @@ async function loadCounts(
     .from("social_accounts")
     .select("id", { count: "exact", head: true })
     .in("tenant_id", ids)
-    .eq("status", "active");
+    .eq("status", "active")
+    .not("platform", "in", UNCOUNTED_FILTER);
   return { brands: ids.length, accounts: count ?? 0 };
 }
 

@@ -382,3 +382,17 @@ export function planBullets(plan: Plan): string[] {
     ...(plan.features.followUps ? ["Follow-ups for leads that go quiet"] : []),
   ];
 }
+
+/**
+ * Connections that don't count as accounts (decided 26 Nov, as Zernio counts them: "SMS and voice
+ * capability on a number never count"; docs.zernio.com, What counts as a connected account). A
+ * WhatsApp number and an email inbox (Google, Microsoft, IMAP) do count, once each.
+ */
+export const UNCOUNTED_PLATFORMS = ["phone", "sms"] as const;
+/** The same list as a PostgREST `not.in` filter value. */
+export const UNCOUNTED_FILTER = `(${UNCOUNTED_PLATFORMS.join(",")})`;
+
+/** Pure: whether a connection on this platform counts toward the plan's accounts. */
+export function countsAsAccount(platform: string): boolean {
+  return !(UNCOUNTED_PLATFORMS as readonly string[]).includes(platform);
+}

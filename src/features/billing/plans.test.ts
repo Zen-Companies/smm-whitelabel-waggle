@@ -22,6 +22,8 @@ import {
   trialIsMonth,
   TRIAL,
   trialEndsAt,
+  countsAsAccount,
+  UNCOUNTED_FILTER,
 } from "./plans";
 import { limitEmailDue, NEVER_DARK, replyLimit, replyLimitNote } from "./reply-limit";
 
@@ -344,5 +346,17 @@ describe("a stored trial's length (review of release #78)", () => {
     expect(trialIsMonth(30)).toBe(true);
     expect(trialIsMonth(28)).toBe(true);
     expect(trialIsMonth(7)).toBe(false);
+  });
+});
+
+describe("what counts as an account (26 Nov, as Zernio counts)", () => {
+  it("phone numbers for texts and calls don't; WhatsApp and email inboxes do", () => {
+    expect(countsAsAccount("phone")).toBe(false);
+    expect(countsAsAccount("sms")).toBe(false);
+    expect(countsAsAccount("whatsapp")).toBe(true);
+    expect(countsAsAccount("google")).toBe(true);
+    expect(countsAsAccount("imap")).toBe(true);
+    expect(countsAsAccount("instagram")).toBe(true);
+    expect(UNCOUNTED_FILTER).toBe("(phone,sms)");
   });
 });
