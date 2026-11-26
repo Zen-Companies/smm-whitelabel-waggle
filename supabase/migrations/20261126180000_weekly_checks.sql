@@ -55,6 +55,23 @@ create policy "no oauth clients" on public.weekly_checks as restrictive for all 
   using ((select auth.jwt() ->> 'client_id') is null)
   with check ((select auth.jwt() ->> 'client_id') is null);
 
+-- A purged brand's check-ups go with it (T21; the summaries hold its questions).
+create function private.forget_purged_weekly_checks()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  delete from public.weekly_checks where tenant_id = new.id;
+  return new;
+end;
+$$;
+
+create trigger tenants_forget_purged_weekly_checks after update of purged_at on public.tenants
+  for each row when (old.purged_at is null and new.purged_at is not null)
+  execute function private.forget_purged_weekly_checks();
+
 -- The Monday email can be turned off in Settings → Notifications, per person ('weekly').
 alter table public.email_opt_outs drop constraint email_opt_outs_kind_check;
 alter table public.email_opt_outs
