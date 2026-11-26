@@ -10,7 +10,8 @@ export default function Page(props: PageProps<"/admin/customers">) {
       <div className="flex flex-col gap-1">
         <h1 className="page-title">Customers</h1>
         <p className="text-ink-2">
-          Every business that signed up, where they are, and what went wrong. Open one to trace it.
+          Every business that signed up, and every sign-up with no business yet, where they are and
+          what went wrong. Open one to trace it.
         </p>
       </div>
       <Suspense fallback={<PageLoading words={LOADING_WORDS.admin} />}>

@@ -810,6 +810,34 @@ export interface CommentAutomationLogEntry {
   at: string | null;
 }
 
+/** Which of Zernio's activity logs to read (`GET /v1/logs` `type`). */
+export type ProviderLogType = "api_request" | "connections" | "all";
+
+/**
+ * One entry of Zernio's activity log (`GET /v1/logs`), cut to what staff need to trace a connect:
+ * codes, ids and Zernio's or the platform's own error text. Never request or response bodies.
+ */
+export interface ProviderLog {
+  type: string;
+  status: string | null;
+  statusCode: number | null;
+  /** `account.connected`, `post.published`, ... */
+  action: string | null;
+  /** From the entry's metadata when present (e.g. `connect_success`, `connect_failed`). */
+  eventType: string | null;
+  errorMessage: string | null;
+  errorCode: string | null;
+  platform: string | null;
+  accountId: string | null;
+  successUsername: string | null;
+  successAccountType: string | null;
+  requestId: string | null;
+  method: string | null;
+  path: string | null;
+  operationId: string | null;
+  createdAt: string;
+}
+
 export interface SocialProvider {
   /** A 409 for the same externalId returns the existing profile with `alreadyExisted: true`. */
   createProfile(input: {
@@ -892,6 +920,20 @@ export interface SocialProvider {
   getUsageCost(
     input: { profileId: string; from: string; to: string } & CallOptions,
   ): Promise<Record<string, number>>;
+  /**
+   * Read only (staff connect trace, 26 Nov): one profile's entries in Zernio's activity log
+   * (`GET /v1/logs`, kept 90 days) between two instants, newest first, at most `limit` (max 100).
+   */
+  listLogs(
+    input: {
+      type: ProviderLogType;
+      profileId: string;
+      platform?: string;
+      from: string;
+      to: string;
+      limit?: number;
+    } & CallOptions,
+  ): Promise<ProviderLog[]>;
   /** Turns texting on for a number (T82c); receiving works at once, US sending after approval. */
   enableSms(input: { numberId: string } & CallOptions): Promise<SmsOnNumber>;
   /**

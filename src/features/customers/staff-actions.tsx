@@ -1,7 +1,8 @@
 "use client";
 
 import { Check, ExternalLink } from "lucide-react";
-import { useActionState, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { logCustomerAction, resendConfirmEmail, type ResendState } from "./actions";
 
@@ -117,5 +118,40 @@ export function ResendConfirm({
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Connect trace: reads Zernio's log again (the page re-renders on the server). */
+export function RefreshLogs() {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => start(() => router.refresh())}
+      className="text-honey-text underline-offset-2 hover:underline disabled:opacity-60"
+    >
+      {pending ? "Refreshing…" : "Refresh"}
+    </button>
+  );
+}
+
+/** Copies a Zernio request id, to send to Zernio. Feedback in place. */
+export function CopyId({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        await navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="text-honey-text underline-offset-2 hover:underline"
+      aria-label={`Copy request id ${value}`}
+    >
+      {copied ? "Copied" : "copy"}
+    </button>
   );
 }

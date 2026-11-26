@@ -27,6 +27,8 @@ export type {
   ProviderComment,
   ProviderCommentReply,
   ProviderMessage,
+  ProviderLog,
+  ProviderLogType,
   ProviderPostStatus,
   ProviderUsage,
   SocialPlatform,
