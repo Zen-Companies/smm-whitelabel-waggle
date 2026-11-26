@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import { THEME_BOOT_SCRIPT } from "@/components/app/theme";
+import { APP_DESCRIPTION } from "@/lib/seo";
 import "./globals.css";
 
 // docs/design.md §3: Outfit for headings and the wordmark, Inter for everything else.
@@ -17,7 +18,9 @@ const outfit = Outfit({
 
 export const metadata: Metadata = {
   title: { default: "Waggle", template: "%s · Waggle" },
-  description: "AI that runs your socials.",
+  description: APP_DESCRIPTION,
+  // The app is never in search (gowaggle.ai is the public site); also sent as X-Robots-Tag.
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
