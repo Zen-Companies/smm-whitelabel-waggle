@@ -26,14 +26,39 @@ export function startFrom(
   timeZone: string,
 ): ComposeInitial {
   const all = parsePostOptions(row.platform_options);
+  const files = ((row.media as StoredMedia[] | null) ?? []).flatMap((m) =>
+    m.url
+      ? [
+          {
+            url: m.url,
+            kind:
+              m.type === "video" || /\.(mp4|mov|webm|m4v)(\?|$)/i.test(m.url)
+                ? ("video" as const)
+                : ("image" as const),
+            width: m.width ?? null,
+            height: m.height ?? null,
+            seconds: m.seconds ?? null,
+          },
+        ]
+      : [],
+  );
   const options: PostOptions = {};
   const crops: ComposeInitial["crops"] = {};
   for (const [platform, o] of Object.entries(all)) {
     if (!o) continue;
     const { media, ...rest } = o;
-    const crop = media?.[0];
-    if (crop?.width && crop.height)
-      crops[platform] = { url: crop.url, width: crop.width, height: crop.height };
+    // Round 4: a platform's own set holds its crops by the photo's place (`from`); an older row
+    // has one crop of the only photo. Files that are the post's own aren't crops.
+    for (const [i, m] of (media ?? []).entries()) {
+      const from = m.from ?? (media?.length === 1 ? 0 : i);
+      const original = files[from];
+      if (!original || original.kind !== "image" || original.url === m.url) continue;
+      if (!m.width || !m.height) continue;
+      crops[platform] = {
+        ...crops[platform],
+        [from]: { url: m.url, width: m.width, height: m.height },
+      };
+    }
     const kept = Object.fromEntries(
       Object.entries(rest).filter(
         ([k]) =>
@@ -43,21 +68,10 @@ export function startFrom(
     );
     if (Object.keys(kept).length) options[platform] = kept;
   }
-  const first = ((row.media as StoredMedia[] | null) ?? []).find((m) => m.url);
-  const video =
-    first?.type === "video" || (!!first?.url && /\.(mp4|mov|webm|m4v)(\?|$)/i.test(first.url));
   return {
     postId: row.id,
     text: row.content,
-    media: first?.url
-      ? {
-          url: first.url,
-          kind: video ? "video" : "image",
-          width: first.width ?? null,
-          height: first.height ?? null,
-          seconds: first.seconds ?? null,
-        }
-      : null,
+    media: files,
     accountIds: row.target_account_ids,
     options,
     crops,

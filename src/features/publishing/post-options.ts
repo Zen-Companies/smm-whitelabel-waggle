@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { toMediaItems, type MediaKind } from "@/lib/social/types";
+import { googleOptionsSchema, googlePlatformData } from "./google-post";
 
 /**
  * What the owner chose for one platform on a post (T75, design "Posts · options"), kept in
@@ -40,12 +41,15 @@ const optionsSchema = z.object({
     .catch(undefined),
   /** Facebook: save as a draft on the Page instead of publishing. */
   fbDraft: z.boolean().optional().catch(undefined),
+  /** Google Business (Posts Round 4): Update, Offer or Event, and a button. */
+  google: googleOptionsSchema.optional().catch(undefined),
   /** Pinterest board (T64). */
   boardId: z.string().optional().catch(undefined),
   /**
-   * Posts Round 2: this platform's own file (a crop made in the composer), sent as Zernio's
-   * `customMedia`, replacing the shared file there only. Set by the server after uploading,
-   * never taken from the browser's options (see `withoutMedia`).
+   * Posts Round 2: this platform's own files (crops made in the composer), sent as Zernio's
+   * `customMedia`, replacing the shared files there only. Round 4 (carousels): the whole set that
+   * goes there, already trimmed to what the platform takes, with its crops in place. Set by the
+   * server, never taken from the browser's options (see `withoutMedia`).
    */
   media: z
     .array(
@@ -54,9 +58,13 @@ const optionsSchema = z.object({
         type: z.enum(["image", "video", "gif", "document"]).optional(),
         width: z.number().int().positive().optional(),
         height: z.number().int().positive().optional(),
+        /** A video's length, for the checks. */
+        seconds: z.number().positive().optional(),
+        /** Round 4: its place in the post's files (older single crops are the first). */
+        from: z.number().int().min(0).max(34).optional(),
       }),
     )
-    .max(1)
+    .max(35)
     .optional()
     .catch(undefined),
 });
@@ -158,6 +166,8 @@ export function targetExtras(
     if (o.playlistId) d.playlistId = o.playlistId;
   } else if (platform === "pinterest") {
     if (o.boardId) d.boardId = o.boardId;
+  } else if (platform === "googlebusiness") {
+    Object.assign(d, googlePlatformData(o.google, null));
   }
   if (FIRST_COMMENT.has(platform) && !story && o.firstComment) d.firstComment = o.firstComment;
 

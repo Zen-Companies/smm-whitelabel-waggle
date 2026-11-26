@@ -6,6 +6,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import type { BestChip } from "./best-chips";
 import { ComposeForm, type ComposeInitial, type ComposeMode } from "./compose-form";
 import { loadQueue } from "./queue-data";
+import { businessPhone } from "./google-post";
 
 /**
  * New post, Edit post and Duplicate in the big window (Posts Round 3, approved 25 Nov). `day`
@@ -62,6 +63,18 @@ export async function ComposeCard({
       .order("created_at"),
   ]);
   const queue = await loadQueue(tenant.zernioProfileId);
+  // Round 4: Google's Call now dials the business phone from Business info.
+  const phone = (accounts ?? []).some((a) => a.platform === "googlebusiness")
+    ? businessPhone(
+        (
+          await supabase
+            .from("kb_entries")
+            .select("title, content, found_kind")
+            .eq("tenant_id", tenant.id)
+            .limit(500)
+        ).data ?? [],
+      )
+    : null;
   return (
     <ComposeForm
       key={`${mode}-${initial?.postId ?? ""}-${day ?? "any"}-${time ?? ""}`}
@@ -90,6 +103,7 @@ export async function ComposeCard({
       timeZone={timeZone}
       chips={chips}
       busyDays={busyDays}
+      businessPhone={phone}
     />
   );
 }

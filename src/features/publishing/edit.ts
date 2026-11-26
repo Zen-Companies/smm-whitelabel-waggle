@@ -10,7 +10,8 @@ import { editDiff, updateFields, type EditablePost, type EditPart } from "./edit
 import { afterLiveEdit, canEditLive, liveCopies } from "./live-edit";
 import { canMove } from "./move";
 import { parsePostOptions, postOptionsRow, type PostOptions } from "./post-options";
-import { MIN_SCHEDULE_AHEAD_MS, ruleProblems, type PostDeps } from "./posts";
+import { MIN_SCHEDULE_AHEAD_MS, ruleProblems, withPlatformMedia, type PostDeps } from "./posts";
+import type { PostFile } from "./carousel";
 import { postErrorMessage, type StoredMedia } from "./publish";
 
 // Change a post after it was made (Posts Round 3, approved 25 Nov): edit or move a planned post
@@ -135,7 +136,9 @@ export async function updateScheduledPost(
     const type = mediaKindOf({ url: m.url, type: stored });
     return [{ ...m, ...(type ? { type } : {}) }];
   });
-  const problems = ruleProblems(platforms, input.content, media, input.options);
+  // Round 4: each platform's part of a carousel, trimmed to what it takes.
+  const withMedia = withPlatformMedia(platforms, media as PostFile[], input.options);
+  const problems = ruleProblems(platforms, input.content, media, withMedia);
   if (problems.length) return { ok: false, error: "refused", problems };
   const tiktok = owned.some((a) => a.platform === "tiktok");
   if (tiktok && !input.tiktokConsent && !row.tiktok_consent_at) {
@@ -143,9 +146,7 @@ export async function updateScheduledPost(
   }
   // The board stays the one the post was made with (a later change never moves a planned pin).
   const options = postOptionsRow(
-    Object.fromEntries(
-      owned.map((a) => [a.platform, input.options[a.platform]]).filter(([, o]) => o),
-    ),
+    Object.fromEntries(owned.map((a) => [a.platform, withMedia[a.platform]]).filter(([, o]) => o)),
     input.youtubeTitle,
     row.platform_options.pinterest?.boardId ??
       owned.find((a) => a.platform === "pinterest")?.pinterest_board_id ??

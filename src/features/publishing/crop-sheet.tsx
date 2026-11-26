@@ -66,6 +66,7 @@ export function CropSheet({
   start,
   onCancel,
   onUse,
+  set,
 }: {
   title: string;
   note: string;
@@ -78,6 +79,15 @@ export function CropSheet({
   start?: { ratio: number; zoom?: number; cx?: number; cy?: number };
   onCancel: () => void;
   onUse: (crop: MadeCrop) => void;
+  /**
+   * Posts Round 4: cropping a carousel's photos one after another. The set shows along the top
+   * (a tick on each one cropped); Next photo keeps this crop and opens the next one.
+   */
+  set?: {
+    thumbs: { key: string; src: string; done: boolean }[];
+    index: number;
+    onNext: (crop: MadeCrop) => void;
+  };
 }) {
   const box = useRef<HTMLDivElement>(null);
   const frame = useRef<HTMLDivElement>(null);
@@ -115,7 +125,7 @@ export function CropSheet({
 
   const sourcePerPixel = () => rect.w / (frame.current?.clientWidth || 1);
 
-  async function use() {
+  async function use(next = false) {
     const el = img.current;
     if (!el?.complete || !el.naturalWidth) return;
     setSaving(true);
@@ -135,7 +145,7 @@ export function CropSheet({
         type,
       },
     );
-    onUse({
+    (next && set ? set.onNext : onUse)({
       file,
       url: URL.createObjectURL(out.blob),
       width: out.width,
@@ -184,6 +194,34 @@ export function CropSheet({
         <h2 id="crop-title" className="section-title">
           {title}
         </h2>
+        {set && (
+          <>
+            <p className="meta -mt-2">
+              Photo {set.index + 1} of {set.thumbs.length}
+              {choices.length === 1 ? ` · ${choices[0].label}` : ""}
+            </p>
+            <ol className="flex gap-1.5 overflow-x-auto pb-1" aria-label="Photos in this post">
+              {set.thumbs.map((t, i) => (
+                <li
+                  key={t.key}
+                  aria-current={i === set.index ? "true" : undefined}
+                  className={cn(
+                    "relative size-11 shrink-0 overflow-hidden rounded-lg border-2",
+                    i === set.index ? "border-honey" : "border-transparent opacity-70",
+                  )}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={t.src} alt={`Photo ${i + 1}`} className="size-full object-cover" />
+                  {t.done && (
+                    <span className="bg-success absolute right-0.5 bottom-0.5 flex size-3.5 items-center justify-center rounded-full text-[9px] font-bold text-white">
+                      ✓
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </>
+        )}
         <div
           ref={frame}
           tabIndex={0}
@@ -292,8 +330,18 @@ export function CropSheet({
           <Button type="button" variant="secondary" onClick={onCancel}>
             Cancel
           </Button>
+          {set && set.index < set.thumbs.length - 1 && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => void use(true)}
+              disabled={saving}
+            >
+              Next photo
+            </Button>
+          )}
           <Button type="button" variant="primary" onClick={() => void use()} disabled={saving}>
-            {saving ? "Cropping…" : "Use this crop"}
+            {saving ? "Cropping…" : set ? "Use these crops" : "Use this crop"}
           </Button>
         </div>
         <p className="meta">{note}</p>
