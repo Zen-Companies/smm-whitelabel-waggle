@@ -1,3 +1,4 @@
+import { cleanLeakedReply, GARBLED_DRAFT_REASON } from "@/lib/draft-leak";
 import { inboxRules, platformLabel } from "@/lib/social/platforms";
 import { retrieveKbEntries, type KbMatch } from "@/features/knowledge-base";
 import type { LlmClient } from "@/lib/llm/client";
@@ -30,6 +31,22 @@ export interface GeneratedDraft {
   issues: GroundingIssue[];
   needsHuman: boolean;
   needsHumanReason: string | null;
+}
+
+/**
+ * Hotfix 26 Nov: a model can put the other fields inside `reply` ("… needsHuman: false reason:
+ * null lead: null}{"). The reply is cleaned and, when anything was removed, goes to the owner:
+ * auto mode never sends a cleaned draft.
+ */
+export function garbledToOwner(result: DraftResult): DraftResult {
+  const { reply, cleaned } = cleanLeakedReply(result.reply);
+  if (!cleaned) return result;
+  return {
+    ...result,
+    reply,
+    needsHuman: true,
+    reason: [GARBLED_DRAFT_REASON, result.reason].filter(Boolean).join("; "),
+  };
 }
 
 /**
@@ -80,7 +97,7 @@ export async function generateDraft(
     }),
     signal: input.signal?.(),
   });
-  const result = toDraftResult(object);
+  const result = garbledToOwner(toDraftResult(object));
 
   // Rule 8: an amount or contact the facts don't contain goes to the owner, not out.
   const issues = groundingIssues(result.reply, facts);

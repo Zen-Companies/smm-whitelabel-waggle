@@ -137,6 +137,7 @@ const DECISION_ERRORS: Record<Exclude<DecisionResult, { ok: true }>["error"], st
   already_decided: "This reply was already handled.",
   empty_reply: "The reply can't be empty.",
   too_long: `Keep the reply under ${REPLY_MAX} characters.`,
+  internal_notes: "This reply has Waggle's internal notes in it. Edit it before sending.",
 };
 
 /** Approve as is, approve an edited reply, or don't reply (PRD F8). Tenant from the session. */

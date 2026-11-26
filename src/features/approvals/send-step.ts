@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import type { Step, StepResult } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { hasLeakedFields } from "@/lib/draft-leak";
 import { markUsedFactsChecked, uncheckedFactIds } from "@/lib/facts";
 import { RetryLaterError } from "@/lib/jobs";
 import {
@@ -305,6 +306,7 @@ export function createSendStep(opts: {
         writtenByOwner: draft.writtenByOwner,
         template: !!draft.template,
         usesUncheckedFacts,
+        leaked: !draft.writtenByOwner && hasLeakedFields(draft.message),
       },
       now,
     });
@@ -317,6 +319,15 @@ export function createSendStep(opts: {
           .update({ status: "pending", decided_at: null, send_attempted_at: null })
           .eq("id", draft.id)
           .eq("status", "approved");
+        if (decision.reason === "internal_notes") {
+          await writeAudit(db, {
+            tenantId: c.tenantId,
+            itemId: item.id,
+            action: "send_refused",
+            actor: "system",
+            details: { draftId: draft.id, reason: "internal_notes" },
+          });
+        }
         return {
           event: "await_approval",
           details: { draftId: draft.id, policyReason: decision.reason },

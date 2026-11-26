@@ -1,5 +1,6 @@
 import { transitionItem } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
+import { hasLeakedFields } from "@/lib/draft-leak";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
 import type { SocialProvider } from "@/lib/social/types";
 import type { ServiceClient } from "@/lib/supabase/service";
@@ -16,7 +17,11 @@ import { bookSendSlot } from "./send-schedule";
 export { REPLY_MAX };
 
 export type DecisionResult =
-  { ok: true } | { ok: false; error: "not_found" | "already_decided" | "empty_reply" | "too_long" };
+  | { ok: true }
+  | {
+      ok: false;
+      error: "not_found" | "already_decided" | "empty_reply" | "too_long" | "internal_notes";
+    };
 
 interface DecisionInput {
   tenantId: string;
@@ -35,7 +40,7 @@ async function loadDecidable(db: ServiceClient, input: DecisionInput) {
       .maybeSingle(),
     db
       .from("drafts")
-      .select("id, body, status")
+      .select("id, body, edited_body, status")
       .eq("id", input.draftId)
       .eq("item_id", input.itemId)
       .eq("tenant_id", input.tenantId)
@@ -64,6 +69,19 @@ export async function approveDraft(
   if (edited !== undefined && edited.length === 0) return { ok: false, error: "empty_reply" };
   if (edited && edited.length > REPLY_MAX) return { ok: false, error: "too_long" };
   const isEdit = edited !== undefined && edited !== draft.body.trim();
+
+  // Hotfix 26 Nov (rule 6 backstop; policy() refuses it at send time too): a reply with Waggle's
+  // internal notes in it never goes out. Nothing changes; the owner edits it first.
+  if (hasLeakedFields(edited ?? draft.edited_body ?? draft.body)) {
+    await writeAudit(db, {
+      tenantId: input.tenantId,
+      itemId: item.id,
+      action: "send_refused",
+      actor: input.userId,
+      details: { draftId: draft.id, reason: "internal_notes" },
+    });
+    return { ok: false, error: "internal_notes" };
+  }
 
   if (draft.status === "pending") {
     const { data: updated, error } = await db
@@ -395,7 +413,10 @@ export async function replyPublicly(
 
 export type OwnerReplyResult =
   | { ok: true; draftId: string }
-  | { ok: false; error: "not_found" | "already_decided" | "empty_reply" | "too_long" };
+  | {
+      ok: false;
+      error: "not_found" | "already_decided" | "empty_reply" | "too_long" | "internal_notes";
+    };
 
 /**
  * The owner answers a message with their own words (MCP Q1). On a message waiting for approval

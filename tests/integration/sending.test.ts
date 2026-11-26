@@ -435,6 +435,70 @@ describe("send step", () => {
   });
 });
 
+describe("Waggle's internal notes in a reply (hotfix 26 Nov)", () => {
+  const GARBLED = "Sundays 8am to 10pm. needsHuman: false reason: null lead: null}{";
+
+  it("approving a garbled draft as is is refused in place: nothing changes, audited", async () => {
+    // A message whose draft still has the leak, waiting for the owner.
+    const id = randomUUID();
+    await db.from("inbound_items").insert({
+      id,
+      tenant_id: tenantId,
+      social_account_id: accountId,
+      kind: "comment",
+      zernio_comment_id: `c_${id}`,
+      zernio_post_id: "1789000",
+      text: "Open on Sunday?",
+      received_at: new Date().toISOString(),
+      status: "awaiting_approval",
+      category: "faq",
+      confidence: 0.95,
+    });
+    const { data: draft } = await db
+      .from("drafts")
+      .insert({ tenant_id: tenantId, item_id: id, body: GARBLED, model: "test" })
+      .select("id")
+      .single();
+
+    const result = await approveDraft(db, { tenantId, userId, itemId: id, draftId: draft!.id });
+    expect(result).toEqual({ ok: false, error: "internal_notes" });
+    const after = await state(id);
+    expect(after.item.status).toBe("awaiting_approval");
+    expect(after.draft.status).toBe("pending");
+    expect(after.audit).toContainEqual(
+      expect.objectContaining({
+        action: "send_refused",
+        details: expect.objectContaining({ reason: "internal_notes" }),
+      }),
+    );
+    expect(JSON.stringify(after.audit)).not.toContain("Sundays");
+    // The owner's edit without the notes goes through.
+    expect(
+      await approveDraft(db, {
+        tenantId,
+        userId,
+        itemId: id,
+        draftId: draft!.id,
+        editedBody: "Sundays 8am to 10pm.",
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("an approved draft that still has them is not sent: back to the owner", async () => {
+    social = new ScriptedSocial();
+    const { itemId, draftId, key } = await approvedItem({ kind: "comment" });
+    await db.from("drafts").update({ edited_body: GARBLED }).eq("id", draftId);
+
+    await run();
+
+    const { item, draft, audit } = await state(itemId);
+    expect(item.status).toBe("awaiting_approval");
+    expect(draft.status).toBe("pending");
+    expect(sendsFor(key)).toEqual([]);
+    expect(audit.map((a) => a.action)).toContain("send_refused");
+  });
+});
+
 describe("Pause all replies (T27)", () => {
   it("an approved reply is held without an attempt, then sent once replies are back on", async () => {
     social = new ScriptedSocial();

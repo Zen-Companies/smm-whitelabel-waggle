@@ -583,6 +583,8 @@ Order:
 6. Mode `approve` → `approve`.
 7. Mode `auto` → `send`, unless the draft used a fact Waggle found on the account that the owner has not checked (`draft.usesUncheckedFacts`) → `approve` with reason `facts_unchecked` (decision 7, 20 Nov; see "Found facts and the not-checked rule").
 
+Hotfix 26 Nov (internal fields leaked into a reply): a free model put `needsHuman: false reason: null lead: null}{` inside `reply`, and it was sent. `src/lib/draft-leak.ts` (pure) finds the draft schema's fields and JSON pieces in a reply. At draft time `generateDraft` cleans the reply (a whole JSON answer gives its `reply`; otherwise it is cut at the first leak) and, when anything was removed, sets `needsHuman` with the reason "The AI's answer came back garbled; Waggle cleaned it — check it before sending." In `policy()`, a draft with `draft.leaked` (computed in the drafted step and again in the send step, not for owner-written replies) → `approve` with reason `internal_notes`, approved or not: the send step puts it back to pending and audits `send_refused`. `approveDraft` refuses such a body in place ("This reply has Waggle's internal notes in it. Edit it before sending."), nothing changes, audited `send_refused`.
+
 Fully unit-tested; no I/O.
 
 As built (T10, `features/approvals`):

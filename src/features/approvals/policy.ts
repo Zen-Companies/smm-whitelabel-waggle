@@ -30,6 +30,11 @@ export interface PolicyInput {
      * that the owner hasn't checked (kb_entries.needs_check). Auto mode never sends it alone.
      */
     usesUncheckedFacts?: boolean;
+    /**
+     * Hotfix 26 Nov: the reply still has the draft schema's own fields in it ("needsHuman:
+     * false reason: null}{", lib/draft-leak). Never sent, even approved: the owner edits it.
+     */
+    leaked?: boolean;
   } | null;
   tenant: {
     subscriptionStatus: SubscriptionStatus;
@@ -72,7 +77,8 @@ export type PolicyReason =
   | "replies_paused"
   | "ai_cap_reached"
   | "review_public"
-  | "facts_unchecked";
+  | "facts_unchecked"
+  | "internal_notes";
 
 export type PolicyDecision =
   | { decision: "pause"; reason: "tenant_inactive" | "account_inactive" }
@@ -99,7 +105,8 @@ export type PolicyDecision =
         | "replies_paused"
         | "review_public"
         | "facts_unchecked"
-        | "ask_first_topic";
+        | "ask_first_topic"
+        | "internal_notes";
     }
   | { decision: "send"; reason: "auto_send" | "owner_approved" };
 
@@ -185,6 +192,10 @@ export function policy(input: PolicyInput): PolicyDecision {
   // 3. The draft says the knowledge base doesn't cover it (or there is no draft).
   if (!input.draft || input.draft.needsHuman)
     return { decision: "escalate", reason: "needs_human" };
+
+  // Hotfix 26 Nov: Waggle's internal notes in the reply. Back to the owner to edit, approved or
+  // not (an old garbled draft, or an edit that kept them).
+  if (input.draft.leaked) return { decision: "approve", reason: "internal_notes" };
 
   // 5. A DM reply must go out inside the platform's window (Meta 24 h; TikTok 48 h, 10 replies).
   const blocked = input.item.kind === "dm" ? dmBlocked(input) : null;

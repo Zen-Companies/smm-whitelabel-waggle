@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
 import { ConsentScreen } from "@/features/mcp";
 
-export const metadata = { title: "Connect an AI assistant", robots: { index: false } };
+export const metadata = { title: "Connect an AI assistant", robots: { index: false, follow: false } };
 
 async function Body({ searchParams }: PageProps<"/oauth/consent">) {
   const params = await searchParams;
