@@ -15,7 +15,11 @@ import { platformLabel } from "@/lib/social/platforms";
 import { mediaKindOf, type PostPlatformResult } from "@/lib/social/types";
 import { canMove } from "./move";
 import { failedAccounts, type TargetAccount } from "./post-results";
-import { dateTimeIn } from "./post-time";
+import { dateTimeIn, dayKeyIn } from "./post-time";
+import { googleEnded } from "./google-post";
+import { parsePostOptions } from "./post-options";
+import { HowItDid } from "./how-it-did";
+import { engagementCell, showNum, type MetricRow, type PostResults } from "./post-metrics";
 
 const DONE: Record<"edited" | "copied", string> = {
   edited: "Changes saved. The post goes out with them.",
@@ -39,6 +43,8 @@ export interface PostRow {
   /** Zernio's id once the post was sent (T74a: reach from analytics). */
   zernio_post_id?: string | null;
   platform_results: PostPlatformResult[];
+  /** Round 4: per-platform choices (a Google offer or event's end hides Fix the text there). */
+  platform_options?: unknown;
 }
 
 /** Status is inline text + icon, never a colored chip (design.md §3). */
@@ -112,6 +118,8 @@ export function Post({
   editHref,
   duplicateHref,
   done = null,
+  results = null,
+  now,
 }: {
   post: PostRow;
   accounts: Map<string, string>;
@@ -127,6 +135,9 @@ export function Post({
   duplicateHref?: string;
   /** Round 3: what just happened to this post, said in place. */
   done?: "edited" | "copied" | null;
+  /** Round 4: its numbers from the hourly copy, for "How it did" (published posts only). */
+  results?: PostResults | null;
+  now?: Date;
 }) {
   const pick: PickerContext = picker ?? { timeZone, chips: null, busyDays: [] };
   // The platforms it's live on (older rows kept no per-platform results: all its accounts).
@@ -141,6 +152,13 @@ export function Post({
           targets.filter((t) => post.target_account_ids.includes(t.id)).map((t) => t.platform),
         ),
       ];
+  // Round 4: Google deletes an offer or event once it ends, so Fix the text skips Google then.
+  const fixPlatforms = googleEnded(
+    parsePostOptions(post.platform_options).googlebusiness?.google,
+    dayKeyIn(now ?? new Date(), timeZone),
+  )
+    ? livePlatforms.filter((p) => p !== "googlebusiness")
+    : livePlatforms;
   const planned = canMove(post) && !!post.scheduled_for;
   const failed =
     post.status === "partial" || post.status === "failed"
@@ -223,8 +241,8 @@ export function Post({
           {planned && post.scheduled_for && (
             <MovePostButton postId={post.id} scheduledFor={post.scheduled_for} picker={pick} />
           )}
-          {post.status === "published" && (
-            <FixTextButton postId={post.id} content={post.content} platforms={livePlatforms} />
+          {post.status === "published" && (fixPlatforms.length > 0 || !livePlatforms.length) && (
+            <FixTextButton postId={post.id} content={post.content} platforms={fixPlatforms} />
           )}
           {duplicateHref &&
             ["scheduled", "queued", "published", "partial"].includes(post.status) && (
@@ -265,6 +283,9 @@ export function Post({
             />
           )}
         </div>
+        {results && (post.status === "published" || post.status === "partial") && (
+          <HowItDid results={results} now={now ?? new Date()} />
+        )}
       </div>
     </Tag>
   );
@@ -281,7 +302,7 @@ export async function loadPosts(tenantId: string) {
     supabase
       .from("posts")
       .select(
-        "id, content, media, status, scheduled_for, queued, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results, zernio_post_id",
+        "id, content, media, status, scheduled_for, queued, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results, zernio_post_id, platform_options",
       )
       .eq("tenant_id", tenantId)
       .neq("status", "draft")
@@ -299,22 +320,27 @@ export async function loadPosts(tenantId: string) {
 }
 
 /**
- * People reached per post (T74a), summed over its platforms, from the analytics sync (T48).
- * Missing until the next sync after the post goes out.
+ * Each sent post's numbers (T74a reach, Round 4 results), by Zernio post id, from the analytics
+ * sync's copy (T48). Missing until the next sync after the post goes out; never calls Zernio.
  */
-export async function loadReach(tenantId: string, posts: PostRow[]): Promise<Map<string, number>> {
+export async function loadMetrics(
+  tenantId: string,
+  posts: PostRow[],
+): Promise<Map<string, MetricRow[]>> {
   const ids = [...new Set(posts.flatMap((p) => p.zernio_post_id ?? []))];
-  const out = new Map<string, number>();
+  const out = new Map<string, MetricRow[]>();
   if (!ids.length) return out;
   const supabase = await createServerSupabase();
   for (let i = 0; i < ids.length; i += 200) {
     const { data } = await supabase
       .from("post_metrics")
-      .select("zernio_post_id, reach")
+      .select(
+        "zernio_post_id, platform, sync_status, reach, impressions, likes, comments, shares, saves, views, synced_at",
+      )
       .eq("tenant_id", tenantId)
       .in("zernio_post_id", ids.slice(i, i + 200));
     for (const m of data ?? []) {
-      if (m.zernio_post_id) out.set(m.zernio_post_id, (out.get(m.zernio_post_id) ?? 0) + m.reach);
+      if (m.zernio_post_id) out.set(m.zernio_post_id, [...(out.get(m.zernio_post_id) ?? []), m]);
     }
   }
   return out;
@@ -327,14 +353,27 @@ const STATUS_TONE: Record<string, string> = {
   "Needs you": "bg-honey-tint text-honey-text",
 };
 
+/** The List view's two number cells for one post (board 3b): reached, then engagement. */
+function numberCells(word: string, r: PostResults | null): { reached: string; engagement: string } {
+  if (word !== "Posted") {
+    return word === "Planned" || word === "Posting"
+      ? { reached: "Not yet", engagement: "Not yet" }
+      : { reached: "–", engagement: "–" };
+  }
+  if (r?.noneShare) return { reached: "Google doesn't share", engagement: "–" };
+  if (!r?.hasNumbers) return { reached: "Soon", engagement: "Soon" };
+  return { reached: showNum(r.reached), engagement: engagementCell(r) };
+}
+
 /**
- * The List view (design "Posts · Month and List", T74a): When, Post, Where, Status, People
- * reached, and the next step. Needs-you posts first, then upcoming, then the latest posted.
+ * The List view (design "Posts · Month and List", T74a; Round 4 adds Engagement): When, Post,
+ * Where, Status, People reached, Engagement, and the next step. Needs-you posts first, then
+ * upcoming, then the latest posted. On a phone each post is a card instead of a wide table.
  */
 export function PostsTable({
   posts,
   platforms,
-  reach,
+  results,
   openHref,
   timeZone,
 }: {
@@ -342,7 +381,8 @@ export function PostsTable({
   posts: PostRow[];
   /** Account id → platform label. */
   platforms: Map<string, string>;
-  reach: Map<string, number>;
+  /** Round 4: a sent post's numbers from the hourly copy, or null. */
+  results: (post: PostRow) => PostResults | null;
   openHref: (postId: string) => string;
 }) {
   const attention = posts.filter(needsNewTime);
@@ -352,69 +392,102 @@ export function PostsTable({
       (a.scheduled_for ?? a.created_at).localeCompare(b.scheduled_for ?? b.created_at),
     );
   const published = posts.filter((p) => p.status === "published").slice(0, 30);
-  const rows = [...attention, ...upcoming, ...published];
+  const rows = [...attention, ...upcoming, ...published].map((p) => {
+    const word = postStatusWord(p);
+    const at = p.published_at ?? p.scheduled_for;
+    return {
+      p,
+      word,
+      when: at ? dateTimeIn(at, timeZone) : p.queued ? "Next free time" : "Not set",
+      title: p.content.split("\n")[0] || "Photo",
+      where: [...new Set(p.target_account_ids.map((id) => platforms.get(id)).filter(Boolean))].join(
+        ", ",
+      ),
+      cells: numberCells(word, results(p)),
+      action: word === "Needs you" ? "Pick a new time" : "Open",
+    };
+  });
   if (!rows.length) {
     return (
       <p className="card text-ink-2 p-5">Nothing yet. Plan your first post with the composer.</p>
     );
   }
+  const statusChip = (word: string) => (
+    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_TONE[word]}`}>
+      {word}
+    </span>
+  );
   return (
-    <div className="card overflow-x-auto">
-      <table className="w-full min-w-[640px] text-sm">
-        <thead className="text-ink-3 border-line border-b text-left text-[13px]">
-          <tr>
-            <th className="px-4 py-2.5 font-medium">When</th>
-            <th className="px-4 py-2.5 font-medium">Post</th>
-            <th className="px-4 py-2.5 font-medium">Where</th>
-            <th className="px-4 py-2.5 font-medium">Status</th>
-            <th className="px-4 py-2.5 text-right font-medium">People reached</th>
-            <th className="px-4 py-2.5">
-              <span className="sr-only">Action</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((p) => {
-            const word = postStatusWord(p);
-            const at = p.published_at ?? p.scheduled_for;
-            const where = [
-              ...new Set(p.target_account_ids.map((id) => platforms.get(id)).filter(Boolean)),
-            ].join(", ");
-            const reached = p.zernio_post_id ? reach.get(p.zernio_post_id) : undefined;
-            return (
-              <tr key={p.id} className="border-line border-b last:border-b-0">
-                <td className="text-ink-2 px-4 py-3 whitespace-nowrap">
-                  {at ? dateTimeIn(at, timeZone) : p.queued ? "Next free time" : "Not set"}
-                </td>
-                <td className="max-w-[280px] truncate px-4 py-3">
-                  {p.content.split("\n")[0] || "Photo"}
-                </td>
-                <td className="text-ink-2 px-4 py-3">{where || "–"}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_TONE[word]}`}
-                  >
-                    {word}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right tabular-nums">
-                  {word === "Posted"
-                    ? reached !== undefined
-                      ? reached.toLocaleString()
-                      : "Soon"
-                    : "–"}
-                </td>
+    <>
+      {/* Phone (board P5): stacked cards, each with people reached and engagement. */}
+      <ul className="flex flex-col gap-2 md:hidden" aria-label="Posts">
+        {rows.map((r) => (
+          <li key={r.p.id} className="card flex flex-col gap-2.5 p-4">
+            <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+              <span className="flex min-w-[200px] flex-1 flex-col gap-0.5">
+                <b className="text-sm font-semibold">{r.title}</b>
+                <span className="meta">
+                  {r.when}
+                  {r.where ? ` · ${r.where}` : ""}
+                </span>
+              </span>
+              {statusChip(r.word)}
+            </div>
+            <dl className="grid grid-cols-2 gap-2">
+              <div className="flex flex-col-reverse">
+                <dt className="text-ink-3 text-xs">People reached</dt>
+                <dd className="text-sm font-semibold tabular-nums">{r.cells.reached}</dd>
+              </div>
+              <div className="flex flex-col-reverse">
+                <dt className="text-ink-3 text-xs">Engagement</dt>
+                <dd className="text-sm font-semibold tabular-nums">{r.cells.engagement}</dd>
+              </div>
+            </dl>
+            <Link href={openHref(r.p.id)} className="action-link with-arrow self-start text-sm">
+              {r.action}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <div className="card hidden overflow-x-auto md:block">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead className="text-ink-3 border-line border-b text-left text-[13px]">
+            <tr>
+              <th className="px-4 py-2.5 font-medium">When</th>
+              <th className="px-4 py-2.5 font-medium">Post</th>
+              <th className="px-4 py-2.5 font-medium">Where</th>
+              <th className="px-4 py-2.5 font-medium">Status</th>
+              <th className="px-4 py-2.5 text-right font-medium">People reached</th>
+              <th className="px-4 py-2.5 text-right font-medium">Engagement</th>
+              <th className="px-4 py-2.5">
+                <span className="sr-only">Action</span>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.p.id} className="border-line border-b last:border-b-0">
+                <td className="text-ink-2 px-4 py-3 whitespace-nowrap">{r.when}</td>
+                <td className="max-w-[260px] truncate px-4 py-3">{r.title}</td>
+                <td className="text-ink-2 px-4 py-3">{r.where || "–"}</td>
+                <td className="px-4 py-3">{statusChip(r.word)}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{r.cells.reached}</td>
+                <td className="px-4 py-3 text-right tabular-nums">{r.cells.engagement}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
-                  <Link href={openHref(p.id)} className="action-link with-arrow">
-                    {word === "Needs you" ? "Pick a new time" : "Open"}
+                  <Link href={openHref(r.p.id)} className="action-link with-arrow">
+                    {r.action}
                   </Link>
                 </td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="meta">
+        Engagement is likes, comments, shares and saves, and that as a share of the people who saw
+        it.
+      </p>
+    </>
   );
 }
 
