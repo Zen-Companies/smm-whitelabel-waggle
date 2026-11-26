@@ -36,7 +36,7 @@ select is(
        -- deleted by the tenants_forget_purged_connect_attempts trigger (Fix 1, 24 Nov)
        'connect_attempts',
        -- deleted by the tenants_forget_purged_inbox_rows trigger (Inbox by sender, 26 Nov)
-       'inbox_reads', 'inbox_senders',
+       'inbox_reads',
        -- kept: costs and the audit trail
        'ai_usage', 'audit_log',
        -- kept: feedback stays with the person (its tenant_id is set null if the brand row goes)

@@ -1176,13 +1176,6 @@ export type Database = {
             referencedRelation: "social_accounts"
             referencedColumns: ["id", "tenant_id"]
           },
-          {
-            foreignKeyName: "inbox_senders_tenant_id_fkey"
-            columns: ["tenant_id"]
-            isOneToOne: false
-            referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
         ]
       }
       inbound_items: {

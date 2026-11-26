@@ -152,8 +152,11 @@ create policy "no oauth clients" on public.inbox_reads as restrictive for all to
 
 -- 4. inbox_senders --------------------------------------------------------------------------
 
+-- tenant_id has no foreign key of its own: the account's (social_account_id, tenant_id) key
+-- covers it, and a second key to tenants would make the API see two paths from tenants to
+-- social_accounts (embeds like tenants -> social_accounts would stop working).
 create table public.inbox_senders (
-  tenant_id uuid not null references public.tenants (id) on delete cascade,
+  tenant_id uuid not null,
   social_account_id uuid not null,
   sender_key text not null check (char_length(sender_key) between 1 and 320),
   automated boolean not null default false,

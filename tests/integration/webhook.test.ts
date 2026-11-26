@@ -351,6 +351,7 @@ describe("POST /api/webhooks/zernio", () => {
       const p = fixture("message-received-email");
       p.message.id = `msg_email_${suffix}_${n}`;
       p.message.conversationId = `conv_email_${suffix}_${n}`;
+      p.message.platformMessageId = `<email_${suffix}_${n}@mail.test>`;
       p.message.sender.id = "Maria@Example.com";
       p.account.id = p.account.accountId = accountId;
       p.metadata.email.subject = subject;
@@ -384,6 +385,7 @@ describe("POST /api/webhooks/zernio", () => {
       const p = fixture("message-received-email");
       p.message.id = `msg_news_${suffix}_${n}`;
       p.message.conversationId = `conv_news_${suffix}_${n}`;
+      p.message.platformMessageId = `<news_${suffix}_${n}@mail.test>`;
       p.message.sender = { id: "hello@producthunt.com", name: "Product Hunt Daily" };
       p.message.text =
         n === 1
