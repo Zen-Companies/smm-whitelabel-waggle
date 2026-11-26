@@ -28,7 +28,14 @@ const weekAgo = () => new Date(Date.now() - 7 * 86_400_000).toISOString();
  * the Lab. Each card ends with a way to its full list; How Waggle replies opens in the side
  * panel.
  */
-export async function TeachView({ replies = false }: { replies?: boolean }) {
+export async function TeachView({
+  replies = false,
+  justOn,
+}: {
+  replies?: boolean;
+  /** After paying for Worker Bee: the row just switched on says so (Playbook round 2). */
+  justOn?: "faq" | "lead";
+}) {
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
   const [{ data: settings }, { data: entries }, { data: drafts }, gapRows, { data: modes }] =
@@ -150,7 +157,7 @@ export async function TeachView({ replies = false }: { replies?: boolean }) {
 
       {replies && (
         <SidePanel label="How Waggle replies" closeHref="/teach">
-          <AutonomyCard variant="teach" />
+          <AutonomyCard variant="teach" justOn={justOn} />
         </SidePanel>
       )}
     </main>

@@ -4,6 +4,7 @@ import { Check } from "lucide-react";
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "cn";
 import { UpgradeLink } from "@/features/billing/client";
 import { saveFollowupsAction, type AutomationFormState } from "./actions";
 import type { SequenceTemplate } from "./sequences-section";
@@ -18,6 +19,7 @@ export function FollowupsCard({
   templates,
   canEdit,
   included,
+  startOn = false,
 }: {
   settings: {
     enabled: boolean;
@@ -32,6 +34,11 @@ export function FollowupsCard({
   canEdit: boolean;
   /** The brand's plan includes follow-ups (always true while plan limits are off). */
   included: boolean;
+  /**
+   * After paying for follow-ups (Playbook round 2, 26 Nov): switched on, with the message ready
+   * to check. It messages customers, so it starts once the owner has checked it and saved.
+   */
+  startOn?: boolean;
 }) {
   const [state, action, pending] = useActionState<AutomationFormState, FormData>(
     saveFollowupsAction,
@@ -63,20 +70,32 @@ export function FollowupsCard({
         .join(", ")
     : null;
   return (
-    <form action={action} className="card flex flex-col gap-3 p-5">
+    <form
+      id="follow-ups"
+      action={action}
+      className={cn("card flex flex-col gap-3 p-5", startOn && "ring-honey ring-2")}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold">Follow up quiet leads</h3>
         <label className="inline-flex min-h-9 cursor-pointer items-center gap-2 text-sm">
           <input
             type="checkbox"
             name="enabled"
-            defaultChecked={settings?.enabled ?? false}
+            defaultChecked={settings?.enabled || (startOn && canEdit)}
             disabled={!canEdit}
             className="accent-honey size-5"
           />
           On
         </label>
       </div>
+      {startOn && canEdit && !settings?.enabled && !state.savedAt && (
+        <p
+          role="status"
+          className="border-honey-border bg-honey-tint m-0 rounded-lg border px-3 py-2 text-sm"
+        >
+          <b>Switched on.</b> Check your message, then Save. It goes out to people who went quiet.
+        </p>
+      )}
       <p className="text-ink-2 text-sm">
         When a lead stops answering, Waggle sends your message once and stops if they reply. It uses
         no AI replies.

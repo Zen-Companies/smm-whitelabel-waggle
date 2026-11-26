@@ -4,6 +4,7 @@ export {
   sendAllReadyAction,
   undoApprovalAction,
   updateAutonomyMode,
+  writeRepliesAfterUpgrade,
 } from "./actions";
 export type { AutonomyFormState, DecisionFormState, SendAllState } from "./actions";
 export {
@@ -21,6 +22,7 @@ export {
 export type { DecisionResult, HideSpamResult, OwnerReplyResult } from "./decisions";
 export { InboxSkeleton } from "./inbox-skeleton";
 export { InboxView } from "./inbox-view";
+export { RepliesBackLine } from "./replies-back-line";
 export {
   countInboxTabs,
   heldReason,

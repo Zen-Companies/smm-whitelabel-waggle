@@ -37,6 +37,7 @@ export type { UpgradeOffer } from "./upgrade-offer";
 export { welcomeFor } from "./welcome";
 export type { WelcomeContent } from "./welcome";
 export { BillingHost } from "./billing-host";
+export { InboxCountdown } from "./inbox-countdown";
 export { DayBanner, DayPill } from "./day-price";
 export { UpgradeNote } from "./upgrade-note";
 export { UpgradeLink } from "./upgrade-link";

@@ -14,6 +14,7 @@ import {
 import { AutoHideForm } from "./auto-hide-form";
 import { AutonomyForm } from "./autonomy-form";
 import { PauseForm } from "./pause-form";
+import type { ConfigurableCategory } from "./autonomy";
 import type { AutonomyMode } from "./policy";
 
 /**
@@ -21,7 +22,14 @@ import type { AutonomyMode } from "./policy";
  * Waggle (T73) under "How Waggle replies", where the pause sits in the page header and Try it is
  * on the same page.
  */
-export async function AutonomyCard({ variant = "settings" }: { variant?: "settings" | "teach" }) {
+export async function AutonomyCard({
+  variant = "settings",
+  justOn,
+}: {
+  variant?: "settings" | "teach";
+  /** After paying for Worker Bee (Playbook round 2): that row says it was just switched on. */
+  justOn?: ConfigurableCategory;
+}) {
   const teach = variant === "teach";
   const tenant = await getCurrentTenant();
   const supabase = await createServerSupabase();
@@ -67,6 +75,7 @@ export async function AutonomyCard({ variant = "settings" }: { variant?: "settin
               hint={CATEGORY_HINTS[category]}
               mode={modes.get(category) ?? "off"}
               autoAllowed={autoOk}
+              justOn={justOn === category && modes.get(category) === "auto"}
             />
           ))}
           <dl className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-6 gap-y-3 p-5">

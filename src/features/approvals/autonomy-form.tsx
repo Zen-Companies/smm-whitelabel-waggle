@@ -23,6 +23,7 @@ export function AutonomyForm({
   hint,
   mode,
   autoAllowed = true,
+  justOn = false,
 }: {
   category: ConfigurableCategory;
   label: string;
@@ -30,6 +31,8 @@ export function AutonomyForm({
   mode: AutonomyMode;
   /** Free approves every reply (19 Nov): Auto-reply shows, locked. */
   autoAllowed?: boolean;
+  /** Switched on for this kind just now, after paying (Playbook round 2): says so in place. */
+  justOn?: boolean;
 }) {
   const [state, action, pending] = useActionState<AutonomyFormState, FormData>(
     updateAutonomyMode,
@@ -96,6 +99,12 @@ export function AutonomyForm({
           )}
         </span>
       </fieldset>
+      {justOn && !pending && !state.saved && !state.error && value === "auto" && (
+        <p role="status" className="meta text-ink-2 mt-2 flex items-center gap-1">
+          <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
+          Saved · Worker Bee answers {label.toLowerCase()} now. Change it here any time.
+        </p>
+      )}
       {(pending || state.saved) && (
         <p className="meta mt-2 flex items-center gap-2">
           {pending ? (

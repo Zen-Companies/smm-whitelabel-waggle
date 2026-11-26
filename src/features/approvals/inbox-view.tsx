@@ -391,10 +391,15 @@ export async function InboxView({
   tab = "for_you",
 
   searchParams,
+
+  notice,
 }: {
   /** From the path: /inbox, /inbox/answered or /inbox/hidden. */
 
   tab?: InboxTab;
+
+  /** For you: one line above the list (the DM countdown, Playbook round 2). */
+  notice?: React.ReactNode;
 
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
@@ -543,6 +548,9 @@ export async function InboxView({
         ) : (
           <div className="[&_.tabs]:border-b-0">{tabs}</div>
         )}
+        {!found && tab === "for_you" && notice ? (
+          <div className="has-[p]:pb-3">{notice}</div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">{body}</div>

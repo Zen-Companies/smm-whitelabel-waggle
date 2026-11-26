@@ -1,11 +1,12 @@
 "use client";
 
-import { AtSign, MessagesSquare, X, Zap, type LucideIcon } from "lucide-react";
+import { AtSign, Clock, MessagesSquare, X, Zap, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { PlanBees, RestingBee } from "@/components/app/bee-plan";
 import { Button } from "@/components/ui/button";
+import { cn } from "cn";
 import type { CheckoutSuccess } from "./popup-actions";
 import {
   NUDGE_EVERY_DAYS,
@@ -23,7 +24,10 @@ import { aboutReplies, NO_FACTS, popupContent, popupVersion, type PopupFacts } f
 import { waitingLine, type ReplyPain } from "./reply-pain";
 import type { OfferReason } from "./upgrade";
 import { upgradeOffer } from "./upgrade-offer";
-import { carryOnFor, UpgradePopup } from "./upgrade-popup";
+import { carryOnPlan, type CarryOnActions } from "./carry-on";
+import { bannerCountdown, countdownOf, endOfLocalDay, type OpenDm } from "./dm-countdown";
+import { UpgradePopup } from "./upgrade-popup";
+import { useMinute } from "./use-minute";
 import { welcomeFor } from "./welcome";
 
 /** The pop-up's own parameters, dropped from the address when it closes. */
@@ -85,6 +89,9 @@ export function BillingPopups({
   tenantId = null,
   needsYou = [],
   connect,
+  workerBee,
+  writeReplies,
+  openDms = [],
   showBanner = true,
 }: {
   org: OfferOrg;
@@ -97,6 +104,12 @@ export function BillingPopups({
   needsYou?: readonly string[];
   /** Connect an account: after paying, "Connect TikTok" carries on (accounts' server action). */
   connect?: (formData: FormData) => Promise<void>;
+  /** After paying for Worker Bee: switch that kind on (Reply rules' server action). */
+  workerBee?: CarryOnActions["workerBee"];
+  /** After paying when out of replies: write replies for the messages that waited. */
+  writeReplies?: CarryOnActions["writeReplies"];
+  /** Open DMs' close times, for the countdown line on the Try Solo banner. */
+  openDms?: OpenDm[];
   /** Setup pages: pop-ups only, no banner. */
   showBanner?: boolean;
 }) {
@@ -187,6 +200,8 @@ export function BillingPopups({
   };
 
   const open = (reason: OfferReason) => setLocal({ kind: "upgrade", reason });
+  // The DM countdown is worked out on screen, and again each minute (never on the server).
+  const now = useMinute();
 
   // Free: the new pop-up (one layout, six versions), with the brand's own numbers once it opens.
   const free = org.current === "free";
@@ -270,7 +285,7 @@ export function BillingPopups({
       trial: org.trial,
       trialDays: org.trialDays,
       facts: known,
-      now: new Date(),
+      now: now ?? new Date(),
     });
     const returned =
       !local && popup.kind === "upgrade" && (checkout === "done" || checkout === "cancelled");
@@ -289,7 +304,11 @@ export function BillingPopups({
               : "checking"
             : null
         }
-        carryOn={carryOnFor(version, connect, back)}
+        carryOn={carryOnPlan(version, {
+          connected: facts?.facts.connected ?? [],
+          canConnect: !!connect,
+        })}
+        actions={{ connect, workerBee, writeReplies }}
         onClose={close}
         onDone={done}
       />
@@ -307,7 +326,15 @@ export function BillingPopups({
         <OutBanner org={org} out={out} onOpen={() => open("out")} />
       )}
       {showBanner && stored.nudge && (
-        <SoloNudge org={org} onOpen={() => open("nudge")} onHide={hideNudge} />
+        <SoloNudge
+          org={org}
+          onOpen={() => open("nudge")}
+          onHide={hideNudge}
+          countdown={(() => {
+            const c = now ? countdownOf(openDms, now, endOfLocalDay(now)) : null;
+            return c ? { line: bannerCountdown(c), urgent: c.urgent } : null;
+          })()}
+        />
       )}
       {freePopup}
       {!free && !returning && popup?.kind === "upgrade" && (
@@ -385,10 +412,13 @@ function SoloNudge({
   org,
   onOpen,
   onHide,
+  countdown,
 }: {
   org: OfferOrg;
   onOpen: () => void;
   onHide: () => void;
+  /** "2 DMs close today, the first in 3 h" (Playbook round 2): opens the Try Solo pop-up. */
+  countdown: { line: string; urgent: boolean } | null;
 }) {
   const solo = org.plans.solo;
   const perks: { icon: LucideIcon; label: string }[] = [
@@ -434,6 +464,21 @@ function SoloNudge({
               </li>
             ))}
           </ul>
+          {countdown && (
+            <button
+              type="button"
+              onClick={onOpen}
+              className={cn(
+                "flex w-fit items-center gap-1.5 text-left text-[13px] font-semibold underline-offset-2 hover:underline",
+                countdown.urgent
+                  ? "bg-danger-soft text-danger rounded-md px-1.5 py-0.5"
+                  : "text-honey",
+              )}
+            >
+              <Clock className="size-3.5" aria-hidden />
+              {countdown.line}
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <span className="flex items-baseline gap-1 whitespace-nowrap">
