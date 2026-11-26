@@ -76,6 +76,64 @@ export function isAutomatedEmail(address: string | null, ownDomains: readonly st
   });
 }
 
+/** Why Waggle took an email for a newsletter or other automated mail (inbox_senders). */
+export type AutomatedReason = "list_header" | "unsubscribe_link" | "bulk_sender";
+
+// The same words as the migration's backfill (20261126120000_inbox_by_sender.sql).
+const UNSUBSCRIBE =
+  /(unsubscribe|opt[ -]?out of (these|this|our) emails|email preferences|manage (your )?(email )?preferences)/i;
+
+/** Mailbox names that only send bulk mail (no-reply ones are skipped before this). */
+const BULK_LOCAL =
+  /^(news|newsletters?|digest|updates?|marketing|promos?|promotions?|deals|offers|campaigns?|mailer|announcements?)([+._-].*)?$/i;
+
+/** Sending services whose own domains show in the From address of bulk mail. */
+const BULK_DOMAINS = [
+  "mailchimp.com",
+  "mcsv.net",
+  "list-manage.com",
+  "sendgrid.net",
+  "mailgun.org",
+  "sparkpostmail.com",
+  "amazonses.com",
+  "substack.com",
+  "beehiiv.com",
+  "convertkit.com",
+  "ccsend.com",
+  "hubspotemail.net",
+  "mktomail.com",
+  "klaviyomail.com",
+  "mandrillapp.com",
+  "createsend.com",
+];
+
+const LIST_HEADERS = /^(list-unsubscribe|list-id|list-post)$/i;
+
+/** A link, raw or as readableEmailText leaves it ("(producthunt.com)"). */
+const LINK = /https?:\/\/|\([a-z0-9.-]+\.[a-z]{2,}\)/i;
+
+/**
+ * Inbox by sender (26 Nov): a newsletter, product update or other bulk mail, which never needs
+ * an answer, by (in order) its list headers when the mailbox passes them, an unsubscribe line in
+ * its words, or a bulk sender's address. Null for what looks like a person writing.
+ */
+export function automatedEmailReason(input: {
+  address: string | null;
+  text: string | null | undefined;
+  /** Header names Zernio passed with the email, when it did (undocumented, VERIFY). */
+  headerNames?: readonly string[];
+}): AutomatedReason | null {
+  if (input.headerNames?.some((h) => LIST_HEADERS.test(h.trim()))) return "list_header";
+  // An unsubscribe line with a link: a customer asking to be taken off a list writes no link.
+  const text = input.text ?? "";
+  if (UNSUBSCRIBE.test(text) && LINK.test(text)) return "unsubscribe_link";
+  const [local = "", domain = ""] = (input.address ?? "").toLowerCase().split("@");
+  if (local && BULK_LOCAL.test(local)) return "bulk_sender";
+  if (domain && BULK_DOMAINS.some((d) => domain === d || domain.endsWith(`.${d}`)))
+    return "bulk_sender";
+  return null;
+}
+
 /** Our own sending domains: the alert sender's domain, plus gowaggle.ai. */
 export function ownEmailDomains(alertFrom: string | undefined): string[] {
   const domains = ["gowaggle.ai"];

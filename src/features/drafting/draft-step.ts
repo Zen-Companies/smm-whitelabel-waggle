@@ -1,5 +1,10 @@
 import { defaultReplyVia, loadPolicyInput, setCommentHidden, triage } from "@/features/approvals";
-import type { Step, StatusEvent } from "@/features/inbox";
+import {
+  answeredByLaterMessage,
+  loadSameSender,
+  type Step,
+  type StatusEvent,
+} from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import type { LlmClient } from "@/lib/llm/client";
 import type { SocialProvider } from "@/lib/social/types";
@@ -55,6 +60,17 @@ export function createDraftStep(deps: {
         return {
           event: "hold",
           details: { decision: "hold", policyReason: "catch_up_draft_cap", drafted: false },
+        };
+      }
+      // One reply per conversation (26 Nov): the same sender wrote again after this one, and
+      // that later message gets the one reply (with this one as an earlier, waiting message).
+      // This one waits undrafted, and closes as answered together when that reply goes out.
+      // A draft the owner (or the reveal) asked for is written anyway.
+      const sameSender = pulled.draft_requested_at ? null : await loadSameSender(db, item.id);
+      if (sameSender && answeredByLaterMessage(sameSender.item, sameSender.others)) {
+        return {
+          event: "hold",
+          details: { decision: "hold", policyReason: "answered_with_later_message", drafted: false },
         };
       }
     }

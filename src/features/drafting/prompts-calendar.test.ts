@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DRAFT_PROMPT_VERSION, DRAFT_PROMPTS, REPLY_LANGUAGE_RULE } from "./prompts";
+import { DRAFT_PROMPTS, REPLY_LANGUAGE_RULE } from "./prompts";
 
 describe("draft prompt 2026-11-13.1 (T81d)", () => {
   const p = DRAFT_PROMPTS["2026-11-13.1"];
@@ -36,9 +36,6 @@ describe("draft prompt 2026-11-13.1 (T81d)", () => {
 
 describe("draft prompt 2026-11-20.1 (first connect: the customer's language)", () => {
   const p = DRAFT_PROMPTS["2026-11-20.1"];
-  it("is the current version", () => {
-    expect(DRAFT_PROMPT_VERSION).toBe("2026-11-20.1");
-  });
   it("replies in the customer's language, any language, using only the owner's answers", () => {
     const system = p.system("Harbour Bean");
     expect(system).toContain(REPLY_LANGUAGE_RULE);

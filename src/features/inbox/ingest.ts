@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import {
+  automatedEmailReason,
   isAutomatedEmail,
   isEmailPlatform,
   looksLikeWaggleEmail,
@@ -29,9 +30,11 @@ import {
   postEventSchema,
   reviewEventSchema,
   reviewUpdatedSchema,
+  emailHeaderNames,
   zernioAccountIdOf,
   type ZernioEnvelope,
 } from "./zernio-events";
+import { senderKeyFor } from "./sender-key";
 import { customerText } from "@/lib/social/whitelabel";
 import { isOptKeyword } from "./opt-keywords";
 
@@ -443,6 +446,11 @@ async function mapComment(
     zernioPostId: e.comment.platformPostId,
     permalink: e.post?.permalink ?? null,
     authorName: e.comment.author.username ?? e.comment.author.name ?? null,
+    senderKey: senderKeyFor({
+      kind: "comment",
+      authorId: e.comment.author.id,
+      authorName: e.comment.author.username ?? e.comment.author.name ?? null,
+    }),
     text: e.comment.text,
     receivedAt: e.comment.createdAt,
   });
@@ -606,10 +614,28 @@ async function mapMessage(
   if ("foreign" in recorded) return rejected("foreign_conversation");
   const conversation = { id: recorded.conversationId };
 
-  const { created } = await insertInboundItem(db, {
+  const senderKey = senderKeyFor({ kind: "dm", email, sender: e.message.sender });
+  // Inbox by sender (26 Nov): a newsletter or other automated sender is kept (it shows in
+  // Updates & newsletters) but never drafted. The owner's "Move a sender to For you" wins.
+  const automated =
+    email && senderKey
+      ? await automatedSender(db, {
+          tenantId,
+          socialAccountId: resolved.accountId,
+          senderKey,
+          reason: automatedEmailReason({
+            address: senderAddress(e.message.sender),
+            text: e.message.text,
+            headerNames: emailHeaderNames(e.metadata?.email?.headers),
+          }),
+        })
+      : false;
+
+  const { itemId, created } = await insertInboundItem(db, {
     kind: "dm",
     tenantId,
     socialAccountId: resolved.accountId,
+    senderKey,
     zernioMessageId: e.message.id,
     conversationId: conversation.id,
     platformMessageId: e.message.platformMessageId ?? null,
@@ -623,7 +649,62 @@ async function mapMessage(
     text: email ? readableEmailText(e.message.text ?? "") : (e.message.text ?? ""),
     receivedAt: e.message.sentAt,
   });
+  if (created && automated) {
+    await transitionItem(db, {
+      itemId,
+      from: "new",
+      event: "automated_sender",
+      details: { policyReason: "automated_sender" },
+    });
+    return { outcome: "processed", detail: "automated_sender" };
+  }
   return { outcome: "processed", detail: created ? "item_created" : "item_exists" };
+}
+
+/**
+ * Whether this email sender is automated: flagged before (and not moved to For you by the
+ * owner), or newly by `reason`, which flags them from now on (one audit row).
+ */
+async function automatedSender(
+  db: ServiceClient,
+  input: {
+    tenantId: string;
+    socialAccountId: string;
+    senderKey: string;
+    reason: ReturnType<typeof automatedEmailReason>;
+  },
+): Promise<boolean> {
+  const { data: known, error } = await db
+    .from("inbox_senders")
+    .select("automated, moved_to_for_you_at")
+    .eq("tenant_id", input.tenantId)
+    .eq("social_account_id", input.socialAccountId)
+    .eq("sender_key", input.senderKey)
+    .maybeSingle();
+  if (error) throw new Error(`inbox_senders lookup failed: ${error.message}`);
+  if (known?.moved_to_for_you_at) return false;
+  if (known?.automated) return true;
+  if (!input.reason) return false;
+  const { error: upsertError } = await db.from("inbox_senders").upsert(
+    {
+      tenant_id: input.tenantId,
+      social_account_id: input.socialAccountId,
+      sender_key: input.senderKey,
+      automated: true,
+      automated_reason: input.reason,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "tenant_id,social_account_id,sender_key" },
+  );
+  if (upsertError) throw new Error(`inbox_senders upsert failed: ${upsertError.message}`);
+  await writeAudit(db, {
+    tenantId: input.tenantId,
+    action: "sender_marked_automated",
+    actor: "system",
+    // The reason only; the sender's address stays in inbox_senders (rule 10).
+    details: { socialAccountId: input.socialAccountId, reason: input.reason },
+  });
+  return true;
 }
 
 const POST_STATUS = {

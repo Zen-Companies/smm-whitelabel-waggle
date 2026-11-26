@@ -4,16 +4,23 @@ import { inboxRules, platformLabel } from "@/lib/social/platforms";
 
 // Drafting prompt (docs/tdd.md §10). Bump the version on any wording change; drafts record the
 // model, and ai_usage records cost, so versions can be compared.
-export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-11-20.1";
+export const DRAFT_PROMPT_VERSION: DraftPromptVersion = "2026-11-26.1";
 
 /** An earlier message in the same DM thread (T30): context for the latest one. */
 export interface ThreadMessage {
   from: "customer" | "business";
   text: string;
+  /**
+   * One reply per conversation (26 Nov): a customer message still waiting for an answer, which
+   * the reply to the latest one answers too.
+   */
+  waiting?: boolean;
 }
 
 /** How many earlier messages go into a draft prompt, and how long each may be (T30). */
 export const THREAD_HISTORY_LIMIT = 4;
+/** 2026-11-26.1: more, when that many of the customer's messages are still waiting (one reply). */
+export const THREAD_HISTORY_MAX = 8;
 export const THREAD_MESSAGE_MAX = 300;
 
 export interface KbFact {
@@ -167,6 +174,43 @@ export function draftSystemPromptLanguage(businessName: string): string {
   return draftSystemPromptCalendar(businessName).replace(ENGLISH_OR_TAGLISH, REPLY_LANGUAGE_RULE);
 }
 
+/** Rule 8 until 2026-11-20.1: reply only to the latest message. */
+const LATEST_ONLY_RULE =
+  "and reply only to the latest message. Facts still come only from BUSINESS INFO, never from what anyone said earlier.";
+
+/**
+ * 2026-11-26.1 (Inbox by sender, one reply per conversation): customer messages marked "not
+ * answered yet" are answered in the same reply as the latest one.
+ */
+export function draftSystemPromptOneReply(businessName: string): string {
+  return draftSystemPromptLanguage(businessName).replace(
+    LATEST_ONLY_RULE,
+    "and reply to the latest message. Customer messages marked (not answered yet) are still waiting for an answer: answer them in the same reply, briefly, without repeating yourself. Facts still come only from BUSINESS INFO, never from what anyone said earlier.",
+  );
+}
+
+/** 2026-11-26.1: up to THREAD_HISTORY_MAX earlier messages, the waiting ones marked. */
+export function draftUserPromptOneReply(input: {
+  kind: "comment" | "dm" | "review";
+  category: string;
+  text: string;
+  facts: KbFact[];
+  history?: ThreadMessage[];
+  platform?: string;
+  calendar?: CalendarContext | null;
+}): string {
+  const base = draftUserPromptCalendar({ ...input, history: [] });
+  const earlier = (input.history ?? []).slice(-THREAD_HISTORY_MAX);
+  if (earlier.length === 0) return base;
+  const lines = earlier.map(
+    (m) =>
+      `${m.from === "customer" ? (m.waiting ? "Customer (not answered yet)" : "Customer") : "You"}: ${asMessageData(m.text.slice(0, THREAD_MESSAGE_MAX))}`,
+  );
+  return ["EARLIER MESSAGES (oldest first):", "<earlier>", ...lines, "</earlier>", "", base].join(
+    "\n",
+  );
+}
+
 // Nullable rather than optional: providers' strict structured-output modes need every key.
 export const draftOutputSchema = z.object({
   reply: z.string().min(1).max(1200),
@@ -219,6 +263,8 @@ export const DRAFT_PROMPTS = {
   "2026-11-13.1": { system: draftSystemPromptCalendar, user: draftUserPromptCalendar },
   /** Replies in the customer's language, any language, from the owner's answers only. */
   "2026-11-20.1": { system: draftSystemPromptLanguage, user: draftUserPromptCalendar },
+  /** One reply per conversation: earlier messages still waiting are answered in the same reply. */
+  "2026-11-26.1": { system: draftSystemPromptOneReply, user: draftUserPromptOneReply },
 } as const;
 
 export type DraftPromptVersion = keyof typeof DRAFT_PROMPTS;

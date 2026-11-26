@@ -72,6 +72,16 @@ export type StatusEvent =
    * Waggle sent anything: the waiting draft is dropped
    */
   | "answered_elsewhere"
+  /**
+   * Inbox by sender (26 Nov): email from a newsletter or other automated sender. Never drafted
+   * (no AI spend), never counted as needing the owner.
+   */
+  | "automated_sender"
+  /**
+   * Inbox by sender (26 Nov): one reply answered this message together with the sender's later
+   * one (sent, or the owner handled the conversation), so it needs nothing more.
+   */
+  | "answered_together"
   /** First connect (20 Nov): a pulled item past the reveal's drafts waits undrafted (draft step) */
   | "hold"
   /** ...until the owner opens it, or it is one of the reveal's first drafts */
@@ -89,6 +99,7 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
     escalate: "escalated",
     fail: "failed",
     answered_elsewhere: "handled",
+    automated_sender: "ignored",
   },
   classified: {
     drafted: "drafted",
@@ -114,6 +125,7 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
     escalate: "escalated",
     answered_elsewhere: "handled",
     redraft: "classified",
+    answered_together: "handled",
   },
   sending: {
     sent: "sent",
@@ -135,13 +147,15 @@ const TRANSITIONS: Record<ItemStatus, Partial<Record<StatusEvent, ItemStatus>>> 
     send: "sending",
     answered_elsewhere: "handled",
     redraft: "classified",
+    answered_together: "handled",
   },
-  failed: { handle: "handled", answered_elsewhere: "handled" },
+  failed: { handle: "handled", answered_elsewhere: "handled", answered_together: "handled" },
   handled: {},
   awaiting_draft: {
     request_draft: "classified",
     handle: "handled",
     answered_elsewhere: "handled",
+    answered_together: "handled",
   },
 };
 

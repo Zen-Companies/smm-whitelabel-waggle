@@ -1,4 +1,4 @@
-import { transitionItem } from "@/features/inbox";
+import { closeAnsweredTogether, transitionItem } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { queueForOwners, queueQuietly } from "@/lib/crm";
 import type { SocialProvider } from "@/lib/social/types";
@@ -259,6 +259,8 @@ export async function markHandled(
     actor: input.userId,
     details: {},
   });
+  // One reply per conversation (26 Nov): the sender's earlier waiting messages are handled too.
+  if (!input.asSpam) await closeAnsweredTogether(db, { itemId: item.id, actor: input.userId });
   return { ok: true };
 }
 
