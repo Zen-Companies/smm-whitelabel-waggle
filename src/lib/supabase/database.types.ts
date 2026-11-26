@@ -3146,6 +3146,78 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_checks: {
+        Row: {
+          accounts: Json
+          attempts: number
+          created_at: string
+          email_sent_at: string | null
+          email_status: string
+          finished_at: string | null
+          id: string
+          locked_at: string | null
+          requested_by: string | null
+          started_at: string | null
+          status: string
+          summary: Json | null
+          tally: Json
+          tenant_id: string
+          trigger: string
+          week_start: string | null
+          window_end: string
+          window_start: string
+        }
+        ComputedFields: never
+        Insert: {
+          accounts?: Json
+          attempts?: number
+          created_at?: string
+          email_sent_at?: string | null
+          email_status?: string
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          requested_by?: string | null
+          started_at?: string | null
+          status?: string
+          summary?: Json | null
+          tally?: Json
+          tenant_id: string
+          trigger: string
+          week_start?: string | null
+          window_end: string
+          window_start: string
+        }
+        Update: {
+          accounts?: Json
+          attempts?: number
+          created_at?: string
+          email_sent_at?: string | null
+          email_status?: string
+          finished_at?: string | null
+          id?: string
+          locked_at?: string | null
+          requested_by?: string | null
+          started_at?: string | null
+          status?: string
+          summary?: Json | null
+          tally?: Json
+          tenant_id?: string
+          trigger?: string
+          week_start?: string | null
+          window_end?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_checks_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

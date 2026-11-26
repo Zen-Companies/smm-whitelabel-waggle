@@ -2,7 +2,7 @@
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(85);
+select plan(90);
 
 -- Fixtures, as postgres (bypasses RLS) ---------------------------------------------------------
 
@@ -79,6 +79,11 @@ insert into public.inbox_senders (tenant_id, social_account_id, sender_key, auto
 insert into public.inbox_reads (tenant_id, user_id, group_key) values
   ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'g_a'),
   ('b1000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'g_b');
+
+-- Weekly check-up (26 Nov): each business's runs and numbers.
+insert into public.weekly_checks (tenant_id, trigger, window_start, window_end, summary) values
+  ('a1000000-0000-4000-8000-000000000001', 'check_now', now() - interval '7 days', now(), '{"who": "A"}'),
+  ('b1000000-0000-4000-8000-000000000001', 'check_now', now() - interval '7 days', now(), '{"who": "B"}');
 
 -- The sender key rules the backfill and the insert trigger share.
 select is(private.email_address_in('Carla Mendoza <Carla@Example.com>'), 'carla@example.com',
@@ -175,6 +180,7 @@ select results_eq($$ select caption from public.post_metrics $$, $$ values ('Pos
 select results_eq($$ select error from public.connect_attempts $$, $$ values ('error_a') $$, 'connect_attempts: only A');
 select results_eq($$ select sender_key from public.inbox_senders $$, $$ values ('sender_a') $$, 'inbox_senders: only A');
 select results_eq($$ select group_key from public.inbox_reads $$, $$ values ('g_a') $$, 'inbox_reads: only own');
+select results_eq($$ select summary->>'who' from public.weekly_checks $$, $$ values ('A') $$, 'weekly_checks: only A');
 select results_eq($$ select public.inbox_conversation_count('b1000000-0000-4000-8000-000000000001', array['new']) $$,
   array[0], 'inbox_conversation_count: nothing of B');
 select is_empty($$ select * from public.inbox_conversations('b1000000-0000-4000-8000-000000000001', array['new']) $$,
@@ -256,6 +262,12 @@ select throws_ok($$ insert into public.inbox_reads (tenant_id, user_id, group_ke
   '42501', null, 'cannot mark a row seen for someone else');
 select is_empty($$ update public.inbox_reads set seen_at = now() where tenant_id = 'b1000000-0000-4000-8000-000000000001' returning group_key $$,
   'cannot update B''s reads');
+select throws_ok($$ insert into public.weekly_checks (tenant_id, trigger, window_start, window_end)
+  values ('a1000000-0000-4000-8000-000000000001', 'check_now', now(), now()) $$,
+  '42501', null, 'cannot start a weekly check-up directly (server only)');
+select throws_ok($$ update public.weekly_checks set status = 'done' $$, '42501', null,
+  'cannot change weekly check-ups');
+select throws_ok($$ delete from public.weekly_checks $$, '42501', null, 'cannot delete weekly check-ups');
 
 -- Allowed writes in A's own tenant.
 
@@ -300,6 +312,7 @@ select throws_ok($$ select * from public.kb_entries $$, '42501', null, 'anon can
 select throws_ok($$ select * from public.connect_attempts $$, '42501', null, 'anon cannot read connect_attempts');
 select throws_ok($$ select * from public.inbox_reads $$, '42501', null, 'anon cannot read inbox_reads');
 select throws_ok($$ select * from public.inbox_senders $$, '42501', null, 'anon cannot read inbox_senders');
+select throws_ok($$ select * from public.weekly_checks $$, '42501', null, 'anon cannot read weekly_checks');
 reset role;
 
 select * from finish();
