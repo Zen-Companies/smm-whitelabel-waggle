@@ -11,6 +11,8 @@ import type {
   ProviderComment,
   ProviderCommentReply,
   ProviderConversation,
+  ProviderLog,
+  ProviderLogType,
   ProviderMessage,
   ProviderReview,
   BusinessProfile,
@@ -836,6 +838,75 @@ export class MockSocialProvider implements SocialProvider {
   }
 
   /** Steady sample pay-per-use for one profile (rule 14: no real Zernio in tests or demos). */
+  /**
+   * Staff connect trace: a sign-in link made a minute into the window, then (picked by the window,
+   * so it stays the same on Refresh) Instagram/Facebook connected, a missing Facebook Page, or no
+   * answer yet.
+   */
+  async listLogs(input: {
+    type: ProviderLogType;
+    profileId: string;
+    platform?: string;
+    from: string;
+    to: string;
+  }): Promise<ProviderLog[]> {
+    const from = Date.parse(input.from);
+    const to = Date.parse(input.to);
+    if (!input.profileId || Number.isNaN(from) || Number.isNaN(to)) return [];
+    const platform = input.platform ?? "instagram";
+    const seed = createHash("sha256").update(`${input.profileId}:${input.from}`).digest();
+    const base: ProviderLog = {
+      type: "api_request",
+      status: "success",
+      statusCode: 200,
+      action: null,
+      eventType: null,
+      errorMessage: null,
+      errorCode: null,
+      platform,
+      accountId: null,
+      successUsername: null,
+      successAccountType: null,
+      requestId: seed.toString("hex").slice(0, 24),
+      method: "GET",
+      path: `/api/v1/connect/${platform}`,
+      operationId: "getConnectUrl",
+      createdAt: new Date(from + 60_000).toISOString(),
+    };
+    const out: ProviderLog[] = [];
+    if (input.type !== "connections" && from + 60_000 <= to) out.push(base);
+    const pick = seed[0]! % 3;
+    const at = from + 4 * 60_000;
+    if (input.type !== "api_request" && pick < 2 && at <= to) {
+      out.push({
+        ...base,
+        type: "connections",
+        method: null,
+        path: null,
+        operationId: null,
+        statusCode: null,
+        createdAt: new Date(at).toISOString(),
+        ...(pick === 0
+          ? {
+              status: "success",
+              action: "account.connected",
+              eventType: "connect_success",
+              accountId: `mock_acc_${seed.toString("hex").slice(0, 8)}`,
+              successUsername: "harbourbean",
+              successAccountType: "business",
+            }
+          : {
+              status: "failed",
+              action: "account.connect_failed",
+              eventType: "connect_failed",
+              errorMessage: "No Facebook Pages found for this account",
+              errorCode: "no_pages",
+            }),
+      });
+    }
+    return out.reverse();
+  }
+
   async getUsageCost(input: { profileId: string }): Promise<Record<string, number>> {
     if (!input.profileId) return {};
     return { accounts: 6, xApi: 3.4, sms: 1.1, credits: -12, total: -1.5 };

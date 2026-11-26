@@ -71,6 +71,8 @@ import {
   type WorkflowGraph,
   type CommentAutomationInput,
   type CommentAutomationLogEntry,
+  type ProviderLog,
+  type ProviderLogType,
   type ProviderUsage,
   type SocialPlatform,
   type SocialProvider,
@@ -79,6 +81,7 @@ import {
 } from "./types";
 import { conversationsAccessIssue, conversationsMetaSchema } from "./dm-access";
 import { connectBranding } from "./whitelabel";
+import { isLogPlatform, toProviderLogs } from "./logs-map";
 
 const blogArticleSchema = z.object({
   id: z.string().min(1),
@@ -753,6 +756,43 @@ export class ZernioSocialProvider implements SocialProvider {
         "getUsageCost",
       );
       return r.totals ?? {};
+    });
+  }
+
+  /** See SocialProvider.listLogs. Read only. */
+  async listLogs(input: {
+    type: ProviderLogType;
+    profileId: string;
+    platform?: string;
+    from: string;
+    to: string;
+    limit?: number;
+    signal?: AbortSignal;
+  }): Promise<ProviderLog[]> {
+    return call("listLogs", async (withFetch) => {
+      const { data } = await this.zernio.logs.listLogs(
+        withFetch({
+          signal: input.signal,
+          query: {
+            type: input.type,
+            profileId: input.profileId,
+            from: input.from,
+            to: input.to,
+            days: 90,
+            limit: Math.min(Math.max(input.limit ?? 50, 1), 100),
+            ...(isLogPlatform(input.platform) ? { platform: input.platform } : {}),
+          },
+        }),
+      );
+      if (data === undefined) {
+        throw new SocialProviderError("Zernio listLogs: unexpected response shape", {
+          ambiguous: false,
+        });
+      }
+      const logs = toProviderLogs(data);
+      return input.platform && !isLogPlatform(input.platform)
+        ? logs.filter((l) => l.platform === input.platform)
+        : logs;
     });
   }
 

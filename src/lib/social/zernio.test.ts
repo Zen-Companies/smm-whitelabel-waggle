@@ -2226,3 +2226,50 @@ describe("Posts round 1 (25 Nov): media types, the full pre-check, retry", () =>
     expect(captured).toHaveLength(1);
   });
 });
+
+describe("ZernioSocialProvider.listLogs (staff connect trace)", () => {
+  it("reads GET /v1/logs for one profile and window, read only", async () => {
+    respond = () =>
+      json({
+        logs: [
+          {
+            type: "connections",
+            action: "account.connected",
+            platform: "facebook",
+            status: "success",
+            created_at: "2026-11-26T17:00:00Z",
+            success_username: "harbourbean",
+          },
+        ],
+      });
+    const logs = await provider.listLogs({
+      type: "connections",
+      profileId: "prof_1",
+      platform: "facebook",
+      from: "2026-11-26T16:56:24.000Z",
+      to: "2026-11-26T19:57:24.000Z",
+      limit: 500,
+    });
+    expect(logs).toEqual([
+      expect.objectContaining({ action: "account.connected", successUsername: "harbourbean" }),
+    ]);
+    const req = captured[0]!;
+    expect(req.method).toBe("GET");
+    expect(req.url.pathname).toBe("/api/v1/logs");
+    expect(Object.fromEntries(req.url.searchParams)).toMatchObject({
+      type: "connections",
+      profileId: "prof_1",
+      platform: "facebook",
+      from: "2026-11-26T16:56:24.000Z",
+      to: "2026-11-26T19:57:24.000Z",
+      limit: "100",
+    });
+  });
+
+  it("throws a provider error when Zernio fails", async () => {
+    respond = () => json({ error: "nope" }, 500);
+    await expect(
+      provider.listLogs({ type: "api_request", profileId: "p", from: "a", to: "b" }),
+    ).rejects.toBeInstanceOf(SocialProviderError);
+  });
+});

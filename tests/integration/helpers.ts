@@ -94,6 +94,7 @@ export function fakeZernio() {
     getMailConnectUrl: notImplemented,
     getIntegrationConnectUrl: notImplemented,
     getUsageCost: notImplemented,
+    listLogs: notImplemented,
     discoverEmail: notImplemented,
     connectEmail: notImplemented,
     connectLine: notImplemented,
