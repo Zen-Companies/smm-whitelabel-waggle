@@ -15,6 +15,10 @@ export interface ThreadMessage {
   itemId: string;
   /** T72: customer messages: what they sent besides words. */
   attachments?: Attachment[];
+  /** Inbox by sender (26 Nov): email, the thread's subject (a divider where it changes). */
+  subject?: string | null;
+  /** Inbox by sender: comments, the post it's on (its caption when known). */
+  post?: { caption: string | null; permalink: string | null } | null;
 }
 
 export interface ActivityLine {
@@ -87,7 +91,8 @@ export function activityLines(
           const why = HANDED[String(d.policyReason ?? d.sendReason ?? "")];
           text = why ? `Handed to you: ${why}` : "Handed to you";
         } else if (to === "failed") text = "Couldn't be sent";
-        else if (to === "handled") text = "Marked as handled";
+        else if (to === "handled")
+          text = d.reason === "answered_together" ? null : "Marked as handled";
         else if (to === "ignored") text = "Hidden as spam";
         else if (to === "paused") text = "Waiting for the account to reconnect";
         break;
@@ -122,6 +127,12 @@ export function activityLines(
       case "delivery_failed":
         text = "Reply not delivered";
         break;
+      case "answered_together":
+        text = "Answered together with their later message";
+        break;
+      case "sender_moved_to_for_you":
+        text = "Sender moved to For you";
+        break;
     }
     if (text && out.at(-1)?.text !== text) out.push({ at: a.created_at, text });
   }
@@ -142,7 +153,9 @@ export async function loadConversation(
 ): Promise<{ thread: ThreadMessage[]; context: ConversationContext } | null> {
   const { data: itemRow } = await supabase
     .from("inbound_items")
-    .select("id, kind, conversation_id, author_name, category, social_accounts (platform)")
+    .select(
+      "id, kind, conversation_id, group_key, author_name, category, social_accounts (platform)",
+    )
     .eq("id", itemId)
     .eq("tenant_id", tenantId)
     .maybeSingle();
@@ -151,25 +164,47 @@ export async function loadConversation(
     id: string;
     kind: "comment" | "dm" | "review" | "call";
     conversation_id: string | null;
+    group_key: string | null;
     author_name: string | null;
     category: string | null;
     social_accounts: { platform: string } | null;
   };
 
-  const { data: threadItems } = item.conversation_id
+  // Inbox by sender (26 Nov): the whole row: a person's DMs, an email sender across threads, a
+  // commenter across posts. The latest 50, shown oldest first.
+  const columns =
+    "id, text, received_at, status, attachments, permalink, post_caption, conversations (subject)";
+  const grouped = item.group_key && (item.kind === "dm" || item.kind === "comment");
+  const { data: threadRows } = grouped
     ? await supabase
         .from("inbound_items")
-        .select("id, text, received_at, status, attachments")
+        .select(columns)
         .eq("tenant_id", tenantId)
-        .eq("conversation_id", item.conversation_id)
-        .neq("status", "ignored")
-        .order("received_at")
+        .eq("group_key", item.group_key!)
+        .or(`status.neq.ignored,id.eq.${item.id}`)
+        .order("received_at", { ascending: false })
         .limit(50)
-    : await supabase
-        .from("inbound_items")
-        .select("id, text, received_at, status, attachments")
-        .eq("id", item.id);
-  const ids = (threadItems ?? []).map((t) => t.id);
+    : item.conversation_id
+      ? await supabase
+          .from("inbound_items")
+          .select(columns)
+          .eq("tenant_id", tenantId)
+          .eq("conversation_id", item.conversation_id)
+          .or(`status.neq.ignored,id.eq.${item.id}`)
+          .order("received_at", { ascending: false })
+          .limit(50)
+      : await supabase.from("inbound_items").select(columns).eq("id", item.id);
+  const threadItems = ((threadRows ?? []) as unknown as {
+    id: string;
+    text: string;
+    received_at: string;
+    status: string;
+    attachments: unknown;
+    permalink: string | null;
+    post_caption: string | null;
+    conversations: { subject: string | null } | null;
+  }[]).reverse();
+  const ids = threadItems.map((t) => t.id);
 
   const [{ data: drafts }, { data: leads }, { data: audit }, stats] = await Promise.all([
     supabase
@@ -201,7 +236,7 @@ export async function loadConversation(
   ]);
 
   const thread: ThreadMessage[] = [];
-  for (const t of threadItems ?? []) {
+  for (const t of threadItems) {
     thread.push({
       key: `c-${t.id}`,
       from: "customer",
@@ -209,6 +244,9 @@ export async function loadConversation(
       at: t.received_at,
       itemId: t.id,
       attachments: parseAttachments(t.attachments),
+      subject: t.conversations?.subject ?? null,
+      post:
+        item.kind === "comment" ? { caption: t.post_caption, permalink: t.permalink } : null,
     });
   }
   for (const d of drafts ?? []) {
@@ -242,7 +280,7 @@ export async function loadConversation(
         kind: item.kind,
         messages: Math.max(1, seen.length),
         firstSeenAt:
-          seen[0]?.received_at ?? (threadItems ?? [])[0]?.received_at ?? new Date().toISOString(),
+          seen[0]?.received_at ?? threadItems[0]?.received_at ?? new Date().toISOString(),
       },
       lead: leads?.[0]
         ? {
