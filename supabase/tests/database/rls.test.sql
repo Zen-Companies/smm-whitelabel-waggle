@@ -2,7 +2,7 @@
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(70);
+select plan(85);
 
 -- Fixtures, as postgres (bypasses RLS) ---------------------------------------------------------
 
@@ -71,6 +71,21 @@ values ('evt_1', 'zernio', 'message.received', '{}');
 insert into public.connect_attempts (tenant_id, user_id, platform, outcome, error) values
   ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'instagram', 'failed', 'error_a'),
   ('b1000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'facebook', 'failed', 'error_b');
+
+-- Inbox by sender (26 Nov): who last opened a row, and automated senders.
+insert into public.inbox_senders (tenant_id, social_account_id, sender_key, automated) values
+  ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'sender_a', true),
+  ('b1000000-0000-4000-8000-000000000001', 'b2000000-0000-4000-8000-000000000001', 'sender_b', true);
+insert into public.inbox_reads (tenant_id, user_id, group_key) values
+  ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'g_a'),
+  ('b1000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'g_b');
+
+-- The sender key rules the backfill and the insert trigger share.
+select is(private.email_address_in('Carla Mendoza <Carla@Example.com>'), 'carla@example.com',
+  'sender key: the address out of a display name, lower-case');
+select is(private.fallback_sender_key('comment', null, ' @Jess.Bakes '), 'name:jess.bakes',
+  'sender key: a comment by its handle');
+select is(private.fallback_sender_key('review', null, 'Ben'), null, 'sender key: none for a review');
 
 -- Schema rules (CLAUDE.md rule 9) -------------------------------------------------------------
 
@@ -158,6 +173,12 @@ select results_eq($$ select title from public.kb_suggestions $$, $$ values ('Par
 select results_eq($$ select data->>'who' from public.analytics_snapshots $$, $$ values ('A') $$, 'analytics_snapshots: only A');
 select results_eq($$ select caption from public.post_metrics $$, $$ values ('Post A') $$, 'post_metrics: only A');
 select results_eq($$ select error from public.connect_attempts $$, $$ values ('error_a') $$, 'connect_attempts: only A');
+select results_eq($$ select sender_key from public.inbox_senders $$, $$ values ('sender_a') $$, 'inbox_senders: only A');
+select results_eq($$ select group_key from public.inbox_reads $$, $$ values ('g_a') $$, 'inbox_reads: only own');
+select results_eq($$ select public.inbox_conversation_count('b1000000-0000-4000-8000-000000000001', array['new']) $$,
+  array[0], 'inbox_conversation_count: nothing of B');
+select is_empty($$ select * from public.inbox_conversations('b1000000-0000-4000-8000-000000000001', array['new']) $$,
+  'inbox_conversations: nothing of B');
 
 -- Writes on B's rows: updates and deletes match nothing, inserts are refused.
 
@@ -222,6 +243,19 @@ select throws_ok($$ insert into public.connect_attempts (tenant_id, platform) va
   '42501', null, 'cannot insert connect_attempts');
 select throws_ok($$ update public.connect_attempts set outcome = 'connected' $$, '42501', null, 'cannot update connect_attempts');
 select throws_ok($$ delete from public.connect_attempts $$, '42501', null, 'cannot delete connect_attempts');
+select throws_ok($$ insert into public.inbox_senders (tenant_id, social_account_id, sender_key)
+  values ('a1000000-0000-4000-8000-000000000001', 'a2000000-0000-4000-8000-000000000001', 'x') $$,
+  '42501', null, 'cannot insert inbox_senders (server only)');
+select throws_ok($$ update public.inbox_senders set moved_to_for_you_at = now() $$, '42501', null,
+  'cannot update inbox_senders (server only)');
+select throws_ok($$ insert into public.inbox_reads (tenant_id, user_id, group_key)
+  values ('b1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'g') $$,
+  '42501', null, 'cannot mark a row seen in B');
+select throws_ok($$ insert into public.inbox_reads (tenant_id, user_id, group_key)
+  values ('a1000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000001', 'g') $$,
+  '42501', null, 'cannot mark a row seen for someone else');
+select is_empty($$ update public.inbox_reads set seen_at = now() where tenant_id = 'b1000000-0000-4000-8000-000000000001' returning group_key $$,
+  'cannot update B''s reads');
 
 -- Allowed writes in A's own tenant.
 
@@ -238,6 +272,9 @@ select results_eq($$ update public.autonomy_settings set mode = 'auto' where cat
   $$ values ('auto') $$, 'can change own autonomy mode');
 select results_eq($$ delete from public.kb_entries where title = 'New' returning title $$, $$ values ('New') $$,
   'can delete own kb entry');
+select lives_ok($$ insert into public.inbox_reads (tenant_id, user_id, group_key)
+  values ('a1000000-0000-4000-8000-000000000001', 'a0000000-0000-4000-8000-000000000001', 'g_new') $$,
+  'can mark own row seen');
 
 -- Back to postgres: B's rows are untouched -------------------------------------------------------
 
@@ -261,6 +298,8 @@ select throws_ok($$ select * from public.tenants $$, '42501', null, 'anon cannot
 select throws_ok($$ select * from public.inbound_items $$, '42501', null, 'anon cannot read inbound items');
 select throws_ok($$ select * from public.kb_entries $$, '42501', null, 'anon cannot read kb entries');
 select throws_ok($$ select * from public.connect_attempts $$, '42501', null, 'anon cannot read connect_attempts');
+select throws_ok($$ select * from public.inbox_reads $$, '42501', null, 'anon cannot read inbox_reads');
+select throws_ok($$ select * from public.inbox_senders $$, '42501', null, 'anon cannot read inbox_senders');
 reset role;
 
 select * from finish();

@@ -1108,10 +1108,81 @@ export type Database = {
         }
         Relationships: []
       }
+      inbox_reads: {
+        Row: {
+          group_key: string
+          seen_at: string
+          tenant_id: string
+          user_id: string
+        }
+        Insert: {
+          group_key: string
+          seen_at?: string
+          tenant_id: string
+          user_id: string
+        }
+        Update: {
+          group_key?: string
+          seen_at?: string
+          tenant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_reads_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbox_senders: {
+        Row: {
+          automated: boolean
+          automated_reason: string | null
+          moved_by: string | null
+          moved_to_for_you_at: string | null
+          sender_key: string
+          social_account_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          automated?: boolean
+          automated_reason?: string | null
+          moved_by?: string | null
+          moved_to_for_you_at?: string | null
+          sender_key: string
+          social_account_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          automated?: boolean
+          automated_reason?: string | null
+          moved_by?: string | null
+          moved_to_for_you_at?: string | null
+          sender_key?: string
+          social_account_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbox_senders_social_account_id_tenant_id_fkey"
+            columns: ["social_account_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "social_accounts"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
       inbound_items: {
         Row: {
           catch_up_id: string | null
           draft_requested_at: string | null
+          group_key: string | null
           post_caption: string | null
           answered_on_platform_at: string | null
           attachments: Json
@@ -1136,6 +1207,7 @@ export type Database = {
           received_at: string
           review_recommends: boolean | null
           review_rating: number | null
+          sender_key: string | null
           social_account_id: string
           status: string
           tenant_id: string
@@ -1150,6 +1222,7 @@ export type Database = {
         Insert: {
           catch_up_id?: string | null
           draft_requested_at?: string | null
+          group_key?: never
           post_caption?: string | null
           answered_on_platform_at?: string | null
           attachments?: Json
@@ -1174,6 +1247,7 @@ export type Database = {
           received_at: string
           review_recommends?: boolean | null
           review_rating?: number | null
+          sender_key?: string | null
           social_account_id: string
           status?: string
           tenant_id: string
@@ -1187,6 +1261,7 @@ export type Database = {
         Update: {
           catch_up_id?: string | null
           draft_requested_at?: string | null
+          group_key?: never
           post_caption?: string | null
           answered_on_platform_at?: string | null
           attachments?: Json
@@ -1211,6 +1286,7 @@ export type Database = {
           received_at?: string
           review_recommends?: boolean | null
           review_rating?: number | null
+          sender_key?: string | null
           social_account_id?: string
           status?: string
           tenant_id?: string
@@ -3295,6 +3371,43 @@ export type Database = {
         Returns: {
           from_status: string
           item_id: string
+        }[]
+      }
+      inbox_conversation_count: {
+        Args: {
+          p_automated?: boolean
+          p_customers_only?: boolean
+          p_statuses: string[]
+          p_tenant_id: string
+        }
+        Returns: number
+      }
+      inbox_conversations: {
+        Args: {
+          p_automated?: boolean
+          p_customers_only?: boolean
+          p_flags?: string[]
+          p_limit?: number
+          p_platforms?: string[]
+          p_sort?: string
+          p_statuses: string[]
+          p_tenant_id: string
+          p_types?: string[]
+        }
+        Returns: {
+          automated: boolean
+          group_key: string
+          item_id: string
+          latest_at: string
+          messages: number
+          new_messages: number
+          platform: string
+          posts: number
+          rank: number
+          sender_key: string
+          social_account_id: string
+          threads: number
+          waiting: number
         }[]
       }
       transition_item: {

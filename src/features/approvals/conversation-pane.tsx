@@ -15,16 +15,43 @@ import { isEmailPlatform, readableEmailText } from "@/features/inbox";
 // logo and Open in <app> stays put; under it the thread (on a warmer shade) and the footer (the
 // composer, a problem box or the sent status) scroll together, so a long message gets the room.
 
+/**
+ * Pure: where the "N new" line goes (Inbox by sender, 26 Nov): before the first customer message
+ * after the viewer last opened the row, or, never opened, before the last `count` customer
+ * messages. -1 for none.
+ */
+export function newLineIndex(
+  thread: Pick<ThreadMessage, "from" | "at">[],
+  count: number,
+  since: string | null,
+): number {
+  if (count <= 0) return -1;
+  if (since) return thread.findIndex((m) => m.from === "customer" && m.at > since);
+  let left = count;
+  for (let i = thread.length - 1; i >= 0; i--) {
+    if (thread[i].from !== "customer") continue;
+    left -= 1;
+    if (left === 0) return i;
+  }
+  return thread.findIndex((m) => m.from === "customer");
+}
+
 export function ConversationPane({
   entry,
   thread,
   footer,
+  newCount = 0,
+  newSince = null,
 }: {
   entry: InboxEntry;
   thread: ThreadMessage[];
   footer: ReactNode;
+  /** Inbox by sender (26 Nov): the row's "N new", and when the viewer last opened it. */
+  newCount?: number;
+  newSince?: string | null;
 }) {
   const name = entry.authorName ?? "A customer";
+  const newAt = newLineIndex(thread, newCount, newSince);
   const open = openOnPlatformHref(entry);
   return (
     <section
@@ -94,6 +121,43 @@ export function ConversationPane({
             return (
               <li key={m.key} className="flex flex-col gap-3">
                 {showDay && <p className="label self-center">{day}</p>}
+                {i === newAt && (
+                  <p className="text-honey-text flex items-center gap-2 text-xs font-semibold">
+                    <span className="bg-honey-border h-px flex-1" aria-hidden />
+                    {newCount} new
+                    <span className="bg-honey-border h-px flex-1" aria-hidden />
+                  </p>
+                )}
+                {!mine && m.subject && m.subject !== prevSubject(thread, i) && (
+                  <p className="text-ink-2 self-start text-[13px] font-semibold">
+                    Subject: {m.subject}
+                  </p>
+                )}
+                {!mine && m.post && postKey(m.post) !== prevPost(thread, i) && (
+                  <p className="text-ink-3 self-start text-[13px]">
+                    Comment on{" "}
+                    {m.post.caption ? (
+                      <span className="text-ink-2 font-medium">
+                        &ldquo;{postTitleLine(m.post.caption)}&rdquo;
+                      </span>
+                    ) : (
+                      "your post"
+                    )}
+                    {m.post.permalink && (
+                      <>
+                        {" · "}
+                        <a
+                          href={m.post.permalink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="link-inline"
+                        >
+                          See the post
+                        </a>
+                      </>
+                    )}
+                  </p>
+                )}
                 <div
                   className={
                     mine
@@ -241,4 +305,28 @@ export function ContextPanel({ context }: { context: ConversationContext }) {
       )}
     </aside>
   );
+}
+
+/** The subject of the customer message before `i`, for a divider only where it changes. */
+function prevSubject(thread: ThreadMessage[], i: number): string | null {
+  for (let j = i - 1; j >= 0; j--) if (thread[j].from === "customer") return thread[j].subject ?? null;
+  return null;
+}
+
+const postKey = (post: NonNullable<ThreadMessage["post"]>) =>
+  post.permalink ?? post.caption ?? "";
+
+/** The post of the comment before `i`: "Comment on …" shows where the post changes. */
+function prevPost(thread: ThreadMessage[], i: number): string | null {
+  for (let j = i - 1; j >= 0; j--) {
+    const p = thread[j].post;
+    if (thread[j].from === "customer" && p) return postKey(p);
+  }
+  return null;
+}
+
+/** A caption's first line, short. */
+function postTitleLine(caption: string): string {
+  const first = caption.trim().split(/\r?\n/)[0] ?? "";
+  return first.length > 60 ? `${first.slice(0, 57).trimEnd()}…` : first;
 }

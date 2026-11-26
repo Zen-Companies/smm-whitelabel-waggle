@@ -40,11 +40,11 @@ export async function AppHeader({
   const fullName =
     typeof user.user_metadata?.full_name === "string" ? user.user_metadata.full_name.trim() : "";
   const supabase = await createServerSupabase();
-  const { count } = await supabase
-    .from("inbound_items")
-    .select("*", { count: "exact", head: true })
-    .eq("tenant_id", tenant.id)
-    .in("status", [...needsYouStatuses]);
+  // Inbox by sender (26 Nov): the Inbox count is people (rows), not messages, as on the page.
+  const { data: count } = await supabase.rpc("inbox_conversation_count", {
+    p_tenant_id: tenant.id,
+    p_statuses: [...needsYouStatuses],
+  });
 
   return (
     <header className="border-line bg-surface sticky top-0 z-40 border-b">
