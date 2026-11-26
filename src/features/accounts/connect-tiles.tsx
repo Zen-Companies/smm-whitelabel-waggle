@@ -5,6 +5,7 @@ import { hasSetupCard, PLATFORM_IDS, PLATFORMS, type Platform } from "@/lib/soci
 import { ConnectButton } from "./connect-button";
 import { StateLabel } from "@/components/app/state-mark";
 import { statusOf, type PlatformStatus, type PlatformStatuses } from "@/features/platforms";
+import type { UnfinishedConnect } from "./connect-unfinished";
 
 /**
  * Connected somewhere else (More connections, Settings → Phone or Messaging), so no tile: one
@@ -41,7 +42,15 @@ function lines(p: Platform): { line: string; note: string | null } {
   return { line: p.line, note: p.needs };
 }
 
-function Tile({ p, status }: { p: Platform; status: PlatformStatus }) {
+function Tile({
+  p,
+  status,
+  unfinished,
+}: {
+  p: Platform;
+  status: PlatformStatus;
+  unfinished: UnfinishedConnect | null;
+}) {
   const { line, note } = lines(p);
   return (
     // Opening the note (18 Nov) widens the tile to the whole row.
@@ -65,6 +74,8 @@ function Tile({ p, status }: { p: Platform; status: PlatformStatus }) {
           id={p.id}
           label={p.label}
           mark={<PlatformMark platform={p.id} size={40} />}
+          unfinished={unfinished?.platform === p.id ? unfinished : null}
+          trouble
         />
       ) : (
         <StateLabel state="soon" className="text-xs">
@@ -81,12 +92,14 @@ function Group({
   hint,
   platforms,
   statuses,
+  unfinished,
 }: {
   id: string;
   title: string;
   hint?: string;
   platforms: Platform[];
   statuses: PlatformStatuses;
+  unfinished: UnfinishedConnect | null;
 }) {
   if (!platforms.length) return null;
   return (
@@ -99,7 +112,7 @@ function Group({
       </div>
       <ul className="grid [grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-3">
         {platforms.map((p) => (
-          <Tile key={p.id} p={p} status={statusOf(statuses, p.id)} />
+          <Tile key={p.id} p={p} status={statusOf(statuses, p.id)} unfinished={unfinished} />
         ))}
       </ul>
     </section>
@@ -114,9 +127,12 @@ function Group({
 export function ConnectTiles({
   exclude = [],
   statuses,
+  unfinished = null,
 }: {
   exclude?: string[];
   statuses: PlatformStatuses;
+  /** A connect that never came back: its tile says "Didn't finish?" (26 Nov). */
+  unfinished?: UnfinishedConnect | null;
 }) {
   // Staff → Platforms (18 Nov): Hidden platforms aren't shown at all.
   const all = PLATFORM_IDS.map((id) => PLATFORMS[id]).filter(
@@ -133,6 +149,7 @@ export function ConnectTiles({
         hint="Comments, DMs or reviews come into your inbox and Waggle drafts the replies. You can post here too."
         platforms={ready.filter((p) => p.kind === "answers")}
         statuses={statuses}
+        unfinished={unfinished}
       />
       <Group
         id="tiles-posts"
@@ -140,8 +157,15 @@ export function ConnectTiles({
         hint="These platforms don't let apps read messages, so Waggle posts for you but can't answer."
         platforms={ready.filter((p) => p.kind === "posts")}
         statuses={statuses}
+        unfinished={unfinished}
       />
-      <Group id="tiles-soon" title="Coming soon" platforms={soon} statuses={statuses} />
+      <Group
+        id="tiles-soon"
+        title="Coming soon"
+        platforms={soon}
+        statuses={statuses}
+        unfinished={null}
+      />
     </div>
   );
 }

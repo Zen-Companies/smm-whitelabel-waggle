@@ -37,3 +37,6 @@ export {
 } from "./health";
 export { CONNECT_COOKIE } from "./connect-go";
 export { safeContinueUrl } from "./connect-note";
+export { loadUnfinishedConnect } from "./connect-unfinished-load";
+export { ConnectTrouble, UnfinishedNote } from "./connect-unfinished-note";
+export type { UnfinishedConnect } from "./connect-unfinished";
