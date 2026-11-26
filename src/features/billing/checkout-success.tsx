@@ -1,20 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { BeeBody } from "@/components/app/bee";
 import { BeeDance } from "@/components/app/bee-setup";
 import { buttonVariants } from "@/components/ui/button";
 import { ConversionTag } from "@/features/ad-tracking/client";
-import { platformLabel } from "@/lib/social/platforms";
 import { cn } from "cn";
+import { CARRY_ON_DELAY_MS, type CarryOnActions, type CarryOnPlan } from "./carry-on";
 import type { CheckoutSuccess as Confirmed } from "./popup-actions";
 import type { PopupContent } from "./popup-copy";
-import type { CarryOn } from "./upgrade-popup";
 
 // After checkout (board "Promotions in the app", 4 · After checkout, approved 24 Nov): the bee
 // dances once while honeycombs burst out and fade, then the plan, the free month in words (never a date, 26 Nov), what's
 // unlocked (the pop-up's own ticks, from the plans), the friend's or banked month when one
-// applied, and one primary button: the tapped action carried on, or Go to my Inbox. Reduced
+// applied, then what happens next: the tapped action carries on by itself after about 2 seconds
+// (Playbook round 2, 26 Nov), with "Stay here instead"; staying leaves Go to my Inbox. Reduced
 // motion: no burst, no dance, a still bee on three filled honeycombs.
 
 const BURST: { dx: number; dy: number; honey: boolean }[] = [
@@ -89,18 +91,139 @@ function SmallBee() {
   );
 }
 
+/**
+ * What happens next (Playbook round 2, approved 26 Nov): "Opening TikTok… So you can finish
+ * connecting it. Stay here instead", then the tap carries on by itself. Only ever shown once
+ * Stripe has confirmed (the success moment). A switch that can't be saved says so in place.
+ */
+function CarryOnLine({
+  plan,
+  actions,
+  back,
+  onDone,
+  onStay,
+}: {
+  plan: CarryOnPlan;
+  actions: CarryOnActions;
+  back: string;
+  onDone: () => void;
+  onStay: () => void;
+}) {
+  const router = useRouter();
+  const connectForm = useRef<HTMLFormElement>(null);
+  const [state, setState] = useState<"waiting" | "running" | { error: string; href: string }>(
+    "waiting",
+  );
+  const run = useEffectEvent(async () => {
+    setState("running");
+    const step = plan.step;
+    switch (step.kind) {
+      case "connect":
+        connectForm.current?.requestSubmit();
+        return;
+      case "go":
+        router.push(step.href);
+        return;
+      case "stay":
+        onDone();
+        return;
+      case "worker_bee": {
+        const fd = new FormData();
+        fd.set("category", step.topic);
+        fd.set("mode", "auto");
+        const result = actions.workerBee
+          ? await actions.workerBee({}, fd).catch(() => ({ error: "x", saved: false }))
+          : { error: "x" };
+        if (result.error) {
+          setState({
+            error: "Couldn’t switch it on. Do it in How Waggle replies.",
+            href: step.href.replace(/&on=[a-z]+/, ""),
+          });
+          return;
+        }
+        router.push(step.href);
+        return;
+      }
+      case "write_replies": {
+        const result = actions.writeReplies
+          ? await actions.writeReplies().catch(() => ({ error: "x" }))
+          : { error: "x" };
+        if ("error" in result) {
+          setState({
+            error: "Couldn’t start the replies. Open a message in your Inbox to answer it.",
+            href: "/inbox",
+          });
+          return;
+        }
+        router.push(`/inbox?answering=${result.count}`);
+        return;
+      }
+    }
+  });
+  useEffect(() => {
+    if (state !== "waiting") return;
+    const t = setTimeout(() => void run(), CARRY_ON_DELAY_MS);
+    return () => clearTimeout(t);
+  }, [state]);
+
+  if (typeof state === "object") {
+    return (
+      <p
+        role="alert"
+        className="border-danger-border bg-danger-soft text-danger m-0 rounded-xl border px-3 py-2 text-center text-[13px]"
+      >
+        {state.error}{" "}
+        <Link href={state.href} onClick={onDone} className="font-semibold underline">
+          Open it
+        </Link>
+      </p>
+    );
+  }
+  return (
+    <div className="border-honey-border bg-honey-tint flex flex-col items-center gap-0.5 rounded-xl border px-3 py-2.5 text-center">
+      {plan.step.kind === "connect" && actions.connect && (
+        <form ref={connectForm} action={actions.connect} className="hidden">
+          <input type="hidden" name="platform" value={plan.step.platform} />
+          <input type="hidden" name="back" value={back} />
+        </form>
+      )}
+      <span role="status" className="text-[14px] font-semibold">
+        {plan.doing}
+      </span>
+      <span className="text-ink-2 text-[12.5px]">{plan.why}</span>
+      {state === "waiting" && (
+        <button
+          type="button"
+          onClick={onStay}
+          className="text-ink-2 hover:text-ink mt-1 min-h-9 text-[13px] font-semibold underline"
+        >
+          Stay here instead
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** The success moment, once Stripe confirmed the checkout. */
 export function CheckoutSuccess({
   content,
   confirmed,
   carryOn,
+  actions,
+  back,
   onDone,
 }: {
   content: PopupContent;
   confirmed: Confirmed;
-  carryOn: CarryOn;
+  /** What the tap carries on to, by itself after the moment. */
+  carryOn: CarryOnPlan | null;
+  actions: CarryOnActions;
+  /** The page it's on, for a connect to come back to. */
+  back: string;
   onDone: () => void;
 }) {
+  const [stayed, setStayed] = useState(false);
+  const going = !!carryOn && !stayed;
   // No date in the pop-up (Jason, 26 Nov: "never say it ends on a date"); the day of the first
   // charge stays on Your plan. With a trial, the pop-up's own words: "Your free month has started."
   const started = confirmed.freeUntil
@@ -108,9 +231,7 @@ export function CheckoutSuccess({
       ? content.success
       : "Your free trial has started."
     : null;
-  const inboxClass = carryOn
-    ? "text-ink hover:text-ink-2 inline-flex min-h-10 items-center justify-center text-[13px] font-semibold"
-    : buttonVariants({ variant: "primary" });
+  const inboxClass = buttonVariants({ variant: "primary" });
   return (
     <div className="flex flex-col gap-3 sm:mt-2">
       {confirmed.tag && <ConversionTag {...confirmed.tag} />}
@@ -166,27 +287,21 @@ export function CheckoutSuccess({
           {line}
         </p>
       ))}
-      {carryOn?.kind === "connect" && (
-        <form action={carryOn.action} className="flex flex-col">
-          <input type="hidden" name="platform" value={carryOn.platform} />
-          <input type="hidden" name="back" value={carryOn.back} />
-          <button type="submit" className={buttonVariants({ variant: "primary" })}>
-            Connect {platformLabel(carryOn.platform)}
-          </button>
-        </form>
+      {going && carryOn ? (
+        <CarryOnLine
+          plan={carryOn}
+          actions={actions}
+          back={back}
+          onDone={onDone}
+          onStay={() => setStayed(true)}
+        />
+      ) : (
+        <>
+          <Link href="/inbox" onClick={onDone} className={cn(inboxClass)}>
+            Go to my Inbox
+          </Link>
+        </>
       )}
-      {carryOn?.kind === "link" && (
-        <Link
-          href={carryOn.href}
-          onClick={onDone}
-          className={buttonVariants({ variant: "primary" })}
-        >
-          {carryOn.label}
-        </Link>
-      )}
-      <Link href="/inbox" onClick={onDone} className={cn(inboxClass)}>
-        Go to my Inbox
-      </Link>
     </div>
   );
 }

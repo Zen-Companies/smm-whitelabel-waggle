@@ -41,8 +41,11 @@ export function isAutomationKind(value: string): value is Kind {
 export async function AutomationsView({
   kind: raw,
   top,
+  followupsOn = false,
 }: {
   kind?: string;
+  /** After paying for follow-ups (Playbook round 2): the card opens switched on, to check. */
+  followupsOn?: boolean;
   /** Under the Teach Waggle tabs (the "Get Waggle ready" line). */
   top?: React.ReactNode;
 }) {
@@ -144,6 +147,7 @@ export async function AutomationsView({
         templates={whatsappTemplates}
         canEdit={canEdit}
         included={followupsIncluded}
+        startOn={followupsOn}
       />
       <nav aria-label="Automation kinds" className="tabs">
         {KINDS.map((k) => (

@@ -4,6 +4,9 @@ import { offerTrialDays } from "./referrals";
 import { billingBanner } from "./banners";
 import { loadBilling } from "./billing-store";
 import { BillingPopups, type OutOfReplies, type ReplyUsage } from "./billing-popups";
+import type { CarryOnActions } from "./carry-on";
+import type { OpenDm } from "./dm-countdown";
+import { loadOpenDms } from "./open-dms";
 import type { OfferOrg } from "./offer-dialogs";
 import { checkoutTrialDays } from "./plans";
 import { perDayFromWeek, type ReplyPain } from "./reply-pain";
@@ -53,6 +56,7 @@ async function loadHostProps(input: {
   banner: "out" | "nudge" | null;
   out: OutOfReplies | null;
   usage: ReplyUsage | null;
+  openDms: OpenDm[];
 }> {
   const { orgId, isOwner, canInvite, tenantId, needsYouStatuses } = input;
   const db = getServiceClient();
@@ -90,10 +94,16 @@ async function loadHostProps(input: {
         reached: status.limit.level === "reached",
       }
     : null;
+  // The Try Solo banner's DM countdown (Playbook round 2): only while it can show (Free).
+  const openDms =
+    banner === "nudge" && tenantId
+      ? await loadOpenDms(db, tenantId, needsYouStatuses, now).catch(() => [])
+      : [];
   return {
     banner,
     out,
     usage,
+    openDms,
     org: {
       orgId,
       isOwner,
@@ -115,6 +125,8 @@ export async function BillingHost({
   tenantId = null,
   needsYouStatuses = [],
   connect,
+  workerBee,
+  writeReplies,
   showBanner = true,
 }: {
   orgId: string;
@@ -128,6 +140,10 @@ export async function BillingHost({
   needsYouStatuses?: readonly string[];
   /** Connect an account (accounts' server action): after paying, the tapped connect carries on. */
   connect?: (formData: FormData) => Promise<void>;
+  /** After paying for Worker Bee, that kind is switched on (Reply rules' server action). */
+  workerBee?: CarryOnActions["workerBee"];
+  /** After paying when out of replies, the messages that waited get replies written. */
+  writeReplies?: CarryOnActions["writeReplies"];
   showBanner?: boolean;
 }) {
   const props = await loadHostProps({
@@ -151,6 +167,8 @@ export async function BillingHost({
       tenantId={tenantId}
       needsYou={needsYouStatuses}
       connect={connect}
+      workerBee={workerBee}
+      writeReplies={writeReplies}
       showBanner={showBanner}
     />
   );

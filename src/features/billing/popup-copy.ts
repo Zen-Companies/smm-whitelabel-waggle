@@ -8,6 +8,7 @@ import {
   type Plan,
   type PlanId,
 } from "./plans";
+import { countdownOf, popupCountdown, type OpenDm } from "./dm-countdown";
 import type { ReplyPain } from "./reply-pain";
 import type { OfferReason } from "./upgrade";
 
@@ -117,6 +118,8 @@ export interface PopupFacts {
   pain: ReplyPain | null;
   /** This month's AI replies. */
   usage: { used: number; allowance: number; resetsOn: string } | null;
+  /** Open DMs (waiting for the owner) still inside their reply window, nearest first. */
+  openDms: OpenDm[];
 }
 
 export const NO_FACTS: PopupFacts = {
@@ -125,6 +128,7 @@ export const NO_FACTS: PopupFacts = {
   scan: null,
   pain: null,
   usage: null,
+  openDms: [],
 };
 
 /** A run of text, bold or not: the honey box's "**13 people** wanted to buy…". */
@@ -158,6 +162,11 @@ export interface PopupContent {
   headline: string;
   sub: string;
   honey: Seg[] | null;
+  /**
+   * The DM countdown (Playbook round 2, 26 Nov) under the headline in B, C and F: "4 DMs close in
+   * 3 h. …". Red under 1 hour. Null when no open DM closes within 24 hours.
+   */
+  countdown: { segs: Seg[]; urgent: boolean } | null;
   ticks: Tick[];
   /** "Add a card, pay $0 today. Then $49 a month after your free month. …" (never a date, Jason). */
   note: string;
@@ -349,6 +358,7 @@ export function popupContent(input: PopupInput): PopupContent {
     : { title: "+ add", text: "Not connected", tone: "open" };
   const base = {
     plan: planId,
+    countdown: popupCountdown(version, countdownOf(facts.openDms ?? [], input.now), solo.name),
     ticks:
       version.v === "team" ? teamTicks(plan, free, version.sub, used) : soloTicks(solo, free, used),
     note: pay.note,
