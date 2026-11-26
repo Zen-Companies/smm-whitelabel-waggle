@@ -142,6 +142,27 @@ export function customPriceLine(plan: Plan): string {
 export const TRIAL = { days: 30, cardRequired: true } as const;
 
 /**
+ * Pure: the trial's pay button (Walter's Playbook, 26 Nov): "Start my free month", or with more
+ * days from a promotion or a friend's link "Start my 60 free days".
+ */
+export function startTrialLabel(days: number = TRIAL.days): string {
+  return days === TRIAL.days
+    ? "Start my free month"
+    : `Start my ${days.toLocaleString("en-US")} free days`;
+}
+
+/** Pure: the trial in words, never a date (Jason): "your free month", "your 60 free days". */
+export function yourTrial(days: number = TRIAL.days): string {
+  return days === TRIAL.days ? "your free month" : `your ${days.toLocaleString("en-US")} free days`;
+}
+
+/** Pure: the success line once the trial started: "Your free month has started." */
+export function trialStartedLine(days: number = TRIAL.days): string {
+  const t = yourTrial(days);
+  return `${t[0]!.toUpperCase()}${t.slice(1)} ${days === TRIAL.days ? "has" : "have"} started.`;
+}
+
+/**
  * The trial before the free month (7 days). A stored trial whose length is unknown (a bill from
  * before org_billing.trial_days, 23 Nov) is read as this one, never as the free month.
  */
@@ -360,4 +381,18 @@ export function planBullets(plan: Plan): string[] {
     ...(plan.features.leadsFlagged ? ["Leads and complaints flagged"] : []),
     ...(plan.features.followUps ? ["Follow-ups for leads that go quiet"] : []),
   ];
+}
+
+/**
+ * Connections that don't count as accounts (decided 26 Nov, as Zernio counts them: "SMS and voice
+ * capability on a number never count"; docs.zernio.com, What counts as a connected account). A
+ * WhatsApp number and an email inbox (Google, Microsoft, IMAP) do count, once each.
+ */
+export const UNCOUNTED_PLATFORMS = ["phone", "sms"] as const;
+/** The same list as a PostgREST `not.in` filter value. */
+export const UNCOUNTED_FILTER = `(${UNCOUNTED_PLATFORMS.join(",")})`;
+
+/** Pure: whether a connection on this platform counts toward the plan's accounts. */
+export function countsAsAccount(platform: string): boolean {
+  return !(UNCOUNTED_PLATFORMS as readonly string[]).includes(platform);
 }

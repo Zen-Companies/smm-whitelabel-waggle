@@ -10,6 +10,8 @@ import { writeAudit } from "@/lib/audit";
 import { getSocialProvider } from "@/lib/social";
 import { isIntegrationKind, SocialProviderError } from "@/lib/social/types";
 import { getServiceClient } from "@/lib/supabase/service";
+import { accountsFullHref } from "./account-room";
+import { DEFAULT_RETURN } from "./connect-return";
 import { handleAccountConnected } from "./events";
 import {
   CONNECTED_PLATFORMS,
@@ -93,6 +95,9 @@ export async function connectWhatsAppKeysAction(
   const parsed = parseWhatsAppKeys(formData);
   if (!parsed.ok) return { error: parsed.error, field: parsed.field };
   const db = getServiceClient();
+  // The plan's connected accounts, as the sign-in connects check them (Walter's playbook, 25 Nov).
+  const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, "whatsapp");
+  if (full) redirect(full);
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
     const account = await getSocialProvider().connectWhatsAppWithKeys({
@@ -173,6 +178,9 @@ export async function discoverEmailAction(
   if (!tenant) return { error: NOT_ALLOWED };
   const parsed = parseEmail(formData);
   if (!parsed.ok) return { error: parsed.error };
+  // An email inbox counts as one account (Febron, 26 Nov): full plans stop here, before the password.
+  const full = await accountsFullHref(getServiceClient(), tenant, DEFAULT_RETURN, "imap");
+  if (full) redirect(full);
   try {
     const discovery = await getSocialProvider().discoverEmail({
       email: parsed.email,
@@ -210,6 +218,9 @@ export async function connectEmailAction(
     .trim()
     .slice(0, 100);
   const db = getServiceClient();
+  // An email inbox counts as one account (Febron, 26 Nov), like a social account.
+  const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, "imap");
+  if (full) redirect(full);
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
     const social = getSocialProvider();
@@ -272,6 +283,8 @@ export async function connectLineAction(
   const parsed = parseLineKeys(formData);
   if (!parsed.ok) return { error: parsed.error, field: parsed.field };
   const db = getServiceClient();
+  const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, "line");
+  if (full) redirect(full);
   let result: { accountId: string; name: string; webhookReady: boolean };
   try {
     const { profileId } = await ensureZernioProfile({ db, social: getSocialProvider }, tenant.id);
@@ -330,6 +343,18 @@ export async function connectMailAction(formData: FormData): Promise<void> {
   const rowId = platform === "google" ? "gmail" : "outlook";
   if (statusOf(await loadPlatformStatuses(db), rowId) !== "available") {
     redirect(`/settings/accounts?connect_error=unavailable&platform=${platform}`);
+  }
+  // An email inbox counts as one account (Febron, 26 Nov). Signing in again to widen a mailbox
+  // the brand already has isn't a new account, so only a new one is checked.
+  const { count: signedIn } = await db
+    .from("social_accounts")
+    .select("id", { count: "exact", head: true })
+    .eq("tenant_id", tenant.id)
+    .eq("platform", platform)
+    .eq("status", "active");
+  if (!signedIn) {
+    const full = await accountsFullHref(db, tenant, DEFAULT_RETURN, platform);
+    if (full) redirect(full);
   }
   const scopes =
     platform === "microsoft"

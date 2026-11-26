@@ -1,5 +1,13 @@
 import { platformLabel } from "@/lib/social/platforms";
-import { TRIAL, type PaidPlanId, type Plan, type PlanId } from "./plans";
+import {
+  startTrialLabel,
+  TRIAL,
+  trialStartedLine,
+  yourTrial,
+  type PaidPlanId,
+  type Plan,
+  type PlanId,
+} from "./plans";
 import type { ReplyPain } from "./reply-pain";
 import type { OfferReason } from "./upgrade";
 
@@ -151,14 +159,16 @@ export interface PopupContent {
   sub: string;
   honey: Seg[] | null;
   ticks: Tick[];
-  /** "Add a card, pay $0 today. Then $49 a month from November 30. …" */
+  /** "Add a card, pay $0 today. Then $49 a month after your free month. …" (never a date, Jason). */
   note: string;
-  /** The card button: "Start free with a card", or without a trial "Pay with a card". */
+  /** Under the note with a trial (Pricing Bible): "We email you 3 days before the first charge." */
+  reminder: string | null;
+  /** The card button: "Start my free month", or without a trial "Pay with a card". */
   cardLabel: string;
   keep: { label: string; kind: "close" | "inbox" };
   /** × in the corner, Esc and the backdrop close it (not when out of replies). */
   closable: boolean;
-  /** After Stripe's return: "You're on Solo. Free until November 30." */
+  /** After Stripe's return: "Your free month has started.", without a trial "You're on Solo." */
   success: string;
   /** The success moment (24 Nov): "Solo" and "$49 a month". */
   planName: string;
@@ -180,39 +190,50 @@ const n = (v: number) => v.toLocaleString("en-US");
 const plural = (k: number, one: string, many: string) => `${n(k)} ${k === 1 ? one : many}`;
 const label = (id: string) => platformLabel(id);
 
-/** "November 30": the trial's end, the first charge. */
-export function trialEndLabel(now: Date, days: number = TRIAL.days): string {
-  return new Date(now.getTime() + days * 86_400_000).toLocaleDateString("en-US", {
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  });
+/**
+ * The Try Solo headline (Walter's playbook, 25 Nov): "Try Solo. Your first month is free." A
+ * promotion or a friend's link with more days: "Try Solo. 60 days free."
+ */
+export function tryHeadline(solo: Plan, trialDays: number = TRIAL.days): string {
+  return trialDays === TRIAL.days
+    ? `Try ${solo.name}. Your first month is free.`
+    : `Try ${solo.name}. ${n(trialDays)} days free.`;
 }
 
 /** Pure: the plan a version offers (Team features go straight to Team). */
 export const offeredBy = (v: PopupVersion): PaidPlanId => (v.v === "team" ? "business" : "solo");
+
+/** The reminder email before the first charge (Pricing Bible: Stripe's trial_will_end, 3 days). */
+export const TRIAL_REMINDER = "We email you 3 days before the first charge.";
+
+/** "About 300 replies a month": the plan's own number (Staff → Plans), never hard-coded. */
+export const aboutReplies = (plan: Plan) => `About ${n(plan.replies)} replies a month`;
+
+/** Worker Bee in the Solo offer (Walter's playbook, 25 Nov; Bible: "regular questions"). */
+export const WORKER_BEE_LINE = "answers regular questions for you, day or night, once you trust it";
 
 /** Pure: the "$0 today" note and the success line. */
 export function payWords(
   plan: Plan,
   free: Plan,
   trial: boolean,
-  now: Date,
   trialDays: number = TRIAL.days,
-): { note: string; cardLabel: string; success: string; price: string } {
-  const end = trialEndLabel(now, trialDays);
+): { note: string; reminder: string | null; cardLabel: string; success: string; price: string } {
   const price = `$${n(plan.monthlyUsd)} a month`;
   const perMonth = price;
   return trial
     ? {
         price: perMonth,
-        note: `Add a card, pay $0 today. Then ${price} from ${end}. Cancel before then and you pay nothing.`,
-        cardLabel: "Start free with a card",
-        success: `You’re on ${plan.name}. Free until ${end}.`,
+        // No date in an offer (Jason, 26 Nov: "never say it ends on a date").
+        note: `Add a card, pay $0 today. Then ${price} after ${yourTrial(trialDays)}. Cancel before it ends and you pay nothing.`,
+        reminder: TRIAL_REMINDER,
+        cardLabel: startTrialLabel(trialDays),
+        success: trialStartedLine(trialDays),
       }
     : {
         price: perMonth,
         note: `Pay $${n(plan.monthlyUsd)} today, then every month. Cancel any time and you go back to ${free.name}.`,
+        reminder: null,
         cardLabel: "Pay with a card",
         success: `You’re on ${plan.name}.`,
       };
@@ -233,13 +254,13 @@ function soloTicks(solo: Plan, free: Plan, used: number | null): Tick[] {
           {
             bee: true,
             bold: "Worker Bee",
-            rest: "answers every message for you, day or night, within Meta’s 24-hour window",
+            rest: WORKER_BEE_LINE,
           },
         ]
       : []),
     {
       bee: false,
-      bold: `${n(solo.replies)} replies a month`,
+      bold: aboutReplies(solo),
       rest: `${free.name} has ${n(free.replies)}`,
     },
   ];
@@ -308,13 +329,13 @@ export function andList(items: string[]): string {
 
 /** Pure: everything the pop-up says, for one version with what's known. */
 export function popupContent(input: PopupInput): PopupContent {
-  const { version, plans, trial, facts, now } = input;
+  const { version, plans, trial, facts } = input;
   const trialDays = input.trialDays ?? TRIAL.days;
   const free = plans.free;
   const solo = plans.solo;
   const planId = offeredBy(version);
   const plan = plans[planId];
-  const pay = payWords(plan, free, trial, now, trialDays);
+  const pay = payWords(plan, free, trial, trialDays);
   const used = facts.connected.length > 0 ? facts.connected.length : null;
   const firstId = facts.connected[0];
   const first = firstId ? label(firstId) : null;
@@ -331,6 +352,7 @@ export function popupContent(input: PopupInput): PopupContent {
     ticks:
       version.v === "team" ? teamTicks(plan, free, version.sub, used) : soloTicks(solo, free, used),
     note: pay.note,
+    reminder: pay.reminder,
     cardLabel: pay.cardLabel,
     success: pay.success,
     planName: plan.name,
@@ -424,7 +446,7 @@ export function popupContent(input: PopupInput): PopupContent {
           { title: "Asks you", text: "when unsure", tone: "open" },
         ],
         headline: `Turn on Worker Bee with ${solo.name}`,
-        sub: `On ${free.name} you approve every reply. On ${solo.name}, Worker Bee answers for you.`,
+        sub: `On ${free.name} you approve every reply. On ${solo.name}, Worker Bee answers regular questions for you.`,
         honey:
           locked > 0 && scanOn
             ? [
@@ -470,7 +492,7 @@ export function popupContent(input: PopupInput): PopupContent {
           ...base,
           strip,
           headline: `Keep Waggle answering with ${solo.name}`,
-          sub: `${free.name} has ${n(free.replies)} replies a month. ${solo.name} has ${n(solo.replies)}.`,
+          sub: `${free.name} has ${n(free.replies)} replies a month. ${solo.name} has about ${n(solo.replies)}.`,
           honey: honey.length ? honey : null,
           keep: { label: "Answer them myself", kind: "inbox" },
           closable: false,
@@ -481,10 +503,10 @@ export function popupContent(input: PopupInput): PopupContent {
       return {
         ...base,
         strip,
-        headline: `Get ${n(solo.replies)} replies a month with ${solo.name}`,
+        headline: `Get about ${n(solo.replies)} replies a month with ${solo.name}`,
         sub: u
           ? `You’ve used ${n(u.used)} of your ${n(u.allowance)} ${free.name} replies this month.`
-          : `${free.name} has ${n(free.replies)} replies a month. ${solo.name} has ${n(solo.replies)}.`,
+          : `${free.name} has ${n(free.replies)} replies a month. ${solo.name} has about ${n(solo.replies)}.`,
         honey:
           daysLeft !== null
             ? [
@@ -580,7 +602,11 @@ export function popupContent(input: PopupInput): PopupContent {
             accountBox,
             {
               title: "Worker Bee",
-              text: trial ? `${trialDays} days free` : `on ${solo.name}`,
+              text: trial
+                ? trialDays === TRIAL.days
+                  ? "First month free"
+                  : `${trialDays} days free`
+                : `on ${solo.name}`,
               tone: "now",
               bee: true,
             },
@@ -589,9 +615,9 @@ export function popupContent(input: PopupInput): PopupContent {
               : []),
           ],
           headline: trial
-            ? `Try ${solo.name} free for ${trialDays} days`
+            ? tryHeadline(solo, trialDays)
             : `Let Worker Bee answer with ${solo.name}`,
-          sub: "Worker Bee answers for you. You still decide what it can say.",
+          sub: `Worker Bee ${WORKER_BEE_LINE}.`,
           honey:
             waiting > 0
               ? [
@@ -636,7 +662,7 @@ export function popupContent(input: PopupInput): PopupContent {
           { title: "Worker Bee", text: "Next", tone: "now", bee: true },
         ],
         headline: "You’re set up. Want Worker Bee to take it from here?",
-        sub: `On ${free.name} you approve every reply. ${solo.name} answers for you, day and night.`,
+        sub: `On ${free.name} you approve every reply. On ${solo.name}, Worker Bee answers regular questions for you, day or night.`,
         honey: honey.length ? honey : null,
       };
     }

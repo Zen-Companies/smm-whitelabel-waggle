@@ -5,6 +5,7 @@ import {
   isCustomPrice,
   PLAN_IDS,
   PLANS,
+  startTrialLabel,
   TRIAL,
   type PaidPlanId,
   type Plan,
@@ -112,9 +113,7 @@ export function upgradeOffer(
   const freeMonth = days === TRIAL.days;
   const cta =
     via === "trial"
-      ? freeMonth
-        ? "Start your free month"
-        : `Start ${days} days free`
+      ? startTrialLabel(days)
       : via === "checkout"
         ? `Upgrade to ${next!.name}`
         : via === "switch"
@@ -178,8 +177,8 @@ export function upgradeOffer(
           title:
             via === "trial"
               ? freeMonth
-                ? `Try ${to.name}: your first month is free.`
-                : `Try ${to.name} free for ${days} days.`
+                ? `Try ${to.name}. Your first month is free.`
+                : `Try ${to.name}. ${n(days)} days free.`
               : `Upgrade to ${to.name}.`,
           body: `${auto ? "Waggle answers the regular questions on its own" : "More room for Waggle"}: ${n(to.accounts)} accounts and ${n(to.replies)} AI replies a month.`,
         };

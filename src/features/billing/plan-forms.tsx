@@ -12,6 +12,7 @@ import {
   dailyAmount,
   isCustomPrice,
   PROMOTED_PLAN,
+  startTrialLabel,
   TRIAL,
   type PlanId,
 } from "./plans";
@@ -259,9 +260,7 @@ export function PlanCards({
                       live
                         ? `Move to ${p.name}`
                         : trial
-                          ? trialDays === TRIAL.days
-                            ? "Start your free month"
-                            : `Start ${trialDays} days free`
+                          ? startTrialLabel(trialDays)
                           : `Upgrade to ${p.name}`
                     }
                     pendingLabel={live ? "Switching…" : "Starting…"}

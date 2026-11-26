@@ -1,4 +1,5 @@
 import "server-only";
+import { UNCOUNTED_FILTER } from "./plans";
 import { CLOSED_STATUSES } from "@/features/catch-up";
 import type { ServiceClient } from "@/lib/supabase/service";
 import type { PopupFacts } from "./popup-copy";
@@ -90,6 +91,7 @@ export async function loadPopupFacts(
       .select("platform")
       .eq("tenant_id", tenantId)
       .eq("status", "active")
+      .not("platform", "in", UNCOUNTED_FILTER)
       .order("created_at", { ascending: true }),
     loadScan(db, tenantId).catch(() => null),
     loadPain(db, tenantId, needsYou, now).catch(() => null),

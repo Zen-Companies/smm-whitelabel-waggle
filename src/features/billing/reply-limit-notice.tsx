@@ -2,8 +2,8 @@ import Link from "next/link";
 import { CombMeter } from "@/components/app/bee-plan";
 import { getServiceClient } from "@/lib/supabase/service";
 import { replyLimitNote } from "./reply-limit";
-import { upgradeHref, upgradeLabel } from "./upgrade";
-import { loadReplyLimit, planLimitsOn } from "./usage";
+import { upgradeHref } from "./upgrade";
+import { loadPlans, loadReplyLimit, planLimitsOn } from "./usage";
 
 /**
  * Replies running low (Pricing Bible; canvas "Settings · Your plan, with the bee"): the 80% note
@@ -28,6 +28,8 @@ export async function ReplyLimitNotice({
   const note = replyLimitNote(limit, plan.plan);
   if (!note) return null;
   const free = plan.plan === "free";
+  // Walter's playbook (25 Nov): the link names what it gets, from Solo's number (Staff → Plans).
+  const soloReplies = free ? (await loadPlans(db)).solo.replies : null;
   return (
     <section
       role="status"
@@ -43,7 +45,9 @@ export async function ReplyLimitNotice({
         href={free ? upgradeHref("replies", "/today") : upgradeHref("top_up", "/today")}
         className="action-link text-sm"
       >
-        {free ? upgradeLabel("replies") : "Get more replies"}
+        {soloReplies !== null
+          ? `Get ${soloReplies.toLocaleString("en-US")} replies`
+          : "Get more replies"}
       </Link>
     </section>
   );

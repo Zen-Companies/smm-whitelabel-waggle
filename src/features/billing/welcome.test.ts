@@ -10,7 +10,7 @@ describe("welcomeFor (Walter's flow, 20 Nov)", () => {
     expect(w.title).toBe("Let Waggle answer on its own");
     expect(w.eyebrow).toBe("Solo · first month free");
     expect(w.offer?.next).toBe("solo");
-    expect(w.offer?.cta).toBe("Start your free month");
+    expect(w.offer?.cta).toBe("Start my free month");
     expect(w.offer?.day).toEqual({ amount: "$1.61", of: "$49 a month after your free month" });
     expect(w.perks[0].key).toBe("autoReply");
     expect(w.perks.map((p) => p.title)).toEqual([

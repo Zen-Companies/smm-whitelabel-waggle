@@ -9,11 +9,10 @@ import { platformLabel } from "@/lib/social/platforms";
 import { cn } from "cn";
 import type { CheckoutSuccess as Confirmed } from "./popup-actions";
 import type { PopupContent } from "./popup-copy";
-import { shortDate } from "./promotions";
 import type { CarryOn } from "./upgrade-popup";
 
 // After checkout (board "Promotions in the app", 4 · After checkout, approved 24 Nov): the bee
-// dances once while honeycombs burst out and fade, then the plan, the date in plain words, what's
+// dances once while honeycombs burst out and fade, then the plan, the free month in words (never a date, 26 Nov), what's
 // unlocked (the pop-up's own ticks, from the plans), the friend's or banked month when one
 // applied, and one primary button: the tapped action carried on, or Go to my Inbox. Reduced
 // motion: no burst, no dance, a still bee on three filled honeycombs.
@@ -102,10 +101,12 @@ export function CheckoutSuccess({
   carryOn: CarryOn;
   onDone: () => void;
 }) {
-  // Shown only after Stripe confirmed (client state), so the browser's own zone is safe here:
-  // the day Stripe charges where the Owner is (QA, 25 Nov).
-  const until = confirmed.freeUntil
-    ? shortDate(new Date(confirmed.freeUntil), Intl.DateTimeFormat().resolvedOptions().timeZone)
+  // No date in the pop-up (Jason, 26 Nov: "never say it ends on a date"); the day of the first
+  // charge stays on Your plan. With a trial, the pop-up's own words: "Your free month has started."
+  const started = confirmed.freeUntil
+    ? content.reminder
+      ? content.success
+      : "Your free trial has started."
     : null;
   const inboxClass = carryOn
     ? "text-ink hover:text-ink-2 inline-flex min-h-10 items-center justify-center text-[13px] font-semibold"
@@ -121,13 +122,14 @@ export function CheckoutSuccess({
         >
           You’re on {content.planName}
         </h2>
-        {until ? (
+        {started ? (
           <>
             <span className="text-[15px] font-semibold">
-              <span className="bg-honey-tint rounded-md px-1.5 py-px">Free until {until}</span>
+              <span className="bg-honey-tint rounded-md px-1.5 py-px">{started}</span>
             </span>
             <span className="text-ink-2 text-[12.5px]">
-              Nothing to pay until then. Then {content.price}; cancel before and you pay nothing.
+              Nothing to pay until it ends. Then {content.price}; cancel before it ends and you pay
+              nothing.
             </span>
           </>
         ) : (

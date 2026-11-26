@@ -10,6 +10,7 @@ import {
   replyAllowance,
   type Plan,
   type PlanId,
+  UNCOUNTED_FILTER,
 } from "./plans";
 import { tryAutoTopUp } from "./auto-top-up";
 import { loadBilling, loadTopUps } from "./billing-store";
@@ -223,7 +224,8 @@ async function activeAccountsInOrg(db: ServiceClient, orgId: string): Promise<nu
     .from("social_accounts")
     .select("id", { count: "exact", head: true })
     .in("tenant_id", ids)
-    .eq("status", "active");
+    .eq("status", "active")
+    .not("platform", "in", UNCOUNTED_FILTER);
   return count ?? 0;
 }
 
