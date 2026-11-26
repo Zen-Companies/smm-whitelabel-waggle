@@ -27,7 +27,8 @@ import { type CustomerRow, LIST_WINDOW, loadCustomerList } from "./load";
 
 const PLAN_LABEL = { free: "Free", trial: "Trial", paid: "Paid" } as const;
 
-const STAGE_TONE: Record<Stage, "red" | "honey" | "blue" | "green"> = {
+const STAGE_TONE: Record<Stage, "red" | "honey" | "blue" | "green" | "grey"> = {
+  no_business: "grey",
   connect: "red",
   step2: "honey",
   step3: "honey",
@@ -36,6 +37,7 @@ const STAGE_TONE: Record<Stage, "red" | "honey" | "blue" | "green"> = {
 };
 
 const TILE_LABEL: Record<Stage, string> = {
+  no_business: "No business yet",
   connect: "Stuck at Connect",
   step2: "Stuck at Step 2",
   step3: "Stuck at Step 3",
@@ -70,7 +72,7 @@ export async function CustomersList({
             name="q"
             type="search"
             defaultValue={p.q ?? ""}
-            placeholder="Business, owner email or @instagram"
+            placeholder="Business, owner name or email, or @instagram"
             className="field"
           />
         </span>
@@ -159,8 +161,8 @@ export async function CustomersList({
       ) : (
         <p className="meta">
           {p.q
-            ? `No business matches “${p.q}”. Search looks at business name, owner email and connected Instagram or Facebook handle. A sign-up that never connected has no handle yet.`
-            : "No businesses match these filters."}
+            ? `Nothing matches “${p.q}”. Search looks at business name, owner email (and name, for sign-ups with no business yet) and connected Instagram or Facebook handle. A sign-up that never connected has no handle yet.`
+            : "Nothing matches these filters."}
         </p>
       )}
 
@@ -261,17 +263,22 @@ function Row({ row, now }: { row: CustomerRow; now: Date }) {
     now,
   });
   const td = "px-2.5 py-3 align-top";
-  const href = `/admin/customers/${row.id}`;
+  const href = row.href;
+  const noBusiness = row.stage === "no_business";
   const browser = browserLabel(row.browser);
   return (
     <tr className="border-subtle hover:bg-subtle/50 border-b">
       <td className={td}>
-        <Link href={href} className="font-semibold hover:underline">
+        <Link
+          href={href}
+          className={noBusiness ? "text-ink-2 hover:underline" : "font-semibold hover:underline"}
+        >
           {row.name}
         </Link>
         {row.kind && <span className="meta block">{row.kind}</span>}
       </td>
       <td className={td}>
+        {row.ownerName && <span className="block font-semibold">{row.ownerName}</span>}
         {row.ownerEmail ?? <span className="meta">No owner login</span>}
         {row.emailUnconfirmed && (
           <span className="mt-1 block">
@@ -279,7 +286,10 @@ function Row({ row, now }: { row: CustomerRow; now: Date }) {
           </span>
         )}
       </td>
-      <td className={`${td} whitespace-nowrap`}>{ago(row.signedUpAt, now)}</td>
+      <td className={`${td} whitespace-nowrap`}>
+        {ago(row.signedUpAt, now)}
+        {row.signUpMethod && <span className="meta block">with {row.signUpMethod}</span>}
+      </td>
       <td className={td}>
         {SOURCE_LABEL[row.source]}
         {row.sourceLabel && <span className="meta block">{row.sourceLabel}</span>}
@@ -309,7 +319,7 @@ function Row({ row, now }: { row: CustomerRow; now: Date }) {
       <td className={`${td} text-right`}>
         <Link
           href={href}
-          aria-label={`Open ${row.name}`}
+          aria-label={noBusiness ? `Open ${row.ownerEmail ?? "sign-up"}` : `Open ${row.name}`}
           className="text-ink-2 hover:text-ink inline-flex min-h-10 items-center"
         >
           <ChevronRight className="size-4" aria-hidden />

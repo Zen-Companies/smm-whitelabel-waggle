@@ -26,6 +26,7 @@ import {
   STAGE_LABEL,
   TIMELINE_KINDS,
   TIMELINE_LABEL,
+  type TimelineEvent,
   type TimelineKind,
 } from "./derive";
 import { type AttemptRow, type CustomerDetail, loadCustomerDetail } from "./load";
@@ -35,7 +36,7 @@ const paramsSchema = z.object({ tenantId: z.uuid() });
 
 const TIMELINE_SHOWN = 60;
 
-const dateTime = (iso: string) =>
+export const dateTime = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", {
     day: "numeric",
     month: "short",
@@ -147,7 +148,13 @@ export async function CustomerDetailView({
       >
         <AttemptsLive attempts={d.attempts} profileId={d.tenant.zernioProfileId} now={now} />
       </Suspense>
-      <Timeline d={d} type={type} showAll={showAll} />
+      <Timeline
+        events={d.timeline}
+        base={`/admin/customers/${d.tenant.id}`}
+        type={type}
+        showAll={showAll}
+        sub="Audit log, connect tries, GoHighLevel, emails and checkouts in one list (UTC)"
+      />
       <div className="grid gap-4 md:grid-cols-2">
         <Setup d={d} />
         <Accounts d={d} />
@@ -158,7 +165,7 @@ export async function CustomerDetailView({
   );
 }
 
-function Card({
+export function Card({
   title,
   sub,
   children,
@@ -178,7 +185,7 @@ function Card({
   );
 }
 
-function Pair({ k, children }: { k: string; children: React.ReactNode }) {
+export function Pair({ k, children }: { k: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="meta text-xs">{k}</dt>
@@ -579,19 +586,24 @@ function AttemptLine({
   );
 }
 
-function Timeline({
-  d,
+/** The timeline card (the business page and the sign-up page). */
+export function Timeline({
+  events: all,
+  base,
   type,
   showAll,
+  sub,
 }: {
-  d: CustomerDetail;
+  events: TimelineEvent[];
+  /** This page's own address, for the filter links. */
+  base: string;
   type: TimelineKind | null;
   showAll: boolean;
+  sub: string;
 }) {
-  const counts = countKinds(d.timeline);
-  const events = type ? d.timeline.filter((e) => e.kind === type) : d.timeline;
+  const counts = countKinds(all);
+  const events = type ? all.filter((e) => e.kind === type) : all;
   const shown = showAll ? events : events.slice(0, TIMELINE_SHOWN);
-  const base = `/admin/customers/${d.tenant.id}`;
   const href = (t: TimelineKind | null, all = false) => {
     const qs = new URLSearchParams();
     if (t) qs.set("type", t);
@@ -604,13 +616,10 @@ function Timeline({
       active ? "bg-ink text-surface border-ink" : "border-line-strong hover:bg-subtle"
     }`;
   return (
-    <Card
-      title="Timeline"
-      sub="Audit log, connect tries, GoHighLevel, emails and checkouts in one list (UTC)"
-    >
+    <Card title="Timeline" sub={sub}>
       <nav aria-label="Show" className="flex flex-wrap gap-1.5">
         <Link href={href(null)} className={pill(!type)} aria-current={!type ? "page" : undefined}>
-          All {d.timeline.length}
+          All {all.length}
         </Link>
         {TIMELINE_KINDS.map((k) => (
           <Link

@@ -285,6 +285,16 @@ describe("status label", () => {
       connectStatusLabel({ stage: "active", stageLabel: "Active", lastTry: null, now }).label,
     ).toBe("Active");
   });
+  it("a sign-up with no business never tapped Connect", () => {
+    expect(
+      connectStatusLabel({
+        stage: "no_business",
+        stageLabel: "No business yet",
+        lastTry: null,
+        now,
+      }),
+    ).toEqual({ label: "Signed up · never tapped Connect", inProgress: false });
+  });
 });
 
 describe("fixHint from Zernio's real failure (23 Nov)", () => {

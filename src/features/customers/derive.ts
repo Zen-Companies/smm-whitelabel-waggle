@@ -7,10 +7,15 @@ import { parseUtmCookie, type Utm } from "@/lib/crm";
 
 // ── Where they are ──────────────────────────────────────────────────────────────────────────────
 
-export const STAGES = ["connect", "step2", "step3", "checkout", "active"] as const;
+/**
+ * `no_business`: a login with an organization but no business in any of them (a sign-up that
+ * never tapped a platform on setup's Connect step, which is what makes the business, 26 Nov).
+ */
+export const STAGES = ["no_business", "connect", "step2", "step3", "checkout", "active"] as const;
 export type Stage = (typeof STAGES)[number];
 
 export const STAGE_LABEL: Record<Stage, string> = {
+  no_business: "No business yet",
   connect: "Connect",
   step2: "Step 2",
   step3: "Step 3",
@@ -150,6 +155,8 @@ export function whereLine(input: {
   planLabel: string;
 }): string {
   switch (input.stage) {
+    case "no_business":
+      return "Never tapped Connect";
     case "connect": {
       const last = latestAttempt(input.attempts);
       if (!last) return "No connect tries yet";
@@ -347,6 +354,8 @@ export const parseListParams = (sp: Record<string, string | string[] | undefined
 export interface Filterable {
   name: string;
   ownerEmail: string | null;
+  /** The owner's name, when known (sign-ups with no business). */
+  ownerName?: string | null;
   handles: readonly string[];
   source: SourceKind;
   stage: Stage;
@@ -362,6 +371,7 @@ export function matchesSearch(row: Filterable, q: string | undefined): boolean {
   return (
     row.name.toLowerCase().includes(term) ||
     (row.ownerEmail ?? "").toLowerCase().includes(term) ||
+    (row.ownerName ?? "").toLowerCase().includes(term) ||
     row.handles.some((h) => h.toLowerCase().replace(/^@/, "").includes(bare))
   );
 }
@@ -380,7 +390,15 @@ export const matchesAll = (row: Filterable, p: ListParams): boolean =>
 export function stageCounts(
   rows: readonly Filterable[],
 ): { total: number } & Record<Stage, number> {
-  const out = { total: rows.length, connect: 0, step2: 0, step3: 0, checkout: 0, active: 0 };
+  const out = {
+    total: rows.length,
+    no_business: 0,
+    connect: 0,
+    step2: 0,
+    step3: 0,
+    checkout: 0,
+    active: 0,
+  };
   for (const r of rows) out[r.stage] += 1;
   return out;
 }

@@ -911,6 +911,11 @@ Spec "Walter's flow" (build B), boards "Walter's flow in Waggle" and "Setup step
   4 s timeout; on failure the page shows Waggle's steps only. Nothing is stored. Building the steps, the "Most likely"
   deduction (time, browser class, platform; labelled "Deduced by Waggle") and the "In progress · N min" status (a try
   with no outcome under 2 h, list and detail) are pure in `connect-story.ts`.
+- Sign-ups with no business (26 Nov): a login whose organizations hold no business (never tapped Connect) is a list row
+  too, "No business yet" / "Signed up · never tapped Connect" (stage `no_business`, also a "Stuck at" option and tile),
+  from the newest 1000 personal organizations, staff left out (`signups.ts`, pure); its page is
+  `/admin/customers/user/[userId]` (owner, organization, source, funnel, org audit + CRM + emails), redirects to the
+  business once one exists, and writes `staff.customer.viewed` to `organization_audit`.
 
 ## From the site's plan card to that plan (board option A, approved 25 Nov)
 

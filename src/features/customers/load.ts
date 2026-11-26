@@ -2,6 +2,7 @@ import "server-only";
 import { loadTenantAiSpend, type AiSpend } from "@/lib/llm";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { emailsOf } from "@/lib/supabase/users";
+import type { User } from "@supabase/supabase-js";
 import {
   attemptEvent,
   auditEvent,
@@ -31,6 +32,7 @@ import {
   type TimelineEvent,
   whereLine,
 } from "./derive";
+import { mergeBySignup, signupRow, usersWithoutBusiness } from "./signups";
 
 // Staff → Customers: the server reads (service role, after the permission check in the view).
 // Counts, ids, codes and labels only; never a customer's message text (rule 10).
@@ -65,12 +67,19 @@ const groupBy = <T>(rows: readonly T[], key: (r: T) => string): Map<string, T[]>
 };
 
 export interface CustomerRow {
+  /** The business's id, or the login's id for a sign-up with no business. */
   id: string;
+  /** The row's page: the business, or the sign-up with no business (26 Nov). */
+  href: string;
   name: string;
   kind: string | null;
   ownerEmail: string | null;
+  /** Known for sign-ups with no business only (the list doesn't read every owner's login). */
+  ownerName: string | null;
   emailUnconfirmed: boolean;
   signedUpAt: string;
+  /** "Google" or "email", for sign-ups with no business; null when not read. */
+  signUpMethod: string | null;
   source: SourceKind;
   sourceLabel: string | null;
   stage: Stage;
@@ -261,11 +270,14 @@ function rowFor(
   const source = sourceOf(ownerId ? (g.signedUpOf.get(ownerId) ?? null) : null);
   return {
     id: t.id,
+    href: `/admin/customers/${t.id}`,
     name: t.name,
     kind: kindOf(t.setup_chat),
     ownerEmail: ownerId ? (g.emails.get(ownerId) ?? null) : null,
+    ownerName: null,
     emailUnconfirmed: !!confirmation && !confirmation.confirmed_at,
     signedUpAt: t.created_at,
+    signUpMethod: null,
     source: source.kind,
     sourceLabel: source.label,
     utm: source.utm,
@@ -307,8 +319,118 @@ export interface CustomerList {
   thisWeek: number;
   /** In-app browser share of those stuck at Connect, in the current filter. */
   connectInApp: { inApp: number; of: number };
-  /** True when there are more businesses than the window looked through. */
+  /** True when there are more businesses (or sign-ups) than the window looked through. */
   windowFull: boolean;
+}
+
+/** Logins read with the admin API, a few at a time (only sign-ups with no business). */
+async function authUsers(db: ServiceClient, ids: readonly string[]): Promise<Map<string, User>> {
+  const out = new Map<string, User>();
+  for (let i = 0; i < ids.length; i += 10) {
+    const got = await Promise.all(ids.slice(i, i + 10).map((id) => db.auth.admin.getUserById(id)));
+    for (const r of got) if (r.data.user) out.set(r.data.user.id, r.data.user);
+  }
+  return out;
+}
+
+const nameOf = (user: User | null | undefined): string | null => {
+  const meta = (user?.user_metadata ?? {}) as Record<string, unknown>;
+  return typeof meta.full_name === "string"
+    ? meta.full_name
+    : typeof meta.name === "string"
+      ? meta.name
+      : null;
+};
+
+const providerOf = (user: User | null | undefined): string | null =>
+  typeof user?.app_metadata?.provider === "string" ? user.app_metadata.provider : null;
+
+/**
+ * Sign-ups with no business (26 Nov): every login gets a personal organization on sign-up, but a
+ * business only once they tap a platform on setup's Connect step. The newest LIST_WINDOW personal
+ * organizations, minus logins with a business in any of their organizations, and minus staff.
+ */
+async function loadSignupRows(
+  db: ServiceClient,
+  since: Date | null,
+  now: Date,
+): Promise<{ rows: (CustomerRow & { utm: Source["utm"] })[]; windowFull: boolean }> {
+  let q = db
+    .from("organizations")
+    .select("id, name, created_at, personal_of")
+    .not("personal_of", "is", null);
+  if (since) q = q.gte("created_at", since.toISOString());
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(LIST_WINDOW);
+  if (error) throw new Error(`customers: reading failed: ${error.message}`);
+  const personal = data ?? [];
+  const windowFull = personal.length >= LIST_WINDOW;
+  const candidates = personal.flatMap((o) => (o.personal_of ? [o.personal_of] : []));
+  const [memberships, tenantMembers, staff] = await Promise.all([
+    inChunks(candidates, (c) =>
+      db.from("organization_members").select("user_id, organization_id").in("user_id", c),
+    ),
+    inChunks(candidates, (c) => db.from("tenant_members").select("user_id").in("user_id", c)),
+    inChunks(candidates, (c) => db.from("staff_members").select("user_id").in("user_id", c)),
+  ]);
+  const orgIds = [...new Set(memberships.map((m) => m.organization_id))];
+  // Deleted (purged) businesses count too: they had one, so they did tap Connect.
+  const withBusiness = await inChunks(orgIds, (c) =>
+    db.from("tenants").select("organization_id").in("organization_id", c),
+  );
+  const ids = usersWithoutBusiness({
+    candidates,
+    memberships,
+    orgsWithBusiness: new Set(withBusiness.flatMap((t) => t.organization_id ?? [])),
+    tenantMembers: new Set(tenantMembers.map((t) => t.user_id)),
+    staff: new Set(staff.map((m) => m.user_id)),
+  });
+  if (!ids.length) return { rows: [], windowFull };
+
+  const orgOf = new Map(
+    personal.flatMap((o) => (o.personal_of ? [[o.personal_of, o] as const] : [])),
+  );
+  const personalIds = ids.flatMap((id) => orgOf.get(id)?.id ?? []);
+  const [users, emails, confirmations, activity, signedUp, bills] = await Promise.all([
+    authUsers(db, ids),
+    emailsOf(db, ids),
+    inChunks(ids, (c) =>
+      db.from("email_confirmations").select("user_id, confirmed_at").in("user_id", c),
+    ),
+    inChunks(ids, (c) => db.from("user_activity").select("user_id, last_seen_at").in("user_id", c)),
+    inChunks(ids, (c) =>
+      db.from("crm_events").select("user_id, details").in("user_id", c).eq("event", "signed_up"),
+    ),
+    inChunks(personalIds, (c) =>
+      db
+        .from("org_billing")
+        .select("organization_id, plan, status, trial_ends_at, billing_interval")
+        .in("organization_id", c),
+    ),
+  ]);
+  const confOf = new Map(confirmations.map((c) => [c.user_id, c]));
+  const seenOf = new Map(activity.map((a) => [a.user_id, a.last_seen_at]));
+  const eventOf = new Map(signedUp.map((e) => [e.user_id, e]));
+  const billOf = new Map(bills.map((b) => [b.organization_id, b]));
+  const rows = ids.map((id) => {
+    const org = orgOf.get(id);
+    const user = users.get(id);
+    return signupRow(
+      {
+        userId: id,
+        email: emails.get(id) ?? user?.email ?? null,
+        name: nameOf(user),
+        signedUpAt: user?.created_at ?? org?.created_at ?? now.toISOString(),
+        provider: providerOf(user),
+        orgName: org?.name ?? null,
+        confirmation: confOf.get(id) ?? null,
+        bill: (org && billOf.get(org.id)) ?? null,
+        signedUpEvent: eventOf.get(id) ?? null,
+        lastSeenAt: seenOf.get(id) ?? null,
+      },
+      now,
+    );
+  });
+  return { rows, windowFull };
 }
 
 export async function loadCustomerList(
@@ -320,7 +442,7 @@ export async function loadCustomerList(
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
   let q = db.from("tenants").select(TENANT_COLUMNS).is("purged_at", null);
   if (since) q = q.gte("created_at", since.toISOString());
-  const [list, total, week] = await Promise.all([
+  const [list, total, week, signups] = await Promise.all([
     q.order("created_at", { ascending: false }).limit(LIST_WINDOW),
     db.from("tenants").select("id", { count: "exact", head: true }).is("purged_at", null),
     db
@@ -328,11 +450,16 @@ export async function loadCustomerList(
       .select("id", { count: "exact", head: true })
       .is("purged_at", null)
       .gte("created_at", weekAgo),
+    loadSignupRows(db, since, now),
   ]);
   if (list.error) throw new Error(`customers: reading failed: ${list.error.message}`);
   const tenants = list.data ?? [];
   const g = await gather(db, tenants);
-  const all = tenants.map((t) => rowFor(t, g, now));
+  const all = mergeBySignup(
+    tenants.map((t) => rowFor(t, g, now)),
+    // An older login's personal organization can be newer than the login: range by the login.
+    signups.rows.filter((r) => !since || Date.parse(r.signedUpAt) >= since.getTime()),
+  );
   const base = all.filter((r) => matchesBase(r, params));
   const matching = all.filter((r) => matchesAll(r, params));
   const stuckConnect = base.filter((r) => r.stage === "connect");
@@ -346,7 +473,7 @@ export async function loadCustomerList(
       inApp: stuckConnect.filter((r) => isInApp(r.browser)).length,
       of: stuckConnect.length,
     },
-    windowFull: tenants.length >= LIST_WINDOW,
+    windowFull: tenants.length >= LIST_WINDOW || signups.windowFull,
   };
 }
 
@@ -437,6 +564,29 @@ export interface CustomerDetail {
 }
 
 const isStaffName = (email: string | undefined) => (email ? email.split("@")[0] : null);
+
+/** Who did each audited thing: Waggle, "the owner", or staff and others by the start of their email. */
+async function actorNamer(
+  db: ServiceClient,
+  actors: readonly string[],
+  ownerId: string | null,
+): Promise<(actor: string) => string> {
+  const actorIds = [...new Set(actors.filter((a) => /^[0-9a-f-]{36}$/i.test(a)))];
+  const [actorEmails, staffRoles] = await Promise.all([
+    emailsOf(db, actorIds),
+    actorIds.length
+      ? db.from("staff_members").select("user_id, role").in("user_id", actorIds)
+      : Promise.resolve({ data: [] as { user_id: string; role: string }[], error: null }),
+  ]);
+  const roleOf = new Map((staffRoles.data ?? []).map((s) => [s.user_id, s.role]));
+  return (actor: string) => {
+    if (actor === "system") return "Waggle";
+    if (actor === ownerId) return "the owner";
+    const who = isStaffName(actorEmails.get(actor)) ?? "someone";
+    const role = roleOf.get(actor);
+    return role ? `${who} (${role})` : who;
+  };
+}
 
 export async function loadCustomerDetail(
   db: ServiceClient,
@@ -539,24 +689,11 @@ export async function loadCustomerDetail(
     ownerId ? db.auth.admin.getUserById(ownerId) : Promise.resolve(null),
   ]);
 
-  // Who did each audited thing: staff and owners by the start of their email.
-  const actorIds = [
-    ...new Set((audit.data ?? []).map((a) => a.actor).filter((a) => /^[0-9a-f-]{36}$/i.test(a))),
-  ];
-  const [actorEmails, staffRoles] = await Promise.all([
-    emailsOf(db, actorIds),
-    actorIds.length
-      ? db.from("staff_members").select("user_id, role").in("user_id", actorIds)
-      : Promise.resolve({ data: [] as { user_id: string; role: string }[], error: null }),
-  ]);
-  const roleOf = new Map((staffRoles.data ?? []).map((s) => [s.user_id, s.role]));
-  const actorName = (actor: string) => {
-    if (actor === "system") return "Waggle";
-    if (actor === ownerId) return "the owner";
-    const who = isStaffName(actorEmails.get(actor)) ?? "someone";
-    const role = roleOf.get(actor);
-    return role ? `${who} (${role})` : who;
-  };
+  const actorName = await actorNamer(
+    db,
+    (audit.data ?? []).map((a) => a.actor),
+    ownerId,
+  );
 
   const attemptRows: AttemptRow[] = (attempts.data ?? []).map((a) => ({
     id: a.id,
@@ -748,4 +885,190 @@ export async function tenantOwner(
     ownerId = data?.[0]?.user_id ?? null;
   }
   return { name: t.name, offboarded: t.offboarded_at !== null, ownerId };
+}
+
+// ── One sign-up with no business (26 Nov) ───────────────────────────────────────────────────────
+
+/**
+ * Where a login's page goes: its business when it has one now (the business page), else its
+ * organization (personal first), where the staff look is audited. Null: no login, or no
+ * organization at all.
+ */
+export async function signupTarget(
+  db: ServiceClient,
+  userId: string,
+): Promise<{ kind: "business"; tenantId: string } | { kind: "signup"; orgId: string } | null> {
+  const [{ data: members, error }, { data: shared }] = await Promise.all([
+    db
+      .from("organization_members")
+      .select("organization_id, created_at, organizations(personal_of)")
+      .eq("user_id", userId)
+      .order("created_at"),
+    db.from("tenant_members").select("tenant_id").eq("user_id", userId).limit(1),
+  ]);
+  if (error) throw new Error(`customers: reading failed: ${error.message}`);
+  const orgIds = (members ?? []).map((m) => m.organization_id);
+  const { data: tenants } = orgIds.length
+    ? await db
+        .from("tenants")
+        .select("id")
+        .in("organization_id", orgIds)
+        .is("purged_at", null)
+        .order("created_at")
+        .limit(1)
+    : { data: [] as { id: string }[] };
+  const tenantId = tenants?.[0]?.id ?? shared?.[0]?.tenant_id;
+  if (tenantId) return { kind: "business", tenantId };
+  const own = (members ?? []).find((m) => m.organizations?.personal_of === userId);
+  const orgId = own?.organization_id ?? orgIds[0];
+  return orgId ? { kind: "signup", orgId } : null;
+}
+
+export interface SignupDetail {
+  row: CustomerRow;
+  source: Source;
+  owner: {
+    id: string;
+    email: string | null;
+    name: string | null;
+    provider: string | null;
+    /** The login's own confirmed time (Google sign-ins come confirmed). */
+    confirmedAt: string | null;
+    emailConfirm: { sentAt: string; confirmedAt: string | null } | null;
+    betaCode: string | null;
+    betaVia: string | null;
+  };
+  org: { id: string; name: string | null; own: boolean; members: number; others: number };
+  timeline: TimelineEvent[];
+  ghlContactId: string | null;
+}
+
+export async function loadSignupDetail(
+  db: ServiceClient,
+  userId: string,
+  orgId: string,
+  now: Date,
+): Promise<SignupDetail | null> {
+  const { data: got } = await db.auth.admin.getUserById(userId);
+  const user = got.user;
+  if (!user) return null;
+  const [memberships, org, members, confirmation, beta, crm, activity, bill, mornings] =
+    await Promise.all([
+      db.from("organization_members").select("organization_id").eq("user_id", userId),
+      db.from("organizations").select("id, name, personal_of").eq("id", orgId).maybeSingle(),
+      db
+        .from("organization_members")
+        .select("user_id", { count: "exact", head: true })
+        .eq("organization_id", orgId),
+      db
+        .from("email_confirmations")
+        .select("sent_at, confirmed_at")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      db.from("beta_access").select("via, beta_codes(code)").eq("user_id", userId).maybeSingle(),
+      db
+        .from("crm_events")
+        .select("id, created_at, event, status, sent_at, ghl_contact_id, details")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      db.from("user_activity").select("last_seen_at").eq("user_id", userId).maybeSingle(),
+      db
+        .from("org_billing")
+        .select("plan, status, trial_ends_at, billing_interval")
+        .eq("organization_id", orgId)
+        .maybeSingle(),
+      db
+        .from("first_morning_emails")
+        .select("created_at, sent_at, outcome")
+        .eq("organization_id", orgId),
+    ]);
+  const orgIds = [...new Set((memberships.data ?? []).map((m) => m.organization_id))];
+  const { data: audit } = await db
+    .from("organization_audit")
+    .select("id, created_at, action, actor, details")
+    .in("organization_id", orgIds.length ? orgIds : [orgId])
+    .order("created_at", { ascending: false })
+    .limit(300);
+  const actorName = await actorNamer(
+    db,
+    (audit ?? []).map((a) => a.actor),
+    userId,
+  );
+
+  const conf = confirmation.data;
+  const emailEvents: TimelineEvent[] = [];
+  if (conf) {
+    emailEvents.push({
+      id: "email:confirm-sent",
+      at: conf.sent_at,
+      kind: "email",
+      title: "Confirm email sent",
+      detail: "Resend",
+    });
+    if (conf.confirmed_at) {
+      emailEvents.push({
+        id: "email:confirmed",
+        at: conf.confirmed_at,
+        kind: "email",
+        title: "Email confirmed",
+        detail: null,
+      });
+    }
+  }
+  for (const [i, m] of (mornings.data ?? []).entries()) {
+    emailEvents.push({
+      id: `email:morning:${i}`,
+      at: m.sent_at ?? m.created_at,
+      kind: "email",
+      title: m.sent_at ? "First-morning email sent" : "First-morning email not sent",
+      detail: m.outcome,
+    });
+  }
+
+  const crmRows = crm.data ?? [];
+  const row = signupRow(
+    {
+      userId,
+      email: user.email ?? null,
+      name: nameOf(user),
+      signedUpAt: user.created_at,
+      provider: providerOf(user),
+      orgName: org.data?.name ?? null,
+      confirmation: conf ? { confirmed_at: conf.confirmed_at } : null,
+      bill: bill.data ?? null,
+      signedUpEvent: crmRows.find((c) => c.event === "signed_up") ?? null,
+      lastSeenAt: activity.data?.last_seen_at ?? null,
+    },
+    now,
+  );
+  const betaRow = beta.data as { via: string; beta_codes: { code: string } | null } | null;
+  const { utm, ...plain } = row;
+  return {
+    row: plain,
+    source: { kind: row.source, label: row.sourceLabel, utm },
+    owner: {
+      id: userId,
+      email: row.ownerEmail,
+      name: row.ownerName,
+      provider: providerOf(user),
+      confirmedAt: user.email_confirmed_at ?? null,
+      emailConfirm: conf ? { sentAt: conf.sent_at, confirmedAt: conf.confirmed_at } : null,
+      betaCode: betaRow?.beta_codes?.code ?? null,
+      betaVia: betaRow?.via ?? null,
+    },
+    org: {
+      id: orgId,
+      name: org.data?.name ?? null,
+      own: org.data?.personal_of === userId,
+      members: members.count ?? 0,
+      others: Math.max(0, orgIds.length - 1),
+    },
+    timeline: mergeTimeline(
+      (audit ?? []).map((a) => auditEvent(a, actorName)),
+      crmRows.map(crmEvent),
+      emailEvents,
+    ),
+    ghlContactId: crmRows.find((c) => c.ghl_contact_id)?.ghl_contact_id ?? null,
+  };
 }

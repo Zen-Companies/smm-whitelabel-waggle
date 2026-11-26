@@ -351,6 +351,9 @@ export function connectStatusLabel(input: {
   now: Date;
 }): { label: string; inProgress: boolean } {
   if (input.stage === "active") return { label: "Active", inProgress: false };
+  if (input.stage === "no_business") {
+    return { label: "Signed up · never tapped Connect", inProgress: false };
+  }
   const open =
     input.stage === "connect" && input.lastTry ? tryInProgress(input.lastTry, input.now) : null;
   return open
