@@ -7,13 +7,13 @@ import { getPlatformPause, recordPlatformPause } from "@/lib/social/platform-pau
 import { hasLiveComments } from "@/lib/social/platforms";
 import {
   isDmAccessMissing,
-  type ProviderComment,
   type ProviderConversation,
   type SocialProvider,
 } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
 import { missedToClassify } from "./missed-topics";
+import { readPostComments } from "./read";
 import { SORT_CAP } from "./reveal-data";
 import {
   addTally,
@@ -68,9 +68,6 @@ const LOCK_MS = 2 * 60 * 1000;
 /** Give up on a catch-up that keeps failing (the owner still has webhooks from now on). */
 const MAX_ATTEMPTS = 5;
 const POSTS_PAGE = 25;
-const COMMENTS_PAGE = 50;
-/** Comment pages read per post: a viral post can't eat the whole run. */
-const MAX_COMMENT_PAGES = 10;
 const CONVERSATIONS = 100;
 const MESSAGES_PER_CONVERSATION = 50;
 /** A post's caption is kept this long on its pulled comments (labels and top questions). */
@@ -408,27 +405,11 @@ async function pullPost(
   /** Response score: customer comments judged, and answered within 24 hours. */
   response: ResponseTally;
 }> {
-  const all: ProviderComment[] = [];
-  let cursor: string | null = null;
-  let capped = false;
-  for (let p = 0; p < MAX_COMMENT_PAGES; p += 1) {
-    const left = input.commentsLeft - all.length;
-    if (left <= 0) {
-      capped = true;
-      break;
-    }
-    const comments: { comments: ProviderComment[]; nextCursor: string | null } = await deps
-      .social()
-      .listPostCommentsPage({
-        accountId: account.zernio_account_id,
-        postId: input.postId,
-        cursor,
-        limit: Math.min(COMMENTS_PAGE, left),
-      });
-    all.push(...comments.comments);
-    cursor = comments.nextCursor;
-    if (!cursor) break;
-  }
+  const { comments: all, capped } = await readPostComments(deps.social(), {
+    accountId: account.zernio_account_id,
+    postId: input.postId,
+    limit: input.commentsLeft,
+  });
 
   const giveaway = isGiveawayPost(all.filter((c) => !c.fromOwner).map((c) => c.text));
   const result = {

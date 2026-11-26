@@ -8,11 +8,21 @@ export { redraftAfterAnswerChange } from "./redraft";
 export { draftOnOpen } from "./draft-on-open";
 export type { DraftOnOpenOutcome } from "./draft-on-open";
 export { draftPulledItem, redraftPulledItem } from "./actions";
-export { CATCH_UP_COMMENTS_MS, CATCH_UP_DMS_MS, DM_REPLY_WINDOW_MS, pullsPastDms } from "./rules";
+export {
+  CATCH_UP_COMMENTS_MS,
+  CATCH_UP_DMS_MS,
+  commentToDraft,
+  DM_REPLY_WINDOW_MS,
+  pulledDmKey,
+  pullsPastDms,
+  sortConversation,
+} from "./rules";
+export { readPostComments } from "./read";
 export {
   authorHandle,
   catchUpAccountKeys,
   CLOSED_STATUSES,
+  isGiveawayPost,
   needsReply,
   safeToQuote,
 } from "./reveal-rules";

@@ -1,7 +1,7 @@
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
 import { getServiceClient } from "@/lib/supabase/service";
 import { isFrequency, type Frequency } from "./digest";
-import { saveCheckInEmails } from "./check-in-actions";
+import { saveCheckInEmails, saveWeeklyEmails } from "./check-in-actions";
 import { CheckInForm } from "./check-in-form";
 import { saveMyEmailFrequency, saveSiteEmailFrequency } from "./email-frequency-actions";
 import { EmailFrequencyForm } from "./email-frequency-form";
@@ -23,7 +23,7 @@ export async function NotificationSettings() {
   const user = await getCurrentUser();
   const emailOn = !!process.env.RESEND_API_KEY && !!process.env.ALERT_FROM_EMAIL;
   const supabase = await createServerSupabase();
-  const [{ data: mine }, fallback, { data: checkInOff }] = await Promise.all([
+  const [{ data: mine }, fallback, { data: checkInOff }, { data: weeklyOff }] = await Promise.all([
     supabase
       .from("notification_prefs")
       .select("email_frequency")
@@ -35,6 +35,12 @@ export async function NotificationSettings() {
       .select("kind")
       .eq("user_id", user.id)
       .eq("kind", "check_in")
+      .maybeSingle(),
+    supabase
+      .from("email_opt_outs")
+      .select("kind")
+      .eq("user_id", user.id)
+      .eq("kind", "weekly")
       .maybeSingle(),
   ]);
   const current = isFrequency(mine?.email_frequency) ? mine.email_frequency : fallback;
@@ -71,6 +77,20 @@ export async function NotificationSettings() {
             </span>
           </span>
           <CheckInForm initial={!checkInOff} action={saveCheckInEmails} />
+        </li>
+        <li className="flex flex-col gap-3 px-5 py-4">
+          <span className="flex flex-col">
+            <span className="font-medium">Your week, every Monday</span>
+            <span className="text-ink-2 text-sm">
+              After Waggle checks your week on Monday morning: how many messages came in, what
+              people wanted and the questions your answers don&apos;t cover. To Owners only.
+            </span>
+          </span>
+          <CheckInForm
+            initial={!weeklyOff}
+            action={saveWeeklyEmails}
+            label="Email me my week on Mondays"
+          />
         </li>
         <li className="flex flex-col px-5 py-4">
           <span className="font-medium">In the app</span>
