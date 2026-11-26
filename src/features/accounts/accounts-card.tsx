@@ -20,6 +20,7 @@ import { connectBanner } from "./connect-banner";
 import { safeReturnPath } from "./connect-return";
 import { ConnectTiles } from "./connect-tiles";
 import { MoreConnections } from "./more-connections";
+import { loadUnfinishedConnect } from "./connect-unfinished-load";
 
 /** " @name", or " name@x.com" for an address; empty when there's no name. */
 function handleOf(username: string | null): string {
@@ -50,6 +51,14 @@ export async function AccountsCard({
 
   const connected = [...new Set((accounts ?? []).map((a) => a.platform))];
   const statuses = await loadPlatformStatuses(getServiceClient());
+  // "Didn't finish?" (26 Nov): a connect that left for the sign-in and never came back.
+  const unfinished = mayConnect
+    ? await loadUnfinishedConnect(
+        supabase,
+        tenant.id,
+        (accounts ?? []).filter((a) => a.status === "active").map((a) => a.platform),
+      )
+    : null;
   // "Before you connect" (18 Nov): ?before=<id> after a connect whose sign-in names Zernio.
   const before = typeof params.before === "string" ? params.before : null;
   const socialNote =
@@ -77,7 +86,7 @@ export async function AccountsCard({
     <>
       {setup}
       {socialNote}
-      <ConnectTiles exclude={connected} statuses={statuses} />
+      <ConnectTiles exclude={connected} statuses={statuses} unfinished={unfinished} />
       <MoreConnections before={before} />
     </>
   );

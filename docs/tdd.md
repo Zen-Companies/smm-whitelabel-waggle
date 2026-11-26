@@ -929,6 +929,13 @@ Spec "Walter's flow" (build B), boards "Walter's flow in Waggle" and "Setup step
   4 s timeout; on failure the page shows Waggle's steps only. Nothing is stored. Building the steps, the "Most likely"
   deduction (time, browser class, platform; labelled "Deduced by Waggle") and the "In progress · N min" status (a try
   with no outcome under 2 h, list and detail) are pure in `connect-story.ts`.
+- "Didn't finish?" (owner side, approved 26 Nov): the Connect tiles (Settings → Accounts) and setup's connect step
+  (`/welcome`) read the brand's `connect_attempts` of the last 2 h with the owner's own client (RLS). The platform's
+  latest try with no outcome, platform not connected, 1 min to 2 h old (`unfinishedConnect`, pure, in
+  `features/accounts/connect-unfinished.ts`) shows a note in place with Try again (a new connect, the normal way) and
+  ×, remembered per try id in localStorage. The 1-minute wait runs in the browser from the server's clock
+  (`showInMs`); a back/forward-cache restore refreshes the page. "Having trouble?" under each sign-in Connect button
+  opens the browser tips in place. A try that came back (failed, no account) keeps the existing banner only.
 - Sign-ups with no business (26 Nov): a login whose organizations hold no business (never tapped Connect) is a list row
   too, "No business yet" / "Signed up · never tapped Connect" (stage `no_business`, also a "Stuck at" option and tile),
   from the newest 1000 personal organizations, staff left out (`signups.ts`, pure); its page is
