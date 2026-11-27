@@ -1,7 +1,13 @@
 // Pure pieces of the two-step posting tools (preview_post, create_post): when a post goes out,
 // and which media problems block it. No database, no Zernio.
 
-import type { PostOptions } from "@/features/publishing";
+import {
+  platformSet,
+  type GoogleButton,
+  type GoogleOptions,
+  type PostOptions,
+} from "@/features/publishing";
+import { platformLabel } from "@/lib/social/platforms";
 import type { MediaCheck } from "@/lib/social/types";
 
 export const PREVIEW_TTL_MS = 30 * 60_000;
@@ -74,6 +80,40 @@ export function mediaProblems(index: number, check: MediaCheck, platforms: strin
   return problems;
 }
 
+/** Google Business: an Update, an Offer or an Event, and a button (Posts Round 4). */
+export interface ToolGoogle {
+  kind: "update" | "offer" | "event";
+  title?: string;
+  start_day?: string;
+  start_time?: string;
+  end_day?: string;
+  end_time?: string;
+  coupon_code?: string;
+  redeem_url?: string;
+  terms?: string;
+  button?: ToolGoogleButton;
+  button_url?: string;
+}
+
+export const TOOL_GOOGLE_BUTTONS = [
+  "book",
+  "order",
+  "shop",
+  "learn_more",
+  "sign_up",
+  "call_now",
+] as const;
+export type ToolGoogleButton = (typeof TOOL_GOOGLE_BUTTONS)[number];
+
+const GOOGLE_BUTTON: Record<ToolGoogleButton, GoogleButton> = {
+  book: "BOOK",
+  order: "ORDER",
+  shop: "SHOP",
+  learn_more: "LEARN_MORE",
+  sign_up: "SIGN_UP",
+  call_now: "CALL",
+};
+
 /** One platform's choices, as the assistant sends them in preview_post. */
 export interface ToolPostOption {
   platform: string;
@@ -83,6 +123,11 @@ export interface ToolPostOption {
   pinterest_board_id?: string;
   caption?: string;
   ai_label?: boolean;
+  /** YouTube: who can see the video. */
+  visibility?: "public" | "unlisted" | "private";
+  /** YouTube: made for kids. */
+  made_for_kids?: boolean;
+  google?: ToolGoogle;
 }
 
 const POST_TYPES = new Set(["instagram", "facebook"]);
@@ -111,9 +156,67 @@ export function optionProblems(options: ToolPostOption[], platforms: string[]): 
       out.push("options: pinterest_board_id is for Pinterest only.");
     if (o.ai_label && !AI_LABEL.has(p))
       out.push(`options: ai_label is for Instagram and YouTube, not ${p}.`);
+    if ((o.visibility || o.made_for_kids !== undefined) && p !== "youtube")
+      out.push("options: visibility and made_for_kids are for YouTube only.");
+    if (o.google && p !== "googlebusiness")
+      out.push("options: google is for Google Business (platform googlebusiness) only.");
+    if (o.google?.button === "call_now" && o.google.button_url)
+      out.push(
+        "options: google.button_url isn't used with call_now (it calls the business phone from Business info).",
+      );
   }
   return out;
 }
+
+/** Pure: the assistant's Google choices as the composer keeps them. */
+export function toGoogleOptions(g: ToolGoogle): GoogleOptions {
+  return {
+    kind: g.kind,
+    ...(g.title ? { title: g.title } : {}),
+    ...(g.start_day ? { startDay: g.start_day } : {}),
+    ...(g.start_time ? { startTime: g.start_time } : {}),
+    ...(g.end_day ? { endDay: g.end_day } : {}),
+    ...(g.end_time ? { endTime: g.end_time } : {}),
+    ...(g.coupon_code ? { coupon: g.coupon_code } : {}),
+    ...(g.redeem_url ? { redeemUrl: g.redeem_url } : {}),
+    ...(g.terms ? { terms: g.terms } : {}),
+    ...(g.button ? { button: GOOGLE_BUTTON[g.button] } : {}),
+    ...(g.button_url ? { buttonUrl: g.button_url } : {}),
+  };
+}
+
+/** What one platform gets of a post's files (carousels are trimmed per platform). */
+export interface PlatformFiles {
+  platform: string;
+  files: number;
+  note: string | null;
+}
+
+/**
+ * Pure: what each platform takes of the post's files, in the composer's words (Posts Round 4,
+ * `platformSet`): a note per platform that gets fewer, and the platforms nothing fits.
+ */
+export function carouselFit(
+  platforms: readonly string[],
+  kinds: readonly ("image" | "video")[],
+  options: PostOptions,
+): { perPlatform: PlatformFiles[]; warnings: string[]; blocked: string[] } {
+  const perPlatform: PlatformFiles[] = [];
+  const warnings: string[] = [];
+  const blocked: string[] = [];
+  for (const p of new Set(platforms)) {
+    const set = platformSet(p, kinds, options[p]?.as);
+    if (set.blocked) {
+      blocked.push(set.blocked);
+      continue;
+    }
+    perPlatform.push({ platform: p, files: set.indices.length, note: set.note });
+    if (set.note) warnings.push(`${set.note}.`);
+  }
+  return { perPlatform, warnings, blocked };
+}
+
+export const placesOf = (platforms: readonly string[]) => platforms.map(platformLabel).join(", ");
 
 /** Pure: the assistant's choices as the composer's per-platform options (posts.platform_options). */
 export function toPostOptions(
@@ -130,6 +233,9 @@ export function toPostOptions(
       ...(o.title ? { title: o.title } : {}),
       ...(o.pinterest_board_id ? { boardId: o.pinterest_board_id } : {}),
       ...(o.ai_label ? { aiLabel: true } : {}),
+      ...(o.visibility ? { visibility: o.visibility } : {}),
+      ...(o.made_for_kids !== undefined ? { madeForKids: o.made_for_kids } : {}),
+      ...(o.google ? { google: toGoogleOptions(o.google) } : {}),
     };
     if (Object.keys(v).length) out[p] = v;
   }

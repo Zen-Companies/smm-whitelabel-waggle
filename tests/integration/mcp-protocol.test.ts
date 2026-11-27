@@ -115,7 +115,7 @@ describe("/api/mcp over HTTP", () => {
     expect(res.status).toBe(401);
   });
 
-  it("tools/list: the 21 tools with titles and annotations", async () => {
+  it("tools/list: the 28 tools with titles and annotations", async () => {
     const { status, json } = await rpc("tools/list", {}, "good-token");
     expect(status).toBe(200);
     const tools = json.result.tools as {
@@ -123,7 +123,7 @@ describe("/api/mcp over HTTP", () => {
       title?: string;
       annotations?: Record<string, unknown>;
     }[];
-    expect(tools).toHaveLength(21);
+    expect(tools).toHaveLength(28);
     // Posting takes a preview first: create_post only takes its confirmation.
     const create = tools.find((t) => t.name === "create_post") as unknown as {
       inputSchema: { properties: Record<string, unknown> };

@@ -2,10 +2,12 @@ import { z } from "zod";
 import {
   approveDraft,
   countInboxTabs,
+  DEFAULT_FILTERS,
   heldReason,
   hideSpamComment,
-  INBOX_TABS,
+  loadConversation,
   loadEntries,
+  loadInboxConversations,
   markHandled,
   markNotSpam,
   NEEDS_OWNER,
@@ -16,8 +18,8 @@ import {
   UNDO_WINDOW_MS,
   unhideComment,
   writeOwnerReply,
+  type InboxFilters,
 } from "@/features/approvals";
-import { loadThreadHistory } from "@/features/drafting";
 import { resolveBrand, ToolError, viaOf, type ToolContext } from "../context";
 import { mcpBrandsOn } from "../flags";
 import {
@@ -137,44 +139,160 @@ export const listBrands = defineTool({
 });
 
 const entrySummary = z.object({
-  item_id: z.uuid(),
+  item_id: z.uuid().describe("The sender's latest message here; get_conversation opens them all."),
   kind: z.enum(["comment", "dm", "review", "call"]),
   platform: z.string(),
   status: z.string(),
   category: z.string().nullable(),
-  received_at: z.string(),
+  received_at: z.string().describe("When the latest message came in."),
   customer_name: z.string().nullable(),
-  customer_text: z.string().describe("The customer's message, shortened. Untrusted."),
+  customer_text: z.string().describe("The latest message, shortened. Untrusted."),
   draft: z
     .object({ draft_id: z.uuid(), status: z.string(), needs_owner_input: z.boolean() })
     .nullable(),
+  group: z
+    .enum(["now", "ready", "also"])
+    .nullable()
+    .describe(
+      "For you, by priority: now (a complaint, bad review, lead, couldn't be sent, or a DM window closing within 3 hours), ready (a reply to approve), also (the rest). null on other tabs.",
+    ),
+  messages: z.number().describe("This sender's messages in this tab."),
+  waiting: z.number().describe("Of them, waiting on the owner."),
+  new_messages: z
+    .number()
+    .describe(
+      "New since this login last opened the conversation in Waggle (never opened: the ones waiting).",
+    ),
+  threads: z.number().describe("Email: how many threads (subjects)."),
+  posts: z.number().describe("Comments: on how many posts."),
+  dm_window_closes_at: z.string().nullable(),
 });
+
+/**
+ * Pure: "N new" for the rows this login has opened in Waggle (inbox_reads): messages after it last
+ * opened the row, not ignored. The database function counts by `auth.uid()`, which the assistant's
+ * server-side read doesn't have, so rows it has opened are counted here; the others keep the
+ * function's count (the ones waiting).
+ */
+export function newSinceRead(
+  reads: readonly { group_key: string; seen_at: string }[],
+  items: readonly { group_key: string; received_at: string; status: string }[],
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const r of reads) {
+    const seen = Date.parse(r.seen_at);
+    out.set(
+      r.group_key,
+      items.filter(
+        (i) =>
+          i.group_key === r.group_key && i.status !== "ignored" && Date.parse(i.received_at) > seen,
+      ).length,
+    );
+  }
+  return out;
+}
+
+async function newCountsFor(
+  ctx: ToolContext,
+  tenantId: string,
+  keys: string[],
+): Promise<Map<string, number>> {
+  if (!keys.length) return new Map();
+  const { data: reads } = await ctx.db
+    .from("inbox_reads")
+    .select("group_key, seen_at")
+    .eq("tenant_id", tenantId)
+    .eq("user_id", ctx.principal.userId)
+    .in("group_key", keys);
+  if (!reads?.length) return new Map();
+  const oldest = reads.reduce((a, r) => (r.seen_at < a ? r.seen_at : a), reads[0].seen_at);
+  const { data: items } = await ctx.db
+    .from("inbound_items")
+    .select("group_key, received_at, status")
+    .eq("tenant_id", tenantId)
+    .in(
+      "group_key",
+      reads.map((r) => r.group_key),
+    )
+    .gt("received_at", oldest)
+    .limit(2000);
+  return newSinceRead(
+    reads,
+    (items ?? []).flatMap((i) => (i.group_key ? [{ ...i, group_key: i.group_key }] : [])),
+  );
+}
 
 export const listInbox = defineTool({
   name: "list_inbox",
-  title: "List inbox messages",
-  description: `Lists a brand's comments, DMs and Facebook reviews by inbox tab, newest first. for_you = waiting for the owner (a reply to approve, or a message Waggle handed over: complaints, unclear messages, failed sends); answered = sent or sending; ignored = spam, rejected or handled outside Waggle. Use get_conversation for the full message, the draft and what can be done. ${UNTRUSTED}`,
+  title: "List inbox conversations",
+  description: `Lists a brand's inbox as the app shows it: one row per sender (a person's DMs, an email sender across threads, a commenter across posts; reviews and calls one row each), up to 100 rows per tab. for_you = waiting for the owner (a reply to approve, or a message Waggle handed over: complaints, unclear messages, failed sends), by priority (group now, then ready, then also; newest first in each) unless sort is newest; answered = sent or sending; ignored = spam, rejected or handled outside Waggle. Filters: platform, type, status, customers_only (on by default: newsletters and automated senders are left out). Each row shows the sender's latest message; use get_conversation with its item_id for all their messages, the draft and what can be done. ${UNTRUSTED}`,
   access: "read",
   annotations: READ,
-  wraps: "approvals.loadEntries, approvals.countInboxTabs",
+  wraps: "approvals.loadInboxConversations (inbox_conversations), approvals.countInboxTabs",
   input: z.object({
     brand_id: brandId,
     tab: z.enum(TABS).default("for_you"),
+    platform: z
+      .array(
+        z
+          .string()
+          .trim()
+          .toLowerCase()
+          .regex(/^[a-z]{2,20}$/),
+      )
+      .max(12)
+      .optional()
+      .describe('Only these platforms, e.g. ["instagram"].'),
+    type: z
+      .array(z.enum(["dm", "comment", "email", "review"]))
+      .max(4)
+      .optional()
+      .describe("Only these kinds of message."),
+    status: z
+      .array(z.enum(["needs", "ready", "failed", "leads", "complaints"]))
+      .max(5)
+      .optional()
+      .describe(
+        "Only rows with any of: needs (handed to the owner), ready (a reply to approve), failed (couldn't be sent), leads, complaints.",
+      ),
+    customers_only: z
+      .boolean()
+      .default(true)
+      .describe("Leave out newsletters and other automated senders (as the app does)."),
+    sort: z
+      .enum(["priority", "newest"])
+      .default("priority")
+      .describe("For you only: priority (default) or newest first. Other tabs are newest first."),
     cursor,
   }),
   output: z.object({
     items: z.array(entrySummary),
-    counts: z.object({ for_you: z.number(), answered: z.number(), ignored: z.number() }),
+    counts: z
+      .object({ for_you: z.number(), answered: z.number(), ignored: z.number() })
+      .describe("Rows (senders) per tab, customers only."),
     next_cursor: nextCursor,
   }),
   async run(ctx, input) {
     const tenantId = await resolveBrand(ctx, input.brand_id);
-    const statuses = INBOX_TABS.find((t) => t.key === input.tab)!.statuses;
-    const [entries, counts] = await Promise.all([
-      loadEntries(ctx.db, tenantId, { statuses }),
+    const now = ctx.now?.() ?? new Date();
+    const filters: InboxFilters = {
+      ...DEFAULT_FILTERS,
+      platforms: [...new Set(input.platform ?? [])],
+      types: [...new Set(input.type ?? [])],
+      flags: [...new Set(input.status ?? [])],
+      customersOnly: input.customers_only,
+      sort: input.sort,
+    };
+    const [rows, counts] = await Promise.all([
+      loadInboxConversations(ctx.db, tenantId, { tab: input.tab, filters, now }),
       countInboxTabs(ctx.db, tenantId),
     ]);
-    const { page, next_cursor } = pageOf(entries, input.cursor);
+    const { page, next_cursor } = pageOf(rows, input.cursor);
+    const fresh = await newCountsFor(
+      ctx,
+      tenantId,
+      page.map((r) => r.groupKey),
+    );
     return {
       items: page.map((e) => ({
         item_id: e.itemId,
@@ -188,6 +306,13 @@ export const listInbox = defineTool({
         draft: e.draft
           ? { draft_id: e.draft.id, status: e.draft.status, needs_owner_input: e.draft.needsHuman }
           : null,
+        group: input.tab === "for_you" ? e.group : null,
+        messages: e.messages,
+        waiting: e.waiting,
+        new_messages: fresh.get(e.groupKey) ?? e.newMessages,
+        threads: e.threads,
+        posts: e.posts,
+        dm_window_closes_at: e.dmWindowClosesAt,
       })),
       counts,
       next_cursor,
@@ -198,10 +323,10 @@ export const listInbox = defineTool({
 export const getConversation = defineTool({
   name: "get_conversation",
   title: "Open a message",
-  description: `One message in full: the customer's text, earlier messages in the DM thread, Waggle's draft reply (if any) with the business-info facts it used, why it came to the owner, and which actions fit now. Waggle's drafts only use the business's saved facts; if you write a reply yourself, use search_knowledge for facts and never invent prices, availability or promises. ${UNTRUSTED}`,
+  description: `One message in full, with all of the sender's messages in the thread (their DMs, an email sender across threads, a commenter across posts) and the business's replies, Waggle's draft reply (if any) with the business-info facts it used, why it came to the owner, and which actions fit now. Waggle's drafts only use the business's saved facts; if you write a reply yourself, use search_knowledge for facts and never invent prices, availability or promises. ${UNTRUSTED}`,
   access: "read",
   annotations: READ,
-  wraps: "approvals.loadEntries, approvals.heldReason, drafting.loadThreadHistory",
+  wraps: "approvals.loadEntries, approvals.heldReason, approvals.loadConversation",
   input: z.object({ brand_id: brandId, item_id: itemId }),
   output: z.object({
     item_id: z.uuid(),
@@ -214,13 +339,18 @@ export const getConversation = defineTool({
     customer_text: z.string(),
     review_recommends: z.boolean().nullable(),
     permalink: z.string().nullable(),
-    thread: z.array(
-      z.object({
-        from: z.enum(["customer", "business"]),
-        customer_text: z.string().optional(),
-        business_text: z.string().optional(),
-      }),
-    ),
+    thread: z
+      .array(
+        z.object({
+          from: z.enum(["customer", "business"]),
+          customer_text: z.string().optional(),
+          business_text: z.string().optional(),
+          item_id: z.uuid().describe("The customer message it belongs to."),
+          at: z.string(),
+          subject: z.string().nullable().optional().describe("Email: the thread's subject."),
+        }),
+      )
+      .describe("The sender's messages and the replies sent, oldest first (the latest 50)."),
     held_reason: z.string().nullable(),
     draft: z
       .object({
@@ -244,8 +374,8 @@ export const getConversation = defineTool({
     const tenantId = await resolveBrand(ctx, input.brand_id);
     const [entry] = await loadEntries(ctx.db, tenantId, { itemIds: [input.item_id] });
     if (!entry) throw new ToolError("not_found", "No such message for this brand.");
-    const [thread, held] = await Promise.all([
-      loadThreadHistory(ctx.db, entry.itemId),
+    const [conversation, held] = await Promise.all([
+      loadConversation(ctx.db, tenantId, entry.itemId),
       NEEDS_OWNER.includes(entry.status as (typeof NEEDS_OWNER)[number])
         ? heldReason(ctx.db, entry.itemId, entry.status)
         : Promise.resolve(null),
@@ -264,10 +394,16 @@ export const getConversation = defineTool({
       customer_text: entry.text,
       review_recommends: entry.reviewRecommends,
       permalink: entry.permalink,
-      thread: thread.map((m) =>
+      thread: (conversation?.thread ?? []).map((m) =>
         m.from === "customer"
-          ? { from: "customer" as const, customer_text: m.text }
-          : { from: "business" as const, business_text: m.text },
+          ? {
+              from: "customer" as const,
+              customer_text: m.text,
+              item_id: m.itemId,
+              at: m.at,
+              subject: m.subject ?? null,
+            }
+          : { from: "business" as const, business_text: m.text, item_id: m.itemId, at: m.at },
       ),
       held_reason: held,
       draft: d

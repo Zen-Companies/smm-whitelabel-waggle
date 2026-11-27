@@ -14,3 +14,20 @@ export { PostsHeader } from "./posts-header";
 export { listBoardsFor } from "./pinterest";
 export { parsePostOptions, targetExtras } from "./post-options";
 export type { PostOptions } from "./post-options";
+export { fixLiveText, movePost, updateScheduledPost } from "./edit";
+export type { FixTextResult, UpdatePostResult } from "./edit";
+export { canMove } from "./move";
+export { canEditLive, liveCopies, liveEditSplit } from "./live-edit";
+export { CAROUSEL_MAX, fileKind, platformSet } from "./carousel";
+export {
+  BUTTON_WORDS,
+  GOOGLE_BUTTONS,
+  GOOGLE_KINDS,
+  googleEnded,
+  readyGoogleOptions,
+} from "./google-post";
+export type { GoogleButton, GoogleKind, GoogleOptions } from "./google-post";
+export { loadBusinessPhone } from "./google-phone";
+export type { StoredMedia } from "./publish";
+export { editDiff } from "./edit-diff";
+export type { EditPart } from "./edit-diff";

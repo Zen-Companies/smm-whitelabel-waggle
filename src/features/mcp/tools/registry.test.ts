@@ -1,19 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { TOOLS } from "./registry";
+import { kindOf } from "../limits";
+import { TOOLS, toolByName } from "./registry";
 
 // The registry is the contract with Claude, ChatGPT and Grok (docs/mcp/PLAN.md §3).
 describe("MCP tool registry", () => {
-  it("has the 21 planned tools, unique snake_case names, a title and a description each", () => {
+  it("has the 28 planned tools, unique snake_case names, a title and a description each", () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual(
       [
         "add_answer",
+        "apply_post_change",
         "approve_reply",
         "create_upload_link",
         "cancel_post",
         "create_post",
+        "duplicate_post",
         "get_analytics",
         "get_conversation",
         "get_post_performance",
+        "get_week",
         "hide_comment",
         "list_brands",
         "list_inbox",
@@ -22,7 +26,11 @@ describe("MCP tool registry", () => {
         "list_posts",
         "move_lead",
         "preview_post",
+        "preview_post_edit",
+        "preview_post_move",
+        "preview_text_fix",
         "resolve_item",
+        "run_week_check",
         "search_knowledge",
         "undo_reply",
         "update_answer",
@@ -48,7 +56,14 @@ describe("MCP tool registry", () => {
     }
     const publicActions = TOOLS.filter((t) => t.annotations.openWorldHint).map((t) => t.name);
     expect(publicActions.sort()).toEqual(
-      ["approve_reply", "cancel_post", "create_post", "hide_comment", "write_reply"].sort(),
+      [
+        "apply_post_change",
+        "approve_reply",
+        "cancel_post",
+        "create_post",
+        "hide_comment",
+        "write_reply",
+      ].sort(),
     );
   });
 
@@ -84,4 +99,22 @@ it("every act tool names the role ability it needs (T58)", () => {
     if (t.access === "act") expect(t.ability, t.name).toBeDefined();
     else expect(t.ability, t.name).toBeUndefined();
   }
+});
+
+it("changes to posts are two steps: previews save in Waggle only, one tool applies them (send)", () => {
+  for (const name of [
+    "preview_post_edit",
+    "preview_post_move",
+    "preview_text_fix",
+    "duplicate_post",
+  ]) {
+    const t = toolByName(name)!;
+    expect(t.annotations, name).toMatchObject({ openWorldHint: false, readOnlyHint: false });
+    expect(t.description, name).toMatch(/apply_post_change|create_post/);
+    expect(Object.keys(t.output.shape), name).toContain("confirmation");
+  }
+  expect(kindOf(toolByName("apply_post_change")!)).toBe("send");
+  expect(kindOf(toolByName("duplicate_post")!)).toBe("act");
+  expect(kindOf(toolByName("get_week")!)).toBe("read");
+  expect(toolByName("run_week_check")!.ability).toBe("replies.approve");
 });
