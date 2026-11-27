@@ -1,20 +1,18 @@
 // First connect in setup (canvas board approved 20 Nov): step 2's edge cases and step 3's
 // questions from the customers' own messages. Pure, tested.
 
+import { breakerApp, type BreakerApp } from "@/features/auth";
 import { BUSINESS_KINDS, QUESTION_MAX } from "./starter";
 
 type Params = Record<string, string | string[] | undefined>;
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 /**
- * Pure: the page is open inside Instagram's or Facebook's own browser (where the paid ads land),
- * where signing in with Meta often stops halfway. Returns which one, or null.
+ * Pure: the page is open inside a browser that breaks the connect (Instagram's, Facebook's,
+ * Messenger's, or TikTok's since 27 Nov), where the ads land. Returns which one, or null.
  */
-export function isInAppBrowser(ua: string | null | undefined): "Instagram" | "Facebook" | null {
-  if (!ua) return null;
-  if (/\bInstagram\b/i.test(ua)) return "Instagram";
-  if (/\b(FBAN|FBAV|FB_IAB|FBIOS)\b/.test(ua)) return "Facebook";
-  return null;
+export function isInAppBrowser(ua: string | null | undefined): BreakerApp | null {
+  return breakerApp(ua);
 }
 
 export type ConnectProblem =
