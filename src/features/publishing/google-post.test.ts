@@ -5,6 +5,7 @@ import {
   googleEnded,
   googlePlatformData,
   googleProblems,
+  readyGoogleOptions,
   telUrl,
   withHttps,
   type GoogleOptions,
@@ -196,5 +197,34 @@ describe("helpers", () => {
     expect(googleEnded(offer, "2026-12-25")).toBe(true);
     expect(googleEnded(offer, "2026-12-24")).toBe(false);
     expect(googleEnded({ kind: "update" }, "2027-01-01")).toBe(false);
+  });
+});
+
+describe("readyGoogleOptions (composer and AI assistants alike)", () => {
+  it("refuses what Google won't take, in the owner's words", () => {
+    const r = readyGoogleOptions({ kind: "event", button: "CALL" }, null);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.problems.map((p) => p.field)).toEqual(["title", "start", "end", "button"]);
+    }
+  });
+
+  it("Call now dials the business phone; other links get https://", () => {
+    const call = readyGoogleOptions(
+      { kind: "update", button: "CALL", buttonUrl: "x" },
+      "+63 2 8555 0142",
+    );
+    expect(call).toEqual({
+      ok: true,
+      google: {
+        kind: "update",
+        button: "CALL",
+        buttonUrl: "tel:+63285550142",
+        redeemUrl: undefined,
+      },
+    });
+    const r = readyGoogleOptions(offer, null);
+    expect(r.ok && r.google.redeemUrl).toBe("https://harbourbakery.ph/order");
+    expect(r.ok && r.google.buttonUrl).toBe("https://harbourbakery.ph/order");
   });
 });

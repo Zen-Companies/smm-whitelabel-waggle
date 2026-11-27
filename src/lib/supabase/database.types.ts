@@ -2374,6 +2374,7 @@ export type Database = {
       post_previews: {
         Row: {
           account_ids: string[]
+          change: string | null
           client_id: string
           content: string
           created_at: string
@@ -2392,6 +2393,7 @@ export type Database = {
         ComputedFields: never
         Insert: {
           account_ids: string[]
+          change?: string | null
           client_id: string
           content: string
           created_at?: string
@@ -2409,6 +2411,7 @@ export type Database = {
         }
         Update: {
           account_ids?: string[]
+          change?: string | null
           client_id?: string
           content?: string
           created_at?: string

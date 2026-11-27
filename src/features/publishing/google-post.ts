@@ -271,3 +271,28 @@ export function googleEnded(o: GoogleOptions | undefined, today: string): boolea
   if (!o || o.kind === "update" || !o.endDay) return false;
   return o.endDay < today;
 }
+
+/**
+ * The owner's Google choices made ready to save (shared by the composer and the AI assistants'
+ * preview): what's wrong first; else Call now's link set to `tel:` + the business phone, and the
+ * other button and redeem links given https://.
+ */
+export function readyGoogleOptions(
+  o: GoogleOptions,
+  phone: string | null,
+): { ok: true; google: GoogleOptions } | { ok: false; problems: GoogleProblem[] } {
+  const problems = googleProblems(o, phone);
+  if (problems.length) return { ok: false, problems };
+  return {
+    ok: true,
+    google: {
+      ...o,
+      ...(o.button === "CALL"
+        ? { buttonUrl: telUrl(phone) ?? undefined }
+        : o.button && o.buttonUrl
+          ? { buttonUrl: withHttps(o.buttonUrl) }
+          : { buttonUrl: undefined }),
+      redeemUrl: o.redeemUrl?.trim() ? withHttps(o.redeemUrl) : undefined,
+    },
+  };
+}

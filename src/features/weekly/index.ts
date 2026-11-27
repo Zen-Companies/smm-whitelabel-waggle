@@ -6,3 +6,6 @@ export { requestCheckNow, runWeeklyChecks, scheduleMondayChecks, RUN_SORT_CAP } 
 export type { CheckNowResult, WeeklyDeps } from "./job";
 export { sendWeeklyEmails } from "./email-send";
 export { kickWeeklyCheck, MAX_WEEKLY_HOPS } from "./kick";
+export { loadWeekCard } from "./data";
+export type { WeekCardData, WeekProgress, WeekRunView } from "./data";
+export type { WeekSummary } from "./summary";

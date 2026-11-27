@@ -497,3 +497,240 @@ describe("Add photos: only links Waggle handed out are saved (security review)",
     ).toBe(false);
   });
 });
+
+describe("MCP catch-up (27 Nov): change posts, inbox by sender, your week", () => {
+  // Many actions in one brand within the hour: the limits are tested in mcp-limits.test.ts.
+  const saved = { ...process.env };
+  beforeAll(() => {
+    process.env.MCP_ACTS_PER_HOUR = "500";
+    process.env.MCP_BURST_SEND_CAP = "500";
+  });
+  afterAll(() => {
+    process.env.MCP_ACTS_PER_HOUR = saved.MCP_ACTS_PER_HOUR;
+    process.env.MCP_BURST_SEND_CAP = saved.MCP_BURST_SEND_CAP;
+  });
+
+  async function plannedPost(content: string) {
+    const preview = (await call(claude, "preview_post", {
+      content,
+      account_ids: [cafe.accountId],
+      publish_at: new Date(Date.now() + 3 * 60 * 60_000).toISOString(),
+    })) as { confirmation: string };
+    const made = (await call(claude, "create_post", {
+      confirmation: preview.confirmation,
+    })) as { post_id: string };
+    // As Zernio's answer leaves it: planned, held by Zernio.
+    await db
+      .from("posts")
+      .update({ status: "scheduled", zernio_post_id: `mock_post_${made.post_id}` })
+      .eq("id", made.post_id);
+    return made.post_id;
+  }
+
+  it("move: preview, the owner's yes, once; a change confirmation isn't a new post", async () => {
+    const postId = await plannedPost("Ube pandesal this Saturday");
+    const to = new Date(Date.now() + 26 * 60 * 60_000);
+    const preview = (await call(claude, "preview_post_move", {
+      post_id: postId,
+      publish_at: to.toISOString(),
+    })) as { confirmation: string; move: { from: string; to: string } };
+    expect(new Date(preview.move.to).getTime()).toBe(to.getTime());
+    expect(await call(claude, "create_post", { confirmation: preview.confirmation })).toEqual({
+      error: "invalid_input",
+    });
+    const done = (await call(claude, "apply_post_change", {
+      confirmation: preview.confirmation,
+    })) as { outcome: string; scheduled_for: string };
+    expect(done.outcome).toBe("moved");
+    const { data: row } = await db.from("posts").select("scheduled_for").eq("id", postId).single();
+    expect(new Date(row!.scheduled_for!).getTime()).toBe(to.getTime());
+    expect(await call(claude, "apply_post_change", { confirmation: preview.confirmation })).toEqual(
+      { error: "already_decided" },
+    );
+    const { data: audit } = await db
+      .from("audit_log")
+      .select("details")
+      .eq("tenant_id", cafe.tenantId)
+      .eq("action", "post_moved")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+    expect((audit!.details as { via?: { clientName?: string } }).via?.clientName).toBe("Claude");
+  });
+
+  it("edit: only what changes; a new post's confirmation can't apply a change", async () => {
+    const postId = await plannedPost("Fresh ensaymada tomorrow");
+    expect(
+      await call(claude, "preview_post_edit", {
+        post_id: postId,
+        content: "Fresh ensaymada tomorrow",
+      }),
+    ).toEqual({ error: "invalid_input" });
+    const preview = (await call(claude, "preview_post_edit", {
+      post_id: postId,
+      content: "Fresh ensaymada tomorrow, from 7am",
+    })) as { confirmation: string; changes: string[]; preview: { content: string } };
+    expect(preview.changes).toEqual(["text"]);
+    expect(preview.preview.content).toBe("Fresh ensaymada tomorrow, from 7am");
+    const done = (await call(claude, "apply_post_change", {
+      confirmation: preview.confirmation,
+    })) as { outcome: string; changed: string[] };
+    expect(done).toMatchObject({ outcome: "updated", changed: ["text"] });
+    const { data: row } = await db.from("posts").select("content").eq("id", postId).single();
+    expect(row!.content).toBe("Fresh ensaymada tomorrow, from 7am");
+
+    const newPost = (await call(claude, "preview_post", {
+      content: "Another one",
+      account_ids: [cafe.accountId],
+      publish_at: "queue",
+    })) as { confirmation: string };
+    expect(await call(claude, "apply_post_change", { confirmation: newPost.confirmation })).toEqual(
+      { error: "invalid_input" },
+    );
+  });
+
+  it("fix the text of a live post; a planned one is refused", async () => {
+    const postId = await plannedPost("Open till 9pm tonight");
+    expect(
+      await call(claude, "preview_text_fix", { post_id: postId, content: "Open till 10pm" }),
+    ).toEqual({ error: "invalid_input" });
+    const { data: acc } = await db
+      .from("social_accounts")
+      .select("zernio_account_id")
+      .eq("id", cafe.accountId)
+      .single();
+    await db
+      .from("posts")
+      .update({
+        status: "published",
+        platform_results: [
+          { platform: "facebook", status: "published", accountId: acc!.zernio_account_id },
+        ],
+      })
+      .eq("id", postId);
+    const preview = (await call(claude, "preview_text_fix", {
+      post_id: postId,
+      content: "Open till 10pm tonight",
+    })) as { confirmation: string; fix: { changes_on: string[]; stays_on: string[] } };
+    expect(preview.fix).toMatchObject({ changes_on: ["facebook"], stays_on: [] });
+    const done = (await call(claude, "apply_post_change", {
+      confirmation: preview.confirmation,
+    })) as { outcome: string; fixed_on: string[] };
+    expect(done).toMatchObject({ outcome: "fixed", fixed_on: ["facebook"] });
+    expect(social.edited.at(-1)).toMatchObject({ content: "Open till 10pm tonight" });
+  });
+
+  it("duplicate: a new preview from a post, posted with create_post", async () => {
+    const postId = await plannedPost("Weekend brunch is back");
+    const dup = (await call(claude, "duplicate_post", {
+      post_id: postId,
+      publish_at: "queue",
+    })) as { confirmation: string; preview: { content: string } };
+    expect(dup.preview.content).toBe("Weekend brunch is back");
+    const made = (await call(claude, "create_post", { confirmation: dup.confirmation })) as {
+      post_id: string;
+    };
+    expect(made.post_id).not.toBe(postId);
+    expect(
+      await call(claude, "duplicate_post", { post_id: randomUUID(), publish_at: "queue" }),
+    ).toEqual({ error: "not_found" });
+  });
+
+  it("list_inbox: one row per sender; get_conversation: all their messages", async () => {
+    const first = randomUUID();
+    const second = randomUUID();
+    for (const [id, minutesAgo] of [
+      [first, 30],
+      [second, 5],
+    ] as const) {
+      const { error } = await db.from("inbound_items").insert({
+        id,
+        tenant_id: cafe.tenantId,
+        social_account_id: cafe.accountId,
+        kind: "comment",
+        zernio_comment_id: `c_${id}`,
+        zernio_post_id: "post_9",
+        author_name: "dana_r",
+        text: minutesAgo === 30 ? "The latte was cold." : "Still waiting for an answer.",
+        received_at: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+        status: "escalated",
+        category: "complaint",
+        confidence: 0.9,
+      });
+      if (error) throw error;
+    }
+    const out = (await call(claude, "list_inbox", { tab: "for_you" })) as {
+      items: { item_id: string; customer_name: string; messages: number; group: string }[];
+    };
+    const dana = out.items.filter((i) => i.customer_name === "dana_r");
+    expect(dana).toHaveLength(1);
+    expect(dana[0]).toMatchObject({ item_id: second, messages: 2, group: "now" });
+    // Complaints come first.
+    expect(out.items[0].group).toBe("now");
+    const onlyComplaints = (await call(claude, "list_inbox", { status: ["complaints"] })) as {
+      items: { customer_name: string }[];
+    };
+    expect(onlyComplaints.items.some((i) => i.customer_name === "dana_r")).toBe(true);
+    const convo = (await call(claude, "get_conversation", { item_id: second })) as {
+      thread: { from: string; item_id: string }[];
+    };
+    expect(convo.thread.filter((m) => m.from === "customer").map((m) => m.item_id)).toEqual([
+      first,
+      second,
+    ]);
+  });
+
+  it("your week: nothing yet, Check now once a day, then the stored numbers", async () => {
+    const empty = (await call(claude, "get_week", {})) as {
+      latest: unknown;
+      check_now: { available: boolean };
+    };
+    expect(empty).toMatchObject({ latest: null, check_now: { available: true } });
+    expect(await call(claude, "run_week_check", {})).toMatchObject({ outcome: "queued" });
+    expect(await call(claude, "run_week_check", {})).toMatchObject({
+      outcome: "already_running",
+    });
+    // The run finishes (the job does this; here by hand, with a stored summary).
+    await db
+      .from("weekly_checks")
+      .update({
+        status: "done",
+        finished_at: new Date().toISOString(),
+        summary: {
+          cameIn: 12,
+          answeredByWaggle: 8,
+          answeredByYou: 2,
+          waiting: 2,
+          closingToday: 0,
+          found: 1,
+          tooOld: 0,
+          previousCameIn: null,
+          accounts: [
+            {
+              id: cafe.accountId,
+              platform: "facebook",
+              name: "Harbour Bean",
+              state: "read",
+              reason: null,
+              count: 12,
+            },
+          ],
+          topics: [{ topic: "hours", label: "Opening hours", count: 4 }],
+          gaps: [{ text: "Do you have oat milk?", times: 2 }],
+        },
+      })
+      .eq("tenant_id", cafe.tenantId)
+      .in("status", ["queued", "running"]);
+    expect(await call(claude, "run_week_check", {})).toMatchObject({ outcome: "limited" });
+    const week = (await call(claude, "get_week", {})) as {
+      latest: {
+        numbers: { came_in: number };
+        uncovered_questions: { customer_question: string }[];
+      };
+      check_now: { available: boolean };
+    };
+    expect(week.latest.numbers.came_in).toBe(12);
+    expect(week.latest.uncovered_questions[0].customer_question).toBe("Do you have oat milk?");
+    expect(week.check_now.available).toBe(false);
+  });
+});

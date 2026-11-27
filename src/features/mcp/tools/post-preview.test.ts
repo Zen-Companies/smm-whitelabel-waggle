@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { MediaCheck } from "@/lib/social/types";
-import { mediaProblems, optionProblems, parsePublishWhen, toPostOptions } from "./post-preview";
+import {
+  carouselFit,
+  mediaProblems,
+  optionProblems,
+  parsePublishWhen,
+  toGoogleOptions,
+  toPostOptions,
+} from "./post-preview";
 
 const now = new Date("2026-11-18T10:00:00Z");
 
@@ -116,5 +123,113 @@ describe("options", () => {
     expect(optionProblems([{ platform: "facebook", ai_label: true }], ["facebook"])[0]).toContain(
       "ai_label is for Instagram and YouTube",
     );
+  });
+});
+
+describe("Google Business, YouTube video choices (Posts Round 4)", () => {
+  it("an offer with a button becomes the composer's Google options", () => {
+    expect(
+      toPostOptions([
+        {
+          platform: "googlebusiness",
+          google: {
+            kind: "offer",
+            title: "Fruitcake 20% off",
+            start_day: "2026-12-01",
+            end_day: "2026-12-24",
+            coupon_code: "FRUIT20",
+            redeem_url: "harbourbakery.ph/order",
+            terms: "Pre-orders only.",
+            button: "order",
+            button_url: "https://harbourbakery.ph/order",
+          },
+        },
+      ]),
+    ).toEqual({
+      googlebusiness: {
+        google: {
+          kind: "offer",
+          title: "Fruitcake 20% off",
+          startDay: "2026-12-01",
+          endDay: "2026-12-24",
+          coupon: "FRUIT20",
+          redeemUrl: "harbourbakery.ph/order",
+          terms: "Pre-orders only.",
+          button: "ORDER",
+          buttonUrl: "https://harbourbakery.ph/order",
+        },
+      },
+    });
+  });
+
+  it("an event keeps its times; call_now is Google's CALL", () => {
+    expect(
+      toGoogleOptions({
+        kind: "event",
+        title: "Latte art night",
+        start_day: "2026-12-05",
+        start_time: "18:00",
+        end_day: "2026-12-05",
+        end_time: "21:00",
+        button: "call_now",
+      }),
+    ).toEqual({
+      kind: "event",
+      title: "Latte art night",
+      startDay: "2026-12-05",
+      startTime: "18:00",
+      endDay: "2026-12-05",
+      endTime: "21:00",
+      button: "CALL",
+    });
+  });
+
+  it("Google choices only for Google; call_now takes no link; YouTube choices only for YouTube", () => {
+    expect(
+      optionProblems([{ platform: "facebook", google: { kind: "offer" } }], ["facebook"])[0],
+    ).toContain("google is for Google Business");
+    expect(
+      optionProblems(
+        [
+          {
+            platform: "googlebusiness",
+            google: { kind: "update", button: "call_now", button_url: "https://x.ph" },
+          },
+        ],
+        ["googlebusiness"],
+      )[0],
+    ).toContain("call_now");
+    expect(
+      optionProblems([{ platform: "instagram", visibility: "unlisted" }], ["instagram"])[0],
+    ).toContain("YouTube only");
+    expect(
+      toPostOptions([{ platform: "youtube", visibility: "unlisted", made_for_kids: false }]),
+    ).toEqual({ youtube: { visibility: "unlisted", madeForKids: false } });
+  });
+});
+
+describe("carouselFit: what each platform takes of up to 20 files", () => {
+  const photos = (n: number) => Array.from({ length: n }, () => "image" as const);
+
+  it("Instagram takes 20; Facebook 10; Google the first photo, each with a note", () => {
+    const r = carouselFit(["instagram", "facebook", "googlebusiness"], photos(14), {});
+    expect(r.perPlatform).toEqual([
+      { platform: "instagram", files: 14, note: null },
+      { platform: "facebook", files: 10, note: expect.stringContaining("the first 10 go") },
+      { platform: "googlebusiness", files: 1, note: expect.stringContaining("first photo only") },
+    ]);
+    expect(r.warnings).toHaveLength(2);
+    expect(r.blocked).toEqual([]);
+  });
+
+  it("a platform nothing fits blocks the preview (Google and a video only)", () => {
+    const r = carouselFit(["googlebusiness", "instagram"], ["video"], {});
+    expect(r.blocked[0]).toContain("doesn't take videos");
+    expect(r.perPlatform.map((p) => p.platform)).toEqual(["instagram"]);
+  });
+
+  it("a Reel takes one file", () => {
+    const r = carouselFit(["instagram"], ["video", "image"], { instagram: { as: "reel" } });
+    expect(r.perPlatform[0]).toMatchObject({ files: 1 });
   });
 });
