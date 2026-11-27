@@ -186,7 +186,9 @@ describe("the owner's own reply to a handed-over complaint (Q1)", () => {
   });
 
   it("list_inbox pages the For you tab, customer text marked as customer_*", async () => {
-    await item(cafe, "awaiting_approval", "faq");
+    // Inbox by sender: a reply waiting for approval shows once its draft exists (as in the app),
+    // so the row here is one handed to the owner.
+    await item(cafe, "escalated", "unclear");
     const out = (await call(claude, "list_inbox", { tab: "for_you" })) as {
       items: { customer_text: string }[];
       counts: { for_you: number };
@@ -504,10 +506,13 @@ describe("MCP catch-up (27 Nov): change posts, inbox by sender, your week", () =
   beforeAll(() => {
     process.env.MCP_ACTS_PER_HOUR = "500";
     process.env.MCP_BURST_SEND_CAP = "500";
+    process.env.MCP_CALLS_PER_MINUTE = "1000";
   });
   afterAll(() => {
-    process.env.MCP_ACTS_PER_HOUR = saved.MCP_ACTS_PER_HOUR;
-    process.env.MCP_BURST_SEND_CAP = saved.MCP_BURST_SEND_CAP;
+    for (const key of ["MCP_ACTS_PER_HOUR", "MCP_BURST_SEND_CAP", "MCP_CALLS_PER_MINUTE"]) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
   });
 
   async function plannedPost(content: string) {
