@@ -28,6 +28,8 @@ export interface InboxFilters {
   /** On by default: newsletters, no-reply and automated senders leave the list (email only). */
   customersOnly: boolean;
   sort: InboxSort;
+  /** Posts Round 5: only the comments on this post (a Waggle post id), from "See comments in Inbox". */
+  post: string | null;
 }
 
 export const DEFAULT_FILTERS: InboxFilters = {
@@ -36,7 +38,10 @@ export const DEFAULT_FILTERS: InboxFilters = {
   flags: [],
   customersOnly: true,
   sort: "priority",
+  post: null,
 };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Params = Record<string, string | string[] | undefined>;
 
@@ -65,6 +70,8 @@ export function parseInboxFilters(params: Params): InboxFilters {
     flags: list(params, "status").filter((f) => flags.includes(f)) as InboxFlag[],
     customersOnly: params.customers !== "all",
     sort: params.sort === "newest" ? "newest" : "priority",
+    post:
+      typeof params.post === "string" && UUID.test(params.post) ? params.post.toLowerCase() : null,
   };
 }
 
@@ -76,6 +83,7 @@ export function filterParams(filters: InboxFilters): Record<string, string> {
   if (filters.flags.length) out.status = filters.flags.join(",");
   if (!filters.customersOnly) out.customers = "all";
   if (filters.sort === "newest") out.sort = "newest";
+  if (filters.post) out.post = filters.post;
   return out;
 }
 
@@ -85,7 +93,8 @@ export function activeFilterCount(filters: InboxFilters): number {
     filters.platforms.length +
     filters.types.length +
     filters.flags.length +
-    (filters.customersOnly ? 0 : 1)
+    (filters.customersOnly ? 0 : 1) +
+    (filters.post ? 1 : 0)
   );
 }
 
@@ -176,4 +185,27 @@ export function rowCountLabel(row: {
   if (row.email && row.threads > 1) parts.push(`${row.threads} subjects`);
   if (row.kind === "comment" && row.posts > 1) parts.push(`${row.posts} posts`);
   return parts.length ? parts.join(" · ") : null;
+}
+
+/**
+ * Posts Round 5: the ids a post's comments carry. Comments name the platform's post id
+ * (`inbound_items.zernio_post_id` holds the webhook's platformPostId), so the post's Zernio id and
+ * the platform ids Waggle's results copy has for it (`post_metrics.provider_post_id`) both count.
+ */
+export function postCommentIds(
+  zernioPostId: string | null,
+  metrics: readonly { provider_post_id: string }[],
+): string[] {
+  return [
+    ...new Set([
+      ...(zernioPostId ? [zernioPostId] : []),
+      ...metrics.map((m) => m.provider_post_id),
+    ]),
+  ].filter(Boolean);
+}
+
+/** The honey chip for a post filter: "Post: Black Friday at Harbo…". */
+export function postChipLabel(content: string): string {
+  const line = content.split("\n")[0].trim() || "Photo";
+  return `Post: ${line.length > 24 ? `${line.slice(0, 24).trimEnd()}…` : line}`;
 }

@@ -2,7 +2,7 @@
 -- Run with `supabase test db` (pnpm test:db). Everything rolls back.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(90);
+select plan(95);
 
 -- Fixtures, as postgres (bypasses RLS) ---------------------------------------------------------
 
@@ -84,6 +84,11 @@ insert into public.inbox_reads (tenant_id, user_id, group_key) values
 insert into public.weekly_checks (tenant_id, trigger, window_start, window_end, summary) values
   ('a1000000-0000-4000-8000-000000000001', 'check_now', now() - interval '7 days', now(), '{"who": "A"}'),
   ('b1000000-0000-4000-8000-000000000001', 'check_now', now() - interval '7 days', now(), '{"who": "B"}');
+
+-- Repeat posts (Posts Round 5): each business's repeat rules and the post text they copy.
+insert into public.post_repeats (tenant_id, every, weekday, at_time, time_zone, content, target_account_ids, last_slot) values
+  ('a1000000-0000-4000-8000-000000000001', 'week', 5, '09:00', 'UTC', 'repeat A', '{a2000000-0000-4000-8000-000000000001}', now()),
+  ('b1000000-0000-4000-8000-000000000001', 'week', 5, '09:00', 'UTC', 'repeat B', '{b2000000-0000-4000-8000-000000000001}', now());
 
 -- The sender key rules the backfill and the insert trigger share.
 select is(private.email_address_in('Carla Mendoza <Carla@Example.com>'), 'carla@example.com',
@@ -181,6 +186,7 @@ select results_eq($$ select error from public.connect_attempts $$, $$ values ('e
 select results_eq($$ select sender_key from public.inbox_senders $$, $$ values ('sender_a') $$, 'inbox_senders: only A');
 select results_eq($$ select group_key from public.inbox_reads $$, $$ values ('g_a') $$, 'inbox_reads: only own');
 select results_eq($$ select summary->>'who' from public.weekly_checks $$, $$ values ('A') $$, 'weekly_checks: only A');
+select results_eq($$ select content from public.post_repeats $$, $$ values ('repeat A') $$, 'post_repeats: only A');
 select results_eq($$ select public.inbox_conversation_count('b1000000-0000-4000-8000-000000000001', array['new']) $$,
   array[0], 'inbox_conversation_count: nothing of B');
 select is_empty($$ select * from public.inbox_conversations('b1000000-0000-4000-8000-000000000001', array['new']) $$,
@@ -268,6 +274,12 @@ select throws_ok($$ insert into public.weekly_checks (tenant_id, trigger, window
 select throws_ok($$ update public.weekly_checks set status = 'done' $$, '42501', null,
   'cannot change weekly check-ups');
 select throws_ok($$ delete from public.weekly_checks $$, '42501', null, 'cannot delete weekly check-ups');
+select throws_ok($$ insert into public.post_repeats (tenant_id, every, at_time, time_zone, content, target_account_ids, last_slot)
+  values ('a1000000-0000-4000-8000-000000000001', 'day', '09:00', 'UTC', 'x', '{}', now()) $$,
+  '42501', null, 'cannot start a repeat directly (server only)');
+select throws_ok($$ update public.post_repeats set stopped_at = now() $$, '42501', null,
+  'cannot change repeats directly');
+select throws_ok($$ delete from public.post_repeats $$, '42501', null, 'cannot delete repeats directly');
 
 -- Allowed writes in A's own tenant.
 
@@ -313,6 +325,7 @@ select throws_ok($$ select * from public.connect_attempts $$, '42501', null, 'an
 select throws_ok($$ select * from public.inbox_reads $$, '42501', null, 'anon cannot read inbox_reads');
 select throws_ok($$ select * from public.inbox_senders $$, '42501', null, 'anon cannot read inbox_senders');
 select throws_ok($$ select * from public.weekly_checks $$, '42501', null, 'anon cannot read weekly_checks');
+select throws_ok($$ select * from public.post_repeats $$, '42501', null, 'anon cannot read post_repeats');
 reset role;
 
 select * from finish();

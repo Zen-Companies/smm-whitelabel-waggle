@@ -33,6 +33,8 @@ export interface WeekPost {
   /** A planned post Zernio holds: it can be dragged to another day. */
   movable: boolean;
   scheduledFor: string | null;
+  /** Round 5: part of a repeat (↻). */
+  repeats?: boolean;
 }
 
 type Moved = {
@@ -203,7 +205,14 @@ export function WeekBoard({
                       p.selected && "outline-ink outline-2",
                     )}
                   >
-                    <span className="line-clamp-2 font-medium">{p.firstLine}</span>
+                    <span className="line-clamp-2 font-medium">
+                      {p.repeats && (
+                        <span className="text-honey-text" aria-label="Repeats: ">
+                          ↻{" "}
+                        </span>
+                      )}
+                      {p.firstLine}
+                    </span>
                     <span className="text-ink-3">
                       {p.word}
                       {at && p.word !== "Needs you" ? ` · ${clockIn(at, timeZone)}` : ""}

@@ -32,7 +32,17 @@ import { StateLabel } from "@/components/app/state-mark";
 import { PostsHeader } from "./posts-header";
 import { platformLabel, platformOf } from "@/lib/social/platforms";
 import { canMove } from "./move";
-import { accountNames, loadMetrics, loadPosts, Post, PostsTable, type PostRow } from "./posts-list";
+import {
+  accountNames,
+  loadMetrics,
+  loadPosts,
+  loadRepeats,
+  Post,
+  PostsTable,
+  type PostRow,
+} from "./posts-list";
+import { repeatInfo, repeatLabel, ruleOfRow } from "./repeat-rule";
+import { parseListSort, type ListSort } from "./list-sort";
 import { BestPostCard } from "./best-post-card";
 import { bestPostThisWeek, postResults } from "./post-metrics";
 import { clockIn, dateTimeIn, dayKeyIn, fromWallClock, zoneLine } from "./post-time";
@@ -47,6 +57,8 @@ type View = "week" | "month" | "list";
 
 function url(p: {
   view: View;
+  /** Round 5: the List view's sort. */
+  sort?: ListSort;
   month: Month;
   week?: string;
   day?: string;
@@ -64,6 +76,7 @@ function url(p: {
   if (p.view === "week" && p.week) q.set("week", p.week);
   else q.set("month", monthParam(p.month));
   if (p.platform) q.set("platform", p.platform);
+  if (p.view === "list" && p.sort && p.sort !== "newest") q.set("sort", p.sort);
   if (p.day) q.set("day", p.day);
   if (p.post) q.set("post", p.post);
   if (p.compose) q.set("new", "1");
@@ -78,12 +91,13 @@ async function loadStartRow(tenantId: string, postId: string) {
   const { data } = await supabase
     .from("posts")
     .select(
-      "id, content, media, target_account_ids, platform_options, scheduled_for, status, zernio_post_id",
+      "id, content, media, target_account_ids, platform_options, scheduled_for, status, zernio_post_id, repeat_id",
     )
     .eq("tenant_id", tenantId)
     .eq("id", postId)
     .maybeSingle();
-  return data as (StartRow & { status: string; zernio_post_id: string | null }) | null;
+  return data as
+    (StartRow & { status: string; zernio_post_id: string | null; repeat_id: string | null }) | null;
 }
 
 function Chip({
@@ -98,6 +112,7 @@ function Chip({
   timeZone: string;
 }) {
   const attention = needsNewTime(post);
+  const repeats = !!post.repeat_id;
   const published = post.status === "published";
   const Icon = attention ? CircleAlert : published ? CircleCheck : CalendarClock;
   const at = post.published_at ?? post.scheduled_for;
@@ -128,6 +143,11 @@ function Chip({
         {attention ? "Needs a new time: " : published ? "Published: " : "Scheduled: "}
       </span>
       <span className="truncate">
+        {repeats && (
+          <span className="text-honey-text" aria-label="Repeats: ">
+            ↻{" "}
+          </span>
+        )}
         {at && !attention ? `${clockIn(at, timeZone)} ` : ""}
         {post.content}
       </span>
@@ -159,6 +179,7 @@ export async function PostsView({
   }
   const str = (k: string) => (typeof params[k] === "string" ? (params[k] as string) : undefined);
   const view: View = str("view") === "list" ? "list" : str("view") === "month" ? "month" : "week";
+  const sort = parseListSort(str("sort"));
   const day = parseDay(str("day"));
   const today = dayKeyIn(new Date(), timeZone);
   const week = weekStart(parseDay(str("week")) ?? day ?? today);
@@ -227,7 +248,15 @@ export async function PostsView({
   const weekPosts = days.flatMap((d) => byDay.get(d) ?? []);
   const platformOfAccount = new Map(accounts.map((a) => [a.id, platformLabel(a.platform)]));
   // Round 4: each sent post's numbers from the hourly copy (no platform calls on page open).
-  const metrics = await loadMetrics(tenant.id, posts);
+  const [metrics, repeats] = await Promise.all([
+    loadMetrics(tenant.id, posts),
+    loadRepeats(tenant.id, editable ? [...posts, editable] : posts),
+  ]);
+  const repeatOf = (p: { id: string; repeat_id?: string | null }) => {
+    const row = p.repeat_id ? repeats.get(p.repeat_id) : undefined;
+    return row ? repeatInfo(row, p.id, timeZone) : null;
+  };
+  const editRepeat = editable?.repeat_id ? repeats.get(editable.repeat_id) : undefined;
   const now = new Date();
   const resultsOf = (p: PostRow) =>
     p.zernio_post_id
@@ -398,8 +427,14 @@ export async function PostsView({
               posts={posts}
               platforms={platformOfAccount}
               results={resultsOf}
-              openHref={(id) => u({ view, month, post: id })}
+              openHref={(id) => u({ view, month, post: id, sort })}
               timeZone={timeZone}
+              sort={sort}
+              sortHrefs={{
+                newest: u({ view, month }),
+                reached: u({ view, month, sort: "reached" }),
+                engagement: u({ view, month, sort: "engagement" }),
+              }}
             />
           ) : view === "week" ? (
             <WeekBoard
@@ -432,6 +467,7 @@ export async function PostsView({
                   selected: p.id === postId,
                   movable: canMove(p) && !!p.scheduled_for,
                   scheduledFor: p.scheduled_for,
+                  repeats: !!p.repeat_id,
                 })),
               )}
             />
@@ -546,7 +582,14 @@ export async function PostsView({
         {editable ? (
           <ComposeCard
             mode="edit"
-            initial={startFrom(editable, "edit", timeZone)}
+            initial={{
+              ...startFrom(editable, "edit", timeZone),
+              // Round 5: a live repeat asks how far the edit goes.
+              repeat:
+                editRepeat && !editRepeat.stopped_at && !editRepeat.finished_at
+                  ? { label: repeatLabel(ruleOfRow(editRepeat)) }
+                  : null,
+            }}
             title="Edit post"
             subtitle={
               editable.scheduled_for
@@ -584,6 +627,7 @@ export async function PostsView({
               duplicateHref={u({ view, month, week, duplicate: selectedPost.id })}
               done={done}
               results={resultsOf(selectedPost)}
+              repeat={repeatOf(selectedPost)}
               now={now}
             />
           </SidePanel>

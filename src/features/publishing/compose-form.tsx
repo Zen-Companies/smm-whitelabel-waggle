@@ -12,7 +12,15 @@ import { Button } from "@/components/ui/button";
 import { platformLabel } from "@/lib/social/platforms";
 import { composePost, saveEditedPost, uploadPostPhoto, type ComposeState } from "./actions";
 import type { BestChip } from "./best-chips";
-import { CAROUSEL_MAX, moveItem, platformSet, setLabel, type PlatformSet } from "./carousel";
+import {
+  CAROUSEL_MAX,
+  carouselRules,
+  moveItem,
+  platformSet,
+  setLabel,
+  type PlatformSet,
+} from "./carousel";
+import { PhotoChooser } from "./photo-chooser";
 import { ComposeModal } from "./compose-modal";
 import { DateTimePicker, PickerShell } from "./date-time-picker";
 import {
@@ -37,6 +45,9 @@ import { OneDrivePicker } from "./onedrive-picker";
 import { PreviewRow, type PlatformMedia } from "./post-preview";
 import { CropSheet, type MadeCrop } from "./crop-sheet";
 import { FitRow } from "./fit-row";
+import { WriteWithWaggle } from "./write-with-waggle";
+import { RepeatFields } from "./repeat-fields";
+import { repeatChoiceProblem, type RepeatEnds, type RepeatEvery } from "./repeat-rule";
 import { GoogleFields } from "./google-fields";
 import { googleProblems } from "./google-post";
 import { MediaStrip, type StripItem } from "./media-strip";
@@ -83,6 +94,8 @@ export interface ComposeInitial {
   youtubeTitle: string;
   /** Edit: the planned day and time (wall clock in the viewer's zone). */
   when: { day: string; time: string } | null;
+  /** Round 5, Edit: the post repeats ("Every week on Friday at 9:00 AM"); asks how far an edit goes. */
+  repeat?: { label: string } | null;
 }
 
 export type ComposeMode = "new" | "edit" | "duplicate";
@@ -93,6 +106,7 @@ const OUTCOME: Record<NonNullable<ComposeState["outcome"]>, string> = {
   waiting: "Saved. It goes out as soon as posting is possible again.",
   failed: "Saved, but it couldn't be posted. It's marked on the calendar.",
   updated: "Saved. The post is updated.",
+  repeating: "Scheduled, and it repeats. Each next one is planned once the last goes out.",
 };
 
 /** "Sun 7:00 AM" for the Schedule button, so the owner sees exactly what will happen. */
@@ -249,7 +263,17 @@ function ComposeFields({
 }) {
   const editing = mode === "edit";
   const today = dayKeyIn(new Date(), timeZone);
-  const [when, setWhen] = useState<"now" | "queue" | "later">(editing || day ? "later" : "now");
+  const [when, setWhen] = useState<"now" | "queue" | "later" | "repeat">(
+    editing || day ? "later" : "now",
+  );
+  // Round 5: how a repeat goes on (its first time is the picked day and time).
+  const [repeat, setRepeat] = useState<{
+    every: RepeatEvery;
+    ends: RepeatEnds;
+    endDate: string;
+    count: number;
+  }>({ every: "week", ends: "never", endDate: "", count: 4 });
+  const [repeatScope, setRepeatScope] = useState<"one" | "following">("one");
   const [date, setDate] = useState(
     () => initial?.when?.day ?? day ?? dayKeyIn(new Date(Date.now() + 24 * 3_600_000), timeZone),
   );
@@ -368,8 +392,32 @@ function ComposeFields({
   // Round 4: which of the files each platform takes (trimmed with a note; blocked only when none).
   const kinds = items.map((i) => i.kind);
   const sets: Record<string, PlatformSet> = Object.fromEntries(
-    pickedPlatforms.map((p) => [p, platformSet(p, kinds, options[p]?.as)]),
+    pickedPlatforms.map((p) => [p, platformSet(p, kinds, options[p]?.as, options[p]?.pick)]),
   );
+  // Round 5: Facebook takes 10 photos; with more, the owner chooses which ("10 of 14 · Choose").
+  const [choosingFor, setChoosingFor] = useState<string | null>(null);
+  const choosable = (p: string) =>
+    p === "facebook" &&
+    (options[p]?.as ?? "post") === "post" &&
+    photoCount > carouselRules(p).photos;
+  const chooseLabels: Partial<Record<string, string>> = Object.fromEntries(
+    pickedPlatforms
+      .filter(choosable)
+      .map((p) => [
+        p,
+        `${sets[p].indices.filter((i) => items[i].kind === "image").length} of ${photoCount} · Choose`,
+      ]),
+  );
+  /** A choice of photos is by place: moving or removing one starts it over. */
+  const dropPicks = () =>
+    setOptions((o) =>
+      Object.fromEntries(
+        Object.entries(o).map(([p, v]) => [
+          p,
+          v && Object.fromEntries(Object.entries(v).filter(([k]) => k !== "pick")),
+        ]),
+      ),
+    );
   const single = items.length === 1 && items[0].kind === "image";
   /** One file's shape as one platform gets it: its crop there, the crop for all, or the file. */
   const shapeOf = (p: string, i: number): MediaShape | null => {
@@ -640,6 +688,8 @@ function ComposeFields({
       setAllCrop(null);
     }
     setCropping(null);
+    dropPicks();
+    setChoosingFor(null);
   };
   const removeCropsFor = (p: string) => {
     setDirty(true);
@@ -660,6 +710,21 @@ function ComposeFields({
   // Day and time are wall clock in the viewer's zone; sent as an absolute ISO time.
   const at = date && time ? fromWallClock(date, time, timeZone) : null;
   const scheduledFor = at && !Number.isNaN(at.getTime()) ? at.toISOString() : "";
+  const repeatProblem =
+    when === "repeat"
+      ? at && !Number.isNaN(at.getTime())
+        ? repeatChoiceProblem(
+            {
+              every: repeat.every,
+              ends: repeat.ends,
+              endDate: repeat.endDate || null,
+              count: repeat.count,
+            },
+            at,
+            timeZone,
+          )
+        : "Pick when the first one goes out."
+      : null;
   const fieldError = (field: ComposeState["field"]) =>
     state.field === field && state.error ? (
       <p role="alert" className="text-danger text-sm">
@@ -693,7 +758,9 @@ function ComposeFields({
         ? "Post now"
         : when === "queue" && nextSlot
           ? `Add to queue · ${slotLabel(nextSlot, timeZone)}`
-          : `Schedule${whenLabel(date, time) ? ` for ${whenLabel(date, time)}` : ""}`;
+          : when === "repeat"
+            ? `Schedule · repeats every ${repeat.every}`
+            : `Schedule${whenLabel(date, time) ? ` for ${whenLabel(date, time)}` : ""}`;
 
   /** Uploads one photo or crop; the link, or the reason it didn't go. */
   const upload = async (file: File): Promise<string> => {
@@ -810,8 +877,26 @@ function ComposeFields({
         {mode === "duplicate" && initial && (
           <input type="hidden" name="fromPostId" value={initial.postId} />
         )}
-        <input type="hidden" name="when" value={when} />
-        {when === "later" && <input type="hidden" name="scheduledFor" value={scheduledFor} />}
+        <input type="hidden" name="when" value={when === "repeat" ? "later" : when} />
+        {(when === "later" || when === "repeat") && (
+          <input type="hidden" name="scheduledFor" value={scheduledFor} />
+        )}
+        <input type="hidden" name="timeZone" value={timeZone} />
+        {when === "repeat" && (
+          <input
+            type="hidden"
+            name="repeat"
+            value={JSON.stringify({
+              every: repeat.every,
+              ends: repeat.ends,
+              endDate: repeat.ends === "on" ? repeat.endDate || null : null,
+              count: repeat.ends === "after" ? repeat.count : null,
+            })}
+          />
+        )}
+        {editing && initial?.repeat && (
+          <input type="hidden" name="repeatScope" value={repeatScope} />
+        )}
 
         <div className="min-h-0 flex-1 overflow-y-auto lg:grid lg:grid-cols-[44fr_56fr] lg:overflow-hidden">
           <div className="flex min-w-0 flex-col gap-4 p-5 lg:overflow-y-auto">
@@ -837,6 +922,15 @@ function ComposeFields({
                   : ""}
               </p>
               {fieldError("content")}
+              {/* Posts Round 5: Waggle drafts the caption from the business info. */}
+              <WriteWithWaggle
+                text={text}
+                maxLength={limit}
+                onUse={(caption) => {
+                  setText(caption);
+                  setDirty(true);
+                }}
+              />
             </div>
 
             {/* Photos and videos (Posts media, approved 16 Nov; Round 4: up to 20, a strip). The
@@ -885,6 +979,8 @@ function ComposeFields({
                   onMove={(from, to) => {
                     setDirty(true);
                     setItems((list) => moveItem(list, from, to));
+                    dropPicks();
+                    setChoosingFor(null);
                     if (allCrop) {
                       URL.revokeObjectURL(allCrop.url);
                       setAllCrop(null);
@@ -1029,6 +1125,24 @@ function ComposeFields({
                   }
                   if (allCrop) URL.revokeObjectURL(allCrop.url);
                   setAllCrop(null);
+                }}
+                choose={chooseLabels}
+                onChoose={(p) => setChoosingFor(p)}
+              />
+            )}
+            {choosingFor && chooseLabels[choosingFor] && (
+              <PhotoChooser
+                platform={choosingFor}
+                photos={items.flatMap((it, index) =>
+                  it.kind === "image" ? [{ index, src: it.src }] : [],
+                )}
+                chosen={sets[choosingFor].indices.filter((i) => items[i].kind === "image")}
+                max={carouselRules(choosingFor).photos}
+                onCancel={() => setChoosingFor(null)}
+                onDone={(pick) => {
+                  setOptions((o) => ({ ...o, [choosingFor]: { ...o[choosingFor], pick } }));
+                  setChoosingFor(null);
+                  setDirty(true);
                 }}
               />
             )}
@@ -1379,8 +1493,8 @@ function ComposeFields({
               When
             </span>
             {!editing && (
-              <div className="segmented" role="radiogroup" aria-label="When">
-                {(["now", "queue", "later"] as const).map((v) => (
+              <div className="segmented max-w-full flex-wrap" role="radiogroup" aria-label="When">
+                {(["now", "queue", "later", "repeat"] as const).map((v) => (
                   <button
                     key={v}
                     type="button"
@@ -1391,16 +1505,22 @@ function ComposeFields({
                     title={v === "queue" && !nextSlot ? "Set posting times to use this" : undefined}
                     onClick={() => {
                       setWhen(v);
-                      setPicking(v === "later");
+                      setPicking(v === "later" || v === "repeat");
                     }}
                     className="disabled:opacity-50"
                   >
-                    {v === "now" ? "Now" : v === "queue" ? "Next free slot" : "Pick a time"}
+                    {v === "now"
+                      ? "Now"
+                      : v === "queue"
+                        ? "Next free slot"
+                        : v === "later"
+                          ? "Pick a time"
+                          : "↻ Repeat"}
                   </button>
                 ))}
               </div>
             )}
-            {when === "later" && (
+            {(when === "later" || when === "repeat") && (
               <button
                 type="button"
                 aria-haspopup="dialog"
@@ -1420,7 +1540,7 @@ function ComposeFields({
                 </a>
               </span>
             )}
-            {!nextSlot && !editing && when !== "later" && (
+            {!nextSlot && !editing && when !== "later" && when !== "repeat" && (
               <span className="meta">
                 <a href="/posts/queue" className="link-inline">
                   Set posting times
@@ -1430,6 +1550,40 @@ function ComposeFields({
             )}
             {fieldError("when")}
           </fieldset>
+          {when === "repeat" && (
+            <RepeatFields
+              value={repeat}
+              onChange={(next) => {
+                setRepeat(next);
+                setDirty(true);
+              }}
+              first={at && !Number.isNaN(at.getTime()) ? at : null}
+              timeZone={timeZone}
+            />
+          )}
+          {editing && initial?.repeat && (
+            <fieldset className="flex w-full flex-wrap items-center gap-2">
+              <legend className="sr-only">Change which posts</legend>
+              <span className="text-ink-2 text-sm">
+                <span aria-hidden>↻ </span>
+                {initial.repeat.label}. Change
+              </span>
+              <div className="segmented max-w-full flex-wrap" role="radiogroup" aria-label="Change which posts">
+                {(["one", "following"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    role="radio"
+                    aria-checked={repeatScope === v}
+                    data-active={repeatScope === v || undefined}
+                    onClick={() => setRepeatScope(v)}
+                  >
+                    {v === "one" ? "Just this one" : "This and the ones after"}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          )}
           {picking && (
             <PickerShell
               placement="popover"
@@ -1448,7 +1602,7 @@ function ComposeFields({
                 onPick={(d, t) => {
                   setDate(d);
                   setTime(t);
-                  setWhen("later");
+                  setWhen((w) => (w === "repeat" ? "repeat" : "later"));
                   setPicking(false);
                   setDirty(true);
                 }}
@@ -1505,6 +1659,7 @@ function ComposeFields({
                 failedFiles ||
                 oversized >= 0 ||
                 picked.length === 0 ||
+                !!repeatProblem ||
                 checks.some((c) => c.level === "blocked") ||
                 refused.length > 0 ||
                 googleIssues.length > 0

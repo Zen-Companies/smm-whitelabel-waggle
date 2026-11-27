@@ -19,6 +19,10 @@ import { dateTimeIn, dayKeyIn } from "./post-time";
 import { googleEnded } from "./google-post";
 import { parsePostOptions } from "./post-options";
 import { HowItDid } from "./how-it-did";
+import { RepeatPanel, type RepeatInfo } from "./repeat-panel";
+import type { RepeatRow } from "./repeat-rule";
+import { sortListRows, type ListSort } from "./list-sort";
+import { ListSortBar } from "./list-sort-bar";
 import { engagementCell, showNum, type MetricRow, type PostResults } from "./post-metrics";
 
 const DONE: Record<"edited" | "copied", string> = {
@@ -45,6 +49,8 @@ export interface PostRow {
   platform_results: PostPlatformResult[];
   /** Round 4: per-platform choices (a Google offer or event's end hides Fix the text there). */
   platform_options?: unknown;
+  /** Round 5: the repeat it belongs to (↻ on the calendar). */
+  repeat_id?: string | null;
 }
 
 /** Status is inline text + icon, never a colored chip (design.md §3). */
@@ -119,6 +125,7 @@ export function Post({
   duplicateHref,
   done = null,
   results = null,
+  repeat = null,
   now,
 }: {
   post: PostRow;
@@ -137,6 +144,8 @@ export function Post({
   done?: "edited" | "copied" | null;
   /** Round 4: its numbers from the hourly copy, for "How it did" (published posts only). */
   results?: PostResults | null;
+  /** Round 5: how it repeats, with Stop repeating. */
+  repeat?: RepeatInfo | null;
   now?: Date;
 }) {
   const pick: PickerContext = picker ?? { timeZone, chips: null, busyDays: [] };
@@ -222,6 +231,7 @@ export function Post({
           )}
         </div>
         <Status post={post} timeZone={timeZone} />
+        {repeat && <RepeatPanel repeat={repeat} />}
         {issue && <p className="danger-box">{issue}</p>}
         {failed.length > 0 && (
           <ul className="danger-box flex flex-col gap-1.5" aria-label="Not posted on">
@@ -284,7 +294,7 @@ export function Post({
           )}
         </div>
         {results && (post.status === "published" || post.status === "partial") && (
-          <HowItDid results={results} now={now ?? new Date()} />
+          <HowItDid results={results} now={now ?? new Date()} postId={post.id} />
         )}
       </div>
     </Tag>
@@ -302,7 +312,7 @@ export async function loadPosts(tenantId: string) {
     supabase
       .from("posts")
       .select(
-        "id, content, media, status, scheduled_for, queued, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results, zernio_post_id, platform_options",
+        "id, content, media, status, scheduled_for, queued, published_at, created_at, last_error, failure_reason, target_account_ids, platform_results, zernio_post_id, platform_options, repeat_id",
       )
       .eq("tenant_id", tenantId)
       .neq("status", "draft")
@@ -346,6 +356,24 @@ export async function loadMetrics(
   return out;
 }
 
+/** Round 5: the repeats these posts belong to, by id (read through RLS). */
+export async function loadRepeats(
+  tenantId: string,
+  posts: { repeat_id?: string | null }[],
+): Promise<Map<string, RepeatRow>> {
+  const ids = [...new Set(posts.flatMap((p) => p.repeat_id ?? []))];
+  if (!ids.length) return new Map();
+  const supabase = await createServerSupabase();
+  const { data } = await supabase
+    .from("post_repeats")
+    .select(
+      "id, every, weekday, month_day, at_time, time_zone, ends, end_date, max_count, made_count, last_post_id, last_slot, last_error, stopped_at, finished_at",
+    )
+    .eq("tenant_id", tenantId)
+    .in("id", ids.slice(0, 200));
+  return new Map((data ?? []).map((r) => [r.id, r]));
+}
+
 const STATUS_TONE: Record<string, string> = {
   Posted: "bg-success-soft text-success",
   Planned: "bg-subtle text-ink-2",
@@ -376,8 +404,13 @@ export function PostsTable({
   results,
   openHref,
   timeZone,
+  sort = "newest",
+  sortHrefs,
 }: {
   timeZone: string;
+  /** Round 5: Newest, Most reached or Most engagement. */
+  sort?: ListSort;
+  sortHrefs?: Record<ListSort, string>;
   posts: PostRow[];
   /** Account id → platform label. */
   platforms: Map<string, string>;
@@ -392,7 +425,11 @@ export function PostsTable({
       (a.scheduled_for ?? a.created_at).localeCompare(b.scheduled_for ?? b.created_at),
     );
   const published = posts.filter((p) => p.status === "published").slice(0, 30);
-  const rows = [...attention, ...upcoming, ...published].map((p) => {
+  const ordered = sortListRows([...attention, ...upcoming, ...published], sort, (p) => {
+    const r = postStatusWord(p) === "Posted" ? results(p) : null;
+    return r?.hasNumbers ? { reached: r.reached, engagement: r.engagement } : null;
+  });
+  const rows = ordered.map((p) => {
     const word = postStatusWord(p);
     const at = p.published_at ?? p.scheduled_for;
     return {
@@ -419,13 +456,21 @@ export function PostsTable({
   );
   return (
     <>
+      {sortHrefs && <ListSortBar sort={sort} hrefs={sortHrefs} />}
       {/* Phone (board P5): stacked cards, each with people reached and engagement. */}
       <ul className="flex flex-col gap-2 md:hidden" aria-label="Posts">
         {rows.map((r) => (
           <li key={r.p.id} className="card flex flex-col gap-2.5 p-4">
             <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
               <span className="flex min-w-[200px] flex-1 flex-col gap-0.5">
-                <b className="text-sm font-semibold">{r.title}</b>
+                <b className="text-sm font-semibold">
+                  {r.p.repeat_id && (
+                    <span className="text-honey-text" aria-label="Repeats: ">
+                      ↻{" "}
+                    </span>
+                  )}
+                  {r.title}
+                </b>
                 <span className="meta">
                   {r.when}
                   {r.where ? ` · ${r.where}` : ""}
@@ -468,7 +513,14 @@ export function PostsTable({
             {rows.map((r) => (
               <tr key={r.p.id} className="border-line border-b last:border-b-0">
                 <td className="text-ink-2 px-4 py-3 whitespace-nowrap">{r.when}</td>
-                <td className="max-w-[260px] truncate px-4 py-3">{r.title}</td>
+                <td className="max-w-[260px] truncate px-4 py-3">
+                  {r.p.repeat_id && (
+                    <span className="text-honey-text" aria-label="Repeats: ">
+                      ↻{" "}
+                    </span>
+                  )}
+                  {r.title}
+                </td>
                 <td className="text-ink-2 px-4 py-3">{r.where || "–"}</td>
                 <td className="px-4 py-3">{statusChip(r.word)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{r.cells.reached}</td>

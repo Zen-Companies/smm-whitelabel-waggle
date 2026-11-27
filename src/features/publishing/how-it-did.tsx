@@ -13,7 +13,16 @@ import {
 // Waggle's hourly copy. Four totals, one line per app, when they were last copied, and the way to
 // its comments.
 
-export function HowItDid({ results, now }: { results: PostResults; now: Date }) {
+export function HowItDid({
+  results,
+  now,
+  postId,
+}: {
+  results: PostResults;
+  now: Date;
+  /** Round 5: See comments in Inbox opens the Inbox filtered to this post. */
+  postId?: string;
+}) {
   const updated = updatedLine(results.updatedAt, now);
   const totals: [string, string][] = [
     ["People reached", showNum(results.reached)],
@@ -72,7 +81,7 @@ export function HowItDid({ results, now }: { results: PostResults; now: Date }) 
       {!results.noneShare && (
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/inbox"
+            href={postId ? `/inbox?post=${postId}` : "/inbox"}
             className="border-line-strong bg-surface hover:bg-subtle inline-flex min-h-11 w-full items-center justify-center rounded-xl border px-4 text-sm font-semibold sm:w-auto"
           >
             {commentCount > 0

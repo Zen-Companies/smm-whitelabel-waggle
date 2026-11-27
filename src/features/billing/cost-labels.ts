@@ -22,6 +22,7 @@ const PURPOSE_LABELS: Record<string, string> = {
   draft: "Draft",
   agent: "Agent",
   setup: "Setup",
+  caption: "Post caption",
 };
 
 const capitalize = (s: string) => (s ? s[0].toUpperCase() + s.slice(1) : s);

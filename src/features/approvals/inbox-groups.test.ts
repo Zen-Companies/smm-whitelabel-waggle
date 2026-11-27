@@ -7,6 +7,8 @@ import {
   inboxType,
   orderConversations,
   parseInboxFilters,
+  postChipLabel,
+  postCommentIds,
   priorityGroup,
   rowCountLabel,
   toggleFilter,
@@ -37,15 +39,17 @@ describe("filters in the address (Inbox by sender, 26 Nov)", () => {
       flags: ["failed"],
       customersOnly: false,
       sort: "newest",
+      post: null,
     });
     expect(activeFilterCount(f)).toBe(5);
     expect(parseInboxFilters(filterParams(f))).toEqual(f);
   });
 
   it("drops odd platform values and repeats", () => {
-    expect(parseInboxFilters({ platform: "google,google,<script>,Instagram" }).platforms).toEqual(
-      ["google", "instagram"],
-    );
+    expect(parseInboxFilters({ platform: "google,google,<script>,Instagram" }).platforms).toEqual([
+      "google",
+      "instagram",
+    ]);
     expect(parseInboxFilters({ platform: ["google", "facebook"] }).platforms).toEqual([
       "google",
       "facebook",
@@ -112,10 +116,7 @@ describe("what needs you on top", () => {
 
   it("Newest drops the groups", () => {
     const rows = [row("old", 1, "2026-11-20T00:00:00Z"), row("new", 3, "2026-11-26T00:00:00Z")];
-    expect(orderConversations(rows, "newest", now).map((r) => r.groupKey)).toEqual([
-      "new",
-      "old",
-    ]);
+    expect(orderConversations(rows, "newest", now).map((r) => r.groupKey)).toEqual(["new", "old"]);
   });
 });
 
@@ -152,5 +153,36 @@ describe("row details", () => {
     // Never opened: before the last 3 customer messages.
     expect(newLineIndex(thread, 3, null)).toBe(2);
     expect(newLineIndex(thread, 0, null)).toBe(-1);
+  });
+});
+
+describe("the post filter (Posts Round 5: See comments in Inbox)", () => {
+  const id = "0b9a4a8e-1c2d-4e5f-8a9b-0c1d2e3f4a5b";
+
+  it("reads ?post=<id> and keeps it in the address", () => {
+    const f = parseInboxFilters({ post: id });
+    expect(f.post).toBe(id);
+    expect(filterParams(f)).toEqual({ post: id });
+    expect(activeFilterCount(f)).toBe(1);
+    expect(parseInboxFilters({ post: "not-a-uuid" }).post).toBeNull();
+  });
+
+  it("matches comments by the post's Zernio id and its platform ids", () => {
+    expect(
+      postCommentIds("z_1", [
+        { provider_post_id: "ig_9" },
+        { provider_post_id: "fb_3" },
+        { provider_post_id: "ig_9" },
+      ]),
+    ).toEqual(["z_1", "ig_9", "fb_3"]);
+    expect(postCommentIds(null, [])).toEqual([]);
+  });
+
+  it("names the post on its chip", () => {
+    expect(postChipLabel("Black Friday at Harbour Bean\nTwo loaves")).toBe(
+      "Post: Black Friday at Harbour…",
+    );
+    expect(postChipLabel("Hi")).toBe("Post: Hi");
+    expect(postChipLabel("")).toBe("Post: Photo");
   });
 });

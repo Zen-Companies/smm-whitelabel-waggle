@@ -30,7 +30,7 @@ import { sweepIdleOrgs } from "@/features/idle";
 import { escalateClosingDmWindows } from "@/features/approvals";
 import { runWeeklyChecks, scheduleMondayChecks, sendWeeklyEmails } from "@/features/weekly";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
-import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
+import { publishQueuedPosts, scheduleRepeats, settleMockPosts } from "@/features/publishing";
 import { embedPendingEntries, findFactsAfterConnect } from "@/features/knowledge-base";
 import { buildBusinessProfiles, buildProfileAfterConnect } from "@/features/setup";
 import { getClassifier } from "@/lib/classifier";
@@ -83,6 +83,15 @@ export async function POST(request: Request): Promise<Response> {
       shouldContinue: () => deadline.remainingMs() > 15_000,
     });
     if (resolveSocialProviderMode(process.env) === "mock") await settleMockPosts(db);
+    // Posts Round 5: each repeat whose planned post has gone out gets its next one.
+    const repeats = await scheduleRepeats({
+      db,
+      social: getSocialProvider,
+      shouldContinue: () => deadline.remainingMs() > 15_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
 
     // T16: hourly account health check (catches a missed disconnect webhook) and the comment
     // backfill after a connect, a recovery or a Zernio pause.
@@ -327,6 +336,7 @@ export async function POST(request: Request): Promise<Response> {
       alerts,
       platform,
       posts,
+      repeats,
       health,
       backfill,
       catchUp,

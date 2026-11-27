@@ -46,6 +46,8 @@ export function FitRow({
   onStory,
   onLeaveOut,
   onAllShape,
+  choose = {},
+  onChoose,
 }: {
   platforms: string[];
   accountCount: number;
@@ -69,6 +71,9 @@ export function FitRow({
   onLeaveOut: (platform: string) => void;
   /** null = Original. */
   onAllShape: (choice: CropChoice | null) => void;
+  /** Round 5: "10 of 14 · Choose" where a platform takes fewer photos than the post has. */
+  choose?: Partial<Record<string, string>>;
+  onChoose?: (platform: string) => void;
 }) {
   const shown = platforms.filter((p) => fits[p]);
   if (!shown.length) return null;
@@ -129,6 +134,15 @@ export function FitRow({
                 <span className="min-w-0">{fit.message}</span>
               </span>
               {details[p] && <span className="text-ink-3 text-xs">{details[p]}</span>}
+              {choose[p] && onChoose && (
+                <button
+                  type="button"
+                  onClick={() => onChoose(p)}
+                  className="action-link self-start text-[13px] tabular-nums"
+                >
+                  {choose[p]}
+                </button>
+              )}
               {crop && (
                 <span className="text-ink-2 flex flex-wrap items-center gap-x-2 text-xs">
                   Cropped to {crop.label}

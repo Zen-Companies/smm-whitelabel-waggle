@@ -4,7 +4,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseAttachments, type Attachment } from "./attachments";
 import { dmWindowClosesAt, dmWindowFor } from "./policy";
 import { type ActivityEntry, mergeActivity } from "./today-activity";
-import { orderConversations, type InboxFilters, type PriorityGroup } from "./inbox-groups";
+import {
+  orderConversations,
+  postChipLabel,
+  postCommentIds,
+  type InboxFilters,
+  type PriorityGroup,
+} from "./inbox-groups";
 
 // What the approval inbox shows (PRD F8). Read with the owner's client, so RLS scopes it.
 
@@ -159,8 +165,16 @@ const ALL_STATUSES = INBOX_TABS.flatMap((t) => t.statuses);
 export async function loadInboxConversations(
   supabase: SupabaseClient<Database>,
   tenantId: string,
-  input: { tab: InboxTab; filters: InboxFilters; automated?: boolean; now?: Date },
+  input: {
+    tab: InboxTab;
+    filters: InboxFilters;
+    automated?: boolean;
+    now?: Date;
+    /** Posts Round 5: the post filter's comment ids (postCommentIds); [] matches nothing. */
+    postIds?: string[] | null;
+  },
 ): Promise<InboxConversation[]> {
+  if (input.postIds && input.postIds.length === 0) return [];
   const statuses = input.automated
     ? ALL_STATUSES
     : INBOX_TABS.find((t) => t.key === input.tab)!.statuses;
@@ -172,6 +186,7 @@ export async function loadInboxConversations(
     ...(f.platforms.length ? { p_platforms: f.platforms } : {}),
     ...(f.types.length ? { p_types: f.types } : {}),
     ...(f.flags.length ? { p_flags: f.flags } : {}),
+    ...(input.postIds ? { p_post_ids: input.postIds } : {}),
     p_customers_only: f.customersOnly,
     p_automated: input.automated ?? false,
     p_sort: sort,
@@ -676,4 +691,33 @@ async function countCappedReplies(
     counts.set(id, (counts.get(id) ?? 0) + 1);
   }
   return counts;
+}
+
+/**
+ * Posts Round 5: the post behind ?post= (this brand's only, through RLS), as the chip's label and
+ * the ids its comments carry. null when it isn't this brand's.
+ */
+export async function loadPostFilter(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  postId: string,
+): Promise<{ label: string; ids: string[] } | null> {
+  const { data: post } = await supabase
+    .from("posts")
+    .select("content, zernio_post_id")
+    .eq("tenant_id", tenantId)
+    .eq("id", postId)
+    .maybeSingle();
+  if (!post) return null;
+  const { data: metrics } = post.zernio_post_id
+    ? await supabase
+        .from("post_metrics")
+        .select("provider_post_id")
+        .eq("tenant_id", tenantId)
+        .eq("zernio_post_id", post.zernio_post_id)
+    : { data: [] };
+  return {
+    label: postChipLabel(post.content),
+    ids: postCommentIds(post.zernio_post_id, metrics ?? []),
+  };
 }

@@ -2429,6 +2429,102 @@ export type Database = {
         }
         Relationships: []
       }
+      post_repeats: {
+        Row: {
+          at_time: string
+          content: string
+          created_at: string
+          created_by: string | null
+          end_date: string | null
+          ends: string
+          every: string
+          finished_at: string | null
+          id: string
+          last_error: string | null
+          last_post_id: string | null
+          last_slot: string
+          made_count: number
+          max_count: number | null
+          media: Json
+          month_day: number | null
+          next_try_at: string | null
+          platform_options: Json
+          stopped_at: string | null
+          stopped_by: string | null
+          target_account_ids: string[]
+          tenant_id: string
+          tiktok_consent: boolean
+          time_zone: string
+          updated_at: string
+          weekday: number | null
+        }
+        ComputedFields: never
+        Insert: {
+          at_time: string
+          content: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          ends?: string
+          every: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          last_post_id?: string | null
+          last_slot: string
+          made_count?: number
+          max_count?: number | null
+          media?: Json
+          month_day?: number | null
+          next_try_at?: string | null
+          platform_options?: Json
+          stopped_at?: string | null
+          stopped_by?: string | null
+          target_account_ids: string[]
+          tenant_id: string
+          tiktok_consent?: boolean
+          time_zone: string
+          updated_at?: string
+          weekday?: number | null
+        }
+        Update: {
+          at_time?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string | null
+          ends?: string
+          every?: string
+          finished_at?: string | null
+          id?: string
+          last_error?: string | null
+          last_post_id?: string | null
+          last_slot?: string
+          made_count?: number
+          max_count?: number | null
+          media?: Json
+          month_day?: number | null
+          next_try_at?: string | null
+          platform_options?: Json
+          stopped_at?: string | null
+          stopped_by?: string | null
+          target_account_ids?: string[]
+          tenant_id?: string
+          tiktok_consent?: boolean
+          time_zone?: string
+          updated_at?: string
+          weekday?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_repeats_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           attempts: number
@@ -2444,6 +2540,7 @@ export type Database = {
           next_attempt_at: string | null
           platform_results: Json
           published_at: string | null
+          repeat_id: string | null
           scheduled_for: string | null
           status: string
           taken_down_at: string | null
@@ -2467,6 +2564,7 @@ export type Database = {
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null
+          repeat_id?: string | null
           scheduled_for?: string | null
           status?: string
           taken_down_at?: string | null
@@ -2489,6 +2587,7 @@ export type Database = {
           next_attempt_at?: string | null
           platform_results?: Json
           published_at?: string | null
+          repeat_id?: string | null
           scheduled_for?: string | null
           status?: string
           taken_down_at?: string | null
@@ -3464,6 +3563,7 @@ export type Database = {
           p_flags?: string[]
           p_limit?: number
           p_platforms?: string[]
+          p_post_ids?: string[]
           p_sort?: string
           p_statuses: string[]
           p_tenant_id: string
