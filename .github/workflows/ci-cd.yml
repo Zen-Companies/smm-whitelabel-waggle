@@ -128,9 +128,10 @@ jobs:
       - run: vercel deploy --prebuilt --prod --token=$VERCEL_TOKEN
       - name: Smoke check
         run: |
-          for p in / /login; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" https://app.gowaggle.ai$p)
-            echo "$p $code"; [ "$code" = 200 ] || exit 1
-          done
+          # Signed-out / sends people to gowaggle.ai (308, hotfix #98); /login must load.
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://app.gowaggle.ai/)
+          echo "/ $code (308 expected)"; [ "$code" = 308 ] || exit 1
+          code=$(curl -s -o /dev/null -w "%{http_code}" https://app.gowaggle.ai/login)
+          echo "/login $code"; [ "$code" = 200 ] || exit 1
           code=$(curl -s -o /dev/null -w "%{http_code}" -X POST https://app.gowaggle.ai/api/jobs/process)
           echo "job route $code (401 expected without the secret)"; [ "$code" = 401 ] || exit 1
