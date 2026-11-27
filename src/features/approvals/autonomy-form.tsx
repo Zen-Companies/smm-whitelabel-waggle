@@ -2,6 +2,7 @@
 
 import { Check } from "lucide-react";
 import { useActionState, useRef, useState } from "react";
+import { BeeBody } from "@/components/app/bee";
 import { UpgradeLink } from "@/features/billing/client";
 import { updateAutonomyMode, type AutonomyFormState } from "./actions";
 import {
@@ -22,6 +23,7 @@ export function AutonomyForm({
   hint,
   mode,
   autoAllowed = true,
+  justOn = false,
 }: {
   category: ConfigurableCategory;
   label: string;
@@ -29,6 +31,8 @@ export function AutonomyForm({
   mode: AutonomyMode;
   /** Free approves every reply (19 Nov): Auto-reply shows, locked. */
   autoAllowed?: boolean;
+  /** Switched on for this kind just now, after paying (Playbook round 2): says so in place. */
+  justOn?: boolean;
 }) {
   const [state, action, pending] = useActionState<AutonomyFormState, FormData>(
     updateAutonomyMode,
@@ -57,14 +61,23 @@ export function AutonomyForm({
         <span className="segmented justify-self-start" role="radiogroup" aria-label={label}>
           {AUTONOMY_MODES.map((m) =>
             m === "auto" && !autoAllowed ? (
-              // Free (23 Nov): the locked mode opens the Worker Bee pop-up for this kind.
+              // Free (23 Nov): the locked mode opens the Worker Bee pop-up for this kind. Fully
+              // legible, with the plan bee pill naming the plan it comes with (Walter's
+              // playbook, tap 10, 25 Nov; the same pill as setup's Reply on its own).
               <UpgradeLink
                 key={m}
                 reason="auto_reply"
                 extra={{ topic: category }}
-                className="opacity-60 hover:opacity-100"
+                aria-label={`${MODE_LABELS[m]}, comes with Solo`}
+                className="gap-1.5"
               >
                 {MODE_LABELS[m]}
+                <span className="bg-honey-tint text-ink border-honey-border inline-flex items-center gap-1 rounded-full border px-2 py-px text-[11px] font-semibold">
+                  <svg width="14" height="10" viewBox="0 0 24 16" aria-hidden>
+                    <BeeBody flutter={false} />
+                  </svg>
+                  Solo
+                </span>
               </UpgradeLink>
             ) : (
               <label key={m} data-active={value === m || undefined}>
@@ -86,6 +99,12 @@ export function AutonomyForm({
           )}
         </span>
       </fieldset>
+      {justOn && !pending && !state.saved && !state.error && value === "auto" && (
+        <p role="status" className="meta text-ink-2 mt-2 flex items-center gap-1">
+          <Check className="text-success size-4" strokeWidth={1.75} aria-hidden />
+          Saved · Worker Bee answers {label.toLowerCase()} now. Change it here any time.
+        </p>
+      )}
       {(pending || state.saved) && (
         <p className="meta mt-2 flex items-center gap-2">
           {pending ? (

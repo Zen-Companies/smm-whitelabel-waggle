@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import type { Step, StepResult } from "@/features/inbox";
+import { closeAnsweredTogether, type Step, type StepResult } from "@/features/inbox";
 import { writeAudit } from "@/lib/audit";
 import { hasLeakedFields } from "@/lib/draft-leak";
 import { markUsedFactsChecked, uncheckedFactIds } from "@/lib/facts";
@@ -429,6 +429,13 @@ export function createSendStep(opts: {
         } catch (error) {
           Sentry.captureException(error, { extra: { itemId: item.id, draftId: draft.id } });
         }
+      }
+      // One reply per conversation (26 Nov): it answered the sender's earlier waiting messages
+      // too. The reply is already out: a failure here is reported, not retried.
+      try {
+        await closeAnsweredTogether(db, { itemId: item.id, actor: "system" });
+      } catch (error) {
+        Sentry.captureException(error, { extra: { itemId: item.id, draftId: draft.id } });
       }
       return { event: "sent", details: { draftId: draft.id, providerId, reconciled } };
     };

@@ -11,7 +11,7 @@ import {
 } from "@/features/ad-tracking";
 import { can, initialsOf, isOrgRole, respondToInvite, ROLE_LABEL } from "@/features/orgs";
 import { headers } from "next/headers";
-import { connectBanner } from "@/features/accounts";
+import { connectBanner, loadUnfinishedConnect, type UnfinishedConnect } from "@/features/accounts";
 import { freeAccountsFull, SignupCheckout, TrialConversionTag } from "@/features/billing";
 import { loadPlatformStatuses } from "@/features/platforms";
 import { connectProblem, deviceOf, isInAppBrowser, WelcomeConnect } from "@/features/setup";
@@ -132,6 +132,8 @@ async function Content({
   // Setup step 1 (Walter's flow, 20 Nov): Connect. A business that already has an account goes
   // on to setup (or Today once setup is finished); one that can't connect goes to Today.
   let connected: string[] = [];
+  // "Didn't finish?" (26 Nov): a connect that left for the sign-in and never came back.
+  let unfinished: UnfinishedConnect | null = null;
   if (hasBrand) {
     const tenant = await getCurrentTenant();
     if (!can(tenant.role, "accounts.manage")) redirect("/today");
@@ -141,6 +143,7 @@ async function Content({
     ]);
     connected = (accounts ?? []).filter((a) => a.status === "active").map((a) => a.platform);
     if (connected.length) redirect(t?.setup_done_at ? "/today" : "/setup");
+    unfinished = await loadUnfinishedConnect(supabase, tenant.id, connected);
   }
 
   const mayAdd = can(org.role, "brands.add");
@@ -198,6 +201,7 @@ async function Content({
           problem={connectProblem(params, banner?.tone === "error" ? banner.text : null)}
           inApp={isInAppBrowser(h.get("user-agent"))}
           device={deviceOf(h.get("user-agent"))}
+          unfinished={unfinished}
           invites={<InviteList invites={invites} email={user.email} />}
           email={user.email}
         />

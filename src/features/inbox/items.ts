@@ -9,6 +9,11 @@ export type NewInboundItem = {
   receivedAt: string;
   /** First connect (20 Nov): the catch-up that pulled it (comments and DMs only). */
   catchUpId?: string | null;
+  /**
+   * Inbox by sender (26 Nov): who sent it (senderKeyFor). Left out, the database fills it from
+   * the conversation (DMs) or the handle (comments).
+   */
+  senderKey?: string | null;
 } & (
   | {
       kind: "comment";
@@ -53,6 +58,7 @@ export async function insertInboundItem(
     author_name: item.authorName,
     text: item.text,
     received_at: item.receivedAt,
+    ...(item.senderKey ? { sender_key: item.senderKey } : {}),
   };
   if (item.kind === "review") return insertReview(db, item, common);
   if (item.kind === "call") return insertCall(db, item, common);

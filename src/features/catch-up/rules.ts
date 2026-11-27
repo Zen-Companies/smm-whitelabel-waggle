@@ -75,6 +75,12 @@ export function sortConversation(
   messages: ProviderMessage[],
   now: Date,
   since: Date,
+  /**
+   * How long after the customer's last message a reply is allowed (Meta: 24 hours). null: the
+   * platform has no reply window (SMS, LINE, email), so every unanswered message is drafted.
+   * The weekly check-up (26 Nov) passes each platform's own window.
+   */
+  replyWindowMs: number | null = DM_REPLY_WINDOW_MS,
 ): { draft: ProviderMessage[]; missed: ProviderMessage[] } {
   const newestFirst = messages
     .filter((m) => Number.isFinite(Date.parse(m.createdAt)))
@@ -87,7 +93,8 @@ export function sortConversation(
   const inWindow = unanswered.filter((m) => Date.parse(m.createdAt) >= since.getTime());
   if (inWindow.length === 0) return { draft: [], missed: [] };
 
-  const replyFrom = now.getTime() - DM_REPLY_WINDOW_MS;
+  if (replyWindowMs === null) return { draft: inWindow, missed: [] };
+  const replyFrom = now.getTime() - replyWindowMs;
   if (Date.parse(inWindow[0].createdAt) >= replyFrom) {
     return { draft: inWindow.filter((m) => Date.parse(m.createdAt) >= replyFrom), missed: [] };
   }

@@ -50,9 +50,9 @@ export function planChipText(state: PlanChipState, short = false): string {
       return short ? days : `${state.planName} trial · ${days}`;
     }
     case "plan":
-      return state.planName;
+      return short && state.allowance > 0 ? replyCount(state) : state.planName;
     case "free":
-      return short ? "Free" : "Free · Upgrade";
+      return short ? replyCount(state) : "Free · Upgrade";
     case "reached":
       if (state.free) return short ? "Upgrade" : "Replies used up · Upgrade to Solo";
       return short ? "Add 200 replies" : "Replies used up · Add 200 for $15";
@@ -61,5 +61,12 @@ export function planChipText(state: PlanChipState, short = false): string {
   }
 }
 
-/** The phone header shows the chip only when there's something to do or a trial running. */
-export const showOnPhone = (state: PlanChipState) => state.kind !== "plan";
+/** The month's replies, compact for the phone header (26 Nov): "82/100". */
+const replyCount = (s: { used: number; allowance: number }) =>
+  `${s.used.toLocaleString("en-US")}/${s.allowance.toLocaleString("en-US")}`;
+
+/**
+ * The phone header shows the chip when there's something to do, a trial running, or a reply limit
+ * to count (26 Nov: "82/100", the phone's "82 of 100 replies"). A plan without a limit stays off.
+ */
+export const showOnPhone = (state: PlanChipState) => state.kind !== "plan" || state.allowance > 0;

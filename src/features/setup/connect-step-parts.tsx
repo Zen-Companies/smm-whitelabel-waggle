@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BeeBody } from "@/components/app/bee";
 import { StateMark } from "@/components/app/state-mark";
 import { buttonVariants } from "@/components/ui/button";
-import { connectAccount } from "@/features/accounts";
+import { connectAccount, ConnectTrouble } from "@/features/accounts";
 import { upgradeHref } from "@/features/billing";
 import { platformLabel } from "@/lib/social/platforms";
 import { connectFirstAccount } from "./actions";
@@ -80,6 +80,7 @@ export function BeforeConnect({ platform, hasBrand }: { platform: string; hasBra
           </ConnectSubmit>
         </ConnectForm>
       </div>
+      <ConnectTrouble className="self-start" />
     </section>
   );
 }

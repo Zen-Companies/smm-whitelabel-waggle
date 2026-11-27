@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Brand } from "@/components/app/brand";
 import { ConnectTrace, connectAccount } from "@/features/accounts";
+import { updateAutonomyMode, writeRepliesAfterUpgrade } from "@/features/approvals";
 import { BillingHost, PromoBar } from "@/features/billing";
 import { Feedback } from "@/features/feedback";
 import { can, listMyOrgs, OrgMenu } from "@/features/orgs";
@@ -23,6 +24,8 @@ async function SetupOffers() {
       isOwner={can(open.role, "billing.view")}
       canInvite={can(open.role, "team.manage")}
       connect={connectAccount}
+      workerBee={updateAutonomyMode}
+      writeReplies={writeRepliesAfterUpgrade}
       showBanner={false}
     />
   );

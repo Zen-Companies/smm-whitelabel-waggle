@@ -571,3 +571,13 @@ export async function loadWork(
     kbTitles,
   });
 }
+
+/**
+ * The brand's best times to post (Zernio's analysis of its own past posts, stored by the
+ * analytics sync), for the Posts picker's chips (Posts Round 3). Null before the first sync.
+ */
+export async function loadBestTimes(db: Db, tenantId: string): Promise<BestTimeSlot[] | null> {
+  const snaps = await loadSnapshots(db, tenantId, [BEST_TIME_KEY]);
+  const b = snaps.get(BEST_TIME_KEY);
+  return b ? (parseOrNull(bestTimeSchema, b.data)?.slots ?? null) : null;
+}

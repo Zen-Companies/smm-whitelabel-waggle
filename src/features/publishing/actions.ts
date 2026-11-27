@@ -14,9 +14,15 @@ import { imageMaxBytesFor } from "./post-rules";
 import { retryPost as retryFailedPost } from "./retry";
 import { chooseBoardFor, listBoardsFor, type PinterestBoard } from "./pinterest";
 import { cancelScheduledPost, createPost, takeDownPost } from "./posts";
+import { fixLiveText, movePost, updateScheduledPost, type UpdatePostResult } from "./edit";
+import { liveEditOutcome } from "./live-edit";
+import type { StoredMedia } from "./publish";
 import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./video";
 import { driveKind, isUploadedImageUrl, ONEDRIVE_VIDEO_MAX_BYTES, postableItems } from "./onedrive";
 import { parsePostOptions, withoutMedia, type PostOptions } from "./post-options";
+import { CAROUSEL_MAX, platformFiles, type PostFile } from "./carousel";
+import { businessPhone, googleProblems, telUrl, withHttps } from "./google-post";
+import { optionMedia } from "./posts";
 import { platformLabel } from "@/lib/social/platforms";
 
 export interface ComposeState {
@@ -25,7 +31,9 @@ export interface ComposeState {
   field?: "content" | "accounts" | "when" | "image" | "youtubeTitle";
   /** Set when the post was saved: the form resets and the new post shows in the list. */
   savedAt?: number;
-  outcome?: "published" | "scheduled" | "waiting" | "failed";
+  /** The saved post (Round 3: a duplicate opens on it). */
+  postId?: string;
+  outcome?: "published" | "scheduled" | "waiting" | "failed" | "updated";
   /** Platforms that won't take the post as it is, with why (shown in "Before it goes out"). */
   problems?: { platform: string; message: string }[];
   /** Platforms' notes on the post: it can still go out (shown in "Before it goes out"). */
@@ -45,6 +53,41 @@ const CROP_PLATFORMS = [
   "bluesky",
 ] as const;
 
+const pixels = z.number().int().positive().max(100_000);
+
+/** Posts Round 4: the post's files in order, already uploaded (the first is the cover). */
+const itemsSchema = z
+  .array(
+    z.object({
+      url: z.string().url().max(2000),
+      type: z.enum(["image", "video"]),
+      width: pixels.optional(),
+      height: pixels.optional(),
+      seconds: z.number().positive().max(86_400).optional(),
+    }),
+  )
+  .max(CAROUSEL_MAX);
+
+/** Each platform's own crops, by the photo's place in the post (already uploaded). */
+const cropsSchema = z.partialRecord(
+  z.enum(CROP_PLATFORMS),
+  z.record(
+    z.string().regex(/^\d{1,2}$/),
+    z.object({ url: z.string().url().max(2000), width: pixels, height: pixels }),
+  ),
+);
+
+/** A JSON form field, read with `schema`; `empty` when it's missing or wrong. */
+function jsonField<T>(value: FormDataEntryValue | null, schema: z.ZodType<T>, empty: T): T {
+  if (typeof value !== "string" || !value) return empty;
+  try {
+    const r = schema.safeParse(JSON.parse(value));
+    return r.success ? r.data : empty;
+  } catch {
+    return empty;
+  }
+}
+
 const composeSchema = z.object({
   content: z.string().trim().min(1, "Write something to post.").max(POST_TEXT_MAX),
   accounts: z.array(z.uuid()).min(1, "Pick at least one account."),
@@ -56,179 +99,245 @@ const composeSchema = z.object({
     .trim()
     .max(YOUTUBE_TITLE_MAX, `YouTube titles are ${YOUTUBE_TITLE_MAX} characters at most.`)
     .optional(),
-  // T63: a video the browser already uploaded to Zernio, and its length if the browser read it.
-  video: z.string().optional(),
-  videoSeconds: z.coerce.number().positive().max(86_400).optional().catch(undefined),
-  // T84c: a photo already copied into media storage from OneDrive, and its size.
-  imageUrl: z.string().optional(),
-  imageSize: z.coerce.number().int().nonnegative().optional().catch(undefined),
-  // Posts Round 2: the photo's or video's size in pixels, and each platform's own crop (its file
-  // comes as `crop_<platform>`), all read in the browser.
-  mediaShape: z
-    .string()
-    .optional()
-    .transform((v) => {
-      try {
-        return v ? mediaShapeSchema.parse(JSON.parse(v)) : undefined;
-      } catch {
-        return undefined;
-      }
-    }),
 });
 
-const pixels = z.number().int().positive().max(100_000);
-const mediaShapeSchema = z.object({
-  width: pixels,
-  height: pixels,
-  crops: z
-    .partialRecord(z.enum(CROP_PLATFORMS), z.object({ width: pixels, height: pixels }))
-    .optional()
-    .default({}),
-});
+type Prepared =
+  | { ok: false; state: ComposeState }
+  | {
+      ok: true;
+      tenant: NonNullable<Awaited<ReturnType<typeof getTenantFor>>>;
+      db: ReturnType<typeof getServiceClient>;
+      data: z.infer<typeof composeSchema>;
+      scheduledFor: Date | null;
+      media: StoredMedia[];
+      options: PostOptions;
+    };
 
-export async function composePost(_prev: ComposeState, formData: FormData): Promise<ComposeState> {
+/** The owner's words for a size limit. */
+const underMb = (bytes: number) => `${Math.round(bytes / 100_000) / 10} MB`;
+
+/**
+ * The composer's form, checked: shared by a new post, a duplicate and an edit (Posts Round 3).
+ * Every file is already in media storage (Round 4): a link is taken only when it's one Waggle
+ * uploaded, or one of `sourceId`'s own files (the post being edited or copied, read from our
+ * row, never from the browser). Several files make a carousel; each platform's crops come by the
+ * photo's place; Google's post kind and button are checked here, and Call now takes the business
+ * phone from Business info.
+ */
+async function prepareCompose(formData: FormData, sourceId?: string): Promise<Prepared> {
   const parsed = composeSchema.safeParse({
     content: formData.get("content"),
     accounts: formData.getAll("accounts"),
     when: formData.get("when"),
     scheduledFor: formData.get("scheduledFor") || undefined,
     youtubeTitle: formData.get("youtubeTitle") || undefined,
-    video: formData.get("video") || undefined,
-    videoSeconds: formData.get("videoSeconds") || undefined,
-    imageUrl: formData.get("imageUrl") || undefined,
-    imageSize: formData.get("imageSize") || undefined,
-    mediaShape: formData.get("mediaShape") || undefined,
   });
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const field = issue.path[0];
     return {
-      error: issue.message,
-      field: field === "accounts" || field === "youtubeTitle" ? field : "content",
+      ok: false,
+      state: {
+        error: issue.message,
+        field: field === "accounts" || field === "youtubeTitle" ? field : "content",
+      },
     };
   }
-  const { content, accounts, when } = parsed.data;
+  const items = jsonField(formData.get("items"), itemsSchema, null);
+  if (!items) return { ok: false, state: { error: "Add the photos again.", field: "image" } };
+  const cropsIn = jsonField(formData.get("crops"), cropsSchema, {});
+  const { accounts, when } = parsed.data;
   let scheduledFor: Date | null = null;
   if (when === "later") {
     const at = parsed.data.scheduledFor ? new Date(parsed.data.scheduledFor) : null;
     if (!at || Number.isNaN(at.getTime())) {
-      return { error: "Pick a date and time.", field: "when" };
+      return { ok: false, state: { error: "Pick a date and time.", field: "when" } };
     }
     if (at.getTime() < Date.now() + 5 * 60_000) {
-      return { error: "Pick a time at least 5 minutes from now.", field: "when" };
+      return {
+        ok: false,
+        state: { error: "Pick a time at least 5 minutes from now.", field: "when" },
+      };
     }
     scheduledFor = at;
   }
 
   const tenant = await getTenantFor("posts.write");
-  if (!tenant) return { error: NOT_ALLOWED };
+  if (!tenant) return { ok: false, state: { error: NOT_ALLOWED } };
   const db = getServiceClient();
-  // Optional image: uploaded through Zernio's presign flow before the post is created.
-  const media: {
-    url: string;
-    seconds?: number | null;
-    type: "image" | "video";
-    width?: number;
-    height?: number;
-  }[] = [];
-  const shape = parsed.data.mediaShape;
-  const dims = shape ? { width: shape.width, height: shape.height } : {};
-  const image = formData.get("image");
-  if (parsed.data.video) {
-    const mock = resolveSocialProviderMode(process.env) === "mock";
-    if (!isUploadedVideoUrl(parsed.data.video, { mock, appUrl: process.env.APP_URL })) {
-      return { error: "Upload the video again.", field: "image" };
+  // The post being edited or copied, only this brand's: its files may be reused, never re-sent.
+  const known = new Set<string>();
+  if (sourceId) {
+    const { data } = await db
+      .from("posts")
+      .select("media, platform_options")
+      .eq("id", sourceId)
+      .eq("tenant_id", tenant.id)
+      .maybeSingle();
+    if (!data) {
+      return { ok: false, state: { error: "That post isn't here any more. Reload the page." } };
+    }
+    for (const m of (data.media as StoredMedia[] | null) ?? []) if (m.url) known.add(m.url);
+    for (const o of Object.values(parsePostOptions(data.platform_options))) {
+      for (const m of o?.media ?? []) known.add(m.url);
+    }
+  }
+  const mock = resolveSocialProviderMode(process.env) === "mock";
+  const linkOpts = { mock, appUrl: process.env.APP_URL };
+  const ours = (url: string, kind: "image" | "video") =>
+    known.has(url) ||
+    (kind === "video" ? isUploadedVideoUrl(url, linkOpts) : isUploadedImageUrl(url, linkOpts));
+
+  const media: StoredMedia[] = [];
+  for (const item of items) {
+    if (!ours(item.url, item.type)) {
+      return {
+        ok: false,
+        state: {
+          error: `Add the ${item.type === "video" ? "video" : "photo"} again.`,
+          field: "image",
+        },
+      };
     }
     media.push({
-      url: parsed.data.video,
-      seconds: parsed.data.videoSeconds ?? null,
-      type: "video",
-      ...dims,
+      url: item.url,
+      type: item.type,
+      ...(item.seconds ? { seconds: item.seconds } : {}),
+      ...(item.width && item.height ? { width: item.width, height: item.height } : {}),
     });
-  } else if (parsed.data.imageUrl && !(image instanceof File && image.size > 0)) {
-    const mock = resolveSocialProviderMode(process.env) === "mock";
-    if (!isUploadedImageUrl(parsed.data.imageUrl, { mock, appUrl: process.env.APP_URL })) {
-      return { error: "Pick the photo again.", field: "image" };
-    }
-    const { data: picked } = await db
-      .from("social_accounts")
-      .select("platform")
-      .eq("tenant_id", tenant.id)
-      .in("id", accounts);
-    const maxBytes = imageMaxBytesFor(
-      (picked ?? []).map((a) => a.platform),
-      POST_IMAGE_MAX_BYTES,
-    );
-    if ((parsed.data.imageSize ?? 0) > maxBytes) {
-      return {
-        error: `Use an image under ${Math.round(maxBytes / 100_000) / 10} MB.`,
-        field: "image",
-      };
-    }
-    media.push({ url: parsed.data.imageUrl, type: "image", ...dims });
-  } else if (image instanceof File && image.size > 0) {
-    if (!(POST_IMAGE_TYPES as readonly string[]).includes(image.type)) {
-      return { error: "Use a JPG, PNG or WebP image.", field: "image" };
-    }
-    // The strictest size among the picked platforms (Bluesky takes 1 MB).
-    const { data: picked } = await db
-      .from("social_accounts")
-      .select("platform")
-      .eq("tenant_id", tenant.id)
-      .in("id", accounts);
-    const maxBytes = imageMaxBytesFor(
-      (picked ?? []).map((a) => a.platform),
-      POST_IMAGE_MAX_BYTES,
-    );
-    if (image.size > maxBytes) {
-      return {
-        error: `Use an image under ${Math.round(maxBytes / 100_000) / 10} MB.`,
-        field: "image",
-      };
-    }
-    const uploaded = await uploadPhoto(image, tenant.id);
-    if ("error" in uploaded) return uploaded;
-    media.push({ url: uploaded.url, type: "image", ...dims });
   }
 
-  // Posts Round 2: each platform's own crop, uploaded like the photo and sent only there
-  // (Zernio `customMedia`). Only with a photo; the browser's options never carry files.
+  const { data: pickedRows } = await db
+    .from("social_accounts")
+    .select("platform")
+    .eq("tenant_id", tenant.id)
+    .in("id", accounts);
+  const picked = new Set((pickedRows ?? []).map((a) => a.platform));
+
   const options = withoutMedia(readOptions(formData.get("platformOptions")));
-  const crops = media[0]?.type === "image" ? Object.entries(shape?.crops ?? {}) : [];
-  for (const [platform, size] of crops) {
-    const file = formData.get(`crop_${platform}`);
-    if (!size || !(file instanceof File) || file.size === 0) continue;
-    if (!["image/jpeg", "image/png"].includes(file.type)) {
-      return { error: "Crop the photo again.", field: "image" };
+  // Posts Round 2 and 4: each platform's crops, sent only there (Zernio `customMedia`), as its
+  // own trimmed set with the crops in place.
+  for (const [platform, byIndex] of Object.entries(cropsIn)) {
+    if (!byIndex || !picked.has(platform)) continue;
+    const crops: Record<number, { url: string; width: number; height: number }> = {};
+    for (const [key, crop] of Object.entries(byIndex)) {
+      const i = Number(key);
+      if (media[i]?.type !== "image") continue;
+      if (!ours(crop.url, "image")) {
+        return { ok: false, state: { error: "Crop the photo again.", field: "image" } };
+      }
+      crops[i] = crop;
     }
-    const maxBytes = imageMaxBytesFor([platform], POST_IMAGE_MAX_BYTES);
-    if (file.size > maxBytes) {
+    if (!Object.keys(crops).length) continue;
+    const { files } = platformFiles(platform, media as PostFile[], crops, options[platform]?.as);
+    if (files) options[platform] = { ...options[platform], media: optionMedia(files) };
+  }
+
+  // Round 4: Google's post kind and button. Call now dials the business phone from Business info.
+  const google = options.googlebusiness?.google;
+  if (google && picked.has("googlebusiness")) {
+    const phone = google.button === "CALL" ? await loadBusinessPhone(db, tenant.id) : null;
+    const problems = googleProblems(google, phone);
+    if (problems.length) {
       return {
-        error: `The crop for ${platformLabel(platform)} is over ${Math.round(maxBytes / 100_000) / 10} MB. Crop a smaller part, or remove the crop.`,
-        field: "image",
+        ok: false,
+        state: {
+          error: "Some platforms won't take this post as it is.",
+          field: "accounts",
+          problems: problems.map((p) => ({ platform: "googlebusiness", message: p.message })),
+        },
       };
     }
-    const uploaded = await uploadPhoto(file, tenant.id);
-    if ("error" in uploaded) return uploaded;
-    options[platform] = {
-      ...options[platform],
-      media: [{ url: uploaded.url, type: "image", width: size.width, height: size.height }],
+    options.googlebusiness = {
+      ...options.googlebusiness,
+      google: {
+        ...google,
+        ...(google.button === "CALL"
+          ? { buttonUrl: telUrl(phone) ?? undefined }
+          : google.button && google.buttonUrl
+            ? { buttonUrl: withHttps(google.buttonUrl) }
+            : { buttonUrl: undefined }),
+        redeemUrl: google.redeemUrl?.trim() ? withHttps(google.redeemUrl) : undefined,
+      },
     };
   }
+  return { ok: true, tenant, db, data: parsed.data, scheduledFor, media, options };
+}
 
+/** The business phone Waggle has (Business info), for Google's Call now. */
+async function loadBusinessPhone(
+  db: ReturnType<typeof getServiceClient>,
+  tenantId: string,
+): Promise<string | null> {
+  const { data } = await db
+    .from("kb_entries")
+    .select("title, content, found_kind")
+    .eq("tenant_id", tenantId)
+    .limit(500);
+  return businessPhone(data ?? []);
+}
+
+const uploadSchema = z.object({
+  platforms: z.array(z.string().max(40)).max(30),
+});
+
+/**
+ * Posts Round 4: uploads one photo (or a crop of one) to media storage as soon as it's needed, so
+ * a post with many photos never carries them all in one request. Checked against the strictest
+ * size among the picked platforms (Bluesky takes 1 MB).
+ */
+export async function uploadPostPhoto(
+  formData: FormData,
+): Promise<{ url: string } | { error: string }> {
+  const file = formData.get("file");
+  const parsed = uploadSchema.safeParse({ platforms: formData.getAll("platforms") });
+  if (!(file instanceof File) || file.size === 0 || !parsed.success) {
+    return { error: "Pick the photo again." };
+  }
+  if (!(POST_IMAGE_TYPES as readonly string[]).includes(file.type)) {
+    return { error: "Use a JPG, PNG or WebP image." };
+  }
+  const maxBytes = imageMaxBytesFor(parsed.data.platforms, POST_IMAGE_MAX_BYTES);
+  if (file.size > maxBytes) return { error: `Use an image under ${underMb(maxBytes)}.` };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const uploaded = await uploadPhoto(file, tenant.id);
+  return "error" in uploaded ? { error: uploaded.error } : uploaded;
+}
+
+export async function composePost(_prev: ComposeState, formData: FormData): Promise<ComposeState> {
+  // Round 3: Duplicate starts from another post; its files are reused from our row.
+  const from = z.uuid().safeParse(formData.get("fromPostId"));
+  const prepared = await prepareCompose(formData, from.success ? from.data : undefined);
+  if (!prepared.ok) return prepared.state;
+  const { tenant, db, data, scheduledFor, media, options } = prepared;
   const result = await createPost(
     { db, social: getSocialProvider },
     {
       tenantId: tenant.id,
       userId: tenant.userId,
-      content,
-      accountIds: accounts,
+      content: data.content,
+      accountIds: data.accounts,
       scheduledFor,
-      media,
+      media: media.flatMap((m) =>
+        m.url
+          ? [
+              {
+                url: m.url,
+                seconds: m.seconds ?? null,
+                type: m.type === "video" ? ("video" as const) : ("image" as const),
+                altText: m.altText ?? null,
+                width: m.width ?? null,
+                height: m.height ?? null,
+              },
+            ]
+          : [],
+      ),
       tiktokConsent: formData.get("tiktokConsent") === "yes",
-      youtubeTitle: parsed.data.youtubeTitle || undefined,
+      youtubeTitle: data.youtubeTitle || undefined,
       options,
-      queued: when === "queue",
+      queued: data.when === "queue",
+      ...(from.success ? { via: { duplicateOf: from.data } } : {}),
     },
   );
   if (!result.ok) {
@@ -260,9 +369,154 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
   revalidatePath("/posts");
   const warnings = result.warnings.length ? { warnings: result.warnings } : {};
   if (result.outcome === "failed") {
-    return { error: result.error, savedAt: Date.now(), outcome: "failed", ...warnings };
+    return {
+      error: result.error,
+      savedAt: Date.now(),
+      postId: result.postId,
+      outcome: "failed",
+      ...warnings,
+    };
   }
-  return { savedAt: Date.now(), outcome: result.outcome, ...warnings };
+  return { savedAt: Date.now(), postId: result.postId, outcome: result.outcome, ...warnings };
+}
+
+/**
+ * Edit post → Save changes (Posts Round 3): the planned post changes in place through Zernio's
+ * update; the row follows; the audit row lists what changed.
+ */
+export async function saveEditedPost(
+  _prev: ComposeState,
+  formData: FormData,
+): Promise<ComposeState> {
+  const id = z.uuid().safeParse(formData.get("postId"));
+  if (!id.success) return { error: "Something went wrong. Reload the page." };
+  if (formData.get("when") !== "later") {
+    return { error: "Pick a time for the post.", field: "when" };
+  }
+  const prepared = await prepareCompose(formData, id.data);
+  if (!prepared.ok) return prepared.state;
+  const { tenant, db, data, scheduledFor, media, options } = prepared;
+  if (!scheduledFor) return { error: "Pick a date and time.", field: "when" };
+  const result = await updateScheduledPost(
+    { db, social: getSocialProvider },
+    {
+      tenantId: tenant.id,
+      userId: tenant.userId,
+      postId: id.data,
+      content: data.content,
+      accountIds: data.accounts,
+      scheduledFor,
+      media,
+      options,
+      youtubeTitle: data.youtubeTitle || undefined,
+      tiktokConsent: formData.get("tiktokConsent") === "yes",
+    },
+  );
+  if (!result.ok) return { ...updateErrorState(result), field: updateErrorField(result) };
+  revalidatePath("/posts");
+  return { savedAt: Date.now(), outcome: "updated" };
+}
+
+function updateErrorField(r: Extract<UpdatePostResult, { ok: false }>): ComposeState["field"] {
+  if (r.error === "too_soon") return "when";
+  if (["accounts_not_owned", "account_disconnected", "consent_required"].includes(r.error)) {
+    return "accounts";
+  }
+  return r.error === "refused" && r.problems?.length ? "accounts" : undefined;
+}
+
+/** An edit or move Zernio (or our checks) didn't take, in the owner's words. */
+function updateErrorState(r: Extract<UpdatePostResult, { ok: false }>): ComposeState {
+  switch (r.error) {
+    case "not_editable":
+      return { error: "This post can't be changed any more: it's going out or already went out." };
+    case "too_soon":
+      return { error: "Pick a time at least 5 minutes from now." };
+    case "accounts_not_owned":
+      return { error: "Pick your connected accounts only." };
+    case "account_disconnected":
+      return { error: "One of these accounts is disconnected. Reconnect it in Settings first." };
+    case "consent_required":
+      return { error: "Tick the TikTok confirmation to post there." };
+    case "paused":
+      return { error: "Posting is paused on our side right now. Try again later." };
+    case "unclear":
+      return {
+        error:
+          "We couldn't tell whether the change was saved. Reload in a minute to check before trying again.",
+      };
+    case "gone":
+      return { error: "This post isn't planned any more. Reload the page." };
+    case "refused":
+      return r.problems?.length
+        ? { error: "Some platforms won't take this post as it is.", problems: r.problems }
+        : { error: r.message ?? "The change wasn't accepted. Try again." };
+  }
+}
+
+const moveSchema = z.object({ postId: z.uuid(), scheduledFor: z.iso.datetime({ offset: true }) });
+
+export type MoveState = { error?: string; scheduledFor?: string };
+
+/**
+ * Move a planned post (Posts Round 3): drag on the week calendar, Move in the post panel, or
+ * Undo (a move back). The post keeps everything else.
+ */
+export async function movePostAction(input: {
+  postId: string;
+  scheduledFor: string;
+}): Promise<MoveState> {
+  const parsed = moveSchema.safeParse(input);
+  if (!parsed.success) return { error: "Pick a day and time." };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const result = await movePost(
+    { db: getServiceClient(), social: getSocialProvider },
+    {
+      tenantId: tenant.id,
+      userId: tenant.userId,
+      postId: parsed.data.postId,
+      scheduledFor: new Date(parsed.data.scheduledFor),
+    },
+  );
+  if (!result.ok) return { error: updateErrorState(result).error };
+  revalidatePath("/posts");
+  return { scheduledFor: result.scheduledFor ?? parsed.data.scheduledFor };
+}
+
+const fixSchema = z.object({
+  postId: z.uuid(),
+  content: z.string().trim().min(1, "Write the text.").max(POST_TEXT_MAX),
+});
+
+export type FixTextState = { error?: string; done?: string };
+
+/** Fix the text on a live post (Posts Round 3, decision 2), where the platform allows it. */
+export async function fixPostText(_prev: FixTextState, formData: FormData): Promise<FixTextState> {
+  const parsed = fixSchema.safeParse({
+    postId: formData.get("postId"),
+    content: formData.get("content"),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Write the text." };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const result = await fixLiveText(
+    { db: getServiceClient(), social: getSocialProvider },
+    { tenantId: tenant.id, userId: tenant.userId, ...parsed.data },
+  );
+  if (!result.ok) {
+    return {
+      error:
+        result.error === "too_long"
+          ? (result.message ?? "The text is too long.")
+          : result.error === "nothing_editable"
+            ? "None of the platforms this post is on allow editing a live post."
+            : "Only a post that went out can have its text fixed.",
+    };
+  }
+  revalidatePath("/posts");
+  const line = liveEditOutcome(result.edited, result.failed);
+  return result.edited.length ? { done: line } : { error: line };
 }
 
 /** Uploads a photo (or a crop of it) to media storage for a post. */
@@ -271,8 +525,13 @@ async function uploadPhoto(
   tenantId: string,
 ): Promise<{ url: string } | { error: string; field: "image" }> {
   try {
+    // The link keeps the file's extension, which is how Waggle and Zernio know it's a photo.
+    const ext = ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const)[
+      file.type as "image/jpeg"
+    ];
+    const base = file.name || "image";
     const { publicUrl } = await getSocialProvider().uploadMedia({
-      filename: file.name || "image",
+      filename: ext && !/\.(jpe?g|png|webp)$/i.test(base) ? `${base}.${ext}` : base,
       contentType: file.type,
       bytes: new Uint8Array(await file.arrayBuffer()),
       signal: AbortSignal.timeout(30_000),

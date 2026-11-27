@@ -25,6 +25,7 @@ import {
   type BusinessProfile,
   type AccountPicture,
   type CreatePostInput,
+  type UpdatePostInput,
   type ProviderCommentReply,
   type ProviderComment,
   type ProviderConversation,
@@ -159,6 +160,8 @@ const postSchema = z.object({
     scheduledFor: z.string().nullish().catch(null),
   }),
 });
+/** `POST /v1/posts/{postId}/edit`: the edited post's link, when Zernio gives one. */
+const editSchema = z.object({ url: z.string().nullish() });
 const queueSlotSchema = z.object({ dayOfWeek: z.number().int().min(0).max(6), time: z.string() });
 const queueSchema = z.object({
   exists: z.boolean().optional(),
@@ -3664,6 +3667,64 @@ export class ZernioSocialProvider implements SocialProvider {
         }),
       );
       return retryOutcome(parse(retrySchema, data, "retryPost"));
+    });
+  }
+
+  async updatePost(
+    input: UpdatePostInput & { signal?: AbortSignal },
+  ): Promise<{ status: ProviderPostStatus; scheduledFor: string | null }> {
+    return call("updatePost", async (withFetch) => {
+      const targets = input.targets
+        ? await this.postTargets({
+            content: input.content ?? "",
+            media: input.media,
+            targets: input.targets,
+            extras: input.extras,
+            tiktokConsent: input.tiktokConsent,
+            publishAt: input.publishAt ?? null,
+            idempotencyKey: input.idempotencyKey,
+          })
+        : undefined;
+      const { data } = await this.zernio.posts.updatePost(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          body: {
+            ...(input.content !== undefined ? { content: input.content } : {}),
+            // An empty list takes the files off (the owner removed the photo).
+            ...(input.media ? { mediaItems: toMediaItems(input.media) } : {}),
+            ...(targets ? { platforms: targets } : {}),
+            ...(input.publishAt ? { scheduledFor: input.publishAt.toISOString() } : {}),
+          },
+          headers: { "Idempotency-Key": input.idempotencyKey },
+        }),
+      );
+      const { post } = parse(postSchema, data, "updatePost");
+      return { status: post.status, scheduledFor: post.scheduledFor ?? null };
+    });
+  }
+
+  async editPublishedPost(input: {
+    postId: string;
+    platform: string;
+    accountId?: string;
+    content: string;
+    signal?: AbortSignal;
+  }): Promise<{ url: string | null }> {
+    return call("editPublishedPost", async (withFetch) => {
+      const { data } = await this.zernio.posts.editPost(
+        withFetch({
+          signal: input.signal,
+          path: { postId: input.postId },
+          body: {
+            platform: input.platform as "facebook",
+            content: input.content,
+            ...(input.accountId ? { accountId: input.accountId } : {}),
+          },
+        }),
+      );
+      const parsed = editSchema.safeParse(data);
+      return { url: parsed.success ? (parsed.data.url ?? null) : null };
     });
   }
 

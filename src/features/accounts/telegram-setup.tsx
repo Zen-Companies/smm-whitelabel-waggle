@@ -35,10 +35,15 @@ export function TelegramSetup() {
   const getCode = useCallback(async () => {
     setState({ step: "loading" });
     const result = await startTelegram();
+    // The plan's accounts are all in use: the upgrade pop-up (Free) or the line, in place.
+    if ("upgrade" in result) {
+      router.push(result.upgrade, { scroll: false });
+      return;
+    }
     setState(
       "error" in result ? { step: "error", message: result.error } : { step: "waiting", ...result },
     );
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     // Once per open (React runs effects twice in development).

@@ -24,17 +24,24 @@ import {
   weekSummary,
   type Month,
 } from "./calendar";
+import { loadBestTimes } from "@/features/analytics";
+import { createServerSupabase } from "@/lib/supabase/server";
+import { bestChips } from "./best-chips";
 import { ComposeCard } from "./compose-card";
-import { EmptyCell } from "@/components/app/empty-spot";
 import { StateLabel } from "@/components/app/state-mark";
 import { PostsHeader } from "./posts-header";
-import { platformLabel } from "@/lib/social/platforms";
-import { accountNames, loadPosts, loadReach, Post, PostsTable, type PostRow } from "./posts-list";
-import { clockIn, dayKeyIn, zoneLine } from "./post-time";
+import { platformLabel, platformOf } from "@/lib/social/platforms";
+import { canMove } from "./move";
+import { accountNames, loadMetrics, loadPosts, Post, PostsTable, type PostRow } from "./posts-list";
+import { BestPostCard } from "./best-post-card";
+import { bestPostThisWeek, postResults } from "./post-metrics";
+import { clockIn, dateTimeIn, dayKeyIn, fromWallClock, zoneLine } from "./post-time";
+import { startFrom, type StartRow } from "./start-from";
+import { WeekBoard } from "./week-board";
 
 // Posts (design "5 · Posts", T74a): the week by default (each day a column with its posts and
-// "+ Plan a post"), a month calendar, or the list with people reached. The composer is always on
-// the right.
+// "+ Plan a post"), a month calendar, or the list with people reached. New post, Edit post and
+// Duplicate open the big window (Posts Round 3).
 
 type View = "week" | "month" | "list";
 
@@ -44,17 +51,39 @@ function url(p: {
   week?: string;
   day?: string;
   post?: string;
-  /** The composer panel, open with no day picked. */
+  /** The composer, open with no day picked. */
   compose?: boolean;
+  /** Round 3: Edit post / Duplicate on this post. */
+  edit?: string;
+  duplicate?: string;
+  /** Round 3: the calendar shows only posts going to this platform. */
+  platform?: string | null;
 }) {
   const q = new URLSearchParams();
   if (p.view !== "week") q.set("view", p.view);
   if (p.view === "week" && p.week) q.set("week", p.week);
   else q.set("month", monthParam(p.month));
+  if (p.platform) q.set("platform", p.platform);
   if (p.day) q.set("day", p.day);
   if (p.post) q.set("post", p.post);
   if (p.compose) q.set("new", "1");
+  if (p.edit) q.set("edit", p.edit);
+  if (p.duplicate) q.set("duplicate", p.duplicate);
   return `/posts?${q}`;
+}
+
+/** A post to edit or copy, this brand's only (read through RLS). */
+async function loadStartRow(tenantId: string, postId: string) {
+  const supabase = await createServerSupabase();
+  const { data } = await supabase
+    .from("posts")
+    .select(
+      "id, content, media, target_account_ids, platform_options, scheduled_for, status, zernio_post_id",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("id", postId)
+    .maybeSingle();
+  return data as (StartRow & { status: string; zernio_post_id: string | null }) | null;
 }
 
 function Chip({
@@ -134,21 +163,56 @@ export async function PostsView({
   const today = dayKeyIn(new Date(), timeZone);
   const week = weekStart(parseDay(str("week")) ?? day ?? today);
   const month =
-    view === "week"
-      ? parseMonth(week.slice(0, 7))
-      : parseMonth(str("month") ?? today.slice(0, 7));
+    view === "week" ? parseMonth(week.slice(0, 7)) : parseMonth(str("month") ?? today.slice(0, 7));
   const time = day ? parseTime(str("time")) : null;
   const postId = str("post");
   const composing = str("new") === "1";
+  const editId = str("edit");
+  const duplicateId = str("duplicate");
+  const done = str("done") === "edited" ? "edited" : str("done") === "copied" ? "copied" : null;
   const names = accountNames(accounts);
+  // Round 3: filter by platform, only when the brand posts to 2 or more.
+  const accountPlatform = new Map(accounts.map((a) => [a.id, a.platform]));
+  const brandPlatforms = [
+    ...new Set(accounts.filter((a) => platformOf(a.platform)?.post).map((a) => a.platform)),
+  ];
+  const platform =
+    brandPlatforms.length > 1 && brandPlatforms.includes(str("platform") ?? "")
+      ? (str("platform") as string)
+      : null;
+  const u = (p: Omit<Parameters<typeof url>[0], "platform">) => url({ ...p, platform });
+  const shown = platform
+    ? posts.filter((p) => p.target_account_ids.some((id) => accountPlatform.get(id) === platform))
+    : posts;
   const selectedPost = postId ? posts.find((p) => p.id === postId) : undefined;
-  const attention = posts.filter(needsNewTime);
+  const attention = shown.filter(needsNewTime);
   const byDay = new Map<string, PostRow[]>();
-  for (const p of posts) {
+  for (const p of shown) {
     if (p.status === "cancelled" && !p.failure_reason) continue;
     const key = postDay(p, timeZone);
     byDay.set(key, [...(byDay.get(key) ?? []), p]);
   }
+  // Days that already have a post, for the picker's dots (every platform).
+  const busyDays = [
+    ...new Set(
+      posts
+        .filter((p) => p.status !== "cancelled" && (p.scheduled_for || p.published_at))
+        .map((p) => postDay(p, timeZone)),
+    ),
+  ];
+  // Round 3: Edit and Duplicate start from a saved post; best times for the picker's chips.
+  const startRow = editId
+    ? await loadStartRow(tenant.id, editId)
+    : duplicateId
+      ? await loadStartRow(tenant.id, duplicateId)
+      : null;
+  const editable = editId && startRow && canMove(startRow) ? startRow : null;
+  const copying = duplicateId && startRow ? startRow : null;
+  const needsPicker = !!(selectedPost || composing || day || editable || copying);
+  const chips = needsPicker
+    ? bestChips(await loadBestTimes(await createServerSupabase(), tenant.id), new Date(), timeZone)
+    : null;
+  const picker = { timeZone, chips, busyDays };
   const monthName = new Date(month.year, month.month - 1, 1).toLocaleDateString(undefined, {
     month: "long",
     year: "numeric",
@@ -162,16 +226,43 @@ export async function PostsView({
   const days = weekDays(week);
   const weekPosts = days.flatMap((d) => byDay.get(d) ?? []);
   const platformOfAccount = new Map(accounts.map((a) => [a.id, platformLabel(a.platform)]));
-  const reach = view === "list" ? await loadReach(tenant.id, posts) : new Map<string, number>();
+  // Round 4: each sent post's numbers from the hourly copy (no platform calls on page open).
+  const metrics = await loadMetrics(tenant.id, posts);
+  const now = new Date();
+  const resultsOf = (p: PostRow) =>
+    p.zernio_post_id
+      ? postResults(
+          p.target_account_ids.flatMap((id) => accountPlatform.get(id) ?? []),
+          metrics.get(p.zernio_post_id) ?? [],
+        )
+      : null;
+  const best = bestPostThisWeek(
+    posts.flatMap((p) => {
+      const results = p.status === "published" && p.published_at ? resultsOf(p) : null;
+      return results && p.published_at
+        ? [{ postId: p.id, publishedAt: p.published_at, results }]
+        : [];
+    }),
+    fromWallClock(weekStart(today), "00:00", timeZone).toISOString(),
+    now,
+  );
+  const bestRow = best ? posts.find((p) => p.id === best.postId) : undefined;
 
   return (
     <>
       <PostsHeader />
+      {best && bestRow && (
+        <BestPostCard
+          best={best}
+          title={bestRow.content.split("\n")[0] || "Photo"}
+          href={u({ view, month, week, post: bestRow.id })}
+        />
+      )}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         {view === "week" && (
           <div className="flex flex-wrap items-center gap-1">
             <Link
-              href={url({ view, month, week: shiftWeek(week, -1) })}
+              href={u({ view, month, week: shiftWeek(week, -1) })}
               aria-label="Previous week"
               className="border-line-strong bg-surface flex size-11 items-center justify-center rounded-md border"
             >
@@ -181,14 +272,14 @@ export async function PostsView({
               {weekLabel(week)}
             </span>
             <Link
-              href={url({ view, month, week: shiftWeek(week, 1) })}
+              href={u({ view, month, week: shiftWeek(week, 1) })}
               aria-label="Next week"
               className="border-line-strong bg-surface flex size-11 items-center justify-center rounded-md border"
             >
               <ChevronRight className="size-5" strokeWidth={1.75} aria-hidden />
             </Link>
             <Link
-              href={url({ view, month, week: weekStart(today) })}
+              href={u({ view, month, week: weekStart(today) })}
               className="hover:text-ink text-ink-2 flex min-h-11 items-center px-3.5 text-sm font-medium"
             >
               This week
@@ -203,7 +294,7 @@ export async function PostsView({
         {view === "month" && (
           <div className="flex items-center gap-1">
             <Link
-              href={url({ view, month: shiftMonth(month, -1) })}
+              href={u({ view, month: shiftMonth(month, -1) })}
               aria-label="Previous month"
               className="border-line-strong bg-surface flex size-11 items-center justify-center rounded-md border"
             >
@@ -211,14 +302,14 @@ export async function PostsView({
             </Link>
             <span className="min-w-[150px] text-center text-lg font-semibold">{monthName}</span>
             <Link
-              href={url({ view, month: shiftMonth(month, 1) })}
+              href={u({ view, month: shiftMonth(month, 1) })}
               aria-label="Next month"
               className="border-line-strong bg-surface flex size-11 items-center justify-center rounded-md border"
             >
               <ChevronRight className="size-5" strokeWidth={1.75} aria-hidden />
             </Link>
             <Link
-              href={url({ view, month: thisMonth })}
+              href={u({ view, month: thisMonth })}
               className="hover:text-ink text-ink-2 flex min-h-11 items-center px-3.5 text-sm font-medium"
             >
               Today
@@ -226,21 +317,18 @@ export async function PostsView({
           </div>
         )}
         <nav aria-label="View" className="segmented ml-auto">
-          <Link
-            href={url({ view: "week", month, week })}
-            data-active={view === "week" || undefined}
-          >
+          <Link href={u({ view: "week", month, week })} data-active={view === "week" || undefined}>
             Week
           </Link>
-          <Link href={url({ view: "month", month })} data-active={view === "month" || undefined}>
+          <Link href={u({ view: "month", month })} data-active={view === "month" || undefined}>
             Month
           </Link>
-          <Link href={url({ view: "list", month })} data-active={view === "list" || undefined}>
+          <Link href={u({ view: "list", month })} data-active={view === "list" || undefined}>
             List
           </Link>
         </nav>
         <Link
-          href={url({ view, month, week, compose: true })}
+          href={u({ view, month, week, compose: true })}
           scroll={false}
           className={buttonVariants({ variant: "primary" })}
         >
@@ -250,7 +338,29 @@ export async function PostsView({
 
       <div className="flex flex-col gap-6">
         <div className="flex min-w-0 flex-col gap-3">
-          <p className="meta">{zoneLine(timeZone)}</p>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {brandPlatforms.length > 1 && (
+              <nav aria-label="Show posts for" className="flex flex-wrap gap-1.5">
+                {[null, ...brandPlatforms].map((p) => (
+                  <Link
+                    key={p ?? "all"}
+                    href={url({ view, month, week, platform: p })}
+                    scroll={false}
+                    aria-current={platform === p ? "true" : undefined}
+                    className={cn(
+                      "inline-flex min-h-9 items-center rounded-full border px-3 text-[13px] font-semibold",
+                      platform === p
+                        ? "bg-ink text-surface border-ink"
+                        : "border-line-strong bg-surface text-ink-2 hover:bg-subtle",
+                    )}
+                  >
+                    {p ? platformLabel(p) : "All"}
+                  </Link>
+                ))}
+              </nav>
+            )}
+            <p className="meta">{zoneLine(timeZone)}</p>
+          </div>
           {first && (
             <div
               role="status"
@@ -271,7 +381,7 @@ export async function PostsView({
                 {first.content.length > 40 ? "…" : ""}&rdquo; didn&apos;t go out.
               </span>
               <Link
-                href={url({
+                href={u({
                   view,
                   month: parseMonth(postDay(first, timeZone).slice(0, 7)),
                   post: first.id,
@@ -287,90 +397,44 @@ export async function PostsView({
             <PostsTable
               posts={posts}
               platforms={platformOfAccount}
-              reach={reach}
-              openHref={(id) => url({ view, month, post: id })}
+              results={resultsOf}
+              openHref={(id) => u({ view, month, post: id })}
               timeZone={timeZone}
             />
           ) : view === "week" ? (
-            <div className="grid gap-3 md:grid-cols-7" aria-label={`Week of ${weekLabel(week)}`}>
-              {days.map((d) => {
-                const list = byDay.get(d) ?? [];
+            <WeekBoard
+              label={`Week of ${weekLabel(week)}`}
+              timeZone={timeZone}
+              days={days.map((d) => {
                 const date = new Date(`${d}T12:00`);
-                return (
-                  <section
-                    key={d}
-                    aria-current={d === today ? "date" : undefined}
-                    className={cn(
-                      "card flex min-h-[180px] min-w-0 flex-col gap-2 p-2.5",
-                      d === day && "ring-honey ring-1",
-                    )}
-                  >
-                    <p className="flex items-baseline gap-1.5 text-[13px]">
-                      <span className="text-ink-3">
-                        {date.toLocaleDateString(undefined, { weekday: "short" })}
-                      </span>
-                      <span
-                        className={cn(
-                          "font-semibold",
-                          d === today &&
-                            "bg-honey text-ink inline-flex min-w-[22px] justify-center rounded-full px-1",
-                        )}
-                      >
-                        {date.getDate()}
-                      </span>
-                    </p>
-                    {list.map((p) => {
-                      const word = postStatusWord(p);
-                      const at = p.published_at ?? p.scheduled_for;
-                      return (
-                        <Link
-                          key={p.id}
-                          href={url({ view, month, week, post: p.id })}
-                          aria-current={p.id === postId ? "true" : undefined}
-                          className={cn(
-                            "text-ink flex flex-col gap-0.5 rounded-lg border px-2 py-1.5 text-xs no-underline",
-                            word === "Needs you"
-                              ? "border-honey-border bg-honey-tint"
-                              : word === "Posted"
-                                ? "bg-subtle border-transparent"
-                                : "border-line-strong bg-surface",
-                            p.id === postId && "outline-ink outline-2",
-                          )}
-                        >
-                          <span className="line-clamp-2 font-medium">
-                            {p.content.split("\n")[0] || "Photo"}
-                          </span>
-                          <span className="text-ink-3">
-                            {word}
-                            {at && word !== "Needs you" ? ` · ${clockIn(at, timeZone)}` : ""}
-                          </span>
-                        </Link>
-                      );
-                    })}
-                    {list.length === 0 ? (
-                      // Rule 4 (option B): an empty day is one empty cell that fills on hover.
-                      <Link
-                        href={url({ view, month, week, day: d })}
-                        aria-label={`Plan a post for ${date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`}
-                        className="empty-slot"
-                      >
-                        <EmptyCell size={36} />
-                        <span className="empty-slot-text">Plan a post</span>
-                      </Link>
-                    ) : (
-                      <Link
-                        href={url({ view, month, week, day: d })}
-                        aria-label={`Plan another post for ${date.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}`}
-                        className="empty-slot mt-auto flex-none flex-row py-1.5"
-                      >
-                        <EmptyCell size={18} />
-                        <span className="empty-slot-text">Plan</span>
-                      </Link>
-                    )}
-                  </section>
-                );
+                return {
+                  key: d,
+                  weekday: date.toLocaleDateString("en-US", { weekday: "short" }),
+                  dayNum: date.getDate(),
+                  long: date.toLocaleDateString("en-US", {
+                    weekday: "long",
+                    month: "long",
+                    day: "numeric",
+                  }),
+                  isToday: d === today,
+                  isPlanDay: d === day,
+                  planHref: u({ view, month, week, day: d }),
+                };
               })}
-            </div>
+              posts={days.flatMap((d) =>
+                (byDay.get(d) ?? []).map((p) => ({
+                  id: p.id,
+                  day: d,
+                  href: u({ view, month, week, post: p.id }),
+                  firstLine: p.content.split("\n")[0] || "Photo",
+                  word: postStatusWord(p),
+                  at: p.published_at ?? p.scheduled_for,
+                  selected: p.id === postId,
+                  movable: canMove(p) && !!p.scheduled_for,
+                  scheduledFor: p.scheduled_for,
+                })),
+              )}
+            />
           ) : (
             <>
               <div role="grid" aria-label={monthName} className="card overflow-hidden">
@@ -416,7 +480,7 @@ export async function PostsView({
                           )}
                         >
                           <Link
-                            href={url({ view, month, day: d })}
+                            href={u({ view, month, day: d })}
                             aria-label={`Plan a post for ${label}`}
                             className="hover:after:bg-subtle self-start after:absolute after:inset-0 after:-z-0"
                           >
@@ -439,7 +503,7 @@ export async function PostsView({
                             <Chip
                               key={p.id}
                               post={p}
-                              href={url({ view, month, post: p.id })}
+                              href={u({ view, month, post: p.id })}
                               selected={p.id === postId}
                               timeZone={timeZone}
                             />
@@ -479,31 +543,70 @@ export async function PostsView({
           )}
         </div>
 
-        {selectedPost ? (
-          <SidePanel label="This post" closeHref={url({ view, month, week })}>
+        {editable ? (
+          <ComposeCard
+            mode="edit"
+            initial={startFrom(editable, "edit", timeZone)}
+            title="Edit post"
+            subtitle={
+              editable.scheduled_for
+                ? `Planned for ${dateTimeIn(editable.scheduled_for, timeZone)}`
+                : undefined
+            }
+            closeHref={u({ view, month, week, post: editable.id })}
+            doneHref={u({ view, month, week })}
+            timeZone={timeZone}
+            chips={chips}
+            busyDays={busyDays}
+          />
+        ) : copying ? (
+          <ComposeCard
+            mode="duplicate"
+            initial={startFrom(copying, "duplicate", timeZone)}
+            title="New post"
+            subtitle="A copy · pick when it goes out"
+            closeHref={u({ view, month, week, post: copying.id })}
+            doneHref={u({ view, month, week })}
+            timeZone={timeZone}
+            chips={chips}
+            busyDays={busyDays}
+          />
+        ) : selectedPost ? (
+          <SidePanel label="This post" closeHref={u({ view, month, week })}>
             <Post
               post={selectedPost}
               accounts={names}
               targets={accounts}
               timeZone={timeZone}
               as="div"
+              picker={picker}
+              editHref={u({ view, month, week, edit: selectedPost.id })}
+              duplicateHref={u({ view, month, week, duplicate: selectedPost.id })}
+              done={done}
+              results={resultsOf(selectedPost)}
+              now={now}
             />
           </SidePanel>
         ) : day || composing ? (
-          <SidePanel
-            label={
+          <ComposeCard
+            day={day}
+            time={time}
+            title="New post"
+            subtitle={
               day
-                ? `New post · ${new Date(`${day}T12:00`).toLocaleDateString(undefined, {
-                    weekday: "short",
+                ? `For ${new Date(`${day}T12:00`).toLocaleDateString("en-US", {
+                    weekday: "long",
                     month: "short",
                     day: "numeric",
                   })}`
-                : "New post"
+                : undefined
             }
-            closeHref={url({ view, month, week })}
-          >
-            <ComposeCard day={day} time={time} bare />
-          </SidePanel>
+            closeHref={u({ view, month, week })}
+            doneHref={u({ view, month, week })}
+            timeZone={timeZone}
+            chips={chips}
+            busyDays={busyDays}
+          />
         ) : null}
       </div>
     </>

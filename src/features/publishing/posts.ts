@@ -5,10 +5,17 @@ import { recordPlatformPause } from "@/lib/social/platform-pause";
 import { SocialProviderError, type SocialProvider } from "@/lib/social/types";
 import { isPlatformPaused } from "@/lib/social/zernio";
 import type { ServiceClient } from "@/lib/supabase/service";
-import { checkPlatform, type RuleCheck } from "./post-rules";
-import { fitFor, refusedMessage, shapeFor, type MediaShape } from "./media-fit";
+import { checkPlatform } from "./post-rules";
+import { fitFor, refusedMessage, type MediaShape } from "./media-fit";
+import { fileKind, platformFiles, platformSet, type PlatformFile, type PostFile } from "./carousel";
 import { publishPost } from "./publish";
-import { postOptionsRow, targetExtras, textFor, type PostOptions } from "./post-options";
+import {
+  postOptionsRow,
+  targetExtras,
+  textFor,
+  type PlatformPostOptions,
+  type PostOptions,
+} from "./post-options";
 import { statusAfterTakeDown, takeDownSplit } from "./take-down";
 
 // Post creation and cancelling without a form: the Server Actions (compose card) and the MCP
@@ -47,6 +54,106 @@ export type CreatePostResult =
       problems: { platform: string; message: string }[];
       warnings: { platform: string; message: string }[];
     };
+
+/** One file as a rule check sees it. */
+export interface CheckedMedia {
+  type?: string | null;
+  seconds?: number | null;
+  width?: number | null;
+  height?: number | null;
+}
+
+/**
+ * Why the post can't go to some of its platforms as it is, per platform: what it takes of the
+ * post's files (Posts Round 4: a carousel is trimmed per platform; blocked only when nothing fits),
+ * our rules (text length, photo or video needed, video length), then "How it fits" (Posts Round 2)
+ * for every file that goes there: a shape or length a platform refuses holds that platform until
+ * the owner crops for it, posts it as a Story or leaves it out. Shapes aren't checked when the
+ * size isn't known (an assistant's post); Zernio's check still runs. Each platform is checked on
+ * its own files when it has them (`options[p].media`: its trimmed set with its crops). Shared by
+ * new posts and edits (Posts Round 3).
+ */
+export function ruleProblems(
+  platforms: readonly string[],
+  content: string,
+  media: readonly CheckedMedia[],
+  options: PostOptions,
+): { platform: string; message: string }[] {
+  const out: { platform: string; message: string }[] = [];
+  for (const platform of new Set(platforms)) {
+    const as = options[platform]?.as;
+    const own = options[platform]?.media;
+    const files: CheckedMedia[] = own?.length ? own : [...media];
+    const set = platformSet(platform, files.map(fileKind), as);
+    if (set.blocked) {
+      out.push({ platform, message: set.blocked });
+      continue;
+    }
+    const sent = set.indices.map((i) => files[i]);
+    const videos = sent.filter((m) => m.type === "video");
+    const check = checkPlatform(platform, {
+      // Each platform's own text when the owner wrote one, else the caption.
+      textLength: textFor(platform, options, content).length,
+      images: sent.length - videos.length,
+      videos: videos.length,
+      videoSeconds: videos[0]?.seconds ?? null,
+    });
+    if (check.level === "blocked") {
+      out.push({ platform, message: check.message });
+      continue;
+    }
+    for (const m of sent) {
+      if (!m.width || !m.height) continue;
+      const shape: MediaShape = {
+        kind: m.type === "video" ? "video" : "image",
+        width: m.width,
+        height: m.height,
+        seconds: m.seconds,
+      };
+      const fit = fitFor(platform, shape, as);
+      if (fit?.level === "refused") {
+        out.push({ platform, message: refusedMessage(fit) });
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Each platform's own files (Posts Round 4): its part of a carousel, trimmed to what it takes,
+ * kept in `options[p].media` and sent as its `customMedia`. A platform that already has its own
+ * files (crops made in the composer, already trimmed) keeps them; one that takes the post as it is
+ * gets none.
+ */
+export function withPlatformMedia(
+  platforms: readonly string[],
+  media: readonly PostFile[],
+  options: PostOptions,
+): PostOptions {
+  const out: PostOptions = { ...options };
+  for (const platform of new Set(platforms)) {
+    if (out[platform]?.media?.length) continue;
+    const { files } = platformFiles(platform, media, undefined, out[platform]?.as);
+    if (files) out[platform] = { ...out[platform], media: optionMedia(files) };
+  }
+  return out;
+}
+
+/** A platform's files as `platform_options` keeps them (no empty fields). */
+export function optionMedia(
+  files: readonly PlatformFile[],
+): NonNullable<PlatformPostOptions["media"]> {
+  return files.map((f) => ({
+    url: f.url,
+    ...(f.type === "image" || f.type === "video" || f.type === "gif" || f.type === "document"
+      ? { type: f.type }
+      : {}),
+    ...(f.width && f.height ? { width: f.width, height: f.height } : {}),
+    ...(f.seconds ? { seconds: f.seconds } : {}),
+    from: f.from,
+  }));
+}
 
 /** How long Zernio's check may take before the post is saved without it. */
 const VALIDATE_TIMEOUT_MS = 15_000;
@@ -120,50 +227,20 @@ export async function createPost(
     };
   });
   const videos = media.filter((m) => m.type === "video");
-  const blocked = owned
-    .map((a) =>
-      checkPlatform(a.platform, {
-        // Each platform's own text when the owner wrote one, else the caption.
-        textLength: textFor(a.platform, input.options ?? {}, input.content).length,
-        images: media.length - videos.length,
-        videos: videos.length,
-        videoSeconds: videos[0]?.seconds ?? null,
-      }),
-    )
-    .filter((c): c is Extract<RuleCheck, { level: "blocked" }> => c.level === "blocked");
-  // Posts Round 2 ("How it fits"): a platform that refuses the file's shape or length can't be
-  // sent until the owner crops for it, posts it as a Story or leaves it out. Others aren't checked
-  // here when the size isn't known (an assistant's post); Zernio's check still runs.
-  const first = media[0];
-  const shared: MediaShape | null =
-    first && "width" in first && first.width && first.height
-      ? {
-          kind: first.type === "video" ? "video" : "image",
-          width: first.width,
-          height: first.height,
-          seconds: first.seconds,
-        }
-      : null;
-  const crops = Object.fromEntries(
-    Object.entries(input.options ?? {}).flatMap(([platform, o]) => {
-      const m = o?.media?.[0];
-      return m?.width && m.height ? [[platform, { width: m.width, height: m.height }]] : [];
-    }),
+  // Round 4: each platform's part of a carousel, trimmed to what it takes.
+  const options = withPlatformMedia(
+    owned.map((a) => a.platform),
+    media,
+    input.options ?? {},
   );
-  const refused = shared
-    ? [...new Set(owned.map((a) => a.platform))].flatMap((platform) => {
-        const shape = shapeFor(platform, shared, crops);
-        const fit = shape ? fitFor(platform, shape, input.options?.[platform]?.as) : null;
-        return fit?.level === "refused" ? [{ platform, message: refusedMessage(fit) }] : [];
-      })
-    : [];
-  if (blocked.length || refused.length) {
-    return {
-      ok: false,
-      error: "not_accepted",
-      problems: [...blocked.map((c) => ({ platform: c.platform, message: c.message })), ...refused],
-      warnings: [],
-    };
+  const problems = ruleProblems(
+    owned.map((a) => a.platform),
+    input.content,
+    media,
+    options,
+  );
+  if (problems.length) {
+    return { ok: false, error: "not_accepted", problems, warnings: [] };
   }
   if (owned.some((a) => a.platform === "tiktok") && !input.tiktokConsent) {
     return { ok: false, error: "consent_required" };
@@ -174,9 +251,7 @@ export async function createPost(
   // What goes in the row, and exactly what publishing will send per platform.
   const optionsRow = postOptionsRow(
     // Only the platforms this post goes to.
-    Object.fromEntries(
-      owned.map((a) => [a.platform, input.options?.[a.platform]]).filter(([, o]) => o),
-    ),
+    Object.fromEntries(owned.map((a) => [a.platform, options[a.platform]]).filter(([, o]) => o)),
     input.youtubeTitle,
     pinterestBoardId,
   );
@@ -239,6 +314,7 @@ export async function createPost(
       accounts: accountIds.length,
       image: media.length > videos.length,
       video: videos.length > 0,
+      files: media.length,
       ...(input.via ? { via: input.via } : {}),
     },
   });

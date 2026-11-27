@@ -1,25 +1,51 @@
+import { SidePanel } from "@/components/app/side-panel";
 import { can } from "@/features/orgs";
 import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
 import { platformOf } from "@/lib/social/platforms";
 import { createServerSupabase } from "@/lib/supabase/server";
-import { ComposeForm } from "./compose-form";
+import type { BestChip } from "./best-chips";
+import { ComposeForm, type ComposeInitial, type ComposeMode } from "./compose-form";
 import { loadQueue } from "./queue-data";
+import { businessPhone } from "./google-post";
 
 /**
- * The composer, always beside the calendar (design v2). `day` comes from a clicked day; `time`
- * from an Analytics best time (T51).
+ * New post, Edit post and Duplicate in the big window (Posts Round 3, approved 25 Nov). `day`
+ * comes from a clicked day; `time` from an Analytics best time (T51); `initial` is the post being
+ * edited or copied.
  */
 export async function ComposeCard({
   day = null,
   time = null,
-  bare = false,
+  mode = "new",
+  initial = null,
+  title,
+  subtitle,
+  closeHref,
+  doneHref,
+  timeZone,
+  chips,
+  busyDays,
 }: {
   day?: string | null;
   time?: string | null;
-  /** Inside the side panel: no card and no heading (the panel has them). */
-  bare?: boolean;
+  mode?: ComposeMode;
+  initial?: ComposeInitial | null;
+  title: string;
+  subtitle?: string;
+  closeHref: string;
+  doneHref: string;
+  timeZone: string;
+  chips: BestChip[] | null;
+  busyDays: string[];
 }) {
   const tenant = await getCurrentTenant();
+  if (!can(tenant.role, "posts.write")) {
+    return (
+      <SidePanel label={title} closeHref={closeHref}>
+        <ReadOnlyNote role={tenant.role} what="the posts" />
+      </SidePanel>
+    );
+  }
   const supabase = await createServerSupabase();
   const [{ data: accounts }, { data: down }] = await Promise.all([
     supabase
@@ -37,50 +63,47 @@ export async function ComposeCard({
       .order("created_at"),
   ]);
   const queue = await loadQueue(tenant.zernioProfileId);
+  // Round 4: Google's Call now dials the business phone from Business info.
+  const phone = (accounts ?? []).some((a) => a.platform === "googlebusiness")
+    ? businessPhone(
+        (
+          await supabase
+            .from("kb_entries")
+            .select("title, content, found_kind")
+            .eq("tenant_id", tenant.id)
+            .limit(500)
+        ).data ?? [],
+      )
+    : null;
   return (
-    <section
-      className={bare ? "flex flex-col gap-4" : "card-lifted flex flex-col gap-4 p-5"}
-      aria-labelledby={bare ? undefined : "compose-heading"}
-      aria-label={bare ? "New post" : undefined}
-    >
-      <div className={bare ? "hidden" : "flex flex-col"}>
-        <h2 id="compose-heading" className="section-title">
-          New post
-        </h2>
-        {day && (
-          <span className="meta">
-            For{" "}
-            {new Date(`${day}T12:00`).toLocaleDateString(undefined, {
-              weekday: "long",
-              month: "short",
-              day: "numeric",
-            })}
-          </span>
-        )}
-      </div>
-      {can(tenant.role, "posts.write") ? (
-        <ComposeForm
-          key={`${day ?? "any"}-${time ?? ""}`}
-          // WhatsApp (and anything else without a feed) can't take posts.
-          accounts={(accounts ?? [])
-            .filter((a) => platformOf(a.platform)?.post)
-            .map((a) => ({
-              id: a.id,
-              platform: a.platform,
-              username: a.username,
-              pinterestBoard: a.pinterest_board_id
-                ? { id: a.pinterest_board_id, name: a.pinterest_board_name ?? "your board" }
-                : null,
-            }))}
-          day={day}
-          time={time}
-          nextSlot={queue?.nextSlots[0] ?? null}
-          brandName={tenant.name}
-          disconnected={(down ?? []).filter((a) => platformOf(a.platform)?.post)}
-        />
-      ) : (
-        <ReadOnlyNote role={tenant.role} what="the posts" />
-      )}
-    </section>
+    <ComposeForm
+      key={`${mode}-${initial?.postId ?? ""}-${day ?? "any"}-${time ?? ""}`}
+      // WhatsApp (and anything else without a feed) can't take posts.
+      accounts={(accounts ?? [])
+        .filter((a) => platformOf(a.platform)?.post)
+        .map((a) => ({
+          id: a.id,
+          platform: a.platform,
+          username: a.username,
+          pinterestBoard: a.pinterest_board_id
+            ? { id: a.pinterest_board_id, name: a.pinterest_board_name ?? "your board" }
+            : null,
+        }))}
+      day={day}
+      time={time}
+      nextSlot={queue?.nextSlots[0] ?? null}
+      brandName={tenant.name}
+      disconnected={(down ?? []).filter((a) => platformOf(a.platform)?.post)}
+      mode={mode}
+      initial={initial}
+      title={title}
+      subtitle={subtitle}
+      closeHref={closeHref}
+      doneHref={doneHref}
+      timeZone={timeZone}
+      chips={chips}
+      busyDays={busyDays}
+      businessPhone={phone}
+    />
   );
 }

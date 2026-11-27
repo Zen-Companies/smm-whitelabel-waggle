@@ -5,13 +5,15 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import type { CheckInState } from "./check-in-actions";
 
-/** The morning-after email on or off, saved in place (no toasts, design.md §4). */
+/** One email on or off (the morning after, the Monday week), saved in place (no toasts, design.md §4). */
 export function CheckInForm({
   initial,
   action,
+  label = "Email me the morning after I connect",
 }: {
   initial: boolean;
   action: (prev: CheckInState, formData: FormData) => Promise<CheckInState>;
+  label?: string;
 }) {
   const [state, formAction, pending] = useActionState<CheckInState, FormData>(action, {});
   return (
@@ -23,7 +25,7 @@ export function CheckInForm({
           defaultChecked={initial}
           className="accent-ink size-4"
         />
-        Email me the morning after I connect
+        {label}
       </label>
       <Button type="submit" variant="secondary" disabled={pending}>
         {pending ? "Saving…" : "Save"}

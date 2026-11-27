@@ -5,6 +5,7 @@ import { POST } from "@/app/api/webhooks/zernio/route";
 import { signZernioBody } from "@/features/inbox/signature";
 import { settleMockPosts } from "@/features/publishing/mock-settle";
 import { chooseBoardFor, listBoardsFor } from "@/features/publishing/pinterest";
+import { fixLiveText, movePost, updateScheduledPost } from "@/features/publishing/edit";
 import { createPost } from "@/features/publishing/posts";
 import { publishPost, publishQueuedPosts } from "@/features/publishing/publish";
 import { MockSocialProvider } from "@/lib/social/mock";
@@ -479,6 +480,95 @@ describe("publishing (T14)", () => {
     await db.from("social_accounts").delete().eq("id", fb!.id);
   });
 
+  it("a carousel: each platform gets the part it takes, as its own files (Posts Round 4)", async () => {
+    social = new ScriptedPosts();
+    const insert = async (platform: string, username: string) =>
+      (
+        await db
+          .from("social_accounts")
+          .insert({
+            tenant_id: tenantId,
+            zernio_account_id: `acc_${platform}_${randomUUID().slice(0, 8)}`,
+            platform,
+            username,
+          })
+          .select("id")
+          .single()
+      ).data!.id;
+    const fb = await insert("facebook", "postingcafe.fb");
+    const google = await insert("googlebusiness", "postingcafe.g");
+    const photo = (n: number) => ({
+      url: `https://media.zernio.com/temp/xmas-${n}.jpg`,
+      type: "image" as const,
+      width: 1080,
+      height: 1350,
+    });
+    const video = { url: "https://media.zernio.com/temp/xmas.mp4", type: "video" as const };
+    const r = await createPost(deps(), {
+      tenantId,
+      userId: randomUUID(),
+      content: "Christmas at the café: swipe for all of it",
+      accountIds: [accountId, fb, google],
+      scheduledFor: null,
+      media: [photo(1), photo(2), photo(3), video],
+      options: {
+        googlebusiness: {
+          google: {
+            kind: "offer",
+            title: "Fruitcake, 20% off",
+            startDay: "2026-12-01",
+            endDay: "2026-12-24",
+            coupon: "FRUIT20",
+            button: "ORDER",
+            buttonUrl: "https://postingcafe.example/order",
+          },
+        },
+      },
+    });
+    expect(r).toMatchObject({ ok: true });
+    const last = social.calls.at(-1)!;
+    // The post's files in order; Instagram takes them all (mixed is fine there).
+    expect(last.media?.map((m) => m.url)).toEqual([
+      photo(1).url,
+      photo(2).url,
+      photo(3).url,
+      video.url,
+    ]);
+    expect(last.extras?.instagram?.customMedia).toBeUndefined();
+    // Facebook can't mix photos and a video: the photos only.
+    expect(last.extras?.facebook?.customMedia?.map((m) => m.url)).toEqual([
+      photo(1).url,
+      photo(2).url,
+      photo(3).url,
+    ]);
+    // Google: the first photo only, as an offer with its button.
+    expect(last.extras?.googlebusiness?.customMedia).toEqual([
+      { type: "image", url: photo(1).url },
+    ]);
+    expect(last.extras?.googlebusiness?.platformSpecificData).toEqual({
+      topicType: "OFFER",
+      event: {
+        title: "Fruitcake, 20% off",
+        schedule: {
+          startDate: { year: 2026, month: 12, day: 1 },
+          endDate: { year: 2026, month: 12, day: 24 },
+        },
+      },
+      offer: { couponCode: "FRUIT20" },
+      callToAction: { type: "ORDER", url: "https://postingcafe.example/order" },
+    });
+    // The row keeps each platform's set with each file's place in the post.
+    const { data: row } = await db
+      .from("posts")
+      .select("platform_options")
+      .eq("id", (r as { postId: string }).postId)
+      .single();
+    const options = row!.platform_options as Record<string, { media?: { from?: number }[] }>;
+    expect(options.facebook.media?.map((m) => m.from)).toEqual([0, 1, 2]);
+    expect(options.googlebusiness.media?.map((m) => m.from)).toEqual([0]);
+    await db.from("social_accounts").delete().in("id", [fb, google]);
+  });
+
   it("Pinterest: the chosen board is remembered and every pin goes there (T64)", async () => {
     const { data: pin } = await db
       .from("social_accounts")
@@ -586,5 +676,178 @@ describe("publishing (T14)", () => {
       status: "published",
       platform_results: [{ platform: "instagram", status: "published" }],
     });
+  });
+});
+
+// Posts Round 3 (25 Nov): move, edit and fix the text, through Zernio's update and edit calls
+// (the in-process mock records them), with the row and the audit log following.
+describe("changing a post after it was made (Posts Round 3)", () => {
+  const audit = async (postId: string, action: string) =>
+    (
+      await db
+        .from("audit_log")
+        .select("details")
+        .eq("tenant_id", tenantId)
+        .eq("action", action)
+        .contains("details", { postId })
+    ).data ?? [];
+
+  async function scheduled() {
+    social = new ScriptedPosts();
+    const post = await queuedPost({ scheduledInMs: 24 * 3_600_000 });
+    await publishPost(deps(), post.id);
+    const row = await postRow(post.id);
+    expect(row.status).toBe("scheduled");
+    return { id: post.id, zernioPostId: row.zernio_post_id! };
+  }
+
+  it("move: only the new time goes to Zernio; the row and the audit follow; never into the past", async () => {
+    const { id, zernioPostId } = await scheduled();
+    const to = new Date(Date.now() + 48 * 3_600_000);
+    const r = await movePost(deps(), { tenantId, userId, postId: id, scheduledFor: to });
+    expect(r).toMatchObject({ ok: true, changed: ["time"] });
+    expect(social.updated).toEqual([
+      expect.objectContaining({ postId: zernioPostId, publishAt: to }),
+    ]);
+    expect(social.updated[0].content).toBeUndefined();
+    const { data } = await db.from("posts").select("scheduled_for").eq("id", id).single();
+    expect(new Date(data!.scheduled_for!).getTime()).toBe(to.getTime());
+    expect(await audit(id, "post_moved")).toHaveLength(1);
+
+    const past = await movePost(deps(), {
+      tenantId,
+      userId,
+      postId: id,
+      scheduledFor: new Date(Date.now() - 60_000),
+    });
+    expect(past).toEqual({ ok: false, error: "too_soon" });
+    expect(social.updated).toHaveLength(1);
+  });
+
+  it("move: a 500 is never retried and leaves the row as it was", async () => {
+    const { id } = await scheduled();
+    const before = (await db.from("posts").select("scheduled_for").eq("id", id).single()).data!;
+    social.updatePost = async () => {
+      throw new SocialProviderError("Zernio updatePost failed (500)", {
+        status: 500,
+        ambiguous: true,
+      });
+    };
+    const r = await movePost(deps(), {
+      tenantId,
+      userId,
+      postId: id,
+      scheduledFor: new Date(Date.now() + 72 * 3_600_000),
+    });
+    expect(r).toEqual({ ok: false, error: "unclear" });
+    const after = (await db.from("posts").select("scheduled_for").eq("id", id).single()).data!;
+    expect(after.scheduled_for).toBe(before.scheduled_for);
+  });
+
+  it("edit: new text goes to Zernio with the platforms; a published post can't be edited", async () => {
+    const { id } = await scheduled();
+    const at = new Date(Date.now() + 30 * 3_600_000);
+    const r = await updateScheduledPost(deps(), {
+      tenantId,
+      userId,
+      postId: id,
+      content: "Fresh croissants, now with almond",
+      accountIds: [accountId],
+      scheduledFor: at,
+      media: [{ url: "https://cdn.example.com/croissant.jpg" }],
+      options: {},
+      tiktokConsent: false,
+    });
+    expect(r).toMatchObject({ ok: true });
+    if (r.ok) expect(r.changed).toEqual(["text", "time"]);
+    expect(social.updated[0]).toMatchObject({
+      content: "Fresh croissants, now with almond",
+      targets: [{ platform: "instagram", accountId: zernioAccountId }],
+      publishAt: at,
+    });
+    const { data } = await db.from("posts").select("content").eq("id", id).single();
+    expect(data!.content).toBe("Fresh croissants, now with almond");
+    expect(await audit(id, "post_updated")).toHaveLength(1);
+
+    await db.from("posts").update({ status: "published" }).eq("id", id);
+    const late = await updateScheduledPost(deps(), {
+      tenantId,
+      userId,
+      postId: id,
+      content: "Too late",
+      accountIds: [accountId],
+      scheduledFor: at,
+      media: [],
+      options: {},
+      tiktokConsent: false,
+    });
+    expect(late).toEqual({ ok: false, error: "not_editable" });
+  });
+
+  it("fix the text: changed where the platform allows it; Instagram is left as it is", async () => {
+    social = new ScriptedPosts();
+    const fbZernio = `acc_fb_${randomUUID().slice(0, 6)}`;
+    const { data: fb } = await db
+      .from("social_accounts")
+      .insert({
+        tenant_id: tenantId,
+        zernio_account_id: fbZernio,
+        platform: "facebook",
+        username: "postingcafe",
+      })
+      .select("id")
+      .single();
+    const post = await queuedPost({ targets: [accountId, fb!.id] });
+    await db
+      .from("posts")
+      .update({
+        status: "published",
+        zernio_post_id: "zp_fix",
+        platform_results: [
+          {
+            platform: "instagram",
+            accountId: zernioAccountId,
+            status: "published",
+            url: null,
+            error: null,
+          },
+          {
+            platform: "facebook",
+            accountId: fbZernio,
+            status: "published",
+            url: null,
+            error: null,
+          },
+        ],
+      })
+      .eq("id", post.id);
+
+    const r = await fixLiveText(deps(), {
+      tenantId,
+      userId,
+      postId: post.id,
+      content: "Fixed: croissants until 2 PM",
+    });
+    expect(r).toEqual({ ok: true, edited: ["facebook"], failed: [], notAllowed: ["instagram"] });
+    // The call also carries a timeout signal; only what was sent matters here.
+    expect(social.edited).toEqual([
+      expect.objectContaining({
+        postId: "zp_fix",
+        platform: "facebook",
+        accountId: fbZernio,
+        content: "Fixed: croissants until 2 PM",
+      }),
+    ]);
+    // Instagram still shows the old text: the new one is kept as Facebook's own.
+    const { data } = await db
+      .from("posts")
+      .select("content, platform_options")
+      .eq("id", post.id)
+      .single();
+    expect(data!.content).toMatch(/^Fresh croissants today!/);
+    expect(data!.platform_options).toMatchObject({
+      facebook: { text: "Fixed: croissants until 2 PM" },
+    });
+    expect(await audit(post.id, "post_text_fixed")).toHaveLength(1);
   });
 });

@@ -3,7 +3,12 @@ import type { ReactNode } from "react";
 import { cn } from "cn";
 import { BrandMark, PlatformMark } from "@/components/app/platform-mark";
 import { StateMark } from "@/components/app/state-mark";
-import { connectAccount } from "@/features/accounts";
+import {
+  connectAccount,
+  ConnectTrouble,
+  UnfinishedNote,
+  type UnfinishedConnect,
+} from "@/features/accounts";
 import { pullsPastDms } from "@/features/catch-up";
 import { statusOf, SWITCHABLE, type PlatformStatuses } from "@/features/platforms";
 import {
@@ -15,7 +20,7 @@ import {
   type PlatformId,
 } from "@/lib/social/platforms";
 import { connectFirstAccount } from "./actions";
-import { ConnectTileSubmit } from "./connect-pending";
+import { ConnectSubmit, ConnectTileSubmit } from "./connect-pending";
 import {
   metaBlockedHere,
   usableHere,
@@ -32,7 +37,7 @@ import {
 } from "./connect-step-parts";
 import type { ConnectProblem } from "./first-connect";
 import { InAppGate } from "./in-app-gate";
-import { SetupStepper } from "./setup-frame";
+import { PRIMARY, SetupStepper } from "./setup-frame";
 import { SwitchHelp } from "./switch-steps";
 
 // Setup step 1, Connect (/welcome; Walter's flow, approved 20 Nov): the 4 main places first,
@@ -169,6 +174,7 @@ export function WelcomeConnect({
   problem,
   inApp,
   device,
+  unfinished = null,
   invites,
   email,
 }: {
@@ -186,6 +192,8 @@ export function WelcomeConnect({
   /** Inside Instagram's or Facebook's own browser: their tiles give way to the block card. */
   inApp: InApp | null;
   device: Device;
+  /** A connect that left for the sign-in and never came back: "Didn't finish?" (26 Nov). */
+  unfinished?: UnfinishedConnect | null;
   /** Team invites, shown on top (the welcome page's invite list). */
   invites: ReactNode;
   email: string | undefined;
@@ -233,8 +241,28 @@ export function WelcomeConnect({
   // Inside Instagram's or Facebook's browser, a problem with their connect (personal Instagram,
   // cancelled sign-in) shows the block card, never a Meta button that would fail here again.
   const metaProblemInApp = metaBlockedHere(problem, inApp);
+  // Not for a platform that can't sign in here (Instagram or Facebook inside their own browser).
+  const retry =
+    unfinished && hasBrand && usableHere([unfinished.platform], inApp).length > 0
+      ? unfinished
+      : null;
   const tiles = (
     <div className="flex flex-col gap-3">
+      {retry && (
+        <UnfinishedNote
+          unfinished={retry}
+          label={labelOf(retry.platform)}
+          tryAgain={
+            <form action={connectAccount}>
+              <input type="hidden" name="platform" value={retry.platform} />
+              <input type="hidden" name="back" value="/welcome" />
+              <ConnectSubmit platform={labelOf(retry.platform)} className={PRIMARY}>
+                Try again
+              </ConnectSubmit>
+            </form>
+          }
+        />
+      )}
       {meta.length > 0 && (
         <SwitchHelp
           platforms={[...meta]}
@@ -267,6 +295,7 @@ export function WelcomeConnect({
           {all ? "Show fewer" : `See all ${total} platforms`}
         </Link>
       )}
+      <ConnectTrouble className="self-start" />
       {later.length > 0 && (
         <p className="bg-subtle text-ink-2 flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-[13px]">
           <span className="flex shrink-0 gap-1">

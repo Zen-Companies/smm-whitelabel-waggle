@@ -28,6 +28,7 @@ import { pruneCalls } from "@/features/mcp";
 import { purgeDueBrands } from "@/features/offboarding";
 import { sweepIdleOrgs } from "@/features/idle";
 import { escalateClosingDmWindows } from "@/features/approvals";
+import { runWeeklyChecks, scheduleMondayChecks, sendWeeklyEmails } from "@/features/weekly";
 import { getProductionSteps, pollFacebookReviews, processDueItems } from "@/features/inbox";
 import { publishQueuedPosts, settleMockPosts } from "@/features/publishing";
 import { embedPendingEntries, findFactsAfterConnect } from "@/features/knowledge-base";
@@ -101,6 +102,24 @@ export async function POST(request: Request): Promise<Response> {
       social: getSocialProvider,
       classifier: getClassifier(),
       shouldContinue: () => deadline.remainingMs() > 15_000,
+    });
+    // Weekly check-up (board "Your week", 26 Nov): Monday 7:00 AM business time, queued every
+    // five minutes; then a slice of the queued check-ups (Monday's and Check now's).
+    const weeklyQueued =
+      new Date().getUTCMinutes() % 5 === 0
+        ? await scheduleMondayChecks(db).catch((e: unknown) => {
+            Sentry.captureException(e);
+            return { error: true };
+          })
+        : null;
+    const weekly = await runWeeklyChecks({
+      db,
+      social: getSocialProvider,
+      classifier: getClassifier(),
+      shouldContinue: () => deadline.remainingMs() > 20_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
     });
     // Walter's flow (decision 7): once a catch-up has read the account, the business info found
     // on it (profile, captions) is saved not checked. One AI call per first connect at most.
@@ -274,7 +293,21 @@ export async function POST(request: Request): Promise<Response> {
       return { error: true };
     });
 
+    // The Monday email to Owners, after each Monday check-up (never after Check now).
+    const weeklyEmails = await sendWeeklyEmails({
+      db,
+      mailer: getMailer(),
+      appUrl: process.env.APP_URL ?? "",
+      shouldContinue: () => deadline.remainingMs() > 8_000,
+    }).catch((e: unknown) => {
+      Sentry.captureException(e);
+      return { error: true };
+    });
+
     return Response.json({
+      weeklyQueued,
+      weekly,
+      weeklyEmails,
       crm,
       morningAfter,
       crmSweep,

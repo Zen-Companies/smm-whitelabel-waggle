@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseAttachments, type Attachment } from "./attachments";
 import { dmWindowClosesAt, dmWindowFor } from "./policy";
 import { type ActivityEntry, mergeActivity } from "./today-activity";
+import { orderConversations, type InboxFilters, type PriorityGroup } from "./inbox-groups";
 
 // What the approval inbox shows (PRD F8). Read with the owner's client, so RLS scopes it.
 
@@ -111,7 +112,11 @@ export function needsOwner(status: string): boolean {
   return (NEEDS_OWNER as readonly string[]).includes(status);
 }
 
-/** One tab of the two-pane inbox. For you is oldest first: the longest-waiting customer on top. */
+/**
+ * One tab, one entry per message, newest first. Inbox by sender (26 Nov): the Inbox itself lists
+ * rows by sender (loadInboxConversations); this stays for the MCP tools and tests. It used to
+ * turn the newest 100 around (oldest first), which put a new DM at row 100 under 99 newsletters.
+ */
 export async function loadInboxTab(
   supabase: SupabaseClient<Database>,
   tenantId: string,
@@ -121,7 +126,99 @@ export async function loadInboxTab(
   const entries = await loadEntries(supabase, tenantId, { statuses });
   if (tab !== "for_you") return entries;
   // A reply waiting for approval always has its draft; one without it isn't ready to show yet.
-  return entries.filter((e) => e.status !== "awaiting_approval" || e.draft).reverse();
+  return entries.filter((e) => e.status !== "awaiting_approval" || e.draft);
+}
+
+/** One Inbox row (26 Nov): a sender on one account, shown by its latest message in the tab. */
+export interface InboxConversation extends InboxEntry {
+  status: string;
+  groupKey: string;
+  /** The latest message's time in this tab. */
+  latestAt: string;
+  messages: number;
+  /** Messages in it that wait on the owner. */
+  waiting: number;
+  /** Since the viewer last opened it ("3 new"); never opened, the ones waiting. */
+  newMessages: number;
+  /** Email: how many threads (subjects); comments: how many posts. */
+  threads: number;
+  posts: number;
+  /** 1 needs you now, 2 ready to approve, 3 also for you (before the DM window, see inbox-groups). */
+  rank: number;
+  automated: boolean;
+  group: PriorityGroup;
+}
+
+/** Statuses a tab or view lists: Updates & newsletters spans every tab. */
+const ALL_STATUSES = INBOX_TABS.flatMap((t) => t.statuses);
+
+/**
+ * The Inbox list (Inbox by sender, approved 26 Nov): one row per sender, grouped on the server so
+ * the 100-row cap counts rows, not messages. Read with the owner's client (RLS).
+ */
+export async function loadInboxConversations(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+  input: { tab: InboxTab; filters: InboxFilters; automated?: boolean; now?: Date },
+): Promise<InboxConversation[]> {
+  const statuses = input.automated
+    ? ALL_STATUSES
+    : INBOX_TABS.find((t) => t.key === input.tab)!.statuses;
+  const f = input.filters;
+  const sort = input.tab === "for_you" && !input.automated ? f.sort : "newest";
+  const { data, error } = await supabase.rpc("inbox_conversations", {
+    p_tenant_id: tenantId,
+    p_statuses: statuses,
+    ...(f.platforms.length ? { p_platforms: f.platforms } : {}),
+    ...(f.types.length ? { p_types: f.types } : {}),
+    ...(f.flags.length ? { p_flags: f.flags } : {}),
+    p_customers_only: f.customersOnly,
+    p_automated: input.automated ?? false,
+    p_sort: sort,
+    p_limit: 100,
+  });
+  if (error) throw new Error(`inbox load failed: ${error.message}`);
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+  const entries = await loadEntries(supabase, tenantId, {
+    itemIds: rows.map((r) => r.item_id),
+    statuses,
+  });
+  const byId = new Map(entries.map((e) => [e.itemId, e]));
+  const merged = rows.flatMap((r) => {
+    const e = byId.get(r.item_id);
+    // A reply waiting for approval always has its draft; one without it isn't ready to show yet.
+    if (!e || (e.status === "awaiting_approval" && !e.draft)) return [];
+    return [
+      {
+        ...e,
+        groupKey: r.group_key,
+        latestAt: r.latest_at,
+        messages: r.messages,
+        waiting: r.waiting,
+        newMessages: r.new_messages,
+        threads: r.threads,
+        posts: r.posts,
+        rank: r.rank,
+        automated: r.automated,
+      },
+    ];
+  });
+  return orderConversations(merged, sort, input.now ?? new Date());
+}
+
+/** Rows from automated senders (Updates & newsletters), across every tab. */
+export async function countAutomatedSenders(
+  supabase: SupabaseClient<Database>,
+  tenantId: string,
+): Promise<number> {
+  const { data, error } = await supabase.rpc("inbox_conversation_count", {
+    p_tenant_id: tenantId,
+    p_statuses: ALL_STATUSES,
+    p_automated: true,
+  });
+  if (error) throw new Error(`inbox count failed: ${error.message}`);
+  return data ?? 0;
 }
 
 export interface TodaySummary {
@@ -225,11 +322,12 @@ export async function loadTodaySummary(
       .eq("tenant_id", tenantId)
       .eq("status", "sent")
       .gte("sent_at", since),
-    supabase
-      .from("inbound_items")
-      .select("id", { count: "exact", head: true })
-      .eq("tenant_id", tenantId)
-      .in("status", [...NEEDS_OWNER]),
+    // Inbox by sender (26 Nov): the headline counts people (rows), not messages, and leaves
+    // out newsletters and other automated senders.
+    supabase.rpc("inbox_conversation_count", {
+      p_tenant_id: tenantId,
+      p_statuses: [...NEEDS_OWNER],
+    }),
     supabase
       .from("inbound_items")
       .select("id", { count: "exact", head: true })
@@ -244,7 +342,7 @@ export async function loadTodaySummary(
   ]);
   return {
     answered: answered.count ?? 0,
-    forYou: forYou.count ?? 0,
+    forYou: forYou.data ?? 0,
     ignored: ignored.count ?? 0,
     hidden: hidden.count ?? 0,
   };
@@ -354,19 +452,24 @@ export function postTitle(content: string): string {
   return first.length > 60 ? `${first.slice(0, 57).trimEnd()}…` : first || "Untitled post";
 }
 
-/** Counts per tab, for the segmented control. */
+/**
+ * Counts per tab, for the segmented control. Inbox by sender (26 Nov): rows (senders), not
+ * messages; From customers only (the default) leaves out automated senders.
+ */
 export async function countInboxTabs(
   supabase: SupabaseClient<Database>,
   tenantId: string,
+  customersOnly = true,
 ): Promise<Record<InboxTab, number>> {
   const counts = await Promise.all(
     INBOX_TABS.map(async (t) => {
-      const { count } = await supabase
-        .from("inbound_items")
-        .select("*", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .in("status", t.statuses);
-      return [t.key, count ?? 0] as const;
+      const { data, error } = await supabase.rpc("inbox_conversation_count", {
+        p_tenant_id: tenantId,
+        p_statuses: t.statuses,
+        p_customers_only: customersOnly,
+      });
+      if (error) throw new Error(`inbox count failed: ${error.message}`);
+      return [t.key, data ?? 0] as const;
     }),
   );
   return Object.fromEntries(counts) as Record<InboxTab, number>;

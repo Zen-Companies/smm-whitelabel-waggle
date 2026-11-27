@@ -104,6 +104,12 @@ export function InviteForm({
       form.current?.reset();
     }
   }, [state.sent]);
+  // After paying for Team (Playbook round 2): /settings/team#invite-email lands here, Email ready.
+  useEffect(() => {
+    if (window.location.hash === "#invite-email") {
+      document.getElementById("invite-email")?.focus();
+    }
+  }, []);
 
   return (
     <section aria-labelledby="invite-heading" className="card flex flex-col gap-4 p-5">

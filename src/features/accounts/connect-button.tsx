@@ -7,6 +7,8 @@ import { StateMark } from "@/components/app/state-mark";
 import { ConnectNoteBox } from "./connect-note-box";
 import { connectNoteCopy, safeContinueUrl } from "./connect-note";
 import { startConnect } from "./start-connect";
+import type { UnfinishedConnect } from "./connect-unfinished";
+import { ConnectTrouble, UnfinishedNote } from "./connect-unfinished-note";
 
 /** The channel /connect/done tells: "this one is connected". */
 export const CONNECT_CHANNEL = "waggle-connect";
@@ -24,23 +26,33 @@ type Phase =
  * and this row waits, then updates itself when that tab is done.
  *
  * Renders the button plus, when open, a full-width block after it (the row wraps).
+ *
+ * "Didn't finish?" (26 Nov): `unfinished` is this platform's connect try that never came back;
+ * its note shows under the button, with Try again (a new connect, the normal way). `trouble`
+ * adds "Having trouble?" with the sign-in tips, for platforms that sign in on their own page.
  */
 export function ConnectButton({
   id,
   label,
   mark,
   buttonLabel = "Connect",
+  unfinished = null,
+  trouble = false,
 }: {
   id: string;
   label: string;
   mark: React.ReactNode;
   buttonLabel?: string;
+  unfinished?: UnfinishedConnect | null;
+  trouble?: boolean;
 }) {
   const router = useRouter();
   // Where the sign-in comes back to (checked on the server).
   const here = usePathname();
   const [phase, setPhase] = useState<Phase>({ at: "idle" });
   const [pending, startTransition] = useTransition();
+  // Try again was tapped on this try: its note is done with (a newer try gets its own).
+  const [retriedId, setRetriedId] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const platform = connectNoteCopy(id, label).platform;
 
@@ -79,6 +91,16 @@ export function ConnectButton({
       window.clearTimeout(stop);
     };
   }, [phase.at, after, id, router]);
+
+  // Back from the sign-in with the browser's back button, the page can come back as it was left
+  // (the back/forward cache): ask the server again, so a connect that didn't finish shows.
+  useEffect(() => {
+    const onShow = (e: PageTransitionEvent) => {
+      if (e.persisted) router.refresh();
+    };
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, [router]);
 
   const begin = () =>
     startTransition(async () => {
@@ -143,6 +165,26 @@ export function ConnectButton({
           {phase.text}
         </p>
       )}
+      {phase.at === "idle" && unfinished && unfinished.id !== retriedId && (
+        <UnfinishedNote
+          unfinished={unfinished}
+          label={label}
+          tryAgain={
+            <Button
+              type="button"
+              variant="primary"
+              disabled={pending}
+              onClick={() => {
+                setRetriedId(unfinished.id);
+                begin();
+              }}
+            >
+              Try again
+            </Button>
+          }
+        />
+      )}
+      {trouble && (phase.at === "idle" || phase.at === "error") && <ConnectTrouble />}
       {phase.at === "note" && (
         <div ref={box} data-connect-open className="basis-full pt-1">
           <ConnectNoteBox

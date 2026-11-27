@@ -344,6 +344,93 @@ describe("POST /api/webhooks/zernio", () => {
     expect(await count("inbound_items", "zernio_message_id", payload.message.id)).toBe(1);
   });
 
+  it("Inbox by sender (26 Nov): one sender's emails across threads share a row; a comment keeps its author id", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const accountId = `acc_imap_${suffix}`;
+    const email = (n: number, subject: string) => {
+      const p = fixture("message-received-email");
+      p.message.id = `msg_email_${suffix}_${n}`;
+      p.message.conversationId = `conv_email_${suffix}_${n}`;
+      p.message.platformMessageId = `<email_${suffix}_${n}@mail.test>`;
+      p.message.sender.id = "Maria@Example.com";
+      p.account.id = p.account.accountId = accountId;
+      p.metadata.email.subject = subject;
+      return p;
+    };
+    await deliver(email(1, "Catering for 30 people?"));
+    await deliver(email(2, "Re: pastries"));
+    const { data: rows } = await db
+      .from("inbound_items")
+      .select("sender_key, group_key, conversation_id")
+      .in("zernio_message_id", [`msg_email_${suffix}_1`, `msg_email_${suffix}_2`]);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows!.map((r) => r.sender_key))).toEqual(new Set(["maria@example.com"]));
+    expect(new Set(rows!.map((r) => r.group_key)).size).toBe(1);
+    expect(new Set(rows!.map((r) => r.conversation_id)).size).toBe(2);
+
+    const comment = withUniqueComment(fixture("comment-received"));
+    await deliver(comment);
+    const { data: c } = await db
+      .from("inbound_items")
+      .select("sender_key")
+      .eq("zernio_comment_id", comment.comment.id)
+      .single();
+    expect(c?.sender_key).toBe("17840000000000001");
+  });
+
+  it("a newsletter is kept but set aside (no draft); Move to For you brings the sender back", async () => {
+    const suffix = randomUUID().slice(0, 8);
+    const accountId = `acc_imap_${suffix}`;
+    const newsletter = (n: number) => {
+      const p = fixture("message-received-email");
+      p.message.id = `msg_news_${suffix}_${n}`;
+      p.message.conversationId = `conv_news_${suffix}_${n}`;
+      p.message.platformMessageId = `<news_${suffix}_${n}@mail.test>`;
+      p.message.sender = { id: "hello@producthunt.com", name: "Product Hunt Daily" };
+      p.message.text =
+        n === 1
+          ? "Today's top launches https://producthunt.com/x\nUnsubscribe https://producthunt.com/u"
+          : "A plain note from the same sender";
+      p.account.id = p.account.accountId = accountId;
+      return p;
+    };
+    const res = await deliver(newsletter(1));
+    expect(await res.json()).toEqual({ outcome: "processed", detail: "automated_sender" });
+    const { data: item } = await db
+      .from("inbound_items")
+      .select("status, social_account_id")
+      .eq("zernio_message_id", `msg_news_${suffix}_1`)
+      .single();
+    expect(item?.status).toBe("ignored");
+    const { data: sender } = await db
+      .from("inbox_senders")
+      .select("automated, automated_reason, moved_to_for_you_at")
+      .eq("social_account_id", item!.social_account_id)
+      .eq("sender_key", "hello@producthunt.com")
+      .single();
+    expect(sender).toEqual({
+      automated: true,
+      automated_reason: "unsubscribe_link",
+      moved_to_for_you_at: null,
+    });
+
+    // Flagged once, later mail from them is set aside too, even without an unsubscribe line.
+    expect(await (await deliver(newsletter(2))).json()).toEqual({
+      outcome: "processed",
+      detail: "automated_sender",
+    });
+
+    await db
+      .from("inbox_senders")
+      .update({ moved_to_for_you_at: new Date().toISOString() })
+      .eq("social_account_id", item!.social_account_id)
+      .eq("sender_key", "hello@producthunt.com");
+    expect(await (await deliver(newsletter(3))).json()).toEqual({
+      outcome: "processed",
+      detail: "item_created",
+    });
+  });
+
   it("an iMessage lands as a chat item; STOP never does (T83d)", async () => {
     const suffix = randomUUID().slice(0, 8);
     const payload = fixture("message-received-imessage");

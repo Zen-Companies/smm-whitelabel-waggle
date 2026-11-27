@@ -1,32 +1,15 @@
 // The policy check (docs/tdd.md §11): pure, no I/O. No reply is sent without passing it
 // (CLAUDE.md rule 6).
 
+import { dmWindowFor } from "@/lib/social/dm-window";
 import { inboxRules } from "@/lib/social/platforms";
 
 export type Category = "faq" | "lead" | "complaint" | "spam" | "unclear";
 export type AutonomyMode = "off" | "approve" | "auto";
 export type SubscriptionStatus = "trialing" | "active" | "past_due" | "canceled";
 
-/** Meta only allows replying to a DM within 24 hours of the customer's last message. */
-export const DM_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
-
-/**
- * A platform's DM rules (T61): Meta 24 h; TikTok 48 h and 10 replies; Bluesky none (null).
- * Without a platform (older callers), Meta's.
- */
-export function dmWindowFor(
-  platform: string | undefined,
-): { ms: number; maxReplies: number | null } | null {
-  if (!platform) return { ms: DM_REPLY_WINDOW_MS, maxReplies: null };
-  const w = inboxRules(platform).dmWindow;
-  return w ? { ms: w.hours * 60 * 60 * 1000, maxReplies: w.maxReplies } : null;
-}
-
-/** When a DM's reply window closes; null when the platform has none or nothing is known. */
-export function dmWindowClosesAt(platform: string | undefined, last: Date | null): Date | null {
-  const w = dmWindowFor(platform);
-  return w && last ? new Date(last.getTime() + w.ms) : null;
-}
+// The DM window lives in lib (the pop-ups' countdown uses it too); re-exported for callers here.
+export { DM_REPLY_WINDOW_MS, dmWindowClosesAt, dmWindowFor } from "@/lib/social/dm-window";
 
 export interface PolicyInput {
   item: { kind: "comment" | "dm" | "review" };

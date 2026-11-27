@@ -13,10 +13,11 @@ import {
 import { BeeBody } from "@/components/app/bee";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { cn } from "cn";
+import type { CarryOnActions, CarryOnPlan } from "./carry-on";
 import { CheckoutSuccess } from "./checkout-success";
 import { choosePlan, type PlanActionState } from "./plan-actions";
 import type { CheckoutSuccess as Confirmed } from "./popup-actions";
-import type { PopupContent, PopupVersion, Seg, StripBox } from "./popup-copy";
+import type { PopupContent, Seg, StripBox } from "./popup-copy";
 import { browserWallet, type Wallet } from "./wallet";
 import { AcceptedMarks, WALLET_LABEL, WalletMark } from "./wallet-mark";
 
@@ -185,35 +186,6 @@ export interface PopupOrg {
   stripeReady: boolean;
 }
 
-/** What happens after "You're on Solo": the tapped action carries on. */
-export type CarryOn =
-  | {
-      kind: "connect";
-      platform: string;
-      action: (formData: FormData) => Promise<void>;
-      back: string;
-    }
-  | { kind: "link"; href: string; label: string }
-  | null;
-
-/** Pure: the next step after paying, for a version (none: just Done). */
-export function carryOnFor(
-  version: PopupVersion,
-  connect: ((formData: FormData) => Promise<void>) | undefined,
-  back: string,
-): CarryOn {
-  if (version.v === "accounts" && version.platform && connect) {
-    return { kind: "connect", platform: version.platform, action: connect, back };
-  }
-  if (version.v === "team" && version.sub === "invite") {
-    return { kind: "link", href: "/settings/team", label: "Invite your team" };
-  }
-  if (version.v === "team" && version.sub === "brands") {
-    return { kind: "link", href: "/brands/new", label: "Add your business" };
-  }
-  return null;
-}
-
 function PayButtons({
   content,
   org,
@@ -281,6 +253,7 @@ export function UpgradePopup({
   checkout,
   confirmed,
   carryOn,
+  actions,
   onClose,
   onDone,
 }: {
@@ -294,7 +267,9 @@ export function UpgradePopup({
   checkout: "done" | "cancelled" | null;
   /** After done: Stripe confirmed the checkout (with the ads tag), or not (null), or still asking. */
   confirmed: Confirmed | null | "checking";
-  carryOn: CarryOn;
+  /** What the paid tap carries on to after the success moment. */
+  carryOn: CarryOnPlan | null;
+  actions: CarryOnActions;
   onClose: () => void;
   /** After success: close and refresh the page for the new plan. */
   onDone: () => void;
@@ -318,6 +293,8 @@ export function UpgradePopup({
               content={content}
               confirmed={confirmed}
               carryOn={carryOn}
+              actions={actions}
+              back={back}
               onDone={onDone}
             />
           ) : (
@@ -350,6 +327,20 @@ export function UpgradePopup({
           </h2>
           <span className="text-ink-2 text-[13px]">{content.sub}</span>
         </div>
+        {content.countdown && (
+          // The DM countdown (Playbook round 2, 26 Nov): honey, red under 1 hour. Real close
+          // times only, worked out each minute; it never resets.
+          <p
+            className={cn(
+              "m-0 rounded-[14px] border px-3 py-[9px] text-[13px]",
+              content.countdown.urgent
+                ? "border-danger-border bg-danger-soft text-danger [&_b]:text-danger"
+                : "border-honey bg-honey-tint",
+            )}
+          >
+            <Segs segs={content.countdown.segs} />
+          </p>
+        )}
         {content.honey && (
           <p className="border-honey-border bg-honey-tint m-0 rounded-[14px] border px-3 py-[9px] text-[13px]">
             <Segs segs={content.honey} />
@@ -392,6 +383,9 @@ export function UpgradePopup({
             />
             <AcceptedMarks />
             <p className="text-ink-3 m-0 text-center text-xs">{content.note}</p>
+            {content.reminder && (
+              <p className="text-ink-3 m-0 -mt-1 text-center text-xs">{content.reminder}</p>
+            )}
           </>
         )}
         {content.keep.kind === "inbox" ? (

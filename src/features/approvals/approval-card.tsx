@@ -162,7 +162,16 @@ function SentRow({ entry, at, first }: { entry: InboxEntry; at: string; first?: 
  * reply", "I'll answer it myself" (write your own, or mark it handled), the DM window, A / E / J.
  * When the account stopped connecting, the send button says so and offers Reconnect.
  */
-export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref: string | null }) {
+export function ApprovalCard({
+  entry,
+  nextHref,
+  answers = 1,
+}: {
+  entry: InboxEntry;
+  nextHref: string | null;
+  /** One reply per conversation (26 Nov): how many waiting messages this reply answers. */
+  answers?: number;
+}) {
   const router = useRouter();
   const draft = entry.draft!;
   const [state, action, pending] = useActionState<DecisionFormState, FormData>(decideDraft, {});
@@ -326,6 +335,7 @@ export function ApprovalCard({ entry, nextHref }: { entry: InboxEntry; nextHref:
           : draft.facts.length
             ? `Waggle's reply · from your answer${draft.facts.length > 1 ? "s" : ""} "${draft.facts.join('", "')}"`
             : "Waggle's reply · written without your answers"}
+        {!own && answers > 1 ? ` · answers all ${answers} new messages` : ""}
       </label>
       {editing ? (
         <textarea

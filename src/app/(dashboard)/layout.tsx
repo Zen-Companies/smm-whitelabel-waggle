@@ -12,7 +12,12 @@ import {
 
 import { Bell } from "@/features/alerts";
 
-import { FirstReplyTag, NEEDS_OWNER } from "@/features/approvals";
+import {
+  FirstReplyTag,
+  NEEDS_OWNER,
+  updateAutonomyMode,
+  writeRepliesAfterUpgrade,
+} from "@/features/approvals";
 
 import { BillingHost, PlanChip, PlanMenuRow, PromoBar } from "@/features/billing";
 
@@ -84,6 +89,8 @@ async function PlanBanner() {
       tenantId={tenant.id}
       needsYouStatuses={NEEDS_OWNER}
       connect={connectAccount}
+      workerBee={updateAutonomyMode}
+      writeReplies={writeRepliesAfterUpgrade}
     />
   );
 }

@@ -9,3 +9,6 @@ export { deviceOf } from "./connect-help";
 export { setupEntry } from "./flow";
 export { loadSetupConnected, loadSetupStrip } from "./setup-data";
 export { buildBusinessProfiles, buildProfileAfterConnect } from "./profile-run";
+// What customers wanted, in plain words (also the weekly check-up's "What people wanted", 26 Nov).
+export { setupTopic, TOPIC_LABEL } from "./topics";
+export type { SetupTopic } from "./topics";

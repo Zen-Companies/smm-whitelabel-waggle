@@ -12,7 +12,6 @@ import {
   showOneShapeForAll,
   type CropChoice,
   type Fit,
-  type MediaShape,
 } from "./media-fit";
 import { MediaFrame, type PlatformMedia } from "./post-preview";
 import type { PostOptions } from "./post-options";
@@ -33,10 +32,13 @@ const TILE: Record<Fit["level"], string> = {
 export function FitRow({
   platforms,
   accountCount,
+  summary,
   fits,
+  details,
   options,
   mediaFor,
-  shared,
+  photo,
+  oneShapeForAll,
   crops,
   allCrop,
   onCrop,
@@ -47,11 +49,19 @@ export function FitRow({
 }: {
   platforms: string[];
   accountCount: number;
+  /** Round 4: "12 photos and 1 video" when the post has several files. */
+  summary: string | null;
   fits: Partial<Record<string, Fit | null>>;
+  /** Round 4: what each platform gets of a carousel ("5 photos, swipe", "1 photo"). */
+  details: Partial<Record<string, string>>;
   options: PostOptions;
   mediaFor: (platform: string) => PlatformMedia | null;
-  shared: MediaShape;
-  crops: Partial<Record<string, MadeCrop>>;
+  /** The post has a photo (crops are offered). */
+  photo: boolean;
+  /** One shape for all: a single photo only. */
+  oneShapeForAll: boolean;
+  /** Each platform's crop in use (a new one, or one the post already had). */
+  crops: Partial<Record<string, { label: string }>>;
   allCrop: MadeCrop | null;
   onCrop: (platform: string) => void;
   onRemoveCrop: (platform: string) => void;
@@ -62,7 +72,6 @@ export function FitRow({
 }) {
   const shown = platforms.filter((p) => fits[p]);
   if (!shown.length) return null;
-  const photo = shared.kind === "image";
   return (
     <section aria-labelledby="fit-heading" className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2">
@@ -71,6 +80,7 @@ export function FitRow({
         </h3>
         <span className="meta">
           {accountCount} account{accountCount === 1 ? "" : "s"}
+          {summary ? ` · ${summary}` : ""}
         </span>
       </div>
       <ul className="grid grid-cols-2 gap-2">
@@ -118,6 +128,7 @@ export function FitRow({
                 ) : null}
                 <span className="min-w-0">{fit.message}</span>
               </span>
+              {details[p] && <span className="text-ink-3 text-xs">{details[p]}</span>}
               {crop && (
                 <span className="text-ink-2 flex flex-wrap items-center gap-x-2 text-xs">
                   Cropped to {crop.label}
@@ -175,7 +186,7 @@ export function FitRow({
           one of these is picked. The other accounts aren&apos;t held up.
         </p>
       )}
-      {photo && showOneShapeForAll(platforms) && (
+      {photo && oneShapeForAll && showOneShapeForAll(platforms) && (
         <div
           className="flex flex-wrap items-center gap-2"
           role="radiogroup"

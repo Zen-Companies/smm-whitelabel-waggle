@@ -38,6 +38,8 @@ import { ReadyLine } from "@/features/setup";
 
 import { getCurrentTenant } from "@/features/tenants";
 
+import { WeekCard } from "@/features/weekly";
+
 import { platformLabel } from "@/lib/social/platforms";
 
 import { createServerSupabase, getCurrentUser } from "@/lib/supabase/server";
@@ -53,7 +55,6 @@ import {
   joinNames,
   leadsLine,
   onlyYouLine,
-  replyTime,
   shortAgo,
   sinceYesterdayLine,
 } from "./today";
@@ -432,85 +433,24 @@ export async function TodayView() {
                   )}
                 </>
               )}
+
+              {/* Weekly check-up (board "Your week", approved 26 Nov): replaces "This week". */}
+              <WeekCard tenantId={tenant.id} canCheck={canSend} gaps={data.gaps} />
             </div>
 
             <aside className="flex min-w-0 flex-[1_1_320px] flex-col gap-4">
-              {data.gaps.length > 0 ? (
-                <section className="card p-6" aria-labelledby="teach-title">
-                  <p className="text-honey-text text-xs font-semibold tracking-wide uppercase">
-                    Teach Waggle
-                  </p>
+              {/* The questions Waggle's answers don't cover are in "Your week" (26 Nov). */}
+              <Line
+                href="/teach"
 
-                  <h2 id="teach-title" className="section-title mt-1">
-                    {`${data.gaps.length} ${data.gaps.length === 1 ? "question" : "questions"} your answers don't cover`}
-                  </h2>
+                title="Teach Waggle"
 
-                  <ul className="mt-3 flex flex-col gap-2 text-sm">
-                    {data.gaps.map((g) => (
-                      <li key={g.text} className="bg-subtle rounded-xl px-3 py-2.5">
-                        &ldquo;{g.text}&rdquo;
-                        {g.times > 1 && (
-                          <span className="text-ink-3"> · asked {g.times} times</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href="/teach#questions"
-
-                    className={`${buttonVariants({ variant: "primary" })} mt-4`}
-                  >
-                    Write the answers
-                  </Link>
-
-                  <p className="meta mt-2">Write it once and Waggle can answer it next time.</p>
-                </section>
-              ) : (
-                <Line
-                  href="/teach"
-
-                  title="Teach Waggle"
-
-                  text="Your answers cover what people ask."
-                />
-              )}
-
-              {quietWeek ? (
-                <Line
-                  href="/insights/work?period=7"
-
-                  title="This week"
-
-                  text="Nothing yet this week."
-                />
-              ) : (
-                <section className="card p-6" aria-labelledby="week-title">
-                  <h2 id="week-title" className="section-title">
-                    This week
-                  </h2>
-
-                  <div className="mt-3 grid grid-cols-2 gap-4">
-                    {[
-                      [String(data.week.answered), "messages answered"],
-
-                      [replyTime(data.week.replySeconds), "typical reply time"],
-
-                      [String(data.week.leads), "leads saved"],
-
-                      [String(data.week.spamHidden), "spam comments hidden"],
-                    ].map(([n, label]) => (
-                      <p key={label} className="flex flex-col">
-                        <span className="font-display text-[28px] leading-none font-semibold tabular-nums">
-                          {n}
-                        </span>
-
-                        <span className="text-ink-3 mt-1 text-[13px]">{label}</span>
-                      </p>
-                    ))}
-                  </div>
-                </section>
-              )}
+                text={
+                  data.gaps.length
+                    ? `${data.gaps.length} ${data.gaps.length === 1 ? "question" : "questions"} to answer, in Your week.`
+                    : "Your answers cover what people ask."
+                }
+              />
 
               <section className="card p-6" aria-labelledby="accounts-title">
                 <h2 id="accounts-title" className="section-title">

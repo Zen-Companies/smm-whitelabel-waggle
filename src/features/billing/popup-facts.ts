@@ -1,7 +1,9 @@
 import "server-only";
+import { UNCOUNTED_FILTER } from "./plans";
 import { CLOSED_STATUSES } from "@/features/catch-up";
 import type { ServiceClient } from "@/lib/supabase/service";
 import type { PopupFacts } from "./popup-copy";
+import { loadOpenDms } from "./open-dms";
 import { scanNumbers } from "./popup-scan";
 import { perDayFromWeek, type ReplyPain } from "./reply-pain";
 
@@ -83,21 +85,25 @@ export async function loadPopupFacts(
   input: { orgId: string; tenantId: string; needsYou: readonly string[]; now: Date },
 ): Promise<Omit<PopupFacts, "usage">> {
   const { tenantId, needsYou, now } = input;
-  const [tenant, accounts, scan, pain] = await Promise.all([
+  const [tenant, accounts, scan, pain, openDms] = await Promise.all([
     db.from("tenants").select("name").eq("id", tenantId).maybeSingle(),
     db
       .from("social_accounts")
       .select("platform")
       .eq("tenant_id", tenantId)
       .eq("status", "active")
+      .not("platform", "in", UNCOUNTED_FILTER)
       .order("created_at", { ascending: true }),
     loadScan(db, tenantId).catch(() => null),
     loadPain(db, tenantId, needsYou, now).catch(() => null),
+    // The DM countdown (Playbook round 2): real close times only; a failure shows no box.
+    loadOpenDms(db, tenantId, needsYou, now).catch(() => []),
   ]);
   return {
     brandName: tenant.data?.name ?? null,
     connected: [...new Set((accounts.data ?? []).map((a) => a.platform))],
     scan,
     pain,
+    openDms,
   };
 }

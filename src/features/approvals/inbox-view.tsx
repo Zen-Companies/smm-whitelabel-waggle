@@ -1,11 +1,11 @@
 import { viewerTimeZone } from "@/lib/time/viewer-zone";
 
 import { DraftOnOpenCard } from "./draft-on-open-card";
-import { CircleCheck, Clock3 } from "lucide-react";
+import { CircleCheck, Clock3, Mail, X } from "lucide-react";
 
 import Link from "next/link";
 
-import { Suspense } from "react";
+import { Fragment, Suspense } from "react";
 
 import { ActionLink } from "@/components/app/action-link";
 
@@ -64,12 +64,13 @@ import { CallCard } from "./call-card";
 import {
   answeredBy,
   ANSWERED_FILTERS,
+  countAutomatedSenders,
   countInboxTabs,
   heldReason,
   normalizeAnsweredBy,
-  type AnsweredBy,
   INBOX_TABS,
-  loadInboxTab,
+  loadEntries,
+  loadInboxConversations,
   loadNextPost,
   loadTodayActivity,
   loadTodaySummary,
@@ -78,11 +79,32 @@ import {
   tabOf,
   todayLine,
   needsOwner,
+  type InboxConversation,
   type InboxEntry,
   type InboxTab,
   type NextPost,
   type TodaySummary,
 } from "./inbox-data";
+
+import {
+  activeFilterCount,
+  CLOSING_SOON_MS,
+  filterParams,
+  GROUP_LABELS,
+  INBOX_FLAGS,
+  INBOX_TYPES,
+  inboxType,
+  parseInboxFilters,
+  rowCountLabel,
+  toggleFilter,
+  windowLeft,
+} from "./inbox-groups";
+
+import { InboxFiltersButton, InboxSortBar } from "./inbox-filters";
+
+import { MarkConversationSeen, MoveSenderButton } from "./inbox-row-client";
+
+import { isEmailPlatform } from "@/features/inbox";
 
 import { InboxLive } from "./inbox-live";
 
@@ -108,21 +130,34 @@ import { AddBooking, calendarAccount } from "@/features/calendar";
 
 // stay as query (routes, 16 Nov).
 
-const href = (tab: InboxTab, item?: string, by: AnsweredBy | "all" = "all") =>
-  inboxHref(tab, { by: by !== "all" ? by : undefined, item });
+
+/** Inbox by sender (26 Nov): what a row knows beyond its latest message. */
+type RowMeta = Pick<
+  InboxConversation,
+  "newMessages" | "threads" | "posts" | "messages" | "latestAt" | "automated"
+>;
 
 /** One list row (design.md §1 rules 2 and 4): who · what they said · what happens next. */
 
 function Row({
   entry,
 
+  meta,
+
   link,
 
   selected,
 
   q,
+
+  now,
+
+  action,
 }: {
   entry: InboxEntry & { status: string };
+
+  /** A row by sender (not while searching). */
+  meta?: RowMeta;
 
   link: string;
 
@@ -131,17 +166,42 @@ function Row({
   /** While searching: the words to highlight, and the row says which tab it's in. */
 
   q?: string;
-}) {
-  const needs = needsOwner(entry.status);
 
-  const note = rowNote(entry);
+  now: Date;
+
+  /** Updates & newsletters: "Move to For you" under the row. */
+  action?: React.ReactNode;
+}) {
+  const needs = needsOwner(entry.status) && !meta?.automated;
+
+  const note = meta?.automated
+    ? { tone: "none" as const, label: undefined, text: "Automated sender" }
+    : rowNote(entry);
 
   const words = messageWords(entry.text, entry.attachments ?? []);
 
   const inTab = q ? INBOX_TABS.find((t) => t.key === tabOf(entry.status))?.label : undefined;
 
+  const email = isEmailPlatform(entry.platform);
+
+  const count = meta
+    ? meta.automated
+      ? meta.threads > 1
+        ? `${meta.threads} threads`
+        : null
+      : rowCountLabel({ ...meta, kind: entry.kind, email })
+    : null;
+
+  // The DM window (honey when under 3 hours), while the owner can still answer.
+  const left = needs ? windowLeft(entry.dmWindowClosesAt, now) : null;
+
+  const closingSoon =
+    !!entry.dmWindowClosesAt && Date.parse(entry.dmWindowClosesAt) - now.getTime() <= CLOSING_SOON_MS;
+
+  const at = meta?.latestAt ?? entry.receivedAt;
+
   return (
-    <li>
+    <li className="flex flex-col">
       <Link
         href={link}
 
@@ -171,12 +231,26 @@ function Row({
               {entry.authorName ?? "A customer"}
             </span>
 
+            {count && (
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-1.5 text-xs font-semibold",
+
+                  meta && meta.newMessages > 0 && !meta.automated
+                    ? "bg-honey-tint text-honey-text"
+                    : "bg-subtle text-ink-2",
+                )}
+              >
+                {count}
+              </span>
+            )}
+
             <time
               className="text-ink-3 ml-auto shrink-0 text-[13px] tabular-nums"
 
-              dateTime={entry.receivedAt}
+              dateTime={at}
             >
-              {shortTime(entry.receivedAt)}
+              {shortTime(at)}
             </time>
 
             {inTab && (
@@ -204,14 +278,54 @@ function Row({
               : words}
           </span>
 
-          <span className="mt-0.5 flex min-w-0">
+          <span className="mt-0.5 flex min-w-0 items-center gap-2">
             <StateLabel
-              state={rowState(entry.status, note.tone)}
+              state={meta?.automated ? "off" : rowState(entry.status, note.tone)}
 
               className="min-w-0 text-[13px] whitespace-normal"
             >
               {note.label ? `${note.label} · ${note.text}` : note.text}
             </StateLabel>
+
+            {left && (
+              <span
+                className={cn(
+                  "ml-auto shrink-0 text-[13px] tabular-nums",
+
+                  closingSoon ? "text-honey-text font-semibold" : "text-ink-3",
+                )}
+              >
+                {left}
+              </span>
+            )}
+          </span>
+        </span>
+      </Link>
+
+      {action && <div className="px-3 pb-2 pl-[60px]">{action}</div>}
+    </li>
+  );
+}
+
+/** Updates & newsletters, one row at the foot of For you (board section 4). */
+
+function UpdatesRow({ count, link }: { count: number; link: string }) {
+  return (
+    <li>
+      <Link
+        href={link}
+
+        className="hover:bg-subtle/70 border-line mt-1 flex gap-3 rounded-[14px] border-t px-3 py-3 no-underline"
+      >
+        <span className="bg-subtle text-ink-2 grid size-9 shrink-0 place-items-center rounded-full">
+          <Mail className="size-4" strokeWidth={1.75} aria-hidden />
+        </span>
+
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="text-ink-2 font-semibold">Updates &amp; newsletters</span>
+
+          <span className="text-ink-3 text-[13px]">
+            {count === 1 ? "1 sender" : `${count} senders`} · Waggle doesn&apos;t answer these
           </span>
         </span>
       </Link>
@@ -391,10 +505,15 @@ export async function InboxView({
   tab = "for_you",
 
   searchParams,
+
+  notice,
 }: {
   /** From the path: /inbox, /inbox/answered or /inbox/hidden. */
 
   tab?: InboxTab;
+
+  /** For you: one line above the list (the DM countdown, Playbook round 2). */
+  notice?: React.ReactNode;
 
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
@@ -410,6 +529,13 @@ export async function InboxView({
 
   const pattern = searchPattern(q);
 
+  // Inbox by sender (26 Nov): filters and sort live in the address; Updates & newsletters is a
+  // view of For you (?view=updates).
+
+  const filters = parseInboxFilters(params);
+
+  const updatesView = tab === "for_you" && params.view === "updates";
+
   // Answered tab (T27, T72): all, or by who answered.
 
   const by =
@@ -423,53 +549,106 @@ export async function InboxView({
 
   const timeZone = await viewerTimeZone();
 
-  const [tabEntries, counts, { count: accounts }, { data: settings }, spend, today, nextPost] =
-    await Promise.all([
-      loadInboxTab(supabase, tenant.id, tab),
+  const now = new Date();
 
-      countInboxTabs(supabase, tenant.id),
+  const [
+    rows,
+    counts,
+    updatesCount,
+    { data: accountRows },
+    { data: settings },
+    spend,
+    today,
+    nextPost,
+  ] = await Promise.all([
+    loadInboxConversations(supabase, tenant.id, {
+      tab,
+      filters,
+      automated: updatesView,
+      now,
+    }),
 
-      supabase
+    countInboxTabs(supabase, tenant.id, filters.customersOnly),
 
-        .from("social_accounts")
+    tab === "for_you" && filters.customersOnly
+      ? countAutomatedSenders(supabase, tenant.id)
+      : Promise.resolve(0),
 
-        .select("*", { count: "exact", head: true })
+    supabase.from("social_accounts").select("platform").eq("tenant_id", tenant.id),
 
-        .eq("tenant_id", tenant.id),
+    supabase.from("tenants").select("replies_paused").eq("id", tenant.id).single(),
 
-      supabase.from("tenants").select("replies_paused").eq("id", tenant.id).single(),
+    // T32: this month's AI allowance (service role: spend is summed across ai_usage).
 
-      // T32: this month's AI allowance (service role: spend is summed across ai_usage).
+    loadTenantAiSpend(getServiceClient(), tenant.id, now),
 
-      loadTenantAiSpend(getServiceClient(), tenant.id, new Date()),
+    loadTodaySummary(supabase, tenant.id, now, timeZone),
 
-      loadTodaySummary(supabase, tenant.id, new Date(), timeZone),
+    loadNextPost(supabase, tenant.id),
+  ]);
 
-      loadNextPost(supabase, tenant.id),
-    ]);
+  const accounts = accountRows?.length ?? 0;
+
+  const platforms = [...new Set((accountRows ?? []).map((a) => a.platform))]
+    .sort()
+    .map((p) => ({ key: p, label: platformLabel(p) }));
 
   const allowance = allowanceNotice(spend);
 
-  const found = pattern ? await searchInbox(supabase, tenant.id, pattern) : null;
+  // Search finds messages, not rows; the filters narrow it.
 
-  const entries = found
-    ? found
-    : by === "all"
-      ? tabEntries
-      : tabEntries.filter((e) => answeredBy(e) === by);
+  const found = pattern
+    ? (await searchInbox(supabase, tenant.id, pattern)).filter(
+        (e) =>
+          (filters.platforms.length === 0 || filters.platforms.includes(e.platform)) &&
+          (filters.types.length === 0 ||
+            filters.types.includes(
+              inboxType(e.kind, isEmailPlatform(e.platform)) as (typeof filters.types)[number],
+            )),
+      )
+    : null;
+
+  const tabRows: InboxConversation[] =
+    by === "all" ? rows : rows.filter((e) => answeredBy(e) === by);
+
+  const entries: (InboxEntry & { status: string })[] = found ?? tabRows;
+
+  const metaOf = new Map(found ? [] : tabRows.map((r) => [r.itemId, r]));
+
+  const listQuery = filterParams(filters);
+
+  const path = inboxHref(tab);
 
   const link = (item?: string) =>
-    found ? `/inbox?q=${encodeURIComponent(q)}${item ? `&item=${item}` : ""}` : href(tab, item, by);
+    found
+      ? `/inbox?q=${encodeURIComponent(q)}${item ? `&item=${item}` : ""}`
+      : inboxHref(tab, {
+          ...listQuery,
+          by: by !== "all" ? by : undefined,
+          view: updatesView ? "updates" : undefined,
+          item,
+        });
 
-  const byCounts = new Map<string, number>([["all", tabEntries.length]]);
+  const byCounts = new Map<string, number>([["all", rows.length]]);
 
-  for (const e of tabEntries) {
+  for (const e of rows) {
     const who = answeredBy(e);
 
     if (who) byCounts.set(who, (byCounts.get(who) ?? 0) + 1);
   }
 
-  const selected = entries.find((e) => e.itemId === itemParam) ?? entries[0];
+  // The open message: a row, or (from a notification or an older link) any message of the brand.
+
+  const listed = entries.find((e) => e.itemId === itemParam);
+
+  const opened =
+    itemParam && !listed && /^[0-9a-f-]{36}$/i.test(itemParam)
+      ? ((await loadEntries(supabase, tenant.id, { itemIds: [itemParam] }))[0] ?? null)
+      : null;
+
+  const selected = listed ?? opened ?? entries[0];
+
+  const selectedMeta = selected ? metaOf.get(selected.itemId) : undefined;
 
   const index = selected ? entries.indexOf(selected) : -1;
 
@@ -479,13 +658,33 @@ export async function InboxView({
 
   const reason = held ? await heldReason(supabase, selected.itemId, selected.status) : null;
 
+  // "3 new": when this person last opened the row (read before opening it marks it seen again).
+
+  const seenAt = selectedMeta
+    ? ((
+        await supabase
+          .from("inbox_reads")
+          .select("seen_at")
+          .eq("tenant_id", tenant.id)
+          .eq("user_id", tenant.userId)
+          .eq("group_key", selectedMeta.groupKey)
+          .maybeSingle()
+      ).data?.seen_at ?? null)
+    : null;
+
+  const filterCount = activeFilterCount(filters);
+
   // Tabs sit on top of the list (design.md §4): text with an ink underline, counts in gray.
 
   const tabs = (
     <div className="flex flex-col">
       <nav aria-label="Inbox filters" className="tabs">
         {INBOX_TABS.map((t) => (
-          <Link key={t.key} href={href(t.key)} data-active={t.key === tab || undefined}>
+          <Link
+            key={t.key}
+            href={inboxHref(t.key, listQuery)}
+            data-active={t.key === tab || undefined}
+          >
             {t.label}
 
             <span>{counts[t.key]}</span>
@@ -498,7 +697,10 @@ export async function InboxView({
           {ANSWERED_FILTERS.map((f) => ({
             label: `${f.label} ${byCounts.get(f.key) ?? 0}`,
 
-            href: href("answered", undefined, f.key),
+            href: inboxHref("answered", {
+              ...listQuery,
+              by: f.key !== "all" ? f.key : undefined,
+            }),
 
             active: by === f.key,
           })).map((f) => (
@@ -523,6 +725,73 @@ export async function InboxView({
     </div>
   );
 
+  // Filters and sort on one row under the tabs; applied filters as honey chips with ×.
+
+  const applied: { key: string; label: string; href: string }[] = [
+    ...filters.platforms.map((p) => ({
+      key: `p-${p}`,
+      label: platformLabel(p),
+      href: inboxHref(tab, filterParams(toggleFilter(filters, "platforms", p))),
+    })),
+    ...filters.types.map((t) => ({
+      key: `t-${t}`,
+      label: INBOX_TYPES.find((x) => x.key === t)?.label ?? t,
+      href: inboxHref(tab, filterParams(toggleFilter(filters, "types", t))),
+    })),
+    ...filters.flags.map((f) => ({
+      key: `f-${f}`,
+      label: INBOX_FLAGS.find((x) => x.key === f)?.label ?? f,
+      href: inboxHref(tab, filterParams(toggleFilter(filters, "flags", f))),
+    })),
+    ...(filters.customersOnly
+      ? []
+      : [
+          {
+            key: "everyone",
+            label: "Automated senders shown",
+            href: inboxHref(tab, filterParams({ ...filters, customersOnly: true })),
+          },
+        ]),
+  ];
+
+  const filterBar = (
+    <div className="relative flex flex-col gap-2 pb-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <InboxFiltersButton
+          path={path}
+          filters={filters}
+          platforms={platforms}
+          showSort={tab === "for_you"}
+        />
+
+        {tab === "for_you" && <InboxSortBar path={path} filters={filters} />}
+      </div>
+
+      {applied.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {applied.map((a) => (
+            <Link
+              key={a.key}
+              href={a.href}
+              aria-label={`Remove ${a.label}`}
+              className="bg-honey-tint border-honey-border text-ink inline-flex min-h-8 items-center gap-1 rounded-full border px-2.5 text-xs font-semibold no-underline"
+            >
+              {a.label}
+              <X className="size-3.5" aria-hidden />
+            </Link>
+          ))}
+
+          <Link
+            href={inboxHref(tab, filters.sort === "newest" ? { sort: "newest" } : undefined)}
+            className="text-ink-2 hover:text-ink ml-1 text-xs font-semibold"
+          >
+            Clear all
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+
   const listCard = (body: React.ReactNode, hideOnPhone = false) => (
     <div
       className={cn(
@@ -531,18 +800,38 @@ export async function InboxView({
         hideOnPhone && "hidden lg:flex",
       )}
     >
-      <div className="border-line flex flex-col gap-2 border-b px-3.5 pt-3.5">
+      <div className="border-line relative flex flex-col gap-2 border-b px-3.5 pt-3.5">
         <InboxSearch initial={q} />
 
         {found ? (
           <p className="text-ink-3 pt-1 pb-3 text-[13px]" role="status">
             {found.length === 0
               ? "Nothing found"
-              : `${found.length === 1 ? "1 conversation" : `${found.length} conversations`} with \u201c${q.trim()}\u201d, across all tabs`}
+              : `${found.length === 1 ? "1 conversation" : `${found.length} conversations`} with “${q.trim()}”, across all tabs`}
           </p>
+        ) : updatesView ? (
+          <div className="flex flex-col gap-1 pb-3">
+            <Link href={inboxHref("for_you", listQuery)} className="text-ink-2 text-sm">
+              ← All conversations
+            </Link>
+
+            <p className="font-semibold">Updates &amp; newsletters</p>
+
+            <p className="text-ink-3 text-[13px]">
+              Emails from automated senders. They never count as things that need you and Waggle
+              doesn&apos;t write replies to them.
+            </p>
+          </div>
         ) : (
-          <div className="[&_.tabs]:border-b-0">{tabs}</div>
+          <>
+            <div className="[&_.tabs]:border-b-0">{tabs}</div>
+
+            {filterBar}
+          </>
         )}
+        {!found && !updatesView && tab === "for_you" && notice ? (
+          <div className="has-[p]:pb-3">{notice}</div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-2">{body}</div>
@@ -566,24 +855,38 @@ export async function InboxView({
       <br />
       Search looks at names, messages and Waggle&apos;s replies in all three tabs.
     </EmptySpot>
+  ) : filterCount > 0 ? (
+    <EmptySpot
+      className="px-2 py-6"
+      action={
+        <ActionLink href={inboxHref(tab, filters.sort === "newest" ? { sort: "newest" } : undefined)}>
+          Clear filters
+        </ActionLink>
+      }
+    >
+      Nothing here with these filters.
+    </EmptySpot>
   ) : (
     <p className="meta px-2 py-6">
-      {tab === "ignored"
-        ? "Spam Waggle hid and messages that needed no reply show up here. Anything here can go back to For you."
-        : by === "auto"
-          ? "Nothing has gone out on its own yet."
-          : by !== "all"
-            ? "Nothing here yet."
-            : "Replies that went out show up here."}
+      {updatesView
+        ? "No automated senders yet."
+        : tab === "ignored"
+          ? "Spam Waggle hid and messages that needed no reply show up here. Anything here can go back to For you."
+          : by === "auto"
+            ? "Nothing has gone out on its own yet."
+            : by !== "all"
+              ? "Nothing here yet."
+              : "Replies that went out show up here."}
     </p>
   );
 
   // Nothing for the owner: the space a conversation would take shows what Waggle did today.
 
-  const caughtUp = !found && tab === "for_you" && entries.length === 0;
+  const caughtUp =
+    !found && !updatesView && tab === "for_you" && filterCount === 0 && entries.length === 0;
 
   const activity = caughtUp
-    ? await loadTodayActivity(supabase, tenant.id, new Date(), 5, timeZone)
+    ? await loadTodayActivity(supabase, tenant.id, now, 5, timeZone)
     : [];
 
   const conversation = selected
@@ -597,6 +900,11 @@ export async function InboxView({
       ? await loadTemplateChoices(supabase, getSocialProvider(), selected)
       : null;
 
+  // One reply per conversation (26 Nov): how many of the sender's messages this reply answers.
+
+  const answers =
+    selected?.kind === "dm" && selectedMeta ? Math.max(1, selectedMeta.waiting) : 1;
+
   const actionFooter = !selected ? null : selected.kind === "call" ? (
     // T82b: a missed call or voicemail: listen, call back, mark handled. Never a reply.
 
@@ -608,6 +916,8 @@ export async function InboxView({
       key={selected.itemId}
 
       entry={selected}
+
+      answers={answers}
 
       nextHref={next ? link(next.itemId) : null}
     />
@@ -653,7 +963,11 @@ export async function InboxView({
 
   // T55: viewers read the conversation; the decision controls show disabled, with a note.
 
-  const footer = !selected ? null : actionFooter ? (
+  const footer = !selected ? null : selectedMeta?.automated ? (
+    <p className="bg-subtle inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm">
+      From an automated sender. Waggle doesn&apos;t answer these.
+    </p>
+  ) : actionFooter ? (
     <RoleGate allowed={can(tenant.role, "replies.approve")} role={tenant.role} what="the replies">
       {actionFooter}
     </RoleGate>
@@ -670,6 +984,17 @@ export async function InboxView({
   ) : (
     <SentFooter entry={selected} />
   );
+
+  // Needs you now → Ready to approve → Also for you, each with its count (For you, by priority).
+
+  const grouped =
+    !found && !updatesView && tab === "for_you" && filters.sort === "priority";
+
+  const groupCounts = new Map<string, number>();
+
+  for (const r of tabRows) groupCounts.set(r.group, (groupCounts.get(r.group) ?? 0) + 1);
+
+  const canMove = can(tenant.role, "replies.approve");
 
   return (
     <div className="flex flex-col gap-5 lg:min-h-0 lg:flex-1">
@@ -707,6 +1032,15 @@ export async function InboxView({
                 Nothing waiting. New messages show up here.
               </p>
 
+              {updatesCount > 0 && (
+                <ul className="flex flex-col">
+                  <UpdatesRow
+                    count={updatesCount}
+                    link={inboxHref("for_you", { ...listQuery, view: "updates" })}
+                  />
+                </ul>
+              )}
+
               {nextPost && <NextPostNote post={nextPost} />}
             </>,
           )}
@@ -723,25 +1057,66 @@ export async function InboxView({
                 <ul
                   className="flex flex-col gap-0.5"
 
-                  aria-label={found ? "Search results" : "Messages"}
+                  aria-label={found ? "Search results" : "Conversations"}
                 >
-                  {entries.map((e) => (
-                    <Row
-                      key={e.itemId}
+                  {entries.map((e, i) => {
+                    const meta = metaOf.get(e.itemId);
 
-                      entry={e}
+                    const heading =
+                      grouped && meta && (i === 0 || metaOf.get(entries[i - 1].itemId)?.group !== meta.group)
+                        ? meta.group
+                        : null;
 
-                      link={link(e.itemId)}
+                    return (
+                      <Fragment key={e.itemId}>
+                        {heading && (
+                          <li className="label flex items-center gap-1.5 px-3 pt-3 pb-1">
+                            {GROUP_LABELS[heading]}
 
-                      q={found ? q : undefined}
+                            <span className="text-ink-3 tabular-nums">
+                              {groupCounts.get(heading) ?? 0}
+                            </span>
+                          </li>
+                        )}
 
-                      selected={e.itemId === selected?.itemId}
-                    />
-                  ))}
+                        <Row
+                          entry={e}
+
+                          meta={meta}
+
+                          link={link(e.itemId)}
+
+                          q={found ? q : undefined}
+
+                          now={now}
+
+                          selected={e.itemId === selected?.itemId}
+
+                          action={
+                            updatesView && canMove ? (
+                              <MoveSenderButton
+                                itemId={e.itemId}
+                                name={e.authorName ?? "this sender"}
+                              />
+                            ) : undefined
+                          }
+                        />
+                      </Fragment>
+                    );
+                  })}
                 </ul>
               )}
 
-              {nextPost && !found && <NextPostNote post={nextPost} />}
+              {!found && !updatesView && updatesCount > 0 && (
+                <ul className="flex flex-col">
+                  <UpdatesRow
+                    count={updatesCount}
+                    link={inboxHref("for_you", { ...listQuery, view: "updates" })}
+                  />
+                </ul>
+              )}
+
+              {nextPost && !found && !updatesView && <NextPostNote post={nextPost} />}
             </>,
 
             !!itemParam,
@@ -764,8 +1139,14 @@ export async function InboxView({
 
                 <MarkItemRead itemId={selected.itemId} />
 
+                {itemParam && <MarkConversationSeen itemId={selected.itemId} />}
+
                 <ConversationPane
                   entry={selected}
+
+                  newCount={selectedMeta?.automated ? 0 : (selectedMeta?.newMessages ?? 0)}
+
+                  newSince={seenAt}
 
                   thread={
                     conversation?.thread ?? [

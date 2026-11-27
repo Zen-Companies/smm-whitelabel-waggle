@@ -88,7 +88,18 @@ export const messageEventSchema = z.object({
   metadata: z
     .object({
       email: z
-        .object({ subject: z.string().max(998).optional().catch(undefined) })
+        .object({
+          subject: z.string().max(998).optional().catch(undefined),
+          // Inbox by sender (26 Nov): only the header NAMES are read (List-Unsubscribe,
+          // List-Id), to tell a newsletter. Not documented for received mail; VERIFY.
+          headers: z
+            .union([
+              z.record(z.string().max(200), z.unknown()),
+              z.array(z.object({ name: z.string().max(200) }).loose()),
+            ])
+            .optional()
+            .catch(undefined),
+        })
         .nullish()
         .catch(null),
     })
@@ -239,4 +250,12 @@ export const rcsStatusSchema = z.object({
 /** The accountId field is canonical; `id` carries the same value (docs.zernio.com/webhooks). */
 export function zernioAccountIdOf(account: z.infer<typeof accountBlock>): string {
   return account.accountId ?? account.id;
+}
+
+/** Pure: the header names of an email's `metadata.email.headers`, however Zernio shapes them. */
+export function emailHeaderNames(
+  headers: Record<string, unknown> | { name: string }[] | undefined,
+): string[] {
+  if (!headers) return [];
+  return Array.isArray(headers) ? headers.map((h) => h.name) : Object.keys(headers);
 }

@@ -5,11 +5,10 @@ import { StateMark } from "@/components/app/state-mark";
 import { getServiceClient } from "@/lib/supabase/service";
 import { cn } from "cn";
 import { loadBilling } from "./billing-store";
-import { accountAllowance, BUSINESS_CALL_URL, EXTRAS, isPlanId } from "./plans";
+import { accountAllowance, BUSINESS_CALL_URL, EXTRAS, isPlanId, UNCOUNTED_FILTER } from "./plans";
 import { planPeek, type PlanPeek } from "./plan-peek";
 import { planChipState, planChipText, showOnPhone, type PlanChipState } from "./plan-chip-state";
 import { planIsLive } from "./subscription";
-import { upgradeHref } from "./upgrade";
 import { UpgradeLink } from "./upgrade-link";
 import { loadPlans, loadReplyLimit } from "./usage";
 
@@ -23,7 +22,13 @@ export const PLAN_HREF = "/plan";
 const loadChip = cache(
   async (
     orgId: string,
-  ): Promise<{ state: PlanChipState | null; renews: string | null; peek: PlanPeek | null }> => {
+  ): Promise<{
+    state: PlanChipState | null;
+    renews: string | null;
+    peek: PlanPeek | null;
+    /** Solo's AI replies a month (Staff → Plans), for "Get 300 replies". */
+    soloReplies: number;
+  }> => {
     const db = getServiceClient();
     const now = new Date();
     const [bill, plans, brandRows] = await Promise.all([
@@ -45,7 +50,8 @@ const loadChip = cache(
       live && bill?.current_period_end && bill.status === "active"
         ? shortDay(bill.current_period_end)
         : null;
-    if (!state || !replies) return { state, renews, peek: null };
+    const soloReplies = plans.solo.replies;
+    if (!state || !replies) return { state, renews, peek: null, soloReplies };
 
     // The hover card (20 Nov): accounts, businesses and replies on their own, as Your plan says.
     const ids = (brandRows.data ?? []).map((b) => b.id);
@@ -56,6 +62,7 @@ const loadChip = cache(
             .select("id", { count: "exact", head: true })
             .in("tenant_id", ids)
             .eq("status", "active")
+            .not("platform", "in", UNCOUNTED_FILTER)
             .then((r) => r.count ?? 0),
           db
             .from("autonomy_settings")
@@ -82,7 +89,7 @@ const loadChip = cache(
       autoCategories: autos,
       accountUsd: EXTRAS.accountUsd,
     });
-    return { state, renews, peek };
+    return { state, renews, peek, soloReplies };
   },
 );
 
@@ -121,30 +128,43 @@ function Mark({ state }: { state: PlanChipState }) {
   return null;
 }
 
-/** The header chip. Owners only: they pay. On a phone only when there's something to do. */
+/**
+ * The header chip. Owners only: they pay. On a phone when there's something to do, or the
+ * month's replies compact ("82/100", 26 Nov) where the plan has a reply limit.
+ */
 export type PlanViewer = { orgId: string; isOwner: boolean };
 
 export async function PlanChip({ orgId, isOwner }: PlanViewer) {
-  const { state, peek } = await loadChip(orgId);
+  const { state, peek, soloReplies } = await loadChip(orgId);
   if (!state || !isOwner) return null;
-  const pill = (
-    <Link
-      href={chipHref(state)}
-      aria-label={`Your plan: ${planChipText(state)}`}
-      className={cn(
-        "min-h-9 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 hover:opacity-90",
-        showOnPhone(state) ? "inline-flex" : "hidden md:inline-flex",
-        TONE[state.kind],
-      )}
-    >
+  // On a phone the pill stays 36px tall but taps over 44px (design.md: 44px targets).
+  const pillClass = cn(
+    "relative min-h-9 items-center gap-2 rounded-full border px-3 text-[13px] font-semibold whitespace-nowrap transition-colors duration-150 before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] hover:opacity-90 md:before:hidden",
+    showOnPhone(state) ? "inline-flex" : "hidden md:inline-flex",
+    TONE[state.kind],
+  );
+  const pillLabel = `Your plan: ${planChipText(state)}`;
+  const inner = (
+    <>
       <Mark state={state} />
-      <span className="md:hidden">{planChipText(state, true)}</span>
+      <span className="tabular-nums md:hidden">{planChipText(state, true)}</span>
       <span className="hidden md:inline">{planChipText(state)}</span>
       {state.kind === "plan" && (
         <span className="text-ink-3 hidden font-medium lg:inline">
           {state.used} of {state.allowance} replies
         </span>
       )}
+    </>
+  );
+  // Free and out of replies (Walter's playbook, tap 5): the out-of-replies pop-up opens in place
+  // over this page, at once; everything else goes to Your plan.
+  const pill = outOnFree(state) ? (
+    <UpgradeLink reason="out" instant aria-label={pillLabel} className={pillClass}>
+      {inner}
+    </UpgradeLink>
+  ) : (
+    <Link href={PLAN_HREF} aria-label={pillLabel} className={pillClass}>
+      {inner}
     </Link>
   );
   if (!peek) return pill;
@@ -159,7 +179,7 @@ export async function PlanChip({ orgId, isOwner }: PlanViewer) {
     >
       {pill}
       <span className="invisible absolute top-full right-0 z-50 hidden pt-2 opacity-0 transition-[opacity,visibility] duration-150 group-focus-within/peek:visible group-focus-within/peek:opacity-100 md:block [@media(hover:hover)]:group-hover/peek:visible [@media(hover:hover)]:group-hover/peek:opacity-100 [@media(hover:hover)]:group-hover/peek:delay-150">
-        <PeekCard peek={peek} />
+        <PeekCard peek={peek} soloReplies={soloReplies} />
       </span>
     </span>
   );
@@ -197,12 +217,13 @@ function PeekComb({ used, allowance }: { used: number; allowance: number }) {
 const PEEK_BUTTON =
   "bg-ink inline-flex min-h-9 items-center rounded-xl px-3 text-[13px] font-semibold whitespace-nowrap text-white no-underline";
 
-function PeekAction({ peek }: { peek: PlanPeek }) {
+function PeekAction({ peek, soloReplies }: { peek: PlanPeek; soloReplies: number }) {
   switch (peek.action.kind) {
     case "upgrade":
+      // Walter's playbook (25 Nov): the link names what it gets, from the plan's number.
       return (
         <UpgradeLink reason="replies" className={PEEK_BUTTON}>
-          Upgrade to Solo
+          Get {soloReplies.toLocaleString("en-US")} replies
         </UpgradeLink>
       );
     case "top_up":
@@ -234,7 +255,7 @@ function PeekAction({ peek }: { peek: PlanPeek }) {
 }
 
 /** The card under the pill (canvas "Plan pill peek + Free and Solo bees", approved 20 Nov). */
-function PeekCard({ peek }: { peek: PlanPeek }) {
+function PeekCard({ peek, soloReplies }: { peek: PlanPeek; soloReplies: number }) {
   return (
     <span
       role="group"
@@ -274,15 +295,14 @@ function PeekCard({ peek }: { peek: PlanPeek }) {
             Open Your plan
           </Link>
         )}
-        <PeekAction peek={peek} />
+        <PeekAction peek={peek} soloReplies={soloReplies} />
       </span>
     </span>
   );
 }
 
-/** Free out of replies goes straight to the upgrade screen; everything else to Your plan. */
-const chipHref = (state: PlanChipState) =>
-  state.kind === "reached" && state.free ? upgradeHref("replies") : PLAN_HREF;
+/** Free out of replies opens the out-of-replies pop-up in place; everything else Your plan. */
+const outOnFree = (state: PlanChipState) => state.kind === "reached" && !!state.free;
 
 function summary(state: PlanChipState, renews: string | null): { title: string; line: string } {
   switch (state.kind) {

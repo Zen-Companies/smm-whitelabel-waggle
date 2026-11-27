@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
 import { z } from "zod";
-import { planAllowsAutoReply, upgradeLine } from "@/features/billing";
+import { planAllowsAutoReply, replyLimitReached, upgradeLine } from "@/features/billing";
 import { getTenantFor, NOT_ALLOWED } from "@/features/tenants";
 import { writeAudit } from "@/lib/audit";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -24,6 +24,7 @@ import {
   writeTemplateReply,
   type DecisionResult,
 } from "./decisions";
+import { writeRepliesForWaiting } from "./replies-back";
 import { sendApprovedReplyAfterUndoWindow } from "./send-now";
 import type { FirstApproval } from "./first-approval";
 import { loadFirstApproval } from "./first-approval-data";
@@ -84,6 +85,34 @@ export async function updateAutonomyMode(
   revalidatePath("/settings", "layout");
   revalidatePath("/teach");
   return { saved: true };
+}
+
+/**
+ * After paying when out of replies (Playbook round 2, 26 Nov): the messages that waited get
+ * replies written, through the draft step and policy() as usual (the owner's reply mode).
+ */
+export async function writeRepliesAfterUpgrade(): Promise<{ count: number } | { error: string }> {
+  const tenant = await getTenantFor("replies.approve");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const db = getServiceClient();
+  const now = new Date();
+  // Still out (the plan hasn't changed yet): nothing to write with.
+  if (await replyLimitReached(db, tenant.id, now)) return { error: "Still out of replies." };
+  try {
+    const count = await writeRepliesForWaiting(db, {
+      tenantId: tenant.id,
+      actor: tenant.userId,
+      now,
+    });
+    revalidatePath("/inbox", "layout");
+    return { count };
+  } catch (e) {
+    console.error("approvals: replies back failed", {
+      tenantId: tenant.id,
+      error: e instanceof Error ? e.message : "unknown",
+    });
+    return { error: "Couldn't start the replies." };
+  }
 }
 
 export interface DecisionFormState {
