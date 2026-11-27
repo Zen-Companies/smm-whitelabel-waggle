@@ -5,6 +5,7 @@ import {
   countAutomatedSenders,
   countInboxTabs,
   loadInboxConversations,
+  loadPostFilter,
   loadTodaySummary,
 } from "@/features/approvals/inbox-data";
 import { DEFAULT_FILTERS } from "@/features/approvals/inbox-groups";
@@ -296,6 +297,46 @@ describe("the grouped list", () => {
     ).toEqual([true]);
   });
 
+  it("narrows to one post's comments (Posts Round 5: See comments in Inbox)", async () => {
+    // Waggle's post went out as Zernio post z_a; Instagram calls it post_a (the comments' id).
+    const { data: post, error } = await db
+      .from("posts")
+      .insert({
+        tenant_id: tenant,
+        content: "Black Friday at Harbour Bakery\nTwo loaves for one",
+        target_account_ids: [instagram],
+        status: "published",
+        zernio_post_id: "z_a",
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    await db.from("post_metrics").insert({
+      tenant_id: tenant,
+      provider_post_id: "post_a",
+      platform: "instagram",
+      zernio_post_id: "z_a",
+    });
+    const filter = await loadPostFilter(owner.client, tenant, post.id);
+    expect(filter).toEqual({ label: "Post: Black Friday at Harbour…", ids: ["z_a", "post_a"] });
+    const rows = await loadInboxConversations(owner.client, tenant, {
+      tab: "for_you",
+      filters: { ...DEFAULT_FILTERS, post: post.id },
+      postIds: filter!.ids,
+    });
+    expect(rows.map((r) => r.itemId)).toEqual([ids.jess1]);
+    expect(rows[0].messages).toBe(1);
+    // A post with no ids yet matches nothing; another brand's post isn't found.
+    expect(
+      await loadInboxConversations(owner.client, tenant, {
+        tab: "for_you",
+        filters: DEFAULT_FILTERS,
+        postIds: [],
+      }),
+    ).toEqual([]);
+    expect(await loadPostFilter(stranger.client, tenant, post.id)).toBeNull();
+  });
+
   it("Newest: plain latest-message-first", async () => {
     const rows = await loadInboxConversations(owner.client, tenant, {
       tab: "for_you",
@@ -333,13 +374,14 @@ describe("the grouped list", () => {
   });
 
   it('"N new" counts from when this login last opened the row', async () => {
-    const group = (
-      await db.from("inbound_items").select("group_key").eq("id", ids.maya3).single()
-    ).data!.group_key!;
-    const { error } = await owner.client.from("inbox_reads").upsert(
-      { tenant_id: tenant, user_id: owner.userId, group_key: group, seen_at: minutesAgo(25) },
-      { onConflict: "tenant_id,user_id,group_key" },
-    );
+    const group = (await db.from("inbound_items").select("group_key").eq("id", ids.maya3).single())
+      .data!.group_key!;
+    const { error } = await owner.client
+      .from("inbox_reads")
+      .upsert(
+        { tenant_id: tenant, user_id: owner.userId, group_key: group, seen_at: minutesAgo(25) },
+        { onConflict: "tenant_id,user_id,group_key" },
+      );
     expect(error).toBeNull();
     const rows = await loadInboxConversations(owner.client, tenant, {
       tab: "for_you",

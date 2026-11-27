@@ -71,6 +71,7 @@ import {
   INBOX_TABS,
   loadEntries,
   loadInboxConversations,
+  loadPostFilter,
   loadNextPost,
   loadTodayActivity,
   loadTodaySummary,
@@ -129,7 +130,6 @@ import { AddBooking, calendarAccount } from "@/features/calendar";
 // Each tab is a place (/inbox, /inbox/answered, /inbox/hidden); the open message and filters
 
 // stay as query (routes, 16 Nov).
-
 
 /** Inbox by sender (26 Nov): what a row knows beyond its latest message. */
 type RowMeta = Pick<
@@ -196,7 +196,8 @@ function Row({
   const left = needs ? windowLeft(entry.dmWindowClosesAt, now) : null;
 
   const closingSoon =
-    !!entry.dmWindowClosesAt && Date.parse(entry.dmWindowClosesAt) - now.getTime() <= CLOSING_SOON_MS;
+    !!entry.dmWindowClosesAt &&
+    Date.parse(entry.dmWindowClosesAt) - now.getTime() <= CLOSING_SOON_MS;
 
   const at = meta?.latestAt ?? entry.receivedAt;
 
@@ -551,6 +552,10 @@ export async function InboxView({
 
   const now = new Date();
 
+  // Posts Round 5: "See comments in Inbox" opens the list narrowed to that post.
+
+  const postFilter = filters.post ? await loadPostFilter(supabase, tenant.id, filters.post) : null;
+
   const [
     rows,
     counts,
@@ -566,6 +571,7 @@ export async function InboxView({
       filters,
       automated: updatesView,
       now,
+      postIds: filters.post ? (postFilter?.ids ?? []) : null,
     }),
 
     countInboxTabs(supabase, tenant.id, filters.customersOnly),
@@ -743,6 +749,15 @@ export async function InboxView({
       label: INBOX_FLAGS.find((x) => x.key === f)?.label ?? f,
       href: inboxHref(tab, filterParams(toggleFilter(filters, "flags", f))),
     })),
+    ...(filters.post
+      ? [
+          {
+            key: "post",
+            label: postFilter?.label ?? "Post: not found",
+            href: inboxHref(tab, filterParams({ ...filters, post: null })),
+          },
+        ]
+      : []),
     ...(filters.customersOnly
       ? []
       : [
@@ -859,7 +874,9 @@ export async function InboxView({
     <EmptySpot
       className="px-2 py-6"
       action={
-        <ActionLink href={inboxHref(tab, filters.sort === "newest" ? { sort: "newest" } : undefined)}>
+        <ActionLink
+          href={inboxHref(tab, filters.sort === "newest" ? { sort: "newest" } : undefined)}
+        >
           Clear filters
         </ActionLink>
       }
@@ -885,9 +902,7 @@ export async function InboxView({
   const caughtUp =
     !found && !updatesView && tab === "for_you" && filterCount === 0 && entries.length === 0;
 
-  const activity = caughtUp
-    ? await loadTodayActivity(supabase, tenant.id, now, 5, timeZone)
-    : [];
+  const activity = caughtUp ? await loadTodayActivity(supabase, tenant.id, now, 5, timeZone) : [];
 
   const conversation = selected
     ? await loadConversation(supabase, tenant.id, selected.itemId)
@@ -902,8 +917,7 @@ export async function InboxView({
 
   // One reply per conversation (26 Nov): how many of the sender's messages this reply answers.
 
-  const answers =
-    selected?.kind === "dm" && selectedMeta ? Math.max(1, selectedMeta.waiting) : 1;
+  const answers = selected?.kind === "dm" && selectedMeta ? Math.max(1, selectedMeta.waiting) : 1;
 
   const actionFooter = !selected ? null : selected.kind === "call" ? (
     // T82b: a missed call or voicemail: listen, call back, mark handled. Never a reply.
@@ -987,8 +1001,7 @@ export async function InboxView({
 
   // Needs you now → Ready to approve → Also for you, each with its count (For you, by priority).
 
-  const grouped =
-    !found && !updatesView && tab === "for_you" && filters.sort === "priority";
+  const grouped = !found && !updatesView && tab === "for_you" && filters.sort === "priority";
 
   const groupCounts = new Map<string, number>();
 
@@ -1063,7 +1076,9 @@ export async function InboxView({
                     const meta = metaOf.get(e.itemId);
 
                     const heading =
-                      grouped && meta && (i === 0 || metaOf.get(entries[i - 1].itemId)?.group !== meta.group)
+                      grouped &&
+                      meta &&
+                      (i === 0 || metaOf.get(entries[i - 1].itemId)?.group !== meta.group)
                         ? meta.group
                         : null;
 

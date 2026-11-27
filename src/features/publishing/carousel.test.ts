@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { carouselRules, moveItem, platformSet, setLabel } from "./carousel";
+import {
+  carouselRules,
+  chooseFrom,
+  moveItem,
+  platformFiles,
+  platformSet,
+  setLabel,
+} from "./carousel";
 
 const photos = (n: number) => Array.from({ length: n }, () => "image" as const);
 
@@ -115,5 +122,37 @@ describe("helpers", () => {
     expect(moveItem(["a", "b", "c", "d"], 2, 1)).toEqual(["a", "c", "b", "d"]);
     expect(moveItem(["a", "b", "c"], 0, 2)).toEqual(["b", "c", "a"]);
     expect(moveItem(["a", "b"], 5, 0)).toEqual(["a", "b"]);
+  });
+});
+
+describe("choosing which photos go (Round 5, Facebook's Choose)", () => {
+  const fourteen = Array.from({ length: 14 }, () => "image" as const);
+
+  it("takes the first ten without a choice", () => {
+    const set = platformSet("facebook", fourteen);
+    expect(set.indices).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(set.note).toBe("Facebook takes up to 10 photos: the first 10 go");
+  });
+
+  it("takes the chosen ten, in post order", () => {
+    const pick = [13, 12, 11, 0, 1, 2, 3, 4, 5, 6];
+    const set = platformSet("facebook", fourteen, undefined, pick);
+    expect(set.indices).toEqual([0, 1, 2, 3, 4, 5, 6, 11, 12, 13]);
+    expect(set.note).toBe("Facebook takes up to 10 photos: the 10 you chose go");
+  });
+
+  it("fills a short choice in post order and ignores places that aren't there", () => {
+    expect(chooseFrom([0, 1, 2, 3, 4], 3, [4, 40])).toEqual([0, 1, 4]);
+    expect(chooseFrom([0, 1, 2, 3, 4], 3, [99])).toEqual([0, 1, 2]);
+    expect(chooseFrom([0, 1, 2], 3, [2])).toEqual([0, 1, 2]);
+  });
+
+  it("sends the chosen photos as Facebook's own files", () => {
+    const media = Array.from({ length: 12 }, (_, i) => ({
+      url: `https://x/${i}.jpg`,
+      type: "image",
+    }));
+    const { files } = platformFiles("facebook", media, undefined, undefined, [11, 10]);
+    expect(files?.map((f) => f.from)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 10, 11]);
   });
 });

@@ -348,3 +348,20 @@ describe("createLlmClient.runTools (T33)", () => {
     expect(usage.records).toHaveLength(AGENT_MAX_STEPS);
   });
 });
+
+describe("createLlmClient.generateObject purpose caption", () => {
+  it("runs on the draft model and records the call as caption", async () => {
+    const { fetchMock, models } = fakeOpenRouter(() => chatCompletion({ answer: "ok" }));
+    const usage = memoryUsage();
+    await createLlmClient({ models, usage }).generateObject({
+      ...call,
+      purpose: "caption",
+      schema,
+      system: "s",
+      prompt: "p",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).model).toBe(models.draft.id);
+    expect(usage.records[0].purpose).toBe("caption");
+  });
+});

@@ -24,6 +24,12 @@ import { CAROUSEL_MAX, platformFiles, type PostFile } from "./carousel";
 import { businessPhone, googleProblems, telUrl, withHttps } from "./google-post";
 import { optionMedia } from "./posts";
 import { platformLabel } from "@/lib/social/platforms";
+import { getLlmClientOrNull } from "@/lib/llm";
+import { CAPTION_ABOUT_MAX, sourceLine } from "./caption";
+import { writeCaption, type CaptionRunResult } from "./caption-run";
+import { REPEAT_MAX_COUNT, repeatChoiceProblem, type RepeatChoice } from "./repeat-rule";
+import { applyEditToRepeat, createRepeat, stopRepeat } from "./repeats";
+import { validTimeZone } from "@/lib/time/zone";
 
 export interface ComposeState {
   error?: string;
@@ -33,7 +39,7 @@ export interface ComposeState {
   savedAt?: number;
   /** The saved post (Round 3: a duplicate opens on it). */
   postId?: string;
-  outcome?: "published" | "scheduled" | "waiting" | "failed" | "updated";
+  outcome?: "published" | "scheduled" | "waiting" | "failed" | "updated" | "repeating";
   /** Platforms that won't take the post as it is, with why (shown in "Before it goes out"). */
   problems?: { platform: string; message: string }[];
   /** Platforms' notes on the post: it can still go out (shown in "Before it goes out"). */
@@ -229,7 +235,13 @@ async function prepareCompose(formData: FormData, sourceId?: string): Promise<Pr
       crops[i] = crop;
     }
     if (!Object.keys(crops).length) continue;
-    const { files } = platformFiles(platform, media as PostFile[], crops, options[platform]?.as);
+    const { files } = platformFiles(
+      platform,
+      media as PostFile[],
+      crops,
+      options[platform]?.as,
+      options[platform]?.pick,
+    );
     if (files) options[platform] = { ...options[platform], media: optionMedia(files) };
   }
 
@@ -305,9 +317,40 @@ export async function uploadPostPhoto(
   return "error" in uploaded ? { error: uploaded.error } : uploaded;
 }
 
+/** Round 5: the composer's Repeat choice (the first time is the post's own). */
+const repeatSchema = z.object({
+  every: z.enum(["day", "week", "month"]),
+  ends: z.enum(["never", "on", "after"]),
+  endDate: z.iso.date().nullish(),
+  count: z.number().int().min(2).max(REPEAT_MAX_COUNT).nullish(),
+});
+
+function readRepeat(formData: FormData): RepeatChoice | null | "bad" {
+  const raw = formData.get("repeat");
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const parsed = repeatSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : "bad";
+  } catch {
+    return "bad";
+  }
+}
+
 export async function composePost(_prev: ComposeState, formData: FormData): Promise<ComposeState> {
   // Round 3: Duplicate starts from another post; its files are reused from our row.
   const from = z.uuid().safeParse(formData.get("fromPostId"));
+  // Round 5: a repeat starts from a post with a time.
+  const repeat = readRepeat(formData);
+  const zone = validTimeZone(String(formData.get("timeZone") ?? ""));
+  if (repeat === "bad") return { error: "Check how it repeats.", field: "when" };
+  if (repeat) {
+    if (formData.get("when") !== "later") {
+      return { error: "Pick when the first one goes out.", field: "when" };
+    }
+    const first = new Date(String(formData.get("scheduledFor") ?? ""));
+    const problem = Number.isNaN(first.getTime()) ? null : repeatChoiceProblem(repeat, first, zone);
+    if (problem) return { error: problem, field: "when" };
+  }
   const prepared = await prepareCompose(formData, from.success ? from.data : undefined);
   if (!prepared.ok) return prepared.state;
   const { tenant, db, data, scheduledFor, media, options } = prepared;
@@ -366,8 +409,33 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
     }
     return { error: "Couldn't save the post. Try again." };
   }
+  // Round 5: the repeat starts once its first post is planned (a refused first post starts none).
+  let repeated = false;
+  if (repeat && result.outcome !== "failed") {
+    try {
+      repeated = !!(await createRepeat(db, {
+        tenantId: tenant.id,
+        userId: tenant.userId,
+        postId: result.postId,
+        choice: repeat,
+        timeZone: zone,
+      }));
+    } catch (error) {
+      Sentry.captureException(error, { extra: { postId: result.postId, step: "createRepeat" } });
+    }
+  }
   revalidatePath("/posts");
   const warnings = result.warnings.length ? { warnings: result.warnings } : {};
+  if (repeat && !repeated && result.outcome !== "failed") {
+    return {
+      savedAt: Date.now(),
+      postId: result.postId,
+      outcome: result.outcome,
+      error:
+        "The first post is planned, but the repeat couldn't be saved. Open the post to try again.",
+      ...warnings,
+    };
+  }
   if (result.outcome === "failed") {
     return {
       error: result.error,
@@ -377,7 +445,12 @@ export async function composePost(_prev: ComposeState, formData: FormData): Prom
       ...warnings,
     };
   }
-  return { savedAt: Date.now(), postId: result.postId, outcome: result.outcome, ...warnings };
+  return {
+    savedAt: Date.now(),
+    postId: result.postId,
+    outcome: repeated ? "repeating" : result.outcome,
+    ...warnings,
+  };
 }
 
 /**
@@ -413,6 +486,10 @@ export async function saveEditedPost(
     },
   );
   if (!result.ok) return { ...updateErrorState(result), field: updateErrorField(result) };
+  // Round 5: a repeating post asks "Just this one" or "This and the ones after".
+  if (formData.get("repeatScope") === "following") {
+    await applyEditToRepeat(db, { tenantId: tenant.id, userId: tenant.userId, postId: id.data });
+  }
   revalidatePath("/posts");
   return { savedAt: Date.now(), outcome: "updated" };
 }
@@ -822,4 +899,85 @@ export async function pickOneDriveAction(input: {
     Sentry.captureException(error, { extra: { tenantId: tenant.id, step: "pickOneDrive" } });
     return { error: "The file couldn't be copied. Try again." };
   }
+}
+
+const captionSchema = z.object({
+  mode: z.enum(["write", "another", "shorter", "hashtags", "improve"]),
+  tone: z.enum(["friendly", "punchy", "excited", "calm"]),
+  about: z.string().max(CAPTION_ABOUT_MAX),
+  current: z.string().max(POST_TEXT_MAX),
+  maxLength: z.number().int().min(50).max(POST_TEXT_MAX),
+});
+
+export type CaptionState =
+  { ok: true; caption: string; source: string } | { ok: false; error: string; capped?: boolean };
+
+const CAPTION_ERRORS: Record<Exclude<CaptionRunResult, { ok: true }>["reason"], string> = {
+  ai_cap_reached:
+    "This month's AI allowance is used up, so Waggle can't write captions until next month. You can still write your own.",
+  hourly_limit: "That's a lot of captions this hour. Try again in a little while.",
+  not_set_up: "Writing with Waggle isn't available right now. Write your own for now.",
+  invented:
+    "Waggle's try mentioned a price or offer that isn't in your business info, so it was dropped. Try again, or add the offer to what the post is about.",
+  failed: "Waggle couldn't write one just now. Try again.",
+};
+
+/**
+ * Write with Waggle (Posts Round 5): a caption from what the post is about and the business info,
+ * or Shorter / Another one / + Hashtags / Improve on one already there. Under the AI cap.
+ */
+export async function writeCaptionAction(input: unknown): Promise<CaptionState> {
+  const parsed = captionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Something went wrong. Reload the page." };
+  const d = parsed.data;
+  if (d.mode === "write" || d.mode === "another" ? !d.about.trim() : !d.current.trim()) {
+    return {
+      ok: false,
+      error: d.mode === "improve" ? "Write something first." : "Say what the post is about.",
+    };
+  }
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { ok: false, error: NOT_ALLOWED };
+  const result = await writeCaption(
+    { db: getServiceClient(), llm: getLlmClientOrNull() },
+    {
+      tenantId: tenant.id,
+      businessName: tenant.name,
+      actor: tenant.userId,
+      mode: d.mode,
+      tone: d.tone,
+      about: d.about,
+      current: d.current,
+      maxLength: d.maxLength,
+    },
+  );
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: CAPTION_ERRORS[result.reason],
+      ...(result.reason === "ai_cap_reached" ? { capped: true } : {}),
+    };
+  }
+  return { ok: true, caption: result.caption, source: sourceLine(result.usedTitles) };
+}
+
+export type StopRepeatState = { error?: string; done?: boolean };
+
+/** Stop repeating (Posts Round 5): the planned post still goes out; no more after it. */
+export async function stopRepeating(
+  _prev: StopRepeatState,
+  formData: FormData,
+): Promise<StopRepeatState> {
+  const id = z.uuid().safeParse(formData.get("repeatId"));
+  if (!id.success) return { error: "Something went wrong. Reload the page." };
+  const tenant = await getTenantFor("posts.write");
+  if (!tenant) return { error: NOT_ALLOWED };
+  const result = await stopRepeat(getServiceClient(), {
+    tenantId: tenant.id,
+    userId: tenant.userId,
+    repeatId: id.data,
+  });
+  if (!result.ok) return { error: "This post doesn't repeat any more. Reload the page." };
+  revalidatePath("/posts");
+  return { done: true };
 }

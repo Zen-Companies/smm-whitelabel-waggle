@@ -14,3 +14,5 @@ export { PostsHeader } from "./posts-header";
 export { listBoardsFor } from "./pinterest";
 export { parsePostOptions, targetExtras } from "./post-options";
 export type { PostOptions } from "./post-options";
+export { scheduleRepeats } from "./repeats";
+export type { RepeatJobSummary } from "./repeats";

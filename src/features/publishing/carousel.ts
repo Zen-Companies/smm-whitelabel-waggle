@@ -69,14 +69,37 @@ export interface PlatformSet {
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
+ * Round 5 ("10 of 14 · Choose"): the files the owner chose for a platform that takes fewer than
+ * the post has, by place; the rest of `max` filled in post order. Without a valid choice, the
+ * first `max`. Always in post order.
+ */
+export function chooseFrom(
+  pool: readonly number[],
+  max: number,
+  pick?: readonly number[],
+): number[] {
+  const chosen = pool.filter((i) => pick?.includes(i)).slice(0, max);
+  if (!chosen.length) return pool.slice(0, max);
+  for (const i of pool) {
+    if (chosen.length >= max) break;
+    if (!chosen.includes(i)) chosen.push(i);
+  }
+  return chosen.sort((a, b) => a - b);
+}
+
+/**
  * The part of a post's files one platform takes. `kinds` is each file's kind in order; `as` is how
- * it shows (a Story or Reel takes one file).
+ * it shows (a Story or Reel takes one file); `pick` the files the owner chose when it takes fewer
+ * than the post has (Round 5, Facebook's "Choose").
  */
 export function platformSet(
   platform: string,
   kinds: readonly ("image" | "video")[],
   as?: PostAs,
+  pick?: readonly number[],
 ): PlatformSet {
+  const picked = (pool: readonly number[], max: number) =>
+    !!pick?.length && pool.length > max && pool.some((i) => pick.includes(i));
   const name = platformLabel(platform);
   const all = kinds.map((_, i) => i);
   const photos = all.filter((i) => kinds[i] === "image");
@@ -130,7 +153,7 @@ export function platformSet(
 
   // Photos and videos together where the platform can't mix them.
   if (photos.length && videos.length && !r.mix) {
-    const kept = photos.slice(0, r.photos);
+    const kept = chooseFrom(photos, r.photos, pick);
     const left = videos.length === 1 ? "The video is left out" : "The videos are left out";
     const capped = photos.length > r.photos ? `; the first ${r.photos} photos go` : "";
     if (platform === "tiktok") {
@@ -141,7 +164,9 @@ export function platformSet(
     }
     const goes =
       photos.length > r.photos
-        ? `the first ${r.photos} photos go`
+        ? picked(photos, r.photos)
+          ? `the ${r.photos} photos you chose go`
+          : `the first ${r.photos} photos go`
         : kept.length === 1
           ? "the photo goes"
           : `the ${kept.length} photos go`;
@@ -177,8 +202,8 @@ export function platformSet(
     );
   const unit = r.mix && videos.length ? "files" : "photos";
   return out(
-    pool.slice(0, max),
-    `${name} takes up to ${max} ${unit}${videos.length && r.mixedMax ? " with a video" : ""}: the first ${max} go`,
+    chooseFrom(pool, max, pick),
+    `${name} takes up to ${max} ${unit}${videos.length && r.mixedMax ? " with a video" : ""}: ${picked(pool, max) ? `the ${max} you chose go` : `the first ${max} go`}`,
   );
 }
 
@@ -225,8 +250,9 @@ export function platformFiles(
   media: readonly PostFile[],
   crops: Partial<Record<number, { url: string; width: number; height: number }>> | undefined,
   as?: PostAs,
+  pick?: readonly number[],
 ): { set: PlatformSet; files: PlatformFile[] | null } {
-  const set = platformSet(platform, media.map(fileKind), as);
+  const set = platformSet(platform, media.map(fileKind), as, pick);
   const files = set.indices.map((i): PlatformFile => {
     const crop = media[i].type !== "video" ? crops?.[i] : undefined;
     return crop

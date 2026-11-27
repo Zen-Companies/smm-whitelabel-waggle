@@ -18,8 +18,11 @@ export interface LlmCallContext {
 }
 
 export interface GenerateObjectInput<T> extends LlmCallContext {
-  /** setup: its own model, retried once on the classify model when that call fails. */
-  purpose: "classify" | "draft" | "setup";
+  /**
+   * setup: its own model, retried once on the classify model when that call fails. caption
+   * (Posts Round 5, Write with Waggle): the draft model, recorded as its own purpose.
+   */
+  purpose: "classify" | "draft" | "setup" | "caption";
   schema: z.ZodType<T>;
   system: string;
   prompt: string;
@@ -82,7 +85,7 @@ export function createLlmClient(deps: { models: ResolvedModels; usage: UsageReco
 
   return {
     async generateObject<T>(input: GenerateObjectInput<T>) {
-      const resolved = models[input.purpose];
+      const resolved = input.purpose === "caption" ? models.draft : models[input.purpose];
       if (input.purpose !== "setup" || resolved.id === models.classify.id) {
         return callObject(resolved, input);
       }

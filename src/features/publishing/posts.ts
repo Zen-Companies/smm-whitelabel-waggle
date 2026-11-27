@@ -84,7 +84,12 @@ export function ruleProblems(
     const as = options[platform]?.as;
     const own = options[platform]?.media;
     const files: CheckedMedia[] = own?.length ? own : [...media];
-    const set = platformSet(platform, files.map(fileKind), as);
+    const set = platformSet(
+      platform,
+      files.map(fileKind),
+      as,
+      own?.length ? undefined : options[platform]?.pick,
+    );
     if (set.blocked) {
       out.push({ platform, message: set.blocked });
       continue;
@@ -134,7 +139,13 @@ export function withPlatformMedia(
   const out: PostOptions = { ...options };
   for (const platform of new Set(platforms)) {
     if (out[platform]?.media?.length) continue;
-    const { files } = platformFiles(platform, media, undefined, out[platform]?.as);
+    const { files } = platformFiles(
+      platform,
+      media,
+      undefined,
+      out[platform]?.as,
+      out[platform]?.pick,
+    );
     if (files) out[platform] = { ...out[platform], media: optionMedia(files) };
   }
   return out;

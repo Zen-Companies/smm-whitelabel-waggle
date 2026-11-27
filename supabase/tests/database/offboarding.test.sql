@@ -39,6 +39,8 @@ select is(
        'inbox_reads',
        -- deleted by the tenants_forget_purged_weekly_checks trigger (weekly check-up, 26 Nov)
        'weekly_checks',
+       -- deleted by the tenants_forget_purged_post_repeats trigger (Posts Round 5, 27 Nov)
+       'post_repeats',
        -- kept: costs and the audit trail
        'ai_usage', 'audit_log',
        -- kept: feedback stays with the person (its tenant_id is set null if the brand row goes)

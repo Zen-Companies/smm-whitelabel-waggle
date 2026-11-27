@@ -46,6 +46,11 @@ const optionsSchema = z.object({
   /** Pinterest board (T64). */
   boardId: z.string().optional().catch(undefined),
   /**
+   * Posts Round 5: which files go when the platform takes fewer than the post has (Facebook's
+   * "10 of 14 · Choose"), by their place in the post.
+   */
+  pick: z.array(z.number().int().min(0).max(34)).max(35).optional().catch(undefined),
+  /**
    * Posts Round 2: this platform's own files (crops made in the composer), sent as Zernio's
    * `customMedia`, replacing the shared files there only. Round 4 (carousels): the whole set that
    * goes there, already trimmed to what the platform takes, with its crops in place. Set by the
