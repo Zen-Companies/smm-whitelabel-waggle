@@ -21,7 +21,8 @@ import { isUploadedVideoUrl, isVideoType, videoFilename, videoProblem } from "./
 import { driveKind, isUploadedImageUrl, ONEDRIVE_VIDEO_MAX_BYTES, postableItems } from "./onedrive";
 import { parsePostOptions, withoutMedia, type PostOptions } from "./post-options";
 import { CAROUSEL_MAX, platformFiles, type PostFile } from "./carousel";
-import { businessPhone, googleProblems, telUrl, withHttps } from "./google-post";
+import { readyGoogleOptions } from "./google-post";
+import { loadBusinessPhone } from "./google-phone";
 import { optionMedia } from "./posts";
 import { platformLabel } from "@/lib/social/platforms";
 import { getLlmClientOrNull } from "@/lib/llm";
@@ -249,44 +250,20 @@ async function prepareCompose(formData: FormData, sourceId?: string): Promise<Pr
   const google = options.googlebusiness?.google;
   if (google && picked.has("googlebusiness")) {
     const phone = google.button === "CALL" ? await loadBusinessPhone(db, tenant.id) : null;
-    const problems = googleProblems(google, phone);
-    if (problems.length) {
+    const ready = readyGoogleOptions(google, phone);
+    if (!ready.ok) {
       return {
         ok: false,
         state: {
           error: "Some platforms won't take this post as it is.",
           field: "accounts",
-          problems: problems.map((p) => ({ platform: "googlebusiness", message: p.message })),
+          problems: ready.problems.map((p) => ({ platform: "googlebusiness", message: p.message })),
         },
       };
     }
-    options.googlebusiness = {
-      ...options.googlebusiness,
-      google: {
-        ...google,
-        ...(google.button === "CALL"
-          ? { buttonUrl: telUrl(phone) ?? undefined }
-          : google.button && google.buttonUrl
-            ? { buttonUrl: withHttps(google.buttonUrl) }
-            : { buttonUrl: undefined }),
-        redeemUrl: google.redeemUrl?.trim() ? withHttps(google.redeemUrl) : undefined,
-      },
-    };
+    options.googlebusiness = { ...options.googlebusiness, google: ready.google };
   }
   return { ok: true, tenant, db, data: parsed.data, scheduledFor, media, options };
-}
-
-/** The business phone Waggle has (Business info), for Google's Call now. */
-async function loadBusinessPhone(
-  db: ReturnType<typeof getServiceClient>,
-  tenantId: string,
-): Promise<string | null> {
-  const { data } = await db
-    .from("kb_entries")
-    .select("title, content, found_kind")
-    .eq("tenant_id", tenantId)
-    .limit(500);
-  return businessPhone(data ?? []);
 }
 
 const uploadSchema = z.object({

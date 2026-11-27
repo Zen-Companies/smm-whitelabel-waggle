@@ -6,8 +6,13 @@ import type { Json } from "@/lib/supabase/database.types";
 
 export type CallKind = "read" | "act" | "send";
 
-/** Tools that put something in front of customers: replies and posts. */
-export const SEND_TOOLS = ["approve_reply", "write_reply", "create_post"] as const;
+/** Tools that put something in front of customers: replies, posts and changes to posts. */
+export const SEND_TOOLS = [
+  "approve_reply",
+  "write_reply",
+  "create_post",
+  "apply_post_change",
+] as const;
 
 export function kindOf(tool: { name: string; access: "read" | "act" }): CallKind {
   if ((SEND_TOOLS as readonly string[]).includes(tool.name)) return "send";

@@ -186,7 +186,7 @@ export type CheckNowResult =
 /** The owner's Check now: once a day per business, never while a check-up is running. */
 export async function requestCheckNow(
   db: ServiceClient,
-  input: { tenantId: string; userId: string; now?: Date },
+  input: { tenantId: string; userId: string; via?: Record<string, string>; now?: Date },
 ): Promise<CheckNowResult> {
   const now = input.now ?? new Date();
   const running = async () => {
@@ -234,7 +234,7 @@ export async function requestCheckNow(
     tenantId: input.tenantId,
     action: "weekly_check_now_requested",
     actor: input.userId,
-    details: { runId: row.id },
+    details: { runId: row.id, ...(input.via ? { via: input.via } : {}) },
   });
   return { outcome: "started", runId: row.id };
 }

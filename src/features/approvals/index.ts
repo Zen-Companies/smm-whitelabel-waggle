@@ -25,6 +25,7 @@ export { InboxView } from "./inbox-view";
 export { RepliesBackLine } from "./replies-back-line";
 export {
   countInboxTabs,
+  loadInboxConversations,
   heldReason,
   heldReasonFromDetails,
   loadEntries,
@@ -34,9 +35,11 @@ export {
   NEEDS_OWNER,
 } from "./inbox-data";
 export type { NextPost } from "./inbox-data";
-export { tabForStatus } from "./conversation-data";
+export { loadConversation, tabForStatus } from "./conversation-data";
+export { DEFAULT_FILTERS, INBOX_FLAGS, INBOX_TYPES } from "./inbox-groups";
+export type { InboxFilters, InboxFlag, InboxType, PriorityGroup } from "./inbox-groups";
 export { INBOX_TABS } from "./inbox-data";
-export type { InboxData, InboxEntry, InboxTab } from "./inbox-data";
+export type { InboxConversation, InboxData, InboxEntry, InboxTab } from "./inbox-data";
 export { AutonomyCard } from "./autonomy-card";
 export { PauseForm } from "./pause-form";
 export { ReadinessCard } from "./readiness-card";

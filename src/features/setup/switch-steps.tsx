@@ -4,7 +4,7 @@ import { useId, useState, type ReactNode } from "react";
 import { cn } from "cn";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { switchNote, switchSteps, type SwitchPlatform } from "./connect-help";
-import { OkLine, StepRow } from "./step-drawings";
+import { OkLine, StepRow } from "@/features/auth";
 
 // Connect fix 2 (board approved 24 Nov): the rule above the Instagram and Facebook buttons, and
 // "How to switch (30 sec)" opening the drawn steps in place, one platform at a time.

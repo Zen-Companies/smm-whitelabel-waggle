@@ -9,7 +9,9 @@ import {
   UnfinishedNote,
   type UnfinishedConnect,
 } from "@/features/accounts";
+import { InAppGuard } from "@/features/auth";
 import { pullsPastDms } from "@/features/catch-up";
+import { recordInAppSwitch } from "@/features/tenants";
 import { statusOf, SWITCHABLE, type PlatformStatuses } from "@/features/platforms";
 import {
   hasLiveComments,
@@ -189,7 +191,8 @@ export function WelcomeConnect({
   /** "Before you connect" open for this platform (Instagram or Facebook). */
   before: string | null;
   problem: ConnectProblem | null;
-  /** Inside Instagram's or Facebook's own browser: their tiles give way to the block card. */
+  /** Inside Instagram's, Facebook's, Messenger's or TikTok's browser: the tiles that would fail
+   * give way to the block card. */
   inApp: InApp | null;
   device: Device;
   /** A connect that left for the sign-in and never came back: "Didn't finish?" (26 Nov). */
@@ -332,6 +335,9 @@ export function WelcomeConnect({
           </p>
         </div>
 
+        {/* Any app's browser (27 Nov): tries Safari or Chrome once, then a note for apps that
+            don't break the connect (the breakers get the card below, from the server). */}
+        <InAppGuard where="connect" record={recordInAppSwitch} />
         {problem && problem.kind !== "free-full" && !metaProblemInApp && (
           <ConnectProblemBox problem={problem} hasBrand={hasBrand} />
         )}
