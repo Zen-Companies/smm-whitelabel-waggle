@@ -10,7 +10,7 @@ import {
   type AnalyticsPlatform,
 } from "@/features/analytics";
 import { searchKbEntries } from "@/features/knowledge-base";
-import { cancelScheduledPost } from "@/features/publishing";
+import { canMove, cancelScheduledPost, type StoredMedia } from "@/features/publishing";
 import { resolveBrand, ToolError, viaOf } from "../context";
 import {
   brandId,
@@ -106,7 +106,7 @@ export const listPosts = defineTool({
   name: "list_posts",
   title: "List posts",
   description:
-    "Lists posts made in Waggle, newest first: upcoming (scheduled or going out), published, needs_attention (failed on a platform) or cancelled. For how posts performed, use get_post_performance.",
+    "Lists posts made in Waggle, newest first: upcoming (scheduled or going out), published, needs_attention (failed on a platform) or cancelled, with their photo and video links and what can be done (can.edit: preview_post_edit and preview_post_move; can.fix_text: preview_text_fix). For how posts performed, use get_post_performance.",
   access: "read",
   annotations: READ,
   wraps: "posts table (publishing)",
@@ -125,6 +125,13 @@ export const listPosts = defineTool({
         scheduled_for: z.string().nullable(),
         published_at: z.string().nullable(),
         problem: z.string().nullable(),
+        media: z
+          .array(z.object({ url: z.string(), type: z.string().nullable() }))
+          .describe("The post's files in order (pass them to preview_post_edit to reorder)."),
+        can: z.object({
+          edit: z.boolean().describe("A planned post: edit or move it."),
+          fix_text: z.boolean().describe("It went out: its text can be fixed where allowed."),
+        }),
       }),
     ),
     next_cursor: nextCursor,
@@ -135,7 +142,7 @@ export const listPosts = defineTool({
     let q = ctx.db
       .from("posts")
       .select(
-        "id, content, status, target_account_ids, scheduled_for, published_at, failure_reason, last_error",
+        "id, content, status, target_account_ids, scheduled_for, published_at, failure_reason, last_error, media, zernio_post_id",
       )
       .eq("tenant_id", tenantId)
       .neq("status", "draft");
@@ -154,6 +161,13 @@ export const listPosts = defineTool({
         scheduled_for: p.scheduled_for,
         published_at: p.published_at,
         problem: p.failure_reason ?? null,
+        media: ((p.media as StoredMedia[] | null) ?? []).flatMap((m) =>
+          m.url ? [{ url: m.url, type: m.type ?? null }] : [],
+        ),
+        can: {
+          edit: canMove(p) && !!p.scheduled_for,
+          fix_text: !!p.zernio_post_id && ["published", "partial"].includes(p.status),
+        },
       })),
       next_cursor: rows.length > PAGE_SIZE ? String(offset + PAGE_SIZE) : null,
     };

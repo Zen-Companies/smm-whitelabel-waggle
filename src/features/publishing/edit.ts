@@ -109,6 +109,8 @@ export async function updateScheduledPost(
     options: PostOptions;
     youtubeTitle?: string;
     tiktokConsent: boolean;
+    /** Set when an AI assistant made the change (audit). */
+    via?: Record<string, string>;
     now?: Date;
   },
 ): Promise<UpdatePostResult> {
@@ -199,7 +201,12 @@ export async function updateScheduledPost(
     tenantId: input.tenantId,
     action: "post_updated",
     actor: input.userId,
-    details: { postId: row.id, changed, accounts: accountIds.length },
+    details: {
+      postId: row.id,
+      changed,
+      accounts: accountIds.length,
+      ...(input.via ? { via: input.via } : {}),
+    },
   });
   return { ok: true, changed, scheduledFor };
 }
@@ -207,7 +214,14 @@ export async function updateScheduledPost(
 /** Move a planned post to a new time (drag on the calendar, or Move). Undo is a move back. */
 export async function movePost(
   deps: PostDeps,
-  input: { tenantId: string; userId: string; postId: string; scheduledFor: Date; now?: Date },
+  input: {
+    tenantId: string;
+    userId: string;
+    postId: string;
+    scheduledFor: Date;
+    via?: Record<string, string>;
+    now?: Date;
+  },
 ): Promise<UpdatePostResult> {
   const { db } = deps;
   const now = input.now ?? new Date();
@@ -241,7 +255,12 @@ export async function movePost(
     tenantId: input.tenantId,
     action: "post_moved",
     actor: input.userId,
-    details: { postId: row.id, from: row.scheduled_for, to: scheduledFor },
+    details: {
+      postId: row.id,
+      from: row.scheduled_for,
+      to: scheduledFor,
+      ...(input.via ? { via: input.via } : {}),
+    },
   });
   return { ok: true, changed: ["time"], scheduledFor };
 }
@@ -272,7 +291,13 @@ function fixReason(error: unknown): string {
  */
 export async function fixLiveText(
   deps: PostDeps,
-  input: { tenantId: string; userId: string; postId: string; content: string },
+  input: {
+    tenantId: string;
+    userId: string;
+    postId: string;
+    content: string;
+    via?: Record<string, string>;
+  },
 ): Promise<FixTextResult> {
   const { db } = deps;
   const { data: post } = await db
@@ -352,6 +377,7 @@ export async function fixLiveText(
       edited: fixed,
       failed: failed.map((f) => f.platform),
       notAllowed,
+      ...(input.via ? { via: input.via } : {}),
     },
   });
   return { ok: true, edited: fixed, failed, notAllowed };
