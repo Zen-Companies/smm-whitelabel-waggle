@@ -38,6 +38,10 @@ describe("usableHere", () => {
     expect(usableHere(ids, "Instagram")).toEqual(["tiktok", "linkedin"]);
     expect(usableHere(ids, "Facebook")).toEqual(["tiktok", "linkedin"]);
   });
+  it("inside TikTok's browser drops TikTok too (27 Nov)", () => {
+    expect(usableHere(ids, "TikTok")).toEqual(["linkedin"]);
+    expect(usableHere(ids, "Messenger")).toEqual(["tiktok", "linkedin"]);
+  });
   it("keeps every tile in a normal browser", () => {
     expect(usableHere(ids, null)).toEqual([...ids]);
   });
@@ -51,6 +55,7 @@ describe("metaBlockedHere", () => {
   });
   it("leaves other problems and normal browsers alone", () => {
     expect(metaBlockedHere({ kind: "cancelled", platform: "tiktok" }, "Instagram")).toBe(false);
+    expect(metaBlockedHere({ kind: "cancelled", platform: "tiktok" }, "TikTok")).toBe(true);
     const message = { kind: "message", text: "Something went wrong" };
     expect(metaBlockedHere(message, "Instagram")).toBe(false);
     expect(metaBlockedHere({ kind: "instagram-personal" }, null)).toBe(false);
@@ -130,5 +135,11 @@ describe("blockedDetails", () => {
       device: "ios",
     });
     expect(blockedDetails("Facebook", "android").browser_class).toBe("in_app_facebook");
+    expect(blockedDetails("Messenger", "ios").browser_class).toBe("in_app_facebook");
+    expect(blockedDetails("TikTok", "android")).toEqual({
+      platform: "tiktok",
+      browser_class: "in_app_tiktok",
+      device: "android",
+    });
   });
 });

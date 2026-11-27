@@ -1,9 +1,11 @@
 import { CircleAlert, CircleCheck } from "lucide-react";
+import { headers } from "next/headers";
 import { IllustratedEmpty } from "@/components/app/illustrated-empty";
 import { PlatformMark } from "@/components/app/platform-mark";
 import { Button } from "@/components/ui/button";
+import { blockedPlatforms, breakerApp, deviceOf, InAppCard, InAppGuard } from "@/features/auth";
 import { can } from "@/features/orgs";
-import { getCurrentTenant, ReadOnlyNote } from "@/features/tenants";
+import { getCurrentTenant, ReadOnlyNote, recordInAppSwitch } from "@/features/tenants";
 import { isPlatformId, platformLabel as name } from "@/lib/social/platforms";
 import { loadPlatformStatuses } from "@/features/platforms";
 import { getServiceClient } from "@/lib/supabase/service";
@@ -80,13 +82,24 @@ export async function AccountsCard({
   ) : params.setup === "line" ? (
     <LineSetup />
   ) : null;
+  // Any app's browser (27 Nov): the switch to Safari or Chrome is tried once; in Instagram's,
+  // Facebook's, Messenger's or TikTok's the tiles that would fail give way to the card.
+  const ua = (await headers()).get("user-agent");
+  const inApp = breakerApp(ua);
+  const blocked = inApp ? blockedPlatforms(inApp) : [];
   const tiles = !mayConnect ? (
     <ReadOnlyNote role={tenant.role} what="the connected accounts" />
   ) : (
     <>
+      <InAppGuard where="connect" record={recordInAppSwitch} />
+      {inApp && <InAppCard app={inApp} device={deviceOf(ua)} where="connect" />}
       {setup}
       {socialNote}
-      <ConnectTiles exclude={connected} statuses={statuses} unfinished={unfinished} />
+      <ConnectTiles
+        exclude={[...connected, ...blocked]}
+        statuses={statuses}
+        unfinished={unfinished && blocked.includes(unfinished.platform) ? null : unfinished}
+      />
       <MoreConnections before={before} />
     </>
   );

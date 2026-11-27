@@ -10,10 +10,10 @@ import { blockedDetails, deviceOf, type InApp } from "./connect-help";
 import { isInAppBrowser } from "./first-connect";
 
 // Connect fix 2 (approved 24 Nov): the audit row when Instagram's or Facebook's browser blocks
-// the connect.
+// the connect (and Messenger's or TikTok's, 27 Nov).
 
 const BLOCK_DEDUPE_MS = 60 * 60 * 1000;
-const appSchema = z.enum(["Instagram", "Facebook"]);
+const appSchema = z.enum(["Instagram", "Facebook", "Messenger", "TikTok"]);
 
 /**
  * `connect_blocked_in_app`: the block card was shown. The page calls this once per browser

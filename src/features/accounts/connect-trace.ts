@@ -34,7 +34,7 @@ export function classifyUserAgent(ua: string | null | undefined): UserAgentClass
   if (isInAppBrowser(ua)) {
     const app = inAppName(ua);
     if (app === "Instagram") return "in_app_instagram";
-    if (app === "Facebook") return "in_app_facebook";
+    if (app === "Facebook" || app === "Messenger") return "in_app_facebook";
     if (app === "TikTok") return "in_app_tiktok";
     return "other";
   }
