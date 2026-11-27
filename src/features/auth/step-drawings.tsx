@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "cn";
-import type { DrawnStep } from "./connect-help";
+import type { DrawnStep } from "./in-app-switch";
 
 // Connect fix 2 (board approved 24 Nov): steps drawn as small phones, the spot to tap ringed in
 // honey, a numbered honey hexagon on each. Drawings only (aria-hidden); the line under each phone

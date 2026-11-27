@@ -25,7 +25,21 @@ describe("isInAppBrowser", () => {
     expect(
       isInAppBrowser("Mozilla/5.0 (Linux; Android 14) Chrome/120 [FB_IAB/FB4A;FBAV/440]"),
     ).toBe("Facebook");
-    expect(isInAppBrowser("Mozilla/5.0 FBIOS")).toBe("Facebook");
+    expect(isInAppBrowser("Mozilla/5.0 (iPad) FBIOS")).toBe("Facebook");
+  });
+  it("spots Messenger's and TikTok's browsers too (27 Nov)", () => {
+    expect(
+      isInAppBrowser("Mozilla/5.0 (iPhone) Mobile/15E148 [FBAN/MessengerForiOS;FBAV/445]"),
+    ).toBe("Messenger");
+    expect(
+      isInAppBrowser(
+        "Mozilla/5.0 (iPhone) Mobile/15E148 musical_ly_32.5.0 BytedanceWebview/d8a21c6",
+      ),
+    ).toBe("TikTok");
+  });
+  it("never on a computer, nor for apps whose browser doesn't break the connect", () => {
+    expect(isInAppBrowser("Mozilla/5.0 FBIOS")).toBeNull();
+    expect(isInAppBrowser("Mozilla/5.0 (iPhone) Mobile/15E148 [LinkedInApp]/9.29")).toBeNull();
   });
   it("leaves normal browsers alone", () => {
     expect(

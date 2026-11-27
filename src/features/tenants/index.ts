@@ -1,6 +1,7 @@
 export { signIn, signOut, signUp, updateBusinessProfile } from "./actions";
 export type { AuthFormState, ProfileFormState } from "./actions";
 export { AuthForm } from "./auth-form";
+export { recordInAppSwitch } from "./in-app-actions";
 export { BusinessSettings } from "./business-settings";
 export { getCurrentTenant, getTenantFor, NOT_ALLOWED } from "./current-tenant";
 export type { CurrentTenant } from "./current-tenant";

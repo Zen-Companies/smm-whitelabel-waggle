@@ -10,7 +10,7 @@ import { ConnectSubmit } from "./connect-pending";
 import type { ConnectProblem } from "./first-connect";
 import { switchSteps } from "./connect-help";
 import { PRIMARY, QUIET } from "./setup-frame";
-import { OkLine, PROGRESS_SAVED, StepRow } from "./step-drawings";
+import { OkLine, PROGRESS_SAVED, StepRow } from "@/features/auth";
 
 // Setup step 1's states around leaving for a sign-in (board "Setup, start to finish", approved
 // 23 Nov): "Before you connect", what came back wrong, and Free with its account used.
